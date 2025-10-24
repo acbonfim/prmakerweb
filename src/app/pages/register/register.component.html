@@ -1,0 +1,110 @@
+<div class="container">
+  <mat-card appearance="outlined" style="background-color: #363636; border-radius: 10px;">
+  <mat-card-header style="background-color: #252525; border-radius: 10px; height: 50px;">
+    <mat-card-title> Criação de template para PullRequests</mat-card-title>
+    <mat-card-subtitle></mat-card-subtitle>
+  </mat-card-header>
+  <mat-card-content>
+    <div style="display: flex; align-items: flex-start; gap: 15px; margin-top: 10px;">
+      <!-- Campo de seleção de usuário -->
+      <mat-form-field style="flex: 1; max-width: 200px;">
+        <mat-label>Selecione um usuário</mat-label>
+        <input type="text"
+               placeholder="Alex C."
+               matInput
+               name="userSelected"
+               [(ngModel)]="userSelected"
+               (ngModelChange)="generateFullDescriptionHandler()"
+               [matAutocomplete]="auto">
+        <mat-autocomplete autoActiveFirstOption #auto="matAutocomplete" [displayWith]="displayUser">
+          @for (user of users; track user.id) {
+            <mat-option [value]="user.id">{{ user.name }}</mat-option>
+          }
+        </mat-autocomplete>
+      </mat-form-field>
+
+      <!-- Campo número do card -->
+      <mat-form-field style="flex: 0 0 200px;">
+        <mat-label>Número do card</mat-label>
+        <input matInput type="number" placeholder="12345" [(ngModel)]="cardNumber" (ngModelChange)="generateFullDescriptionHandler()"/>
+        <button
+          matIconButton
+          matSuffix
+          matTooltip="Buscar PR já criado para esse card"
+          matTooltipPosition="above"
+          (click)="getPullRequestByEnvironmentAndUserAndCardNumber()"
+          [disabled]="!userSelected || !cardNumber || !environment || isPullRequestLoading"
+        >
+          <mat-icon>search</mat-icon>
+        </button>
+      </mat-form-field>
+
+      <!-- Grupo de botões de ambiente -->
+      <div style="flex: 0 0 300px;">
+        <mat-button-toggle-group style="width: 100%; display: flex; height: 55px;" [(ngModel)]="environment"
+                                 (ngModelChange)="onBranchChange()">
+          <mat-button-toggle value="dev" style="flex: 1; display: flex; align-items: center; justify-content: center;">
+            DEV
+          </mat-button-toggle>
+          <mat-button-toggle value="qa" style="flex: 1; display: flex; align-items: center; justify-content: center;">
+            QA
+          </mat-button-toggle>
+          <mat-button-toggle value="rv" matTooltip="Release-Version"
+                             style="flex: 1; display: flex; align-items: center; justify-content: center;">RV
+          </mat-button-toggle>
+          <mat-button-toggle value="hv" matTooltip="Hotfix-Version"
+                             style="flex: 1; display: flex; align-items: center; justify-content: center;">HV
+          </mat-button-toggle>
+          <mat-button-toggle value="rc" matTooltip="Release-Candidate"
+                             style="flex: 1; display: flex; align-items: center; justify-content: center;">RC
+          </mat-button-toggle>
+        </mat-button-toggle-group>
+      </div>
+    </div>
+
+    @if (template !== null){
+      <button matButton
+              (click)="openDialogTemplate()"
+              matTooltip="Clique para ver o template carregado"
+              matTooltipPosition="above"
+              style="margin-bottom: 10px"><mat-icon>article_shortcut</mat-icon>Template carregado</button>
+    }
+
+    @if (fullDescription !== null){
+      <button matButton
+              (click)="openDialogFullDescription()"
+              matTooltip="Clique para ver a descrição completa"
+              matTooltipPosition="above"
+              style="margin-bottom: 10px"><mat-icon>article_shortcut</mat-icon>Descrição montada</button>
+    }
+
+
+    <mat-form-field class="full-width" style="height: 100%">
+      <mat-label>Descrição</mat-label>
+      <textarea [(ngModel)]="pullRequest.description" (ngModelChange)="generateFullDescriptionHandler()"  matInput placeholder="Ex. It makes me feel..." cols="30" rows="7"></textarea>
+    </mat-form-field>
+
+    <mat-form-field class="full-width">
+      <mat-label>Root Cause</mat-label>
+      <textarea [(ngModel)]="pullRequest.rootCause" (ngModelChange)="generateFullDescriptionHandler()" matInput placeholder="Ex. It makes me feel..." cols="30" rows="7"></textarea>
+    </mat-form-field>
+
+  </mat-card-content>
+  <mat-card-actions style="background-color: #5b5b5b; margin-top: 20px; border-radius: 10px;">
+    <button mat-raised-button
+            [disabled]="isPullRequestLoading || fullDescription === null"
+            (click)="copyFullDescriptionToClipboard()">Copiar<mat-icon>content_copy</mat-icon></button>
+    <button mat-raised-button style="margin-left: 10px" (click)="openGithubPullRequestPage()" [disabled]="!this.pullRequest?.description">Abrir PR<mat-icon>merge</mat-icon></button>
+    <button disabled mat-raised-button matTooltip="Em breve" style="margin-left: 10px">Gerar com IA<mat-icon>model_training</mat-icon></button>
+    <button mat-raised-button style="margin-left: 10px"
+            [disabled]="isPullRequestLoading || fullDescription === null"
+            (click)="savePullRequest()">Salvar<mat-icon>save</mat-icon></button>
+    <button mat-raised-button style="margin-left: 10px"
+            [disabled]="isPullRequestLoading || fullDescription === null"
+            (click)="clearAll()">Limpar<mat-icon>clear</mat-icon></button>
+
+  </mat-card-actions>
+</mat-card>
+</div>
+<ngx-loading-bar></ngx-loading-bar>
+
