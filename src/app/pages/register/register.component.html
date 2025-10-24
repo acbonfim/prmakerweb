@@ -95,13 +95,16 @@
             [disabled]="isPullRequestLoading || fullDescription === null"
             (click)="copyFullDescriptionToClipboard()">Copiar<mat-icon>content_copy</mat-icon></button>
     <button mat-raised-button style="margin-left: 10px" (click)="openGithubPullRequestPage()" [disabled]="!this.pullRequest?.description">Abrir PR<mat-icon>merge</mat-icon></button>
-    <button disabled mat-raised-button matTooltip="Em breve" style="margin-left: 10px">Gerar com IA<mat-icon>model_training</mat-icon></button>
+
     <button mat-raised-button style="margin-left: 10px"
             [disabled]="isPullRequestLoading || fullDescription === null"
             (click)="savePullRequest()">Salvar<mat-icon>save</mat-icon></button>
     <button mat-raised-button style="margin-left: 10px"
             [disabled]="isPullRequestLoading || fullDescription === null"
             (click)="clearAll()">Limpar<mat-icon>clear</mat-icon></button>
+    <button mat-raised-button disabled style="margin-left: 10px"
+            >Salvar RC no DevOps<mat-icon>beenhere</mat-icon></button>
+    <button disabled mat-raised-button matTooltip="Em breve" style="margin-left: 10px">Gerar com IA<mat-icon>model_training</mat-icon></button>
 
   </mat-card-actions>
 </mat-card>
