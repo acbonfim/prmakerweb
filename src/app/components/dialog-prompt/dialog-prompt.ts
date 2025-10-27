@@ -43,7 +43,7 @@ export class DialogPrompt implements OnInit {
     CardNumber (Ticket): {cardNumber},
     Reclamação inicial: {description}
 
-    O pull request precisa ser em ingles, e conter uma sessão para Root Cause Analysis (RCA), detalhando o que causou o problema e como ele foi resolvido.
+    Todo o texto gerado precisa ser em ingles, e conter uma sessão para Root Cause Analysis (RCA), detalhando o que causou o problema e como ele foi resolvido.
 
     Modelo do PR:
 
@@ -62,6 +62,13 @@ export class DialogPrompt implements OnInit {
     Plano de Ação / Prevenção: XXX
     Arquivos modificados / Codigo Modificado/ Dados alterados na base de dados: X,X,X
     Ticket: {cardNumber}
+
+    Regras gerais:
+
+    Texto completamente em ingles
+    Sessão para Pull Request
+    Sessão para RCA
+    Seguir os modelos acima
     `;
 
     if (this.data.description) {

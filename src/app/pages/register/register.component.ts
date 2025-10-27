@@ -26,6 +26,7 @@ import {SplitButton} from 'primeng/splitbutton';
 import {MenuItem, MenuItemCommandEvent} from 'primeng/api';
 import { DialogPrompt } from '../../components/dialog-prompt/dialog-prompt';
 import { CliipboardService } from '../../services/cliipboard.service';
+import {environment} from '../../../environments/environment';
 
 @Component({
   selector: 'app-register',
@@ -59,7 +60,7 @@ class RegisterComponent implements OnInit {
   environment = 'dev';
   template:any = null;
   pullRequest:any = {};
-  urlBase = "http://prformapi.runasp.net/api/";
+  urlBase = environment.apiUrl;
   isTemplateLoading = false;
   isPullRequestLoading = false;
   readonly dialog = inject(MatDialog);

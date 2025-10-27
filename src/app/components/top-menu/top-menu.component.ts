@@ -12,6 +12,7 @@ import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import {ButtonModule} from 'primeng/button';
 import {InputNumberModule} from 'primeng/inputnumber';
+import {environment} from '../../../environments/environment';
 
 interface AutoCompleteCompleteEvent {
   originalEvent: Event;
@@ -41,9 +42,8 @@ export class TopMenuComponent implements OnInit {
   @Input() isCollapsed: boolean = false;
   @Output() selectedUserEmit = new EventEmitter<void>();
 
-  items: any[] | undefined;
   users: any[] = [];
-  urlBase = "http://prformapi.runasp.net/api/";
+  urlBase = environment.apiUrl;
   filteredUsers: any[] = [];
   selectedUser: any = null;
 
