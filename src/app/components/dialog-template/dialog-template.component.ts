@@ -1,5 +1,5 @@
 import {Component, inject, OnInit} from '@angular/core';
-import {MAT_DIALOG_DATA, MatDialogActions, MatDialogContent} from '@angular/material/dialog';
+import {MAT_DIALOG_DATA, MatDialogActions, MatDialogContent, MatDialogRef} from '@angular/material/dialog';
 import {MatButtonModule} from '@angular/material/button';
 
 @Component({
@@ -15,10 +15,10 @@ import {MatButtonModule} from '@angular/material/button';
 export class DialogTemplateComponent implements OnInit {
 
   readonly data = inject<any>(MAT_DIALOG_DATA);
+  readonly dialogRef = inject(MatDialogRef<DialogTemplateComponent>);
   constructor() { }
 
   ngOnInit() {
-    console.log(this.data);
   }
 
 }

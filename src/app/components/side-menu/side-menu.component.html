@@ -1,0 +1,14 @@
+<mat-nav-list>
+  @for (item of menu; track item) {
+    <mat-list-item
+      class="pt-2 pb-2"
+      [class.active-route]="isActiveRoute(item.link)"
+      (click)="navigateTo(item.link)">
+      <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+      @if (!isCollapsed) {
+        <span matListItemTitle>{{ item.label }}</span>
+      }
+    </mat-list-item>
+    <mat-divider class="mb-2 mt-2" style="border-top-color: rgb(33,33,33)"></mat-divider>
+  }
+</mat-nav-list>

@@ -1,9 +1,8 @@
-import {Component, inject, OnInit} from '@angular/core';
+import {Component, HostListener, inject, OnInit} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatInputModule } from '@angular/material/input';
-import {MatButtonToggle, MatButtonToggleGroup} from '@angular/material/button-toggle';
 import {MatTooltipModule} from '@angular/material/tooltip';
 import {FormsModule} from '@angular/forms';
 import {MatIconModule} from '@angular/material/icon';
@@ -14,6 +13,19 @@ import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {MatAutocompleteModule} from '@angular/material/autocomplete';
 import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
 import {LoadingBarModule, LoadingBarService} from '@ngx-loading-bar/core';
+import {EditorModule} from 'primeng/editor';
+import {SelectButtonModule} from 'primeng/selectbutton';
+import {InputGroupModule} from 'primeng/inputgroup';
+import {InputGroupAddonModule} from 'primeng/inputgroupaddon';
+import {ButtonModule} from 'primeng/button';
+import {MenuModule} from 'primeng/menu';
+import {InputNumberModule} from 'primeng/inputnumber';
+import {LMarkdownEditorModule} from 'ngx-markdown-editor';
+import {UserService} from '../../services/UserService.service';
+import {SplitButton} from 'primeng/splitbutton';
+import {MenuItem, MenuItemCommandEvent} from 'primeng/api';
+import { DialogPrompt } from '../../components/dialog-prompt/dialog-prompt';
+import { CliipboardService } from '../../services/cliipboard.service';
 
 @Component({
   selector: 'app-register',
@@ -25,15 +37,21 @@ import {LoadingBarModule, LoadingBarService} from '@ngx-loading-bar/core';
     MatButtonModule,
     MatInputModule,
     MatDividerModule,
-    MatButtonToggleGroup,
-    MatButtonToggle,
     MatTooltipModule,
     FormsModule,
     MatIconModule,
     MatProgressSpinnerModule,
     MatAutocompleteModule,
     MatSnackBarModule,
-    LoadingBarModule
+    LoadingBarModule,
+    EditorModule,
+    SelectButtonModule,
+    InputGroupModule,
+    InputGroupAddonModule,
+    ButtonModule,
+    MenuModule,
+    InputNumberModule,
+    SplitButton
   ]
 })
 class RegisterComponent implements OnInit {
@@ -43,29 +61,148 @@ class RegisterComponent implements OnInit {
   pullRequest:any = {};
   urlBase = "http://prformapi.runasp.net/api/";
   isTemplateLoading = false;
-  isUserLoading = false;
   isPullRequestLoading = false;
   readonly dialog = inject(MatDialog);
   userSelected: any = null;
-  users: any[] = [];
   cardNumber: null | string = null;
   fullDescription = null;
   link = "https://github.com/electradv/edv-solvace/compare/my-environment...hotfix/";
+  mobileButtons: MenuItem[] = [];
+  isMobile = false;
+
+  justifyOptions = [
+    {
+      label: 'DEV',
+      value: 'dev'
+    },
+    {
+      label: 'QA',
+      value: 'qa'
+    },
+    {
+      label: 'RV',
+      value: 'rv'
+    },
+    {
+      label: 'HV',
+      value: 'hv'
+    },
+    {
+      label: 'RC',
+      value: 'rc'
+    },
+  ]
+
+
+
+
+  @HostListener('window:resize')
+  onResize() {
+    this.checkIfMobile();
+  }
+
+  private checkIfMobile() {
+    this.isMobile = window.innerWidth <= 768;
+  }
+
+  private initializeMobileButtons() {
+    this.mobileButtons = [
+      {
+        label: 'Copiar',
+        icon: 'pi pi-copy',
+        command: (event: MenuItemCommandEvent) => {
+          this.copyFullDescriptionToClipboard();
+        }
+      },
+      {
+        label: 'Abrir PR',
+        icon: 'pi pi-github',
+        command: (event: MenuItemCommandEvent) => {
+          this.openGithubPullRequestPage();
+        }
+      },
+      {
+        label: 'Limpar',
+        icon: 'pi pi-times',
+        command: (event: MenuItemCommandEvent) => {
+          this.clearAll();
+        }
+      },
+      {
+        label: 'Salvar RC no DevOps',
+        disabled: true,
+        icon: 'pi pi-cloud-upload',
+      },
+      {
+        label: 'Gerar com IA',
+        icon: 'pi pi-bullseye',
+        disabled: true,
+      },
+    ];
+  }
+
+  updateMobileButtonsState() {
+    this.mobileButtons.forEach(button => {
+      if (button.label === 'Copiar' || button.label === 'Abrir PR' || button.label === 'Limpar') {
+        button.disabled = this.isPullRequestLoading || this.fullDescription === null;
+      }
+    });
+  }
+
+
+
 
   private _snackBar = inject(MatSnackBar);
+  private _clipboardService = inject(CliipboardService);
 
-  displayUser = (userId: number): string => {
-    const user = this.users.find(u => u.id === userId);
-    return user ? user.name : '';
-  }
   constructor(
     private http: HttpClient,
-    private loadingBar: LoadingBarService
+    private loadingBar: LoadingBarService,
+    private userService: UserService
   ) { }
 
   ngOnInit() {
     this.getTemplateByEnvironment();
-    this.getAllUsers();
+    this.checkIfMobile();
+    this.initializeMobileButtons();
+
+    this.userService.selectedUser$.subscribe(user => {
+      if (user) {
+        console.log(user)
+        this.userSelected = user.value.id;
+        this.generateFullDescriptionHandler();
+      }
+    });
+  }
+
+  processTextForEditor(text: string): string {
+    if (!text) return '';
+
+    return text
+      .replace(/\\n/g, '\n')  // Converter \n literais em quebras de linha
+      .replace(/\n\n/g, '</p><p>')  // Parágrafos duplos
+      .replace(/\n/g, '<br>')       // Quebras de linha simples
+      .replace(/^/, '<p>')          // Início do parágrafo
+      .replace(/$/, '</p>');        // Fim do parágrafo
+  }
+
+  processMarkdown(text: string): string {
+    if (!text) return '';
+
+    return text
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+      .replace(/^\* (.*$)/gim, '<li>$1</li>')
+      .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>');
+  }
+
+  onEditorTextChange(event: any) {
+    let processedText = this.processTextForEditor(event.textValue || '');
+    processedText = this.processMarkdown(processedText);
+    this.pullRequest.rootCause = processedText;
+    this.generateFullDescriptionHandler();
   }
 
   clearAll() {
@@ -137,22 +274,16 @@ class RegisterComponent implements OnInit {
     );
   }
 
-  getAllUsers() {
-    this.isUserLoading = true;
-    this.loadingBar.start();
-    this.http.get(`${this.urlBase}User/GetUsers`).subscribe(
-      (result:any) => {
-        this.users = result;
-        this.isUserLoading = false;
-        this.loadingBar.stop();
-      }
-    );
-  }
+
 
   openDialogTemplate() {
     const dialogRef = this.dialog.open(DialogTemplateComponent, {
       data: this.template,
-      width: '800px',
+      width: '1200px',
+      height: '80vh',
+      maxWidth: '90vw',
+      maxHeight: '90vh',
+      panelClass: 'custom-dialog-container'
     });
   }
 
@@ -163,21 +294,39 @@ class RegisterComponent implements OnInit {
         description: this.fullDescription,
         environmentName: this.environment.toUpperCase(),
       },
-      width: '800px',
+      width: '1200px',
+      height: '80vh',
+      maxWidth: '90vw',
+      maxHeight: '90vh',
+      panelClass: 'custom-dialog-container'
+    });
+  }
+
+  openDialogPrompt() {
+    const dialogRef = this.dialog.open(DialogPrompt, {
+      data: {
+        cardNumber: this.cardNumber
+      },
+      width: '1200px',
+      height: '80vh',
+      maxWidth: '90vw',
+      maxHeight: '90vh',
+      panelClass: 'custom-dialog-container'
     });
   }
 
   copyFullDescriptionToClipboard() {
+
     if (!this.fullDescription) {
       this._snackBar.open('Nenhuma descrição completa para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
       return;
     }
 
-    navigator.clipboard.writeText(this.fullDescription)
-      .then(() => {
-        this._snackBar.open('Descrição completa copiada para a área de transferência', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
-      });
+    this._clipboardService.copyFullDescriptionToClipboard(this.fullDescription!);
+
   }
+
+
 
   generateFullDescriptionHandler() {
     if(this.pullRequest.description && this.pullRequest.description.length == 0) {
@@ -189,6 +338,8 @@ class RegisterComponent implements OnInit {
 
     this.setFullDescription();
   }
+
+
 
   setFullDescription(){
     this.fullDescription = this.template.description;

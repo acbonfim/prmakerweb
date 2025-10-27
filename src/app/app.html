@@ -17,67 +17,11 @@
       overflow: hidden;
       background-color: #17191c;
     }
-
-    .flake {
-      position: absolute;
-      width: 10px;
-      height: 10px;
-      background-color: #fff;
-      border-radius: 50%;
-      animation: fall linear infinite;
-      z-index: 9999;
-    }
-
-    @keyframes fall {
-      0% {
-        transform: translateY(0) rotate(0deg);
-      }
-      100% {
-        transform: translateY(100vh) rotate(360deg);
-      }
-    }
   </style>
 </head>
 <body class="mat-typography df-backgound-dark" >
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      const numFlakes = 15;
 
-
-
-      const currentDate = new Date();
-      const isDecember = currentDate.getMonth() === 11;
-      const isBetweenDates = isDecember && currentDate.getDate() >= 1 && currentDate.getDate() <= 26;
-
-
-        for (let i = 0; i < numFlakes; i++) {
-          createFlake();
-        }
-
-
-      function createFlake() {
-        const flake = document.createElement('div');
-        flake.className = 'flake';
-        document.body.appendChild(flake);
-
-        resetFlake(flake);
-      }
-
-      function resetFlake(flake) {
-        const size = Math.random() * 10 + 5;
-        const left = Math.random() * window.innerWidth;
-        const delay = Math.random() * 25; // Atraso aleatório para iniciar a animação
-        const duration = Math.random() * 10 + 10; // Duração da animação
-
-        flake.style.width = `${size}px`;
-        flake.style.height = `${size}px`;
-        flake.style.left = `${left}px`;
-        flake.style.animationDelay = `-${delay}s`;
-        flake.style.animationDuration = `${duration}s`;
-      }
-    });
-  </script>
-  <router-outlet></router-outlet>
+  <app-page-container></app-page-container>
 
   <noscript>Please enable JavaScript to continue using this application.</noscript>
 </body>

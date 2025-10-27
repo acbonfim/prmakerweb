@@ -1,0 +1,39 @@
+mat-list-item {
+  height: auto !important;
+}
+
+mat-list-item .mat-list-item-content {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px;
+  padding: 0 16px !important;
+}
+
+.menu-item-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.active-route {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.active-route .mat-icon {
+  color: #007bff;
+}
+
+.active-route span {
+  color: #007bff;
+  font-weight: 500;
+}
+
+mat-list-item {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+mat-list-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}

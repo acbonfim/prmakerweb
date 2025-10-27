@@ -1,11 +1,15 @@
-<div style="padding: 10px">
-  <h2 mat-dialog-title style="padding: 10px">Template para a branch {{data.environmentName}}</h2>
-  <mat-dialog-content>
-    <pre>{{ data.description }}</pre>
+<div class="dialog-container">
+  <div class="dialog-header">
+    <h2 mat-dialog-title>Template para a branch {{data.environmentName}}</h2>
+  </div>
+
+  <mat-dialog-content class="dialog-content">
+    <div class="scrollable-content">
+      <pre>{{ data.description }}</pre>
+    </div>
   </mat-dialog-content>
-  <mat-dialog-actions>
-    <button matButton mat-dialog-close>Close</button>
+
+  <mat-dialog-actions class="dialog-footer">
+    <button matButton mat-dialog-close (click)="dialogRef.close()">Fechar</button>
   </mat-dialog-actions>
 </div>
-
-

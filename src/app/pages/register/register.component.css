@@ -6,3 +6,41 @@
 .full-width {
   width: 100%;
 }
+
+::ng-deep .custom-select-button {
+  height: 56px !important;
+}
+
+::ng-deep .custom-select-button .p-button {
+  height: 56px !important;
+  display: flex;
+  align-items: center;
+}
+
+::ng-deep .custom-input-group {
+  height: 56px !important;
+  max-width: 300px !important;
+}
+
+::ng-deep .custom-input-group .p-inputgroup {
+  height: 56px !important;
+}
+
+::ng-deep .custom-input-group .p-inputnumber,
+::ng-deep .custom-input-group .p-inputnumber-input,
+::ng-deep .custom-input-group .p-inputgroup-addon {
+  height: 56px !important;
+}
+
+::ng-deep .custom-input-group .p-inputgroup-addon .p-button {
+  height: 56px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+::ng-deep p-button {
+  height: 56px !important;
+}
+
+

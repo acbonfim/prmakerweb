@@ -1,0 +1,17 @@
+<div class="page-container">
+  <div class="top-bar">
+    <app-top-menu [isCollapsed]="isSidebarCollapsed"
+                  (toggleSidebar)="toggleSidebar()"
+                  ></app-top-menu>
+  </div>
+
+  <div class="main-content">
+    <div class="sidebar" [class.collapsed]="isSidebarCollapsed">
+      <app-side-menu [isCollapsed]="isSidebarCollapsed" (toggleSidebar)="toggleSidebar()"></app-side-menu>
+    </div>
+
+    <div class="content-area">
+      <router-outlet></router-outlet>
+    </div>
+  </div>
+</div>

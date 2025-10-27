@@ -1,0 +1,118 @@
+<mat-card>
+  <mat-card-content>
+    <p-table [value]="products" dataKey="id" editMode="row" [tableStyle]="{'min-width': '50rem'}">
+      <ng-template #header>
+        <tr>
+          <th style="width:22%">Code</th>
+          <th style="width:22%">Name</th>
+          <th style="width:22%">Inventory Status</th>
+          <th style="width:22%">Price</th>
+          <th style="width:12%"></th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-product let-editing="editing" let-ri="rowIndex">
+        <tr [pEditableRow]="product">
+          <td>
+            <p-cellEditor>
+              <ng-template #input>
+                <input
+                  pInputText type="text"
+                  [(ngModel)]="product.code" />
+              </ng-template>
+              <ng-template #output>
+                {{product.code}}
+              </ng-template>
+            </p-cellEditor>
+          </td>
+          <td>
+            <p-cellEditor>
+              <ng-template #input>
+                <input
+                  pInputText type="text"
+                  [(ngModel)]="product.name"
+                  required />
+              </ng-template>
+              <ng-template #output>
+                {{product.name}}
+              </ng-template>
+            </p-cellEditor>
+          </td>
+          <td>
+            <p-cellEditor>
+              <ng-template #input>
+                <p-select
+                  [options]="statuses"
+                  appendTo="body"
+                  [(ngModel)]="product.inventoryStatus"
+                  [style]="{'width':'100%'}" />
+              </ng-template>
+              <ng-template #output>
+                <p-tag
+                  [value]="product.inventoryStatus"
+                  [severity]="getSeverity(product.inventoryStatus)" />
+              </ng-template>
+            </p-cellEditor>
+          </td>
+          <td>
+            <p-cellEditor>
+              <ng-template #input>
+                <input
+                  pInputText type="text"
+                  [(ngModel)]="product.price" />
+              </ng-template>
+              <ng-template #output>
+                {{product.price | currency: 'USD'}}
+              </ng-template>
+            </p-cellEditor>
+          </td>
+          <td>
+            <div class="flex items-center justify-center gap-2">
+              <button
+                *ngIf="!editing"
+                pButton
+                pRipple
+                type="button"
+                pInitEditableRow
+                icon="pi pi-pencil"
+                (click)="onRowEditInit(product)"
+                text
+                rounded
+                severity="secondary"
+              ></button>
+              <button
+                *ngIf="editing"
+                pButton
+                pRipple
+                type="button"
+                pSaveEditableRow
+                icon="pi pi-check"
+                (click)="onRowEditSave(product)"
+                text
+                rounded
+                severity="secondary"
+              ></button>
+              <button
+                *ngIf="editing"
+                pButton
+                pRipple
+                type="button"
+                pCancelEditableRow
+                icon="pi pi-times"
+                (click)="onRowEditCancel(product, ri)"
+                text
+                rounded
+                severity="secondary"
+              ></button>
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </mat-card-content>
+</mat-card>
+
+
+
+
+
+<ngx-loading-bar></ngx-loading-bar>
