@@ -8,7 +8,6 @@ import {FormsModule} from '@angular/forms';
 import {MatIconModule} from '@angular/material/icon';
 import {HttpClient} from '@angular/common/http';
 import {MatDialog} from '@angular/material/dialog';
-import {DialogTemplateComponent} from '../../components/dialog-template/dialog-template.component';
 import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {MatAutocompleteModule} from '@angular/material/autocomplete';
 import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
@@ -21,18 +20,21 @@ import {ButtonModule} from 'primeng/button';
 import {MenuModule} from 'primeng/menu';
 import {InputNumberModule} from 'primeng/inputnumber';
 import {LMarkdownEditorModule} from 'ngx-markdown-editor';
-import {UserService} from '../../services/UserService.service';
 import {SplitButton} from 'primeng/splitbutton';
 import {MenuItem, MenuItemCommandEvent} from 'primeng/api';
-import { DialogPrompt } from '../../components/dialog-prompt/dialog-prompt';
-import { CliipboardService } from '../../services/cliipboard.service';
-import {environment} from '../../../environments/environment';
+import {UserService} from '../../../services/UserService.service';
+import {CliipboardService} from '../../../services/cliipboard.service';
+import {environment} from '../../../../environments/environment';
+import {DialogTemplateComponent} from '../../../components/dialog-template/dialog-template.component';
+import {DialogPrompt} from '../../../components/dialog-prompt/dialog-prompt';
+import {StorageService} from '../../../services/storage.service';
 
 @Component({
   selector: 'app-register',
   templateUrl: './register.component.html',
   styleUrls: ['./register.component.css'],
   providers: [HttpClient],
+  standalone: true,
   imports: [
     MatCardModule,
     MatButtonModule,
@@ -55,9 +57,9 @@ import {environment} from '../../../environments/environment';
     SplitButton
   ]
 })
-class RegisterComponent implements OnInit {
+export class RegisterComponent implements OnInit {
 
-  environment = 'dev';
+  environmentName = 'dev';
   template:any = null;
   pullRequest:any = {};
   urlBase = environment.apiUrl;
@@ -159,7 +161,7 @@ class RegisterComponent implements OnInit {
   constructor(
     private http: HttpClient,
     private loadingBar: LoadingBarService,
-    private userService: UserService
+    private storageService: StorageService,
   ) { }
 
   ngOnInit() {
@@ -167,13 +169,8 @@ class RegisterComponent implements OnInit {
     this.checkIfMobile();
     this.initializeMobileButtons();
 
-    this.userService.selectedUser$.subscribe(user => {
-      if (user) {
-        console.log(user)
-        this.userSelected = user.value.id;
-        this.generateFullDescriptionHandler();
-      }
-    });
+    this.userSelected = this.storageService.getAccess().user;
+    console.log(this.userSelected);
   }
 
   processTextForEditor(text: string): string {
@@ -207,7 +204,7 @@ class RegisterComponent implements OnInit {
   }
 
   clearAll() {
-    this.environment = 'dev';
+    this.environmentName = 'dev';
     this.template = null;
     this.pullRequest = {};
     this.cardNumber = null;
@@ -222,7 +219,7 @@ class RegisterComponent implements OnInit {
     let pullRequestModel = {
       description: this.pullRequest.description,
       cardNumber: cardNumber,
-      userId: this.userSelected,
+      userId: this.userSelected.externalId,
       formId: this.template.id,
       rootCause: this.pullRequest.rootCause,
     };
@@ -248,7 +245,7 @@ class RegisterComponent implements OnInit {
   getTemplateByEnvironment() {
     this.isTemplateLoading = true;
     this.loadingBar.start();
-    this.http.get(`${this.urlBase}Form/GetByEnvironment?enrironmentName=${this.environment.toUpperCase()}`).subscribe(
+    this.http.get(`${this.urlBase}Form/GetByEnvironment?enrironmentName=${this.environmentName.toUpperCase()}`).subscribe(
       (template:any) => {
         this.template = template;
         this.isTemplateLoading = false;
@@ -258,22 +255,26 @@ class RegisterComponent implements OnInit {
     );
   }
 
-  getPullRequestByEnvironmentAndUserAndCardNumber() {
-    this.isPullRequestLoading = true;
-    this.loadingBar.start();
-    this.http.get(`${this.urlBase}PullRequest/GetByEnvironmentNameAndCardNumber?environmentName=${this.environment}&cardNumber=${this.cardNumber}&userId=${this.userSelected}`).subscribe(
-      (response:any) => {
-        this.pullRequest = response;
-        this.isPullRequestLoading = false;
-        this.loadingBar.stop();
-        this.generateFullDescriptionHandler();
-      },
-      error => {
-        this.isPullRequestLoading = false;
-        this.loadingBar.stop();
+
+    getPullRequestByCardNumber()
+    {
+      this.isPullRequestLoading = true;
+      this.loadingBar.start();
+      this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}}`).subscribe(
+        (response: any) => {
+          if(response) {
+            this.pullRequest = response;
+            this.isPullRequestLoading = false;
+            this.loadingBar.stop();
+            this.generateFullDescriptionHandler();
+          }
+
+        },
+        error => {
+          this.isPullRequestLoading = false;
+          this.loadingBar.stop();
+        });
     }
-    );
-  }
 
 
 
@@ -293,7 +294,7 @@ class RegisterComponent implements OnInit {
       data: {
         id: 1,
         description: this.fullDescription,
-        environmentName: this.environment.toUpperCase(),
+        environmentName: this.environmentName.toUpperCase(),
       },
       width: '1200px',
       height: '80vh',
@@ -333,7 +334,7 @@ class RegisterComponent implements OnInit {
     if(this.pullRequest.description && this.pullRequest.description.length == 0) {
       this.pullRequest.description = null;
     }
-    if(this.cardNumber == null || this.userSelected == null) return;
+    if(this.cardNumber == null) return;
     if(this.pullRequest.description == null) return;
     if(this.template == null) return;
 
@@ -350,14 +351,14 @@ class RegisterComponent implements OnInit {
 
     const newDescription = prTemplate.replace(/\[ \]/g, '[x]');
 
-    this.fullDescription = newDescription.replace("Descreva as alterações feitas neste PR", `${prDescription.toString().trim()}\n\nAB#${this.cardNumber} ${this.environment.toUpperCase()}`);
+    this.fullDescription = newDescription.replace("Descreva as alterações feitas neste PR", `${prDescription.toString().trim()}\n\nAB#${this.cardNumber} ${this.environmentName.toUpperCase()}`);
     this.makeUrlLink();
   }
 
   makeUrlLink() {
-    if(this.cardNumber == null || this.userSelected == null) return;
+    if(this.cardNumber == null) return;
     this.link = `https://github.com/electradv/edv-solvace/compare/my-environment...hotfix/${this.cardNumber}`;
-    this.link = this.link.replace("my-environment",this.convertEnvironmentIdToBranchName(this.environment.toLowerCase()));
+    this.link = this.link.replace("my-environment",this.convertEnvironmentIdToBranchName(this.environmentName.toLowerCase()));
   }
 
   convertEnvironmentIdToBranchName(id: string): string {
@@ -382,7 +383,7 @@ class RegisterComponent implements OnInit {
     this.makeUrlLink();
     let url = new URL(this.link);
     url.searchParams.set('expand', '1');
-    url.searchParams.set('title', `AB#${this.cardNumber} ${this.environment.toUpperCase()}`);
+    url.searchParams.set('title', `AB#${this.cardNumber} ${this.environmentName.toUpperCase()}`);
     url.searchParams.set('body', this.fullDescription!);
 
     window.open(url, '_blank');

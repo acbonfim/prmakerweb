@@ -1,0 +1,60 @@
+
+
+
+<div class="container" [style.paddingTop.vh]="isDesktop ? '0' : '10'" >
+
+  <div class="d-flex justify-content-center">
+    <mat-card class="w-50 d-block position-absolute card-logo" >
+      <img src="assets/images/logo.png" class="mt-2" style="width:200px;" alt="">
+    </mat-card>
+  </div>
+  <div class="card">
+{{creds|json}}
+    <h1 class="title">Login</h1>
+    <div>
+      <div class="input-container" >
+        <mat-form-field appearance="fill" class="w-100 mb-3" color="primary">
+          <mat-label>Usuário</mat-label>
+          <input matInput  [(ngModel)]="creds!.username" (keydown.enter)="login()">
+          <mat-hint class="text-danger"></mat-hint>
+        </mat-form-field>
+      </div>
+
+      <div class="input-container">
+        <mat-form-field appearance="fill" class="w-100 mb-3">
+          <mat-label>Informe sua senha</mat-label>
+          <input  matInput [type]="hide ? 'password' : 'text'" [(ngModel)]="creds!.password" (keydown.enter)="login()">
+          <button mat-icon-button matSuffix (click)="hide = !hide" [attr.aria-label]="'Hide password'" [attr.aria-pressed]="hide">
+            <mat-icon>{{hide ? 'visibility_off' : 'visibility'}}</mat-icon>
+          </button>
+        </mat-form-field>
+      </div>
+      <div class="input-container mb-5" style="margin-top: -30px;">
+        <mat-slide-toggle color="primary"
+        (ngModelChange)="clearAccess()"
+        [(ngModel)]="salvarLogin" [checked]="salvarLogin">Salvar senha?</mat-slide-toggle>
+      </div>
+
+      <div class="button-container {{load ? 'disabled' : ''}}" >
+        <div class="d-flex">
+          <button type="submit" (click)="login()" class="w-100  {{load ? 'disabled' : ''}}"  >
+            <span>Login </span>
+            @if(load) {
+              <mat-icon class=""><mat-spinner color="accent" class="mt-1" mat-icon diameter="21"></mat-spinner></mat-icon>
+            }
+
+
+          </button>
+
+       </div>
+
+      </div>
+      <div class="footer"><a >Esqueceu sua senha?</a></div>
+    </div>
+  </div>
+
+
+</div>
+
+
+

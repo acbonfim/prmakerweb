@@ -11,6 +11,7 @@ import {MatIconModule} from '@angular/material/icon';
   selector: 'app-dialog-prompt',
   templateUrl: './dialog-prompt.html',
   styleUrl: './dialog-prompt.css',
+  standalone: true,
   imports: [
     MatDialogContent,
     MatDialogActions,

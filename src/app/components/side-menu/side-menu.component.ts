@@ -11,6 +11,7 @@ import {filter} from 'rxjs';
   templateUrl: './side-menu.component.html',
   styleUrls: ['./side-menu.component.css'],
   imports: [CommonModule, MatListModule, MatIconModule, RouterLink],
+  standalone: true,
 })
 export class SideMenuComponent implements OnInit {
 
@@ -24,17 +25,17 @@ export class SideMenuComponent implements OnInit {
     {
       label: 'Início',
       icon: 'home',
-      link: '/home'
+      link: 'auth/home'
     },
     {
       label: 'Pull Requests',
       icon: 'merge',
-      link: '/register'
+      link: 'auth/register'
     },
     {
       label: 'Ambientes clientes',
       icon: 'language',
-      link: '/client-access'
+      link: 'auth/client-access'
     },
   ]
 
@@ -53,7 +54,7 @@ export class SideMenuComponent implements OnInit {
 
 
   isActiveRoute(link: string): boolean {
-    return this.currentRoute === link || this.currentRoute.startsWith(link + '/');
+    return this.currentRoute === ('/' + link) || this.currentRoute.startsWith(link + '/');
   }
 
   navigateTo(link: string) {

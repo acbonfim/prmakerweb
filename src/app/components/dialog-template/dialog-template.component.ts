@@ -6,6 +6,7 @@ import {MatButtonModule} from '@angular/material/button';
   selector: 'app-dialog-template',
   templateUrl: './dialog-template.component.html',
   styleUrls: ['./dialog-template.component.css'],
+  standalone: true,
   imports: [
     MatDialogContent,
     MatDialogActions,

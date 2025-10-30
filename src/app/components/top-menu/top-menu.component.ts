@@ -1,4 +1,4 @@
-import {Component, EventEmitter, Input, OnInit, Output} from '@angular/core';
+import {Component, EventEmitter, HostListener, Input, OnInit, Output} from '@angular/core';
 import {MatIconModule} from '@angular/material/icon';
 import {MatButtonModule} from '@angular/material/button';
 import {MatMenuModule} from '@angular/material/menu';
@@ -13,6 +13,11 @@ import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import {ButtonModule} from 'primeng/button';
 import {InputNumberModule} from 'primeng/inputnumber';
 import {environment} from '../../../environments/environment';
+import {MatFormFieldModule} from '@angular/material/form-field';
+import {GlobalService} from '../../services/global.service';
+import {StorageService} from '../../services/storage.service';
+import {WsService} from '../../services/ws.service';
+import {RouterModule} from '@angular/router';
 
 interface AutoCompleteCompleteEvent {
   originalEvent: Event;
@@ -23,6 +28,7 @@ interface AutoCompleteCompleteEvent {
 @Component({
   selector: 'app-top-menu',
   templateUrl: './top-menu.component.html',
+  standalone: true,
   imports: [
     MatIconModule,
     MatButtonModule,
@@ -33,7 +39,9 @@ interface AutoCompleteCompleteEvent {
     InputGroupModule,
     InputGroupAddonModule,
     ButtonModule,
-    InputNumberModule
+    InputNumberModule,
+    MatFormFieldModule,
+    RouterModule
   ],
   styleUrls: ['./top-menu.component.css']
 })
@@ -42,53 +50,72 @@ export class TopMenuComponent implements OnInit {
   @Input() isCollapsed: boolean = false;
   @Output() selectedUserEmit = new EventEmitter<void>();
 
-  users: any[] = [];
-  urlBase = environment.apiUrl;
-  filteredUsers: any[] = [];
-  selectedUser: any = null;
+  sidebarOpen = true;
+  user: any = {};
+  isOn = false;
+  isProduction = false;
+  title = '';
+  isDesktop = false;
 
 
   constructor(
-    private http: HttpClient,
-    private loadingBar: LoadingBarService,
-    private userService: UserService,
+    private _globalService: GlobalService,
+    public _storageService: StorageService,
+    private _wsService: WsService,
   ) { }
 
-  ngOnInit() {
-    this.getAllUsers();
+  ngOnInit(): void {
+    this.title = environment.title;
+    this.isProduction = environment.production;
+    this.user = this._storageService.getAccess().user;
+
+    let nameSplit = this.user.fullName.split(' ');
+    let names = nameSplit.length;
+
+    this.user.firstName = nameSplit[0];
+    this.user.lastName = nameSplit[names - 1];
+    this.realTimeMethods();
   }
 
-  getAllUsers() {
-    this.loadingBar.start();
-    this.http.get(`${this.urlBase}User/GetUsers`).subscribe(
-      (result: any) => {
-        this.users = result;
-        this.loadingBar.stop();
-      },
-      error => {
-        console.error('Erro ao carregar usuários:', error);
-        this.loadingBar.stop();
-      }
-    );
+  realTimeMethods() {
+    this._wsService._wsOn.subscribe((data: boolean) => {
+      console.log(data);
+      this.isOn = data;
+    });
   }
 
-  searchUsers(event: AutoCompleteCompleteEvent) {
-    const query = event.query.toLowerCase();
+  toggle() {
+    this.sidebarOpen = !this.sidebarOpen;
+    this._globalService._sideNavToggle(null);
+  }
 
-    if (query) {
-      this.filteredUsers = this.users.filter(user =>
-        user.name.toLowerCase().includes(query) ||
-        (user.email && user.email.toLowerCase().includes(query))
-      );
+  logOut() {
+    this._wsService.endConnection();
+    this._globalService.navigateTo("login");
+  }
+
+  @HostListener('window:resize')
+  onResize() {
+    this.isDesktop = this._globalService.isDesktop();
+    this.autoToggleSidebar();
+  }
+
+  autoToggleSidebar() {
+    if (this.isDesktop) {
+      this.sidebarOpen = true;
     } else {
-      this.filteredUsers = [...this.users];
+      this.sidebarOpen = false;
     }
+
+    this._globalService._sideNavToggle(this.sidebarOpen);
   }
 
 
-  onUserSelect(user: any) {
-    this.userService.setSelectedUser(user)
-  }
+
+
+
+
+
 
   onToggleSidebar() {
     this.toggleSidebar.emit();

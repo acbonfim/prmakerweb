@@ -11,14 +11,14 @@ export class CliipboardService {
 
   copyFullDescriptionToClipboard(fullDescription: string) {
     if (!fullDescription) {
-      this._snackBar.open('Nenhuma descrição completa para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
+      this._snackBar.open('Nenhuma descrição para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
       return;
     }
 
     try {
       navigator.clipboard.writeText(fullDescription)
         .then(() => {
-          this._snackBar.open('Descrição completa copiada para a área de transferência', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
+          this._snackBar.open('Copiado com sucesso', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
         })
         .catch(err => {
           console.error('Erro ao copiar para a área de transferência:', err);
@@ -48,7 +48,7 @@ export class CliipboardService {
     try {
       const successful = document.execCommand('copy');
       if (successful) {
-        this._snackBar.open('Descrição completa copiada para a área de transferência', 'Ok',
+        this._snackBar.open('Copiado com sucesso', 'Ok',
           {direction: "ltr", horizontalPosition: "right", verticalPosition: "top"});
       }
     } catch (err) {

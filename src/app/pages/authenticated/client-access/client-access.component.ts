@@ -7,10 +7,10 @@ import {CommonModule} from '@angular/common';
 import {ToastModule} from 'primeng/toast';
 import {ButtonModule} from 'primeng/button';
 import {MessageService, SelectItem} from 'primeng/api';
-import {ProductService} from '../../services/ProductService.service';
 import {FormsModule} from '@angular/forms';
 import {LoadingBarModule, LoadingBarService} from '@ngx-loading-bar/core';
 import {MatCardModule} from '@angular/material/card';
+import {ProductService} from '../../../services/ProductService.service';
 
 
 export interface Product {
@@ -30,6 +30,7 @@ export interface Product {
   selector: 'app-client-access',
   templateUrl: './client-access.component.html',
   styleUrls: ['./client-access.component.css'],
+  standalone: true,
   imports: [TableModule, ToastModule, CommonModule, TagModule, SelectModule, ButtonModule, InputTextModule, CommonModule, FormsModule, LoadingBarModule,
     MatCardModule
 
@@ -58,7 +59,7 @@ export class ClientAccessComponent implements OnInit {
   ngOnInit() {
     this.loadingBar.start();
     this.productService.getProductsMini()
-      .then((data) => {
+      .then((data: any) => {
       this.products = data;
         this.loadingBar.stop();
     });

@@ -8,6 +8,7 @@ import {CommonModule} from '@angular/common';
   selector: 'app-page-container',
   templateUrl: './page-container.component.html',
   styleUrls: ['./page-container.component.css'],
+  standalone: true,
   imports: [SideMenuComponent,
     RouterModule,
     RouterOutlet,

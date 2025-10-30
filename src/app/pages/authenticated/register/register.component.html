@@ -19,8 +19,8 @@
         </p-inputnumber>
         <p-inputgroup-addon>
           <p-button
-            (onClick)="getPullRequestByEnvironmentAndUserAndCardNumber()"
-            [disabled]="!userSelected || !cardNumber || !environment || isPullRequestLoading"
+            (onClick)="getPullRequestByCardNumber()"
+            [disabled]="!cardNumber || !environmentName || isPullRequestLoading"
             icon="pi pi-search" severity="secondary" variant="text" />
         </p-inputgroup-addon>
       </p-inputgroup>
@@ -29,7 +29,7 @@
 
       <p-selectbutton class="col-12 col-md-6"
         [options]="justifyOptions"
-                      [(ngModel)]="environment"
+                      [(ngModel)]="environmentName"
                       (onChange)="onBranchChange()"
                       optionLabel="label"
                       optionValue="value"

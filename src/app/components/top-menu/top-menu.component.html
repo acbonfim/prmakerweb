@@ -6,43 +6,46 @@
   </button>
 
 
-
-
-  <div class="ms-5">
-    <p-autocomplete
-      [dropdown]="true"
-      [suggestions]="filteredUsers"
-      [(ngModel)]="selectedUser"
-      (completeMethod)="searchUsers($event)"
-      (onSelect)="onUserSelect($event)"
-      field="name"
-      optionLabel="name"
-      placeholder="Buscar usuário..."
-      [minLength]="0"
-      [showClear]="true"
-      [forceSelection]="false"
-      styleClass="w-100">
-
-      <ng-template let-user pTemplate="item">
-        <div class="d-flex align-items-center">
-          <div>
-            <div class="font-medium">{{ user.name }}</div>
-          </div>
-        </div>
-      </ng-template>
-    </p-autocomplete>
-  </div>
-
-  <button mat-icon-button class="ms-auto" [matMenuTriggerFor]="menu">
-    <mat-icon>account_circle</mat-icon>
+  <span class="example-spacer "></span>
+  <button hidden mat-icon-button class="example-icon favorite-icon" aria-label="Example icon-button with heart icon">
+    <mat-icon >manage_accounts</mat-icon>
   </button>
+  <button hidden mat-icon-button class="example-icon" aria-label="Example icon-button with share icon">
+    <mat-icon >mark_chat_unread</mat-icon>
+  </button>
+  <button mat-icon-button class="example-icon" aria-label="Example icon-button with share icon">
+    <mat-icon >notifications</mat-icon>
+  </button>
+  <a style="cursor: pointer">
+
+
+    <a mat-fab class="example-icon ms-4" style="width: 40px; height: 40px; background-color: black;">
+      <img src="assets/images/user.png" class="avatar status {{isOn? 'is-on':'is-off'}}">
+    </a>
+
+      <span class="ms-2" style="font-size: 15px;">
+      {{
+          user.firstName + ' ' + user.lastName
+        }}
+    </span>
+
+  </a>
+
+  <a [matMenuTriggerFor]="menuUser" class="mt-2 text-white" style="cursor: pointer">
+    <mat-icon>arrow_drop_down</mat-icon>
+  </a>
 </div>
 
-<mat-menu #menu="matMenu">
-  <div class="container p-2">
-    <div>Alex Carlos</div>
-    <mat-divider class="mt-3"></mat-divider>
-    <button mat-menu-item>Gerenciar conta</button>
-    <button mat-menu-item>Sair</button>
-  </div>
+
+<mat-menu #menuUser="matMenu">
+  <button [routerLink]="['administracao/userMananger']" mat-menu-item>
+    <mat-icon>person</mat-icon>
+    <span>Meu perfil</span>
+  </button>
+  <mat-divider></mat-divider>
+  <button mat-menu-item (click)="logOut()">
+    <mat-icon>logout
+    </mat-icon>
+    <span>Sair</span>
+  </button>
 </mat-menu>

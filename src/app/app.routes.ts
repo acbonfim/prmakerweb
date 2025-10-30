@@ -1,19 +1,22 @@
 import { Routes } from '@angular/router';
-import RegisterComponent from './pages/register/register.component';
-import { HomeComponent } from './pages/home/home.component';
-import { ClientAccessComponent } from './pages/client-access/client-access.component';
 
 export const routes: Routes = [
   {
-    path: 'register', component: RegisterComponent
+    path: 'login',
+    loadComponent: () => import('./pages/login/login').then(m => m.Login)
   },
   {
-    path: '', redirectTo: 'register', pathMatch: 'full'
+    path: 'auth',
+    loadChildren: () => import('./pages/authenticated/authenticated.routes').then(m => m.AUTHENTICATED_ROUTES)
   },
   {
-    path: 'home', component: HomeComponent
+    path: '',
+    redirectTo: 'login',
+    pathMatch: 'full'
   },
   {
-    path: 'client-access', component: ClientAccessComponent
-  },
+    path: '**',
+    redirectTo: 'auth/dashboard',
+    pathMatch: 'full'
+  }
 ];
