@@ -94,8 +94,13 @@
       </button>
       Button to save root cause to DevOps (currently disabled) -->
 
-      <button mat-raised-button disabled style="margin-left: 10px"
-      >Salvar RC no DevOps<mat-icon>beenhere</mat-icon></button>
+      <button mat-raised-button
+              (click)="saveRootCauseToDevOps()"
+              [disabled]="isAzureLoading || !cardNumber || !pullRequest?.rootCause"
+              style="margin-left: 10px">
+        Salvar RC no DevOps
+        <mat-icon>beenhere</mat-icon>
+      </button>
       <button mat-raised-button style="margin-left: 10px"
               [disabled]="!cardNumber"
               (click)="generatePullRequestWithAi()"

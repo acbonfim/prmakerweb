@@ -74,6 +74,7 @@ export class RegisterComponent implements OnInit {
   mobileButtons: MenuItem[] = [];
   copyCustomButtons: MenuItem[] = [];
   isMobile = false;
+  isAzureLoading: boolean = false;
 
   justifyOptions = [
     {
@@ -97,6 +98,7 @@ export class RegisterComponent implements OnInit {
       value: 'rc'
     },
   ]
+
 
 
 
@@ -255,6 +257,31 @@ export class RegisterComponent implements OnInit {
     )
 
     console.log(pullRequestModel);
+  }
+
+  saveRootCauseToDevOps() {
+    this.isAzureLoading = true;
+    this.loadingBar.start();
+
+    let model = {
+      rootCause: this.pullRequest.rootCause,
+    };
+
+    this.http.post(`${this.urlBase}Azure/card/${this.cardNumber}/rootcause`, model).subscribe(
+      x => {
+        if(x)
+          this._snackBar.open('RCA salvo com sucesso!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
+
+        this.isAzureLoading = false
+        this.loadingBar.stop();
+      }, error => {
+        this._snackBar.open('Erro ao tentar salvar RCA no DevOps', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
+
+        this.isAzureLoading = false
+        this.loadingBar.stop();
+      }
+    )
+
   }
 
   getTemplateByEnvironment() {
