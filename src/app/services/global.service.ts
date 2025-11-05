@@ -15,6 +15,7 @@ export class GlobalService {
   sideNavToggle = new EventEmitter<any>();
   horizontalPosition: MatSnackBarHorizontalPosition = 'end';
   verticalPosition: MatSnackBarVerticalPosition = 'top';
+  onAiGenerated = new EventEmitter<any>();
 
   constructor(
     private http: HttpClient
@@ -22,6 +23,10 @@ export class GlobalService {
     , private _snackBar: MatSnackBar
     , private _clipboardService: CliipboardService
   ) { }
+
+  onAiGeneratedEmit(data: any) {
+    this.onAiGenerated.emit(data);
+  }
 
   public _sideNavToggle(status: any) {
     this.sideNavToggle.emit(status);

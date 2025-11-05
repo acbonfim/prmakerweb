@@ -44,3 +44,26 @@
 }
 
 
+::ng-deep .custom-buttom .p-button {
+  height: 40px !important;
+  color: var(--mat-sys-primary);
+  font-family: Roboto,
+  "Helvetica Neue",
+  sans-serif;
+  border: none;
+}
+
+::ng-deep .custom-buttom .p-button:hover {
+  background-color: var(--mat-button-protected-container-color, var(--mat-sys-surface));
+  color: var(--mat-sys-primary);
+  border: none;
+}
+
+
+
+::ng-deep .custom-buttom .p-button:disabled {
+  border: none;
+  color: var(--mat-button-protected-disabled-label-text-color, color-mix(in srgb, var(--mat-sys-on-surface) 80%, transparent));
+  background-color: var(--mat-button-protected-disabled-container-color, color-mix(in srgb, var(--mat-sys-on-surface) 25%, transparent))
+}
+

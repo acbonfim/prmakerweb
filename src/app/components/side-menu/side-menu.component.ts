@@ -10,7 +10,7 @@ import {filter} from 'rxjs';
   selector: 'app-side-menu',
   templateUrl: './side-menu.component.html',
   styleUrls: ['./side-menu.component.css'],
-  imports: [CommonModule, MatListModule, MatIconModule, RouterLink],
+  imports: [CommonModule, MatListModule, MatIconModule],
   standalone: true,
 })
 export class SideMenuComponent implements OnInit {

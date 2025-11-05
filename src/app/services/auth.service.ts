@@ -66,7 +66,7 @@ export class AuthService {
     const credentials = JSON.stringify({ accessToken: access.accessToken, refreshToken: access.refreshToken });
     let isRefreshSuccess: boolean;
     const refreshRes = await new Promise<any>((resolve, reject) => {
-      this.http.post<AuthenticatedResponse>(`${this.baseUrl}/user/RefreshToken`, credentials, {
+      this.http.post<AuthenticatedResponse>(`${this.baseUrl}user/RefreshToken`, credentials, {
         headers: new HttpHeaders({
           "Content-Type": "application/json"
         })

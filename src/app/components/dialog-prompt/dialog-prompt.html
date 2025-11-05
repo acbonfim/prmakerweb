@@ -4,40 +4,91 @@
   </div>
 
   <mat-dialog-content class="dialog-content p-3">
-    <div class="row">
-      <mat-form-field class="col-12 col-md-2">
-        <mat-label>Número do Card</mat-label>
-        <input [(ngModel)]="data.cardNumber"
-               (ngModelChange)="gerarPrompt()"
-               matInput>
-      </mat-form-field>
 
-      <mat-form-field class="col-12 col-md-3">
-        <mat-label>Commit ID</mat-label>
-        <input [(ngModel)]="data.commitID"
-               (ngModelChange)="gerarPrompt()"
-               matInput>
-      </mat-form-field>
-    </div>
+    @if(data.isAiGenerate){
+      <mat-stepper linear #stepper>
+        <mat-step>
+          <ng-template matStepLabel>Azure DevOps</ng-template>
+          <ng-template matStepContent>
+            @if(isAzureLoading()){
+              <div class="d-inline-flex align-items-center">
+                Carregando informações do card no Azure...
+                <mat-spinner class="ms-2" diameter="20"></mat-spinner>
+              </div>
+            }
+            @if (data.isAiGenerate && showCardDetails() && !isAzureLoading()) {
+              <div class="container overflow-auto">
+                <div class="mt-2 p-2 bg-dark rounded" [innerHTML]="reproSteps | safeHtml"
+                     style="max-width: 100%; height: 300px; overflow: auto;"></div>
+              </div>
 
-    <div class="row">
-      <mat-form-field class="col-12">
-        <mat-label>Reclamação original</mat-label>
-        <textarea [(ngModel)]="data.description"
-                  (ngModelChange)="gerarPrompt()"
-                  matInput></textarea>
-      </mat-form-field>
+            }
 
-    </div>
+          </ng-template>
+        </mat-step>
+        <mat-step [editable]="!this.reproSteps.length" [completed]="this.reproSteps.length" >
+          <ng-template matStepLabel>GitHub</ng-template>
+          <ng-template matStepContent>
+            @if (!isGitHubLoading())
+            {
+              <mat-form-field class="full-width" style="height: 100%">
+                <mat-label>Informe o ID do commit</mat-label>
+                <input matInput [(ngModel)]="commitId" />
+                <button
+                  matIconButton
+                  matSuffix
+                  (click)="getGitHubCommitDiff()"
+                >
+                  <mat-icon>search</mat-icon>
+                </button>
+              </mat-form-field>
+            } @else {
+              <div class="d-inline-flex align-items-center">
+                Carregando informações do commit no GitHub...
+                <mat-spinner class="ms-2" diameter="20"></mat-spinner>
+              </div>
+            }
+
+            @if(githubCommitDiff) {
+              <div class="diff-viewer-container mt-3">
+                <app-git-diff-viewer [commitData]="githubCommitDiff"></app-git-diff-viewer>
+              </div>
+            }
 
 
-    <br>
+          </ng-template>
+        </mat-step>
+        <mat-step [editable]="false" >
+          <ng-template matStepLabel>Gerar com IA</ng-template>
+          <ng-template matStepContent>
+            @if(isAiLoading()){
+              <div class="d-inline-flex align-items-center">
+                Gerando seu texto de Pull Request com IA...
+                <mat-spinner class="ms-2" diameter="20"></mat-spinner>
+              </div>
+            }
 
-    @if(promptText){
-      <div class="scrollable-content">
-        <pre>{{ promptText }}</pre>
-      </div>
+            @if(!isAiLoading() && generatedText) {
+              <div class="generated-content mt-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h4 class="mb-0">Texto Gerado:</h4>
+                  <button mat-raised-button color="primary" (click)="copyPromptToClipboard()">
+                    <mat-icon>content_copy</mat-icon>
+                    Copiar
+                  </button>
+                </div>
+                <div class="markdown-viewer p-3 bg-dark rounded"
+                     style="max-height: 500px; overflow-y: auto;"
+                     [innerHTML]="generatedText | safeHtml">
+                </div>
+              </div>
+            }
+          </ng-template>
+        </mat-step>
+      </mat-stepper>
+
     }
+
 
   </mat-dialog-content>
 

@@ -28,6 +28,7 @@ import {environment} from '../../../../environments/environment';
 import {DialogTemplateComponent} from '../../../components/dialog-template/dialog-template.component';
 import {DialogPrompt} from '../../../components/dialog-prompt/dialog-prompt';
 import {StorageService} from '../../../services/storage.service';
+import {GlobalService} from '../../../services/global.service';
 
 @Component({
   selector: 'app-register',
@@ -71,6 +72,7 @@ export class RegisterComponent implements OnInit {
   fullDescription = null;
   link = "https://github.com/electradv/edv-solvace/compare/my-environment...hotfix/";
   mobileButtons: MenuItem[] = [];
+  copyCustomButtons: MenuItem[] = [];
   isMobile = false;
 
   justifyOptions = [
@@ -157,6 +159,7 @@ export class RegisterComponent implements OnInit {
 
   private _snackBar = inject(MatSnackBar);
   private _clipboardService = inject(CliipboardService);
+  private _globalService = inject(GlobalService);
 
   constructor(
     private http: HttpClient,
@@ -168,9 +171,21 @@ export class RegisterComponent implements OnInit {
     this.getTemplateByEnvironment();
     this.checkIfMobile();
     this.initializeMobileButtons();
+    this.initializeCustomCopyButtons();
 
     this.userSelected = this.storageService.getAccess().user;
     console.log(this.userSelected);
+    this.initAiGeneratedListener();
+  }
+
+  initAiGeneratedListener() {
+    this._globalService.onAiGenerated.subscribe((data: any) => {
+      if(data) {
+        this.pullRequest.description = data.pullRequestDescriptionAiGenerated;
+        this.pullRequest.rootCause = data.rootCauseAnalysisAiGenerated;
+        this.generateFullDescriptionHandler();
+      }
+    })
   }
 
   processTextForEditor(text: string): string {
@@ -255,17 +270,33 @@ export class RegisterComponent implements OnInit {
     );
   }
 
+  generatePullRequestWithAi() {
+    const dialogRef = this.dialog.open(DialogPrompt, {
+      data: {
+        cardNumber: this.cardNumber,
+        isAiGenerate: true,
+      },
+      width: '1200px',
+      height: '80vh',
+      maxWidth: '90vw',
+      maxHeight: '90vh',
+      panelClass: 'custom-dialog-container'
+    });
+  }
+
 
     getPullRequestByCardNumber()
     {
       this.isPullRequestLoading = true;
       this.loadingBar.start();
-      this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}}`).subscribe(
+      this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}`).subscribe(
         (response: any) => {
+
+          this.isPullRequestLoading = false;
+          this.loadingBar.stop();
+
           if(response) {
             this.pullRequest = response;
-            this.isPullRequestLoading = false;
-            this.loadingBar.stop();
             this.generateFullDescriptionHandler();
           }
 
@@ -304,10 +335,11 @@ export class RegisterComponent implements OnInit {
     });
   }
 
-  openDialogPrompt() {
+  openDialogPrompt(isAiGenerate: boolean = false) {
     const dialogRef = this.dialog.open(DialogPrompt, {
       data: {
-        cardNumber: this.cardNumber
+        cardNumber: this.cardNumber,
+        isAiGenerate: isAiGenerate,
       },
       width: '1200px',
       height: '80vh',
@@ -317,14 +349,56 @@ export class RegisterComponent implements OnInit {
     });
   }
 
-  copyFullDescriptionToClipboard() {
+
+  copyFullDescriptionToClipboard(itemToCopy: string = "full") {
 
     if (!this.fullDescription) {
       this._snackBar.open('Nenhuma descrição completa para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
       return;
     }
 
-    this._clipboardService.copyFullDescriptionToClipboard(this.fullDescription!);
+    let contentToCopy: string = '';
+
+    switch (itemToCopy) {
+      case 'full':
+        contentToCopy = this.fullDescription;
+        this._snackBar.open('Descrição completa copiada!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        break;
+
+      case 'description':
+        if (!this.pullRequest.description) {
+          this._snackBar.open('Nenhuma descrição para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+          return;
+        }
+        contentToCopy = `${this.pullRequest.description.toString().trim()}`;
+        this._snackBar.open('Descrição copiada!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        break;
+
+      case 'rootCause':
+        if (!this.pullRequest.rootCause) {
+          this._snackBar.open('Nenhum Root Cause para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+          return;
+        }
+        contentToCopy = this.pullRequest.rootCause;
+        this._snackBar.open('Root Cause copiado!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        break;
+
+      case 'template':
+        if (!this.template || !this.template.description) {
+          this._snackBar.open('Nenhum template para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+          return;
+        }
+        contentToCopy = this.template.description;
+        this._snackBar.open('Template copiado!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        break;
+
+      default:
+        contentToCopy = this.fullDescription;
+        this._snackBar.open('Descrição completa copiada!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        break;
+    }
+
+    this._clipboardService.copyFullDescriptionToClipboard(contentToCopy);
 
   }
 
@@ -395,6 +469,32 @@ export class RegisterComponent implements OnInit {
   }
 
   protected readonly Number = Number;
+
+  private initializeCustomCopyButtons() {
+    this.copyCustomButtons = [
+      {
+        label: 'Apenas descrição',
+        icon: 'pi pi-copy',
+        command: (event: MenuItemCommandEvent) => {
+          this.copyFullDescriptionToClipboard("description");
+        }
+      },
+      {
+        label: 'Root Cause',
+        icon: 'pi pi-copy',
+        command: (event: MenuItemCommandEvent) => {
+          this.copyFullDescriptionToClipboard("rootCause");
+        }
+      },
+      {
+        label: 'Template',
+        icon: 'pi pi-copy',
+        command: (event: MenuItemCommandEvent) => {
+          this.copyFullDescriptionToClipboard("template");
+        }
+      }
+    ];
+  }
 }
 
 export default RegisterComponent

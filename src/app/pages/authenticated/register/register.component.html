@@ -69,9 +69,12 @@
   </mat-card-content>
   <mat-card-actions style="background-color: #5b5b5b; margin-top: 20px; border-radius: 10px;">
     @if(!isMobile){
-      <button mat-raised-button
-              [disabled]="isPullRequestLoading || fullDescription === null"
-              (click)="copyFullDescriptionToClipboard()">Copiar<mat-icon>content_copy</mat-icon></button>
+      <p-splitbutton class="custom-buttom"
+                     label="Copiar"
+                     icon="pi pi-copy"
+                     [disabled]="isPullRequestLoading || fullDescription === null"
+                     [model]="copyCustomButtons" (onClick)="copyFullDescriptionToClipboard('full')" rounded severity="secondary"/>
+
       <button mat-raised-button style="margin-left: 10px"
               (click)="openGithubPullRequestPage()"
               [disabled]="!this.pullRequest?.description">Abrir PR<mat-icon>merge</mat-icon></button>
@@ -82,12 +85,23 @@
       <button mat-raised-button style="margin-left: 10px"
               [disabled]="isPullRequestLoading || fullDescription === null"
               (click)="clearAll()">Limpar<mat-icon>clear</mat-icon></button>
+
+      <!-- Button to generate prompt for AI processing
       <button mat-raised-button style="margin-left: 10px"
               [disabled]="!cardNumber"
-              (click)="openDialogPrompt()">Gerar Prompt<mat-icon>model_training</mat-icon></button>
+              (click)="openDialogPrompt()">Gerar Prompt
+        <mat-icon>model_training</mat-icon>
+      </button>
+      Button to save root cause to DevOps (currently disabled) -->
+
       <button mat-raised-button disabled style="margin-left: 10px"
       >Salvar RC no DevOps<mat-icon>beenhere</mat-icon></button>
-      <button disabled mat-raised-button matTooltip="Em breve" style="margin-left: 10px">Gerar com IA<mat-icon>model_training</mat-icon></button>
+      <button mat-raised-button style="margin-left: 10px"
+              [disabled]="!cardNumber"
+              (click)="generatePullRequestWithAi()"
+      >Gerar com IA<mat-icon>model_training</mat-icon></button>
+
+
     } @else {
       <p-splitbutton style="width: 100% !important"
         label="Salvar"
