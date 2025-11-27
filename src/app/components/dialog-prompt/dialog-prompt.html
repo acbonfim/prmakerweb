@@ -1,6 +1,6 @@
 <div class="dialog-container">
   <div class="dialog-header">
-    <h2 mat-dialog-title>Gerar prompt para descrição pull request</h2>
+    <h2 mat-dialog-title>Gerar informações automáticas</h2>
   </div>
 
   <mat-dialog-content class="dialog-content p-3">
@@ -72,13 +72,9 @@
               <div class="generated-content mt-3">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                   <h4 class="mb-0">Texto Gerado:</h4>
-                  <button mat-raised-button color="primary" (click)="copyPromptToClipboard()">
-                    <mat-icon>content_copy</mat-icon>
-                    Copiar
-                  </button>
                 </div>
                 <div class="markdown-viewer p-3 bg-dark rounded"
-                     style="max-height: 500px; overflow-y: auto;"
+                     style="max-height: 400px; height: 400px; overflow-y: auto;"
                      [innerHTML]="generatedText | safeHtml">
                 </div>
               </div>

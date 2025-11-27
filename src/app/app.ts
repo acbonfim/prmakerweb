@@ -4,7 +4,7 @@ import {PageContainerComponent} from './components/page-container/page-container
 
 @Component({
   selector: 'app-root',
-  imports: [ PageContainerComponent, RouterModule],
+  imports: [  RouterModule],
   standalone: true,
   template: `<router-outlet></router-outlet>`,
   styleUrl: './app.scss'

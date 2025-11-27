@@ -71,7 +71,7 @@ interface FileChange {
   `,
   styles: [`
     .diff-container-wrapper {
-      max-height: 600px;
+      max-height: 400px;
       overflow-y: auto;
       overflow-x: auto;
       border: 1px solid #30363d;

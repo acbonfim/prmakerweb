@@ -76,6 +76,10 @@ export class RegisterComponent implements OnInit {
   isMobile = false;
   isAzureLoading: boolean = false;
 
+  branchPrefix: string = 'hotfix/';
+  isEditingPrefix: boolean = false;
+  branchName: string = '';
+
   justifyOptions = [
     {
       label: 'DEV',
@@ -102,6 +106,23 @@ export class RegisterComponent implements OnInit {
 
 
 
+  onPrefixDoubleClick() {
+    this.isEditingPrefix = true;
+  }
+
+  onPrefixBlur() {
+    this.isEditingPrefix = false;
+    if (!this.branchPrefix || this.branchPrefix.trim() === '') {
+      this.branchPrefix = 'hotfix/';
+    } else if (!this.branchPrefix.endsWith('/')) {
+      this.branchPrefix = this.branchPrefix + '/';
+    }
+    this.makeUrlLink();
+  }
+
+  onPrefixChange() {
+    this.makeUrlLink();
+  }
 
   @HostListener('window:resize')
   onResize() {
@@ -226,6 +247,8 @@ export class RegisterComponent implements OnInit {
     this.pullRequest = {};
     this.cardNumber = null;
     this.fullDescription = null;
+    this.branchPrefix = 'hotfix/';
+    this.branchName = '';
     this.link = "https://github.com/electradv/edv-solvace/compare/my-environment...hotfix/";
   }
 
@@ -239,6 +262,8 @@ export class RegisterComponent implements OnInit {
       userId: this.userSelected.externalId,
       formId: this.template.id,
       rootCause: this.pullRequest.rootCause,
+      branchPrefix: this.branchPrefix,
+      branchName: this.branchName,
     };
 
     this.http.post(`${this.urlBase}PullRequest`, pullRequestModel).subscribe(
@@ -324,6 +349,8 @@ export class RegisterComponent implements OnInit {
 
           if(response) {
             this.pullRequest = response;
+            this.branchName = response.branchName;
+            this.branchPrefix = response.branchPrefix;
             this.generateFullDescriptionHandler();
           }
 
@@ -445,20 +472,24 @@ export class RegisterComponent implements OnInit {
 
 
   setFullDescription(){
-    this.fullDescription = this.template.description;
 
-    const prDescription = this.pullRequest.description;
-    let prTemplate = this.template.description;
+    //this.fullDescription = this.template.description;
 
-    const newDescription = prTemplate.replace(/\[ \]/g, '[x]');
+    //const prDescription = this.pullRequest.description;
+    //let prTemplate = this.template.description;
 
-    this.fullDescription = newDescription.replace("Descreva as alterações feitas neste PR", `${prDescription.toString().trim()}\n\nAB#${this.cardNumber} ${this.environmentName.toUpperCase()}`);
+    //const newDescription = prTemplate.replace(/\[ \]/g, '[x]');
+
+    //this.fullDescription = newDescription.replace("Descreva as alterações feitas neste PR", `${prDescription.toString().trim()}\n\nAB#${this.cardNumber} ${this.environmentName.toUpperCase()}`);
+
+    this.fullDescription = this.pullRequest.description;
+
     this.makeUrlLink();
   }
 
   makeUrlLink() {
     if(this.cardNumber == null) return;
-    this.link = `https://github.com/electradv/edv-solvace/compare/my-environment...hotfix/${this.cardNumber}`;
+    this.link = `https://github.com/electradv/edv-solvace/compare/my-environment...${this.branchPrefix}${this.branchName}`;
     this.link = this.link.replace("my-environment",this.convertEnvironmentIdToBranchName(this.environmentName.toLowerCase()));
   }
 
@@ -497,6 +528,7 @@ export class RegisterComponent implements OnInit {
 
   protected readonly Number = Number;
 
+
   private initializeCustomCopyButtons() {
     this.copyCustomButtons = [
       {
@@ -521,6 +553,10 @@ export class RegisterComponent implements OnInit {
         }
       }
     ];
+  }
+
+  onCardNumberChange() {
+    this.branchName = this.cardNumber!.toString();
   }
 }
 
