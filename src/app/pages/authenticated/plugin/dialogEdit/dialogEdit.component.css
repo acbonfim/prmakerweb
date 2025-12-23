@@ -1,0 +1,53 @@
+:host ::ng-deep .mat-mdc-dialog-surface {
+  overflow: hidden !important;
+}
+
+/* .example-form {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .example-form .form-row {
+    margin-bottom: 20px;
+  }
+
+  .example-form label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #dddddd;
+  }
+
+  .example-form input {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.1);
+    transition: border-color 0.3s ease;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .input-container {
+    display: flex;
+    align-items: center;
+  }
+
+  .input {
+    padding: 7px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.1);
+    transition: border-color 0.3s ease;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    flex: 1;
+  margin-right: 10px;
+  }
+
+  .example-form input:focus {
+    outline: none;
+    border-color: #2196f3;
+  }
+   */

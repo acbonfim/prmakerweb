@@ -37,6 +37,16 @@ export class SideMenuComponent implements OnInit {
       icon: 'language',
       link: 'auth/client-access'
     },
+    {
+      label: 'Gestão de usuários',
+      icon: 'manage_accounts',
+      link: 'auth/user/manager'
+    },
+    {
+      label: 'Plugins',
+      icon: 'hub',
+      link: 'auth/plugin-manager'
+    },
   ]
 
   constructor() {

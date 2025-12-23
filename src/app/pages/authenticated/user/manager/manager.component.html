@@ -1,0 +1,119 @@
+
+
+<mat-card class="w-100 p-3" style="display: flex; align-items: center; flex-direction: row;">
+  <mat-icon style="margin-right: 8px;" matBadge="{{allUsers? allUsers.elements?.length : 0}}">manage_accounts</mat-icon>
+  <span style="vertical-align: middle; font-size: 20px;" >Gerenciar usuários</span>
+  <button mat-raised-button color="primary" class="ms-auto"
+
+  ><mat-icon>add</mat-icon> Novo usuário</button>
+</mat-card>
+
+<mat-form-field style="vertical-align: middle;" class="example-form-field w-100 mt-3">
+  <mat-label>Buscar por nome</mat-label>
+  <input matInput type="text" [(ngModel)]="filterName" #filter (keyup.enter)="filterName = ''">
+  <button matSuffix mat-icon-button aria-label="Clear" (click)="filterName = ''">
+    <mat-icon>search</mat-icon>
+  </button>
+</mat-form-field>
+
+<div class="row" style="margin:0">
+
+  @if(allUsers)
+  {
+    <div class="row pt-3 m-0 rounded"
+         style="background-color: rgb(79, 79, 79);overflow-y: auto;
+  max-height: calc(100vh - 300px);">
+      @for(user of allUsers.elements; track user)
+      {
+        <div class="col-12 col-md-6 col-lg-4" >
+          <mat-card class="example-card mb-3" >
+            <mat-card-header>
+              <mat-card-title>{{getDisplayName(user.fullName)}}</mat-card-title>
+              <mat-card-subtitle>{{user.departamento}} - {{user.userName}}</mat-card-subtitle>
+              <mat-card-subtitle></mat-card-subtitle>
+            </mat-card-header>
+            <mat-card-content class="mt-2">
+              <div class="mb-3">
+                <mat-icon>manage_accounts</mat-icon>
+                <strong class="p1">Cargos</strong>
+                <div class="d-flex flex-wrap">
+                  @for (item of user.userRoles; track item; let i = $index) {
+                    <div
+                      (mouseenter)="showIconByEvent($event,true)" (mouseleave)="showIconByEvent($event,false)"
+                      class="rounded bg-secondary p-1 me-1 mt-1">
+                      <i matTooltip="Remover" class="material-icons d-none" style="font-size: 12px;cursor: pointer;">cancel</i>
+                      {{ item.role.name }}
+                    </div>
+                  }
+
+                  <div class="icon-container">
+                    <div class="rounded bg-primary p-1 me-1 mt-1" style="cursor: pointer;">&nbsp;+&nbsp;</div>
+                  </div>
+                </div>
+
+              </div>
+
+
+              <mat-divider></mat-divider>
+            </mat-card-content>
+            <mat-card-actions class="d-flex">
+              <button mat-icon-button matTooltip="Editar" (click)="openDialogEdit(user)">
+                <mat-icon>edit</mat-icon>
+              </button>
+              <button mat-icon-button matTooltip="Cargos" (click)="openDialogEdit(user)">
+                <mat-icon>manage_accounts</mat-icon>
+              </button>
+              <button mat-icon-button matTooltip="Serviços" (click)="openDialogEdit(user)">
+                <mat-icon>lan</mat-icon>
+              </button>
+              <section class="example-section ms-auto">
+                @if(load.activeToogle && ('toogle-'+user.id) === actionId)
+                {
+                  <div disabled="">
+                    @if(load)
+                    {
+                      <mat-spinner diameter="20" color="accent"></mat-spinner>
+                    }
+
+                  </div>
+                }
+
+                @if(!load.activeToogle || load.activeToogle && ('toogle-'+user.id) !== actionId)
+                {
+                  <mat-slide-toggle
+                    matTooltip="{{user.active? 'Desativar': 'Ativar'}}"
+                    class="example-margin"
+                    [color]="'primary'"
+                    [checked]="user.active"
+                    [disabled]="load.activeToogle"
+                    (toggleChange)="activeToogle(user)"
+                    style="margin-top: -3px;"
+                  >
+
+                  </mat-slide-toggle>
+                }
+
+              </section>
+            </mat-card-actions>
+            <mat-card-footer>
+            </mat-card-footer>
+          </mat-card>
+        </div>
+      }
+
+
+
+    </div>
+  }
+
+  <button class="mt-2 w-100" mat-raised-button [disabled]="!allUsers.stillFetchable" (click)="morePage()">
+    {{allUsers.stillFetchable ? "Ver mais" : "Não há mais usuários para exibir"}}
+  </button>
+
+  @if(load.getAllUsers)
+  {
+    <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+  }
+
+</div>
+

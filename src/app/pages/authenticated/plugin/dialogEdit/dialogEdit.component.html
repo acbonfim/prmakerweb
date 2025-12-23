@@ -1,0 +1,42 @@
+<mat-dialog-content style="overflow-y: hidden;">
+  <div style="display: flex; align-items: center; flex-direction: row; overflow-y: hidden">
+    <mat-icon>{{data.key == 'auth' ? 'lock' : 'link'}}</mat-icon> &nbsp; {{title}} - {{data.description}}
+
+  </div>
+  <mat-divider class="mt-2"></mat-divider>
+  <form  class="mb-2 mt-2" style="max-height: 300px; overflow-y: auto;">
+    @for (property of getObjectKeys(urlApiModel); track property)
+    {
+      <mat-form-field class="example-full-width w-100">
+        <mat-label>{{property}}</mat-label>
+        <input matInput [value]="urlApiModel[property]" #val  (change)="objChanged(property,val.value)">
+        <button matSuffix mat-icon-button matTooltip="Excluir atributo" color="primary" (click)="removeProperty(property)">
+          <mat-icon>close</mat-icon>
+        </button>
+      </mat-form-field>
+    }
+
+  </form>
+
+
+
+
+</mat-dialog-content>
+
+<mat-dialog-actions class="p-3" style="background-color: rgb(49, 49, 49);">
+  <div class="input-container">
+    <button mat-raised-button [disabled]="!validProperty(propertyName)" color="basic" (click)="addProperty(propertyName); propertyName = ''">
+      <mat-icon>add</mat-icon>Nova
+    </button>
+      <input matInput placeholder="Propriedade" style="height: 40px;" class="input ms-2" [(ngModel)]="propertyName">
+
+  </div>
+  <button class="ms-auto" mat-raised-button color="primary"
+  (click)="saveChanges()"
+  [disabled]="load"
+  >Salvar <mat-icon>save</mat-icon></button>
+</mat-dialog-actions>
+@if(load){
+  <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+}
+

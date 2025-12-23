@@ -24,6 +24,15 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadComponent: () => import('./client-access/client-access.component').then(m => m.ClientAccessComponent)
       },
       {
+        path: 'user',
+        loadChildren: () => import('./user/user.routes').then(m => m.USER_ROUTES)
+      },
+      {
+        path: 'plugin-manager',
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./plugin/plugin.component').then(m => m.PluginComponent)
+      },
+      {
         path: '',
         redirectTo: 'dashboard',
         pathMatch: 'full'

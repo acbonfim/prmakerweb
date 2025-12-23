@@ -1,0 +1,28 @@
+<mat-card-content class="p-4">
+  <div class="" style="font-size: 26px; color: white;">
+    {{title}}
+  </div>
+
+  <mat-divider class="mt-3"></mat-divider>
+  <div class="row mt-3">
+    <div class="col-5">
+      <mat-form-field class="w-100">
+        <mat-label>Nome do plugin</mat-label>
+        <input [disabled]="load" required matInput [(ngModel)]="model.description">
+      </mat-form-field>
+    </div>
+
+
+  </div>
+</mat-card-content>
+  <mat-dialog-actions class="df-bg-dialog-actions p-3">
+    <button [disabled]="load
+            || !model.description"
+
+    mat-raised-button color="primary" class="ms-auto" (click)="save()">Salvar</button>
+  </mat-dialog-actions>
+@if(load){
+  <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+}
+
+

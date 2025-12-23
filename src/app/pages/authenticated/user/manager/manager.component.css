@@ -1,0 +1,24 @@
+.example-section {
+    display: flex;
+    align-content: center;
+    align-items: center;
+    height: 60px;
+  }
+
+  .icon-container {
+    position: relative;
+  }
+  
+  .icon-container i {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+    margin-left: 5px;
+    font-size: 16px;
+  }
+  
+  .icon-container:hover i {
+    display: inline;
+  }
+  

@@ -89,12 +89,20 @@ export class DialogPrompt implements OnInit {
   }
 
   get reproSteps(): string {
-    return this.cardData?.fields['Microsoft.VSTS.TCM.ReproSteps'] || '';
+    if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] !== 'User Story') {
+      return this.cardData.fields['Microsoft.VSTS.TCM.ReproSteps'];
+    }else if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] == 'User Story'){
+      return this.cardData.fields['System.Title'];
+    }
+
+    return "";
   }
 
   set reproSteps(value: string) {
-    if (this.cardData) {
+    if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] !== 'User Story') {
       this.cardData.fields['Microsoft.VSTS.TCM.ReproSteps'] = value;
+    }else if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] == 'User Story'){
+      this.cardData.fields['System.Title'] = value;
     }
   }
 

@@ -1,0 +1,16 @@
+
+<mat-dialog-content class="p-3">
+  <h3 >{{data.title}}</h3>
+  <p style="font-size: 14px;" class="">{{data.description}}</p>
+</mat-dialog-content>
+  
+  <mat-dialog-actions class="d-flex df-bg-footer p-3">
+    <button mat-button (click)="onCancel()">
+      {{data.labelCancel}}
+    </button>
+
+    <button mat-raised-button (click)="onConfirm()" color="warn" class="ms-auto">
+      {{data.labelConfirm}}
+    </button>
+  </mat-dialog-actions>
+

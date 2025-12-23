@@ -1,0 +1,136 @@
+<div>
+  <mat-card appearance="outlined"  >
+    <mat-card-header class="p-3"
+                     style="background-color: #252525; border-radius: 10px">
+      <mat-card-title class="" style="display: flex; align-items: center; gap: 8px;">
+        <mat-icon>hub</mat-icon>
+        Plugins
+        <button mat-raised-button class="ms-auto"
+                (click)="openDialogManager()"
+        ><mat-icon>add</mat-icon> Novo plugin</button>
+      </mat-card-title>
+    </mat-card-header>
+
+
+
+    <mat-card-content>
+      <div class="mt-2 mb-2 row" style="display: flex; align-items: flex-start; gap: 15px; margin-top: 10px;">
+
+        @if(load.getAllPlugin){
+          <app-showLoad ></app-showLoad>
+        }
+
+        <mat-form-field class="w-100">
+          <mat-label>Filter</mat-label>
+          <input matInput (keyup)="applyFilter($event)" placeholder="Ex. Clickbus" #input>
+        </mat-form-field>
+
+        <div class="mat-elevation-z8">
+          <table mat-table [dataSource]="dataSource" matSort class="rounded">
+
+
+            <ng-container matColumnDef="description">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header> Descrição </th>
+              <td mat-cell *matCellDef="let row"> {{row.description}} </td>
+            </ng-container>
+
+
+            <ng-container matColumnDef="actions" >
+              <th mat-header-cell *matHeaderCellDef mat-sort-header> # </th>
+              <td mat-cell *matCellDef="let row">
+
+
+                <button class="ms-2" mat-mini-fab color="accent" id="{{'btn-'+row.id}}"
+                        matTooltip="Ações" matTooltipPosition="above"
+                        [disabled]="load.createPlugin && (load.createPlugin && ('btn-'+row.id === actionId))"
+                        [matMenuTriggerFor]="actionsMenu" [matMenuTriggerData]="{name: row}"
+                >
+                  @if(load.createPlugin && ('btn-'+row.id) == actionId){
+                    <mat-spinner diameter="20"
+                                 color="primary"></mat-spinner>
+                  }
+
+                  @if(!load.createPlugin || (load.createPlugin && ('btn-'+row.id !== actionId))){
+                    <mat-icon>more_vert</mat-icon>
+                  }
+
+                </button>
+
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+
+            <tr class="mat-row" *matNoDataRow>
+              <td class="mat-cell" colspan="4">No data matching the filter "{{input.value}}"</td>
+            </tr>
+          </table>
+
+          <mat-paginator [pageSizeOptions]="[5, 10, 25, 100]" aria-label="Select page of users"></mat-paginator>
+        </div>
+      </div>
+
+
+    </mat-card-content>
+  </mat-card>
+</div>
+
+
+
+
+
+<mat-menu #actionsMenu="matMenu" yPosition="above">
+  <ng-template matMenuContent let-name="name" >
+    <button class="" mat-menu-item
+    (click)="openDialogEdit(name, 'url')">
+      <mat-icon class="text-warning">link</mat-icon>
+      Editar URLS
+    </button>
+
+    <button class="" mat-menu-item
+    (click)="openDialogEdit(name, 'auth')">
+      <mat-icon class="text-warning">lock</mat-icon>
+      Editar Autenticação
+    </button>
+
+    <button class="" mat-menu-item
+    (click)="openDialogEdit(name, 'settings')">
+      <mat-icon class="text-warning">settings</mat-icon>
+      Editar Configurações
+    </button>
+
+    <button class="" mat-menu-item
+    (click)="openDialogManager(name)">
+      <mat-icon class="text-warning">edit</mat-icon>
+      Editar Plugin
+    </button>
+
+    <button class="" mat-menu-item
+    (click)="copyPlugin(name)">
+      <mat-icon class="text-warning">dynamic_feed</mat-icon>
+      Duplicar Plugin
+    </button>
+
+    <mat-divider class="m-3"></mat-divider>
+
+    <button class="" mat-menu-item
+    (click)="openDialogConfirm(name)">
+      <mat-icon class="text-danger">delete</mat-icon>
+      Deletar Plugin
+    </button>
+
+    <mat-divider class="m-3"></mat-divider>
+
+
+    <button class="" mat-menu-item disabled matTooltip="Em desenvolvimento">
+      <mat-icon class="text-primary">translate</mat-icon>
+      Tradutor Cidades
+    </button>
+
+
+  </ng-template>
+</mat-menu>
+
+
+
