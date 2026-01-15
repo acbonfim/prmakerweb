@@ -64,6 +64,10 @@ export class Login implements OnInit {
 
         const token = this._storageService.getAccess().accessToken;
 
+      if (token && !this.jwtHelper.isTokenExpired(token)) {
+        this._authService.scheduleTokenRefresh();
+      }
+
         console.log("exp", this.jwtHelper.isTokenExpired(token))
     }
 
@@ -83,6 +87,8 @@ export class Login implements OnInit {
             this._globalService.log(_retorno, "LOGUEI")
             if (_retorno.success) {
                 this._storageService.setAccess(_retorno.object);
+
+              this._authService.scheduleTokenRefresh();
 
                 this._authService.generateApiKey().subscribe(
                   (retApiKey: any) => {
@@ -150,8 +156,7 @@ export class Login implements OnInit {
 
     async refresh() {
 
-        const isRefreshSuccess = await this._authService.tryRefreshingTokens();
-        console.log(isRefreshSuccess)
+        return await this._authService.tryRefreshingTokens();
     }
 
 }

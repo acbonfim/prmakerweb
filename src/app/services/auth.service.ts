@@ -17,12 +17,30 @@ export class AuthService {
   baseUrl = environment.urlApiAuth;
   jwtHelper = new JwtHelperService();
   decodedToken: any;
+  private refreshTimeout: any;
 
   constructor(
     private http: HttpClient
     ,private _storageService: StorageService
     , private _globalService: GlobalService
     ) { }
+
+  public scheduleTokenRefresh() {
+    if (this.refreshTimeout) {
+      clearTimeout(this.refreshTimeout);
+    }
+
+    const refreshTime = 59 * 60 * 1000; // 59 minutos em milissegundos
+
+    this.refreshTimeout = setTimeout(() => {
+      this.tryRefreshingTokens().then(success => {
+        if (success) {
+          this._globalService.log("Token renovado automaticamente após 59 minutos.");
+          this.scheduleTokenRefresh();
+        }
+      });
+    }, refreshTime);
+  }
 
   login(cred: any) {
     return this.http

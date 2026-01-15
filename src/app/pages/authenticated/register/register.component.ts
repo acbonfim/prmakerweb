@@ -1,4 +1,4 @@
-import {Component, HostListener, inject, OnInit} from '@angular/core';
+import {ChangeDetectorRef, Component, HostListener, inject, OnInit} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -29,6 +29,10 @@ import {DialogTemplateComponent} from '../../../components/dialog-template/dialo
 import {DialogPrompt} from '../../../components/dialog-prompt/dialog-prompt';
 import {StorageService} from '../../../services/storage.service';
 import {GlobalService} from '../../../services/global.service';
+import {firstValueFrom} from 'rxjs';
+import {tap} from 'rxjs/internal/operators/tap';
+import {GdsService} from '../../../services/gds.service';
+import {JsonPipe} from '@angular/common';
 
 @Component({
   selector: 'app-register',
@@ -55,18 +59,20 @@ import {GlobalService} from '../../../services/global.service';
     ButtonModule,
     MenuModule,
     InputNumberModule,
-    SplitButton
+    SplitButton,
+    JsonPipe
   ]
 })
 export class RegisterComponent implements OnInit {
 
-  environmentName = 'dev';
+  environmentName = 'development';
   template:any = null;
   pullRequest:any = {};
   urlBase = environment.apiUrl;
   isTemplateLoading = false;
   isPullRequestLoading = false;
   readonly dialog = inject(MatDialog);
+  private configurationService = inject(GdsService);
   userSelected: any = null;
   cardNumber: null | string = null;
   fullDescription = null;
@@ -84,24 +90,20 @@ export class RegisterComponent implements OnInit {
     {
       label: 'DEV',
       value: 'dev'
-    },
-    {
-      label: 'QA',
-      value: 'qa'
-    },
-    {
-      label: 'RV',
-      value: 'rv'
-    },
-    {
-      label: 'HV',
-      value: 'hv'
-    },
-    {
-      label: 'RC',
-      value: 'rc'
-    },
+    }
   ]
+
+  cardTypeOptions = [
+    {
+      label: 'Bug',
+      value: 'bug'
+    },
+    {
+      label: 'User Story',
+      value: 'us'
+    }
+  ]
+  configurations: any = {};
 
 
 
@@ -188,17 +190,58 @@ export class RegisterComponent implements OnInit {
     private http: HttpClient,
     private loadingBar: LoadingBarService,
     private storageService: StorageService,
+    private cdr: ChangeDetectorRef,
   ) { }
 
-  ngOnInit() {
-    this.getTemplateByEnvironment();
-    this.checkIfMobile();
-    this.initializeMobileButtons();
-    this.initializeCustomCopyButtons();
+  async ngOnInit() {
+    try {
+      await Promise.all([
+        firstValueFrom(this.getPullRequestConfigurations()),
+      ]);
 
-    this.userSelected = this.storageService.getAccess().user;
-    console.log(this.userSelected);
-    this.initAiGeneratedListener();
+      // Agora que as configs chegaram, prossegue
+      //this.getTemplateByEnvironment();
+      this.checkIfMobile();
+      this.initializeMobileButtons();
+      this.initializeCustomCopyButtons();
+
+      this.userSelected = this.storageService.getAccess().user;
+      console.log(this.userSelected);
+      this.initAiGeneratedListener();
+      this.initializeBranchConfigurations();
+
+    } catch (error) {
+      console.error('Falha ao inicializar configurações', error);
+    }
+
+
+  }
+
+  initializeBranchConfigurations(){
+    const activeBranchsStr = this.configurations.PullRequest.ActiveBranchs;
+
+    if (activeBranchsStr) {
+      try {
+        const rawBranches = eval(activeBranchsStr);
+
+        this.justifyOptions = rawBranches.map((branch: any) => ({
+          label: branch.label,
+          value: branch.branchName
+        }));
+
+        this.cdr.detectChanges();
+      } catch (error) {
+        console.error('Erro ao processar ActiveBranchs:', error);
+      }
+    }
+  }
+
+  getPullRequestConfigurations(){
+    return this.configurationService.getAllById(9).pipe(
+      tap((response: any) => {
+        this.configurations.PullRequest = response.configurations;
+      })
+    );
   }
 
   initAiGeneratedListener() {
@@ -207,6 +250,7 @@ export class RegisterComponent implements OnInit {
         this.pullRequest.description = data.pullRequestDescriptionAiGenerated;
         this.pullRequest.rootCause = data.rootCauseAnalysisAiGenerated;
         this.generateFullDescriptionHandler();
+        this.cdr.detectChanges();
       }
     })
   }
@@ -242,7 +286,7 @@ export class RegisterComponent implements OnInit {
   }
 
   clearAll() {
-    this.environmentName = 'dev';
+    this.environmentName = 'development';
     this.template = null;
     this.pullRequest = {};
     this.cardNumber = null;
@@ -327,6 +371,7 @@ export class RegisterComponent implements OnInit {
       data: {
         cardNumber: this.cardNumber,
         isAiGenerate: true,
+        cardType: this.cardType
       },
       width: '1200px',
       height: '80vh',
@@ -351,6 +396,9 @@ export class RegisterComponent implements OnInit {
             this.pullRequest = response;
             this.branchName = response.branchName;
             this.branchPrefix = response.branchPrefix;
+
+            this.cdr.detectChanges();
+
             this.generateFullDescriptionHandler();
           }
 
@@ -379,6 +427,21 @@ export class RegisterComponent implements OnInit {
       data: {
         id: 1,
         description: this.fullDescription,
+        environmentName: this.environmentName.toUpperCase(),
+      },
+      width: '1200px',
+      height: '80vh',
+      maxWidth: '90vw',
+      maxHeight: '90vh',
+      panelClass: 'custom-dialog-container'
+    });
+  }
+
+  openDialogRCA() {
+    const dialogRef = this.dialog.open(DialogTemplateComponent, {
+      data: {
+        id: 1,
+        description: this.pullRequest.rootCause,
         environmentName: this.environmentName.toUpperCase(),
       },
       width: '1200px',
@@ -464,9 +527,9 @@ export class RegisterComponent implements OnInit {
     }
     if(this.cardNumber == null) return;
     if(this.pullRequest.description == null) return;
-    if(this.template == null) return;
 
     this.setFullDescription();
+    this.cdr.detectChanges();
   }
 
 
@@ -485,29 +548,16 @@ export class RegisterComponent implements OnInit {
     this.fullDescription = this.pullRequest.description;
 
     this.makeUrlLink();
+
+    this.cdr.detectChanges();
   }
 
   makeUrlLink() {
     if(this.cardNumber == null) return;
     this.link = `https://github.com/electradv/edv-solvace/compare/my-environment...${this.branchPrefix}${this.branchName}`;
-    this.link = this.link.replace("my-environment",this.convertEnvironmentIdToBranchName(this.environmentName.toLowerCase()));
-  }
+    this.link = this.link.replace("my-environment",this.environmentName.toLowerCase());
 
-  convertEnvironmentIdToBranchName(id: string): string {
-    switch (id) {
-      case 'hv':
-        return 'hotfix-version';
-      case 'dev':
-        return 'development';
-      case 'qa':
-        return 'qa';
-      case 'rv':
-        return 'release-version';
-      case 'rc':
-        return 'release-candidate';
-      default:
-        return 'development';
-    }
+    this.cdr.detectChanges();
   }
 
   openGithubPullRequestPage() {
@@ -515,7 +565,7 @@ export class RegisterComponent implements OnInit {
     this.makeUrlLink();
     let url = new URL(this.link);
     url.searchParams.set('expand', '1');
-    url.searchParams.set('title', `AB#${this.cardNumber} ${this.environmentName.toUpperCase()}`);
+    url.searchParams.set('title', `AB#${this.cardNumber} ${this.getBranchLabelByBranch(this.environmentName).toUpperCase()}`);
     url.searchParams.set('body', this.fullDescription!);
 
     window.open(url, '_blank');
@@ -523,10 +573,15 @@ export class RegisterComponent implements OnInit {
   onBranchChange() {
     this.template = null;
     this.getTemplateByEnvironment();
+  }
 
+  getBranchLabelByBranch(branch: string) {
+    const branchLabel = this.justifyOptions.find(option => option.value === branch);
+    return branchLabel ? branchLabel.label : branch;
   }
 
   protected readonly Number = Number;
+  cardType: any = 'bug';
 
 
   private initializeCustomCopyButtons() {

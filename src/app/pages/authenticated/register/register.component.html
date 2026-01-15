@@ -56,6 +56,15 @@
           optionValue="value"
           styleClass="custom-select-button">
         </p-selectbutton>
+
+<!--        <p-selectbutton-->
+<!--          class="mr-auto"-->
+<!--          [options]="cardTypeOptions"-->
+<!--          [(ngModel)]="cardType"-->
+<!--          optionLabel="label"-->
+<!--          optionValue="value"-->
+<!--          styleClass="custom-select-button">-->
+<!--        </p-selectbutton>-->
       </div>
 
 
@@ -78,10 +87,19 @@
                   style="margin-bottom: 10px"><mat-icon>article_shortcut</mat-icon>Descrição montada</button>
         }
 
+        @if (pullRequest.rootCause && pullRequest.rootCause.length){
+          <button matButton
+                  class="ms-2"
+                  (click)="openDialogRCA()"
+                  matTooltip="Clique para ver o RCA"
+                  matTooltipPosition="above"
+                  style="margin-bottom: 10px"><mat-icon>article_shortcut</mat-icon>Root Cause</button>
+        }
+
 
         <mat-form-field class="full-width" style="height: 100%">
           <mat-label>Descrição</mat-label>
-          <textarea [(ngModel)]="pullRequest.description" (ngModelChange)="generateFullDescriptionHandler()"  matInput placeholder="Ex. It makes me feel..." cols="30" rows="4"></textarea>
+          <textarea [(ngModel)]="pullRequest.description"   matInput placeholder="Ex. It makes me feel..." cols="30" rows="4"></textarea>
         </mat-form-field>
 
         <mat-form-field class="full-width">
@@ -98,10 +116,9 @@
                          icon="pi pi-copy"
                          [disabled]="isPullRequestLoading || fullDescription === null"
                          [model]="copyCustomButtons" (onClick)="copyFullDescriptionToClipboard('full')" rounded severity="secondary"/>
-
           <button mat-raised-button style="margin-left: 10px"
                   (click)="openGithubPullRequestPage()"
-                  [disabled]="!this.pullRequest?.description">Abrir PR<mat-icon>merge</mat-icon></button>
+                  [disabled]="!this.pullRequest?.description || !this.environmentName.length">Abrir PR<mat-icon>merge</mat-icon></button>
 
           <button mat-raised-button style="margin-left: 10px"
                   [disabled]="isPullRequestLoading || fullDescription === null"

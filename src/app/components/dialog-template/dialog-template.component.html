@@ -1,11 +1,10 @@
 <div class="dialog-container">
-  <div class="dialog-header">
-    <h2 mat-dialog-title>Template para a branch {{data.environmentName}}</h2>
-  </div>
-
   <mat-dialog-content class="dialog-content">
-    <div class="scrollable-content">
-      <pre>{{ data.description }}</pre>
+    <div class="generated-content mt-3">
+      <div class="markdown-viewer p-3 bg-dark rounded"
+           style="max-height: 550px; height: 550px; overflow-y: auto;"
+           [innerHTML]="generatedText | safeHtml">
+      </div>
     </div>
   </mat-dialog-content>
 

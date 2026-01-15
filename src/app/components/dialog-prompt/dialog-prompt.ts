@@ -14,6 +14,9 @@ import {MatStepper, MatStepperModule} from '@angular/material/stepper';
 import { GitDiffViewerComponent } from "../git-diff-viewer/git-diff-viewer";
 import { marked } from 'marked';
 import {GlobalService} from '../../services/global.service';
+import {GdsService} from '../../services/gds.service';
+import {firstValueFrom} from 'rxjs';
+import {tap} from 'rxjs/internal/operators/tap';
 
 @Component({
   selector: 'app-dialog-prompt',
@@ -33,7 +36,8 @@ import {GlobalService} from '../../services/global.service';
     MatProgressSpinnerModule,
     SafeHtmlPipe,
     MatStepperModule,
-    GitDiffViewerComponent
+    GitDiffViewerComponent,
+
 ]
 })
 export class DialogPrompt implements OnInit {
@@ -55,8 +59,10 @@ export class DialogPrompt implements OnInit {
   generatedTextRaw: string = "";
   private pullRequestDescriptionAiGenerated: string = "";
   private rootCauseAnalysisAiGenerated: string = "";
+  private configurationService = inject(GdsService);
 
   @ViewChild('stepper') stepper!: MatStepper;
+  private configurations: any = {};
 
 
   constructor(private http: HttpClient) {
@@ -66,9 +72,24 @@ export class DialogPrompt implements OnInit {
     });
   }
 
-  ngOnInit() {
-    if(this.data.isAiGenerate){
-      this.getCardById()
+  async ngOnInit() {
+    this.isAzureLoading.set(true);
+
+    try {
+      await Promise.all([
+        firstValueFrom(this.getDevOpsConfigurations()),
+        firstValueFrom(this.getAiConfigurations())
+      ]);
+
+      // Agora que as configs chegaram, prossegue
+      if (this.data.isAiGenerate) {
+        this.getCardById();
+      } else {
+        this.isAzureLoading.set(false);
+      }
+    } catch (error) {
+      this.isAzureLoading.set(false);
+      console.error('Falha ao inicializar configurações', error);
     }
   }
 
@@ -89,21 +110,22 @@ export class DialogPrompt implements OnInit {
   }
 
   get reproSteps(): string {
+    let fieldRetroSteps = 'Microsoft.VSTS.TCM.ReproSteps';
+    let fieldTitle = 'System.Title';
+
+    if(this.configurations.Azure && this.configurations.Azure.RetroStepsFieldName)
+      fieldRetroSteps = this.configurations.Azure.RetroStepsFieldName;
+
+    if(this.configurations.Azure && this.configurations.Azure.TitleFieldName)
+      fieldTitle = this.configurations.Azure.TitleFieldName;
+
     if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] !== 'User Story') {
-      return this.cardData.fields['Microsoft.VSTS.TCM.ReproSteps'];
+      return this.cardData.fields[fieldRetroSteps];
     }else if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] == 'User Story'){
-      return this.cardData.fields['System.Title'];
+      return this.cardData.fields[fieldTitle];
     }
 
     return "";
-  }
-
-  set reproSteps(value: string) {
-    if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] !== 'User Story') {
-      this.cardData.fields['Microsoft.VSTS.TCM.ReproSteps'] = value;
-    }else if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] == 'User Story'){
-      this.cardData.fields['System.Title'] = value;
-    }
   }
 
   extractSectionsFromGeneratedText(generatedText: string): void {
@@ -153,6 +175,22 @@ export class DialogPrompt implements OnInit {
           console.error('Error fetching card:', error);
         });
 
+  }
+
+  getAiConfigurations(){
+    return this.configurationService.getAllById(3).pipe(
+      tap((response: any) => {
+        this.configurations.AI = response.configurations;
+      })
+    );
+  }
+
+  getDevOpsConfigurations(){
+    return this.configurationService.getAllById(8).pipe(
+      tap((response: any) => {
+        this.configurations.Azure = response.configurations;
+      })
+    );
   }
 
   getGitHubCommitDiff(){
@@ -239,17 +277,17 @@ export class DialogPrompt implements OnInit {
 
     Modelo do RCA:
 
-    Causa Principal: XXX
+    Main Cause: XXX
     Contributing Factors: XXX
-    Impacto: XXX
-    Solução Aplicada: XXX
-    Plano de Ação / Prevenção: XXX
-    Arquivos modificados / Codigo Modificado/ Dados alterados na base de dados: X,X,X
+    Impact: XXX
+    Applied Solution: XXX
+    Action/Prevention Plan: XXX
+    Modified files/Modified code/Altered data in the database: X,X,X
     Ticket: {cardNumber}
 
     Regras gerais:
 
-    Texto completamente em ingles
+    Texto completamente em ingles, não pode ter nada em portugues
     Formatação do texto deve ser em MARKDOWN
     Sessão para Pull Request
     Sessão para RCA
@@ -262,6 +300,15 @@ export class DialogPrompt implements OnInit {
     {TEXTO DO RCA AQUI}
     < /RCA>
     `;
+
+    if(this.configurations.AI && this.configurations.AI.PromptBug) {
+      if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] === 'User Story'){
+        prompt = this.configurations.AI.PromptUS;
+      } else {
+        prompt = this.configurations.AI.PromptBug;
+      }
+
+    }
 
     prompt = prompt.replace('{githubCommitDiff}', JSON.stringify(this.githubCommitDiff, null, 2));
     prompt = prompt.replace('{cardNumber}', this.data.cardNumber);
