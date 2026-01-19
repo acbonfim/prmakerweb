@@ -294,6 +294,7 @@ export class RegisterComponent implements OnInit {
     this.branchPrefix = 'hotfix/';
     this.branchName = '';
     this.link = "https://github.com/electradv/edv-solvace/compare/my-environment...hotfix/";
+    this.cardType = '';
   }
 
   savePullRequest() {
@@ -304,7 +305,7 @@ export class RegisterComponent implements OnInit {
       description: this.pullRequest.description,
       cardNumber: cardNumber,
       userId: this.userSelected.externalId,
-      formId: this.template.id,
+      formId: 1,
       rootCause: this.pullRequest.rootCause,
       branchPrefix: this.branchPrefix,
       branchName: this.branchName,
@@ -378,6 +379,17 @@ export class RegisterComponent implements OnInit {
       maxWidth: '90vw',
       maxHeight: '90vh',
       panelClass: 'custom-dialog-container'
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result) {
+        this.cardType = result.toLowerCase();
+
+        if(this.cardType == 'us') {
+          this.branchPrefix = 'feature/';
+        }
+        this.cdr.detectChanges();
+      }
     });
   }
 

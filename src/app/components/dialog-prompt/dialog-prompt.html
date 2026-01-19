@@ -92,6 +92,6 @@
     <button matButton color="accent"
             [disabled]="!promptText.length"
             (click)="copyPromptToClipboard()"><mat-icon>content_copy</mat-icon> Copiar</button>
-    <button matButton mat-dialog-close (click)="dialogRef.close()">Fechar</button>
+    <button matButton mat-dialog-close (click)="onClose()">Fechar</button>
   </mat-dialog-actions>
 </div>

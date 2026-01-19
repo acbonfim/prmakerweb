@@ -87,7 +87,7 @@
                   style="margin-bottom: 10px"><mat-icon>article_shortcut</mat-icon>Descrição montada</button>
         }
 
-        @if (pullRequest.rootCause && pullRequest.rootCause.length){
+        @if (pullRequest.rootCause && pullRequest.rootCause.length && this.cardType !== 'us'){
           <button matButton
                   class="ms-2"
                   (click)="openDialogRCA()"
@@ -102,11 +102,12 @@
           <textarea [(ngModel)]="pullRequest.description"   matInput placeholder="Ex. It makes me feel..." cols="30" rows="4"></textarea>
         </mat-form-field>
 
-        <mat-form-field class="full-width">
-          <mat-label>Root Cause</mat-label>
-          <textarea [(ngModel)]="pullRequest.rootCause" (ngModelChange)="generateFullDescriptionHandler()" matInput placeholder="Ex. It makes me feel..." cols="30" rows="4"></textarea>
-        </mat-form-field>
-
+        @if(this.cardType !== 'us'){
+          <mat-form-field class="full-width" >
+            <mat-label>Root Cause</mat-label>
+            <textarea [(ngModel)]="pullRequest.rootCause" (ngModelChange)="generateFullDescriptionHandler()" matInput placeholder="Ex. It makes me feel..." cols="30" rows="4"></textarea>
+          </mat-form-field>
+        }
 
       </mat-card-content>
       <mat-card-actions style="background-color: #5b5b5b; margin-top: 20px; border-radius: 10px;">
@@ -137,7 +138,7 @@
 
       <button mat-raised-button
               (click)="saveRootCauseToDevOps()"
-              [disabled]="isAzureLoading || !cardNumber || !pullRequest?.rootCause"
+              [disabled]="isAzureLoading || !cardNumber || !pullRequest?.rootCause || cardType === 'us'"
               style="margin-left: 10px">
         Salvar RC no DevOps
         <mat-icon>beenhere</mat-icon>

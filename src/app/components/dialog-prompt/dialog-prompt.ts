@@ -122,7 +122,7 @@ export class DialogPrompt implements OnInit {
     if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] !== 'User Story') {
       return this.cardData.fields[fieldRetroSteps];
     }else if (this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] == 'User Story'){
-      return this.cardData.fields[fieldTitle];
+      return this.cardData.fields["System.Description"];
     }
 
     return "";
@@ -130,7 +130,7 @@ export class DialogPrompt implements OnInit {
 
   extractSectionsFromGeneratedText(generatedText: string): void {
     const rcaMatch = generatedText.match(/<RCA>([\s\S]*?)<\s*\/\s*RCA>/i);
-    const rootCauseAnalysis = rcaMatch ? rcaMatch[1].trim() : '';
+    const rootCauseAnalysis = rcaMatch ? rcaMatch[1].trim() : 'no need';
 
     let pullRequestDescription = '';
     if (rcaMatch) {
@@ -254,6 +254,11 @@ export class DialogPrompt implements OnInit {
       });
 
   }
+
+  onClose(){
+    let cardType = this.cardData && this.cardData.fields && this.cardData.fields['System.WorkItemType'] === 'User Story' ? 'US' : 'BUG';
+    this.dialogRef.close(cardType);
+  };
 
   gerarPrompt() {
     if(!this.githubCommitDiff || !this.data.cardNumber || !this.reproSteps) return;
