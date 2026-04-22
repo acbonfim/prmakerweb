@@ -1,0 +1,281 @@
+.vacations-container {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.header-card {
+  margin-bottom: 20px;
+}
+
+.balance-info {
+  display: flex;
+  gap: 30px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.balance-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.balance-label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.balance-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: #333;
+}
+
+.balance-value.highlight {
+  color: #1976d2;
+}
+
+.tab-content {
+  padding: 20px 0;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 16px;
+}
+
+.calendar-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.calendar {
+  padding: 12px;
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.weekday {
+  text-align: center;
+  font-weight: bold;
+  color: #666;
+  padding: 6px;
+  font-size: 13px;
+}
+
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  grid-template-rows: repeat(6, 1fr);
+}
+
+.calendar-day {
+  aspect-ratio: 1 / 1;
+  height: 100%;
+  width: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  cursor: default;
+  transition: all 0.2s;
+  background: white;
+  color: #0c0c0c;
+}
+
+.calendar-day:hover {
+  background: #f5f5f5;
+}
+
+.calendar-day.other-month {
+  opacity: 0.3;
+}
+
+.calendar-day.today {
+  background: #e3f2fd;
+  border-color: #1976d2;
+  font-weight: bold;
+}
+
+.calendar-day.occupied {
+  background: #fff3e0;
+  border-color: #ff9800;
+}
+
+.day-number {
+  font-size: 15px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.occupancy-indicator {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+  font-size: 10px;
+  color: #ff9800;
+}
+
+.small-icon {
+  font-size: 14px;
+  width: 14px;
+  height: 14px;
+}
+
+.occupancy-count {
+  font-weight: bold;
+}
+
+.action-buttons {
+  margin-top: 20px;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.requests-card {
+  margin-top: 20px;
+}
+
+.requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.request-item {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.request-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.request-user {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.request-dates {
+  flex: 1;
+  font-size: 16px;
+}
+
+.business-days {
+  color: #666;
+  font-size: 14px;
+  margin-left: 8px;
+}
+
+.request-notes {
+  padding: 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #555;
+}
+
+.request-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.empty-state,
+.loading-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
+
+mat-chip {
+  color: white !important;
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .vacations-container {
+    padding: 12px;
+  }
+
+  .balance-info {
+    gap: 16px;
+  }
+
+  .calendar {
+    padding: 8px;
+  }
+
+  .calendar-days {
+    gap: 4px;
+  }
+
+  .calendar-weekdays {
+    gap: 4px;
+  }
+
+  .calendar-day {
+    padding: 4px;
+    max-height: 60px;
+  }
+
+  .day-number {
+    font-size: 11px;
+  }
+
+  .weekday {
+    font-size: 11px;
+    padding: 2px;
+  }
+
+  .occupancy-indicator {
+    font-size: 9px;
+  }
+
+  .small-icon {
+    font-size: 12px;
+    width: 12px;
+    height: 12px;
+  }
+
+  .request-info {
+    flex-direction: column;
+  }
+
+  .request-actions {
+    justify-content: flex-start;
+  }
+}

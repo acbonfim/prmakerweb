@@ -566,7 +566,7 @@ export class RegisterComponent implements OnInit {
 
   makeUrlLink() {
     if(this.cardNumber == null) return;
-    this.link = `https://github.com/electradv/edv-solvace/compare/my-environment...${this.branchPrefix}${this.branchName}`;
+    this.link = `https://github.com/electradv/edv-solvace-apps/compare/my-environment...${this.branchPrefix}${this.branchName}`;
     this.link = this.link.replace("my-environment",this.environmentName.toLowerCase());
 
     this.cdr.detectChanges();

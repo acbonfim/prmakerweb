@@ -33,6 +33,21 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadComponent: () => import('./plugin/plugin.component').then(m => m.PluginComponent)
       },
       {
+        path: 'vacations',
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./vacations/vacations.component').then(m => m.VacationsComponent)
+      },
+      {
+        path: 'vacation-balances',
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./vacations/vacation-balances.component').then(m => m.VacationBalancesComponent)
+      },
+      {
+        path: 'vacation-approvals',
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./vacations/vacation-approvals.component').then(m => m.VacationApprovalsComponent)
+      },
+      {
         path: '',
         redirectTo: 'dashboard',
         pathMatch: 'full'

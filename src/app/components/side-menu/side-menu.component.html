@@ -1,5 +1,5 @@
 <mat-nav-list>
-  @for (item of menu; track item) {
+  @for (item of menu; track item) { @if (isMenuItemVisible(item)) {
     <mat-list-item
       class="pt-2 pb-2"
       [class.active-route]="isActiveRoute(item.link)"
@@ -10,5 +10,5 @@
       }
     </mat-list-item>
     <mat-divider class="mb-2 mt-2" style="border-top-color: rgb(33,33,33)"></mat-divider>
-  }
+  } }
 </mat-nav-list>

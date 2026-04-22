@@ -1,8 +1,8 @@
 const protocol = 'https';
-const server = 'prformapi.runasp.net';
+const server = 'localhost:5083';
 const serverAuth = 'authapiservice.runasp.net';
 const port = '80';
-const host = `${protocol}://${server}`;
+const host = `http://${server}`;
 const hostAuth = `${protocol}://${serverAuth}`;
 
 export const environment =

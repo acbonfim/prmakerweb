@@ -1,0 +1,221 @@
+<div class="vacations-container">
+  <app-showLoad *ngIf="isLoadingCalendar || isLoadingRequests || isLoadingBalance || isSaving"></app-showLoad>
+
+  <mat-card class="header-card">
+    <mat-card-header>
+      <mat-card-title>Gerenciamento de Férias</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="balance-info" *ngIf="activeBalances.length > 0">
+        <div class="balance-item">
+          <span class="balance-label">Disponível:</span>
+          <span class="balance-value">{{ getTotalAvailableDays() }} dias</span>
+        </div>
+        <div class="balance-item">
+          <span class="balance-label">Usados:</span>
+          <span class="balance-value">{{ getTotalUsedDays() }} dias</span>
+        </div>
+        <div class="balance-item">
+          <span class="balance-label">Restantes:</span>
+          <span class="balance-value highlight">{{ getTotalRemainingDays() }} dias</span>
+        </div>
+      </div>
+      <div *ngIf="activeBalances.length === 0 && !isLoadingBalance">
+        <p style="color: #666;">Nenhum período aquisitivo ativo encontrado.</p>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-tab-group>
+    <!-- Aba do Calendário -->
+    <mat-tab label="Calendário">
+      <div class="tab-content">
+        <mat-card>
+          <mat-card-header>
+            <div class="calendar-header">
+              <button mat-icon-button (click)="previousMonth()" [disabled]="isLoadingCalendar">
+                <mat-icon>chevron_left</mat-icon>
+              </button>
+              <h2>{{ monthNames[currentMonth] }} {{ currentYear }}</h2>
+              <button mat-icon-button (click)="nextMonth()" [disabled]="isLoadingCalendar">
+                <mat-icon>chevron_right</mat-icon>
+              </button>
+            </div>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="calendar" *ngIf="!isLoadingCalendar">
+              <div class="calendar-weekdays">
+                <div class="weekday" *ngFor="let day of weekDays">{{ day }}</div>
+              </div>
+              <div class="calendar-days">
+                <div
+                  class="calendar-day"
+                  *ngFor="let day of calendarDays"
+                  [class.other-month]="!day.isCurrentMonth"
+                  [class.today]="day.isToday"
+                  [class.occupied]="day.isOccupied"
+                  [matTooltip]="day.isOccupied ? getOccupancyTooltip(day.occupancies) : ''"
+                >
+                  <span class="day-number">{{ day.dayNumber }}</span>
+                  <div class="occupancy-indicator" *ngIf="day.isOccupied">
+                    <mat-icon class="small-icon">person</mat-icon>
+                    <span class="occupancy-count">{{ day.occupancies.length }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="loading-state" *ngIf="isLoadingCalendar">
+              <p>Carregando calendário...</p>
+            </div>
+          </mat-card-content>
+        </mat-card>
+
+        <div class="action-buttons">
+          <button mat-raised-button color="primary" (click)="openCreateRequestModal()" [disabled]="isLoadingCalendar || isSaving">
+            <mat-icon>add</mat-icon>
+            Nova Solicitação
+          </button>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- Aba Minhas Solicitações -->
+    <mat-tab label="Minhas Solicitações">
+      <div class="tab-content">
+        <mat-card class="requests-card">
+          <mat-card-header>
+            <mat-card-title>Minhas Solicitações de Férias</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="requests-list" *ngIf="!isLoadingRequests && myRequests.length > 0">
+              <div class="request-item" *ngFor="let request of myRequests">
+                <div class="request-info">
+                  <div class="request-dates">
+                    <strong>{{ formatDate(request.startDate) }}</strong> até
+                    <strong>{{ formatDate(request.endDate) }}</strong>
+                    <span class="business-days">({{ request.businessDays }} dias úteis)</span>
+                  </div>
+                  <mat-chip [style.background-color]="getStatusColor(request.status)">
+                    {{ getStatusLabel(request.status) }}
+                  </mat-chip>
+                </div>
+
+                <div class="request-notes" *ngIf="request.managerNotes">
+                  <small><strong>Obs. Gestor:</strong> {{ request.managerNotes }}</small>
+                </div>
+                <div class="request-notes" *ngIf="request.hrNotes">
+                  <small><strong>Obs. RH:</strong> {{ request.hrNotes }}</small>
+                </div>
+
+                <div class="request-actions">
+                  <button
+                    mat-icon-button
+                    color="primary"
+                    *ngIf="canEdit(request)"
+                    (click)="openEditRequestModal(request)"
+                    matTooltip="Editar"
+                    [disabled]="isLoadingRequests || isSaving"
+                  >
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button
+                    mat-icon-button
+                    color="warn"
+                    *ngIf="canDelete(request)"
+                    (click)="deleteRequest(request)"
+                    matTooltip="Excluir"
+                    [disabled]="isLoadingRequests || isSaving"
+                  >
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="empty-state" *ngIf="!isLoadingRequests && myRequests.length === 0">
+              <p>Você ainda não possui solicitações de férias.</p>
+            </div>
+
+            <div class="loading-state" *ngIf="isLoadingRequests">
+              <p>Carregando solicitações...</p>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </mat-tab>
+
+    <!-- Aba Gestão (apenas para gestores) -->
+    <mat-tab label="Gestão de Férias" *ngIf="isManager">
+      <div class="tab-content">
+        <mat-card class="requests-card">
+          <mat-card-header>
+            <mat-card-title>Todas as Solicitações</mat-card-title>
+          </mat-card-header>
+          <mat-card-content>
+            <div class="requests-list" *ngIf="allRequests.length > 0">
+              <div class="request-item" *ngFor="let request of allRequests">
+                <div class="request-info">
+                  <div class="request-user">
+                    <strong>Usuário:</strong> {{ request.userFullName || request.userId }}
+                  </div>
+                  <div class="request-dates">
+                    <strong>{{ formatDate(request.startDate) }}</strong> até
+                    <strong>{{ formatDate(request.endDate) }}</strong>
+                    <span class="business-days">({{ request.businessDays }} dias úteis)</span>
+                  </div>
+                  <mat-chip [style.background-color]="getStatusColor(request.status)">
+                    {{ getStatusLabel(request.status) }}
+                  </mat-chip>
+                </div>
+
+                <div class="request-notes" *ngIf="request.managerNotes">
+                  <small><strong>Obs. Gestor:</strong> {{ request.managerNotes }}</small>
+                </div>
+                <div class="request-notes" *ngIf="request.hrNotes">
+                  <small><strong>Obs. RH:</strong> {{ request.hrNotes }}</small>
+                </div>
+
+                <div class="request-actions">
+                  <button
+                    mat-raised-button
+                    color="primary"
+                    *ngIf="canApprove(request)"
+                    (click)="approveRequest(request)"
+                    [disabled]="isSaving"
+                  >
+                    <mat-icon>check</mat-icon>
+                    Aprovar
+                  </button>
+                  <button
+                    mat-raised-button
+                    color="accent"
+                    *ngIf="canAuthorize(request)"
+                    (click)="authorizeRequest(request)"
+                    [disabled]="isSaving"
+                  >
+                    <mat-icon>verified</mat-icon>
+                    Autorizar RH
+                  </button>
+                  <button
+                    mat-icon-button
+                    color="warn"
+                    *ngIf="canDelete(request)"
+                    (click)="deleteRequest(request)"
+                    matTooltip="Excluir"
+                    [disabled]="isSaving"
+                  >
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="empty-state" *ngIf="allRequests.length === 0">
+              <p>Nenhuma solicitação de férias encontrada.</p>
+            </div>
+          </mat-card-content>
+        </mat-card>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</div>

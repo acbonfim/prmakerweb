@@ -5,6 +5,7 @@ import {MatIconModule} from '@angular/material/icon';
 import {NavigationEnd, Router, RouterLink} from '@angular/router';
 import {MatDialog} from '@angular/material/dialog';
 import {filter} from 'rxjs';
+import {StorageService} from '../../services/storage.service';
 
 @Component({
   selector: 'app-side-menu',
@@ -18,10 +19,12 @@ export class SideMenuComponent implements OnInit {
   @Input() isCollapsed: boolean = false;
   @Output() toggleSidebar = new EventEmitter<void>();
   readonly router = inject(Router);
+  private storageService = inject(StorageService);
 
   currentRoute: string = '';
+  private userRoles: string[] = [];
 
-  menu = [
+  menu: { label: string; icon: string; link: string; allowedRoles?: string[] }[] = [
     {
       label: 'Início',
       icon: 'home',
@@ -47,6 +50,22 @@ export class SideMenuComponent implements OnInit {
       icon: 'hub',
       link: 'auth/plugin-manager'
     },
+    {
+      label: 'Férias',
+      icon: 'beach_access',
+      link: 'auth/vacations'
+    },
+    {
+      label: 'Meus Períodos',
+      icon: 'event_available',
+      link: 'auth/vacation-balances'
+    },
+    {
+      label: 'Aprovar Férias',
+      icon: 'assignment_turned_in',
+      link: 'auth/vacation-approvals',
+      allowedRoles: ['admin', 'gestor']
+    },
   ]
 
   constructor() {
@@ -60,6 +79,26 @@ export class SideMenuComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.loadUserRoles();
+  }
+
+  private loadUserRoles() {
+    const token = this.storageService.getItem('apiKey');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const roleKey = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
+        const rawRoles = payload[roleKey] ?? payload['role'];
+        this.userRoles = Array.isArray(rawRoles) ? rawRoles : (rawRoles ? [rawRoles] : []);
+      } catch {
+        this.userRoles = [];
+      }
+    }
+  }
+
+  isMenuItemVisible(item: { allowedRoles?: string[] }): boolean {
+    if (!item.allowedRoles || item.allowedRoles.length === 0) return true;
+    return item.allowedRoles.some(role => this.userRoles.includes(role));
   }
 
 
