@@ -48,6 +48,21 @@
           <input pInputText placeholder="branch name" [(ngModel)]="branchName"/>
         </p-inputgroup>
 
+        <p-inputgroup style="width: auto; min-width: 190px;">
+          <p-autoComplete
+            [(ngModel)]="selectedRepositoryObj"
+            [suggestions]="filteredRepositories"
+            (completeMethod)="filterRepositories($event)"
+            (onSelect)="onRepositorySelect()"
+            (onClear)="onRepositorySelect()"
+            field="label"
+            placeholder="Repositório"
+            [dropdown]="true"
+            [forceSelection]="true"
+            styleClass="repo-autocomplete"
+          ></p-autoComplete>
+        </p-inputgroup>
+
         <p-selectbutton
           class="mr-auto"
           [options]="justifyOptions"
@@ -56,6 +71,8 @@
           optionValue="value"
           styleClass="custom-select-button">
         </p-selectbutton>
+
+
 
 <!--        <p-selectbutton-->
 <!--          class="mr-auto"-->

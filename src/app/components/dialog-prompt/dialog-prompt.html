@@ -6,7 +6,7 @@
   <mat-dialog-content class="dialog-content p-3">
 
     @if(data.isAiGenerate){
-      <mat-stepper linear #stepper>
+      <mat-stepper linear #stepper (selectionChange)="onStepChange($event)">
         <mat-step>
           <ng-template matStepLabel>Azure DevOps</ng-template>
           <ng-template matStepContent>
@@ -19,7 +19,7 @@
             @if (data.isAiGenerate && showCardDetails() && !isAzureLoading()) {
               <div class="container overflow-auto">
                 <div class="mt-2 p-2 bg-dark rounded" [innerHTML]="reproSteps | safeHtml"
-                     style="max-width: 100%; height: 300px; overflow: auto;"></div>
+                     style="max-width: 100%; height: calc(100vh - 330px); overflow: auto;"></div>
               </div>
 
             }
@@ -29,32 +29,100 @@
         <mat-step [editable]="!this.reproSteps.length" [completed]="this.reproSteps.length" >
           <ng-template matStepLabel>GitHub</ng-template>
           <ng-template matStepContent>
-            @if (!isGitHubLoading())
-            {
-              <mat-form-field class="full-width" style="height: 100%">
-                <mat-label>Informe o ID do commit</mat-label>
-                <input matInput [(ngModel)]="commitId" />
-                <button
-                  matIconButton
-                  matSuffix
-                  (click)="getGitHubCommitDiff()"
-                >
-                  <mat-icon>search</mat-icon>
-                </button>
-              </mat-form-field>
-            } @else {
+            @if (isCommitsLoading()) {
               <div class="d-inline-flex align-items-center">
-                Carregando informações do commit no GitHub...
+                Carregando commits da branch...
                 <mat-spinner class="ms-2" diameter="20"></mat-spinner>
               </div>
             }
 
-            @if(githubCommitDiff) {
-              <div class="diff-viewer-container mt-3">
-                <app-git-diff-viewer [commitData]="githubCommitDiff"></app-git-diff-viewer>
+            @if (!isCommitsLoading()) {
+              <br>
+              <mat-form-field class="full-width">
+                <mat-label>Buscar commit</mat-label>
+                <input
+                  matInput
+                  [formControl]="commitSearchControl"
+                  [matAutocomplete]="auto"
+                  placeholder="Digite para filtrar por mensagem..."
+                />
+                <mat-icon matSuffix>search</mat-icon>
+                <mat-autocomplete
+                  #auto="matAutocomplete"
+                  [displayWith]="displayCommit.bind(this)"
+                  (optionSelected)="selectCommit($event.option.value)"
+                >
+                  @for (commit of filteredCommits; track getCommitSha(commit)) {
+                    <mat-option [value]="commit">
+                      <div class="commit-option">
+                        <span class="commit-sha">{{ getCommitSha(commit).substring(0, 7) }}</span>
+                        <span class="commit-msg">
+                          {{ getCommitTitle(commit) }}
+                          @if (getCommitDescription(commit)) {
+                            <span class="commit-desc"> — {{ getCommitDescription(commit).split('\n')[0] }}</span>
+                          }
+                        </span>
+                      </div>
+                    </mat-option>
+                  }
+                </mat-autocomplete>
+              </mat-form-field>
+
+              <div class="commit-scroll-area">
+
+                @if (isGitHubLoading()) {
+                  <div class="d-inline-flex align-items-center mt-2">
+                    Carregando informações do commit no GitHub...
+                    <mat-spinner class="ms-2" diameter="20"></mat-spinner>
+                  </div>
+                }
+
+                @if (selectedCommit && !isGitHubLoading()) {
+                  <div class="commit-details p-3 bg-dark rounded">
+                    <div class="commit-detail-row">
+                      <mat-icon class="commit-detail-icon">person</mat-icon>
+                      <span class="commit-detail-label">Autor:</span>
+                      <span class="commit-detail-value">{{ getCommitAuthor(selectedCommit) }}</span>
+                    </div>
+                    <div class="commit-detail-row mt-1">
+                      <mat-icon class="commit-detail-icon">schedule</mat-icon>
+                      <span class="commit-detail-label">Data:</span>
+                      <span class="commit-detail-value">{{ getCommitDate(selectedCommit) }}</span>
+                    </div>
+                    <div class="commit-detail-row mt-1">
+                      <mat-icon class="commit-detail-icon">tag</mat-icon>
+                      <span class="commit-detail-label">SHA:</span>
+                      <span class="commit-detail-value commit-sha-full">{{ getCommitSha(selectedCommit).substring(0, 12) }}</span>
+                    </div>
+                    <div class="commit-detail-row mt-2">
+                      <mat-icon class="commit-detail-icon">message</mat-icon>
+                      <span class="commit-detail-label">Mensagem:</span>
+                    </div>
+                    <div class="commit-message-text mt-1">{{ getCommitTitle(selectedCommit) }}</div>
+                    @if (getCommitDescription(selectedCommit)) {
+                      <div class="commit-body-text mt-1">{{ getCommitDescription(selectedCommit) }}</div>
+                    }
+
+                    @if (!githubCommitDiff) {
+                      <div class="d-flex justify-content-end mt-3">
+                        <button mat-raised-button color="primary" (click)="advanceToAI()">
+                          <mat-icon>search</mat-icon>
+                          Buscar Diff
+                        </button>
+                      </div>
+                    }
+                  </div>
+                }
+
+                @if (githubCommitDiff) {
+                  <div class="diff-viewer-container mt-3">
+                    <app-git-diff-viewer [commitData]="githubCommitDiff"></app-git-diff-viewer>
+                  </div>
+
+                }
+
               </div>
             }
-
 
           </ng-template>
         </mat-step>
@@ -74,7 +142,7 @@
                   <h4 class="mb-0">Texto Gerado:</h4>
                 </div>
                 <div class="markdown-viewer p-3 bg-dark rounded"
-                     style="max-height: 400px; height: 400px; overflow-y: auto;"
+                     style="max-height: calc(100vh - 400px); overflow-y: auto;"
                      [innerHTML]="generatedText | safeHtml">
                 </div>
               </div>
@@ -89,9 +157,14 @@
   </mat-dialog-content>
 
   <mat-dialog-actions class="dialog-footer">
-    <button matButton color="accent"
-            [disabled]="!promptText.length"
-            (click)="copyPromptToClipboard()"><mat-icon>content_copy</mat-icon> Copiar</button>
-    <button matButton mat-dialog-close (click)="onClose()">Fechar</button>
+    <button matButton (click)="onClose()">Fechar</button>
+
+    @if (githubCommitDiff) {
+      <button mat-raised-button color="primary" (click)="goToGenerateWithAI()">
+        <mat-icon>auto_awesome</mat-icon>
+        Avançar para Gerar com IA
+      </button>
+    }
+
   </mat-dialog-actions>
 </div>

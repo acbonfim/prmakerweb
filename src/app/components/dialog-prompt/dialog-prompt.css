@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-height: 80vh;
+  max-height: 90vh;
   width: 100%;
   overflow: hidden;
 }
@@ -26,6 +26,10 @@
   flex: 1;
   overflow: hidden;
 
+}
+
+::ng-deep .mat-mdc-dialog-content{
+  max-height: 80vh !important;
 }
 
 .scrollable-content {
@@ -106,7 +110,28 @@
 
 .diff-viewer-container {
   width: 100%;
-  margin-top: 1rem;
+}
+
+.commit-scroll-area {
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--mat-sys-outline) var(--mat-sys-surface-variant);
+}
+
+.commit-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.commit-scroll-area::-webkit-scrollbar-track {
+  background: var(--mat-sys-surface-variant);
+  border-radius: 4px;
+}
+
+.commit-scroll-area::-webkit-scrollbar-thumb {
+  background: var(--mat-sys-outline);
+  border-radius: 4px;
 }
 
 .scrollable-content {
@@ -226,4 +251,83 @@
 .generated-content h4 {
   color: #e6edf3;
   margin-bottom: 12px;
+}
+
+.commit-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.commit-sha {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #58a6ff;
+  background: rgba(88, 166, 255, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.commit-msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-desc {
+  color: #8b949e;
+  font-size: 0.9em;
+}
+
+.commit-details {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.commit-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #e6edf3;
+  font-size: 14px;
+}
+
+.commit-detail-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: #8b949e;
+}
+
+.commit-detail-label {
+  color: #8b949e;
+  font-weight: 500;
+}
+
+.commit-detail-value {
+  color: #e6edf3;
+}
+
+.commit-sha-full {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #58a6ff;
+}
+
+.commit-message-text {
+  color: #e6edf3;
+  font-size: 14px;
+  font-weight: 500;
+  padding-left: 22px;
+}
+
+.commit-body-text {
+  color: #8b949e;
+  font-size: 13px;
+  padding-left: 22px;
+  white-space: pre-wrap;
+}
+
+.full-width {
+  width: 100%;
 }

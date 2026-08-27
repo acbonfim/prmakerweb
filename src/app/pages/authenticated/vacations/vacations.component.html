@@ -1,32 +1,41 @@
 <div class="vacations-container">
   <app-showLoad *ngIf="isLoadingCalendar || isLoadingRequests || isLoadingBalance || isSaving"></app-showLoad>
 
-  <mat-card class="header-card">
-    <mat-card-header>
-      <mat-card-title>Gerenciamento de Férias</mat-card-title>
-    </mat-card-header>
-    <mat-card-content>
-      <div class="balance-info" *ngIf="activeBalances.length > 0">
-        <div class="balance-item">
-          <span class="balance-label">Disponível:</span>
-          <span class="balance-value">{{ getTotalAvailableDays() }} dias</span>
-        </div>
-        <div class="balance-item">
-          <span class="balance-label">Usados:</span>
-          <span class="balance-value">{{ getTotalUsedDays() }} dias</span>
-        </div>
-        <div class="balance-item">
-          <span class="balance-label">Restantes:</span>
-          <span class="balance-value highlight">{{ getTotalRemainingDays() }} dias</span>
-        </div>
-      </div>
-      <div *ngIf="activeBalances.length === 0 && !isLoadingBalance">
-        <p style="color: #666;">Nenhum período aquisitivo ativo encontrado.</p>
-      </div>
-    </mat-card-content>
-  </mat-card>
+  <div class="vacations-layout">
+    <mat-card class="header-card">
+      <mat-card-header>
+        <mat-card-title>Gerenciamento de Férias</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <mat-form-field appearance="outline" class="department-select">
+          <mat-label>Time</mat-label>
+          <mat-select [(ngModel)]="selectedDepartment" (selectionChange)="onDepartmentChange()" [disabled]="isLoadingDepartments">
+            <mat-option *ngFor="let dep of departments" [value]="dep">{{ dep }}</mat-option>
+          </mat-select>
+          <mat-hint *ngIf="!selectedDepartment">Selecione um time para ver o calendário</mat-hint>
+        </mat-form-field>
 
-  <mat-tab-group>
+        <div class="balance-info" *ngIf="activeBalances.length > 0">
+          <div class="balance-item">
+            <span class="balance-label">Disponível:</span>
+            <span class="balance-value">{{ getTotalAvailableDays() }} dias</span>
+          </div>
+          <div class="balance-item">
+            <span class="balance-label">Usados:</span>
+            <span class="balance-value">{{ getTotalUsedDays() }} dias</span>
+          </div>
+          <div class="balance-item">
+            <span class="balance-label">Restantes:</span>
+            <span class="balance-value highlight">{{ getTotalRemainingDays() }} dias</span>
+          </div>
+        </div>
+        <div *ngIf="activeBalances.length === 0 && !isLoadingBalance">
+          <p style="color: #666;">Nenhum período aquisitivo ativo encontrado.</p>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <mat-tab-group class="vacations-tabs">
     <!-- Aba do Calendário -->
     <mat-tab label="Calendário">
       <div class="tab-content">
@@ -54,18 +63,87 @@
                   [class.other-month]="!day.isCurrentMonth"
                   [class.today]="day.isToday"
                   [class.occupied]="day.isOccupied"
-                  [matTooltip]="day.isOccupied ? getOccupancyTooltip(day.occupancies) : ''"
+                  [ngStyle]="getDayStyle(day)"
+                  (mouseenter)="showTooltip($event, day)"
+                  (mousemove)="moveTooltip($event)"
+                  (mouseleave)="hideTooltip()"
                 >
                   <span class="day-number">{{ day.dayNumber }}</span>
                   <div class="occupancy-indicator" *ngIf="day.isOccupied">
-                    <mat-icon class="small-icon">person</mat-icon>
-                    <span class="occupancy-count">{{ day.occupancies.length }}</span>
+                    <mat-icon class="small-icon" [style.color]="getCalendarStatusConfig(getDominantStatusId(day)).color">
+                      {{ getCalendarStatusConfig(getDominantStatusId(day)).icon }}
+                    </mat-icon>
+                    <span class="occupancy-count" [style.color]="getCalendarStatusConfig(getDominantStatusId(day)).color">
+                      {{ day.occupancies.length }}
+                    </span>
+                  </div>
+                  <div class="status-dots" *ngIf="day.isOccupied && day.occupancies.length > 1">
+                    <span
+                      class="status-dot"
+                      *ngFor="let occ of day.occupancies"
+                      [style.background-color]="getCalendarStatusConfig(occ.statusId).borderColor"
+                      [title]="occ.userName"
+                    ></span>
                   </div>
                 </div>
               </div>
             </div>
+
+            <!-- Custom Tooltip -->
+            <div
+              #tooltipEl
+              class="calendar-custom-tooltip"
+              *ngIf="tooltipDay"
+              [style.left.px]="tooltipX"
+              [style.top.px]="tooltipY"
+            >
+              <div class="tooltip-header">
+                <mat-icon class="tooltip-header-icon">event</mat-icon>
+                <span>{{ tooltipDay.date | date:'dd/MM/yyyy' }}</span>
+              </div>
+              <div class="tooltip-divider"></div>
+              <div class="tooltip-person" *ngFor="let occ of tooltipDay.occupancies; let last = last">
+                <div class="tooltip-person-row">
+                  <mat-icon class="tooltip-person-icon">person</mat-icon>
+                  <span class="tooltip-person-name">{{ occ.userName }}</span>
+                </div>
+                <div class="tooltip-status-badge"
+                  [style.background-color]="getCalendarStatusConfig(occ.statusId).bgColor"
+                  [style.color]="getCalendarStatusConfig(occ.statusId).color"
+                  [style.border-color]="getCalendarStatusConfig(occ.statusId).borderColor"
+                >
+                  <mat-icon class="tooltip-status-icon">{{ getCalendarStatusConfig(occ.statusId).icon }}</mat-icon>
+                  {{ getCalendarStatusConfig(occ.statusId).label }}
+                </div>
+                <div class="tooltip-meta" *ngIf="occ.createdAt">
+                  <mat-icon class="tooltip-meta-icon">schedule</mat-icon>
+                  <span>Solicitado em {{ formatDateTime(occ.createdAt) }}</span>
+                </div>
+                <div class="tooltip-meta tooltip-meta--approved" *ngIf="occ.approvedByManagerAt">
+                  <mat-icon class="tooltip-meta-icon">thumb_up</mat-icon>
+                  <span>
+                    Aprovado pelo gestor
+                    <ng-container *ngIf="occ.approvedByManagerName"> por <strong>{{ occ.approvedByManagerName }}</strong></ng-container>
+                    em {{ formatDateTime(occ.approvedByManagerAt) }}
+                  </span>
+                </div>
+                <div class="tooltip-meta tooltip-meta--hr" *ngIf="occ.authorizedByHRAt">
+                  <mat-icon class="tooltip-meta-icon">verified</mat-icon>
+                  <span>
+                    Autorizado pelo RH
+                    <ng-container *ngIf="occ.authorizedByHRName"> por <strong>{{ occ.authorizedByHRName }}</strong></ng-container>
+                    em {{ formatDateTime(occ.authorizedByHRAt) }}
+                  </span>
+                </div>
+                <div class="tooltip-separator" *ngIf="!last"></div>
+              </div>
+            </div>
             <div class="loading-state" *ngIf="isLoadingCalendar">
               <p>Carregando calendário...</p>
+            </div>
+            <div class="empty-state" *ngIf="!isLoadingCalendar && !selectedDepartment">
+              <mat-icon>business</mat-icon>
+              <p>Selecione um time para visualizar o calendário de férias.</p>
             </div>
           </mat-card-content>
         </mat-card>
@@ -86,7 +164,7 @@
           <mat-card-header>
             <mat-card-title>Minhas Solicitações de Férias</mat-card-title>
           </mat-card-header>
-          <mat-card-content>
+          <mat-card-content class="mt-2">
             <div class="requests-list" *ngIf="!isLoadingRequests && myRequests.length > 0">
               <div class="request-item" *ngFor="let request of myRequests">
                 <div class="request-info">
@@ -95,7 +173,7 @@
                     <strong>{{ formatDate(request.endDate) }}</strong>
                     <span class="business-days">({{ request.businessDays }} dias úteis)</span>
                   </div>
-                  <mat-chip [style.background-color]="getStatusColor(request.status)">
+                  <mat-chip [style.background-color]="getStatusColor(request.status)" class="white-text">
                     {{ getStatusLabel(request.status) }}
                   </mat-chip>
                 </div>
@@ -152,7 +230,12 @@
             <mat-card-title>Todas as Solicitações</mat-card-title>
           </mat-card-header>
           <mat-card-content>
-            <div class="requests-list" *ngIf="allRequests.length > 0">
+            <div class="empty-state" *ngIf="!selectedDepartment">
+              <mat-icon>business</mat-icon>
+              <p>Selecione um time na aba Calendário para visualizar as solicitações.</p>
+            </div>
+
+            <div class="requests-list" *ngIf="selectedDepartment && allRequests.length > 0">
               <div class="request-item" *ngFor="let request of allRequests">
                 <div class="request-info">
                   <div class="request-user">
@@ -210,12 +293,13 @@
               </div>
             </div>
 
-            <div class="empty-state" *ngIf="allRequests.length === 0">
+            <div class="empty-state" *ngIf="selectedDepartment && allRequests.length === 0">
               <p>Nenhuma solicitação de férias encontrada.</p>
             </div>
           </mat-card-content>
         </mat-card>
       </div>
     </mat-tab>
-  </mat-tab-group>
+    </mat-tab-group>
+  </div>
 </div>

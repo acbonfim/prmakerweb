@@ -40,20 +40,35 @@ import { ShowLoadComponent } from '../../../components/showLoad/showLoad.compone
           <mat-card-title>Aprovação de Férias</mat-card-title>
         </mat-card-header>
         <mat-card-content>
-          <mat-form-field appearance="outline">
-            <mat-label>Filtrar por Status</mat-label>
-            <mat-select [(ngModel)]="statusFilter" (selectionChange)="applyFilter()">
-              <mat-option [value]="0">Todos</mat-option>
-              <mat-option [value]="1">Aguardando Aprovação</mat-option>
-              <mat-option [value]="2">Aprovado pelo Gestor</mat-option>
-              <mat-option [value]="3">Autorizado pelo RH</mat-option>
-              <mat-option [value]="4">Concluído</mat-option>
-            </mat-select>
-          </mat-form-field>
+          <div class="filters-row">
+            <mat-form-field appearance="outline">
+              <mat-label>Time</mat-label>
+              <mat-select [(ngModel)]="selectedDepartment" (selectionChange)="onDepartmentChange()" [disabled]="isLoadingDepartments">
+                <mat-option *ngFor="let dep of departments" [value]="dep">{{ dep }}</mat-option>
+              </mat-select>
+              <mat-hint *ngIf="!selectedDepartment">Selecione um time</mat-hint>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline">
+              <mat-label>Filtrar por Status</mat-label>
+              <mat-select [(ngModel)]="statusFilter" (selectionChange)="applyFilter()" [disabled]="!selectedDepartment">
+                <mat-option [value]="0">Todos</mat-option>
+                <mat-option [value]="1">Aguardando Aprovação</mat-option>
+                <mat-option [value]="2">Aprovado pelo Gestor</mat-option>
+                <mat-option [value]="3">Autorizado pelo RH</mat-option>
+                <mat-option [value]="4">Concluído</mat-option>
+              </mat-select>
+            </mat-form-field>
+          </div>
         </mat-card-content>
       </mat-card>
 
-      <div class="requests-grid" *ngIf="!isLoading && filteredRequests.length > 0">
+      <div class="empty-state" *ngIf="!isLoading && !selectedDepartment">
+        <mat-icon>business</mat-icon>
+        <p>Selecione um time para visualizar as solicitações de férias.</p>
+      </div>
+
+      <div class="requests-grid" *ngIf="!isLoading && selectedDepartment && filteredRequests.length > 0">
         <mat-card *ngFor="let request of filteredRequests" class="request-card">
           <mat-card-header>
             <mat-card-title>
@@ -61,7 +76,7 @@ import { ShowLoadComponent } from '../../../components/showLoad/showLoad.compone
                 <mat-icon>person</mat-icon>
                 <span>{{ request.userFullName || request.userId }}</span>
               </div>
-              <mat-chip [style.background-color]="getStatusColor(request.status)">
+              <mat-chip [style.background-color]="getStatusColor(request.status)" >
                 {{ getStatusLabel(request.status) }}
               </mat-chip>
             </mat-card-title>
@@ -121,7 +136,7 @@ import { ShowLoadComponent } from '../../../components/showLoad/showLoad.compone
         </mat-card>
       </div>
 
-      <div class="empty-state" *ngIf="!isLoading && filteredRequests.length === 0">
+      <div class="empty-state" *ngIf="!isLoading && selectedDepartment && filteredRequests.length === 0">
         <mat-icon>inbox</mat-icon>
         <p>Nenhuma solicitação encontrada.</p>
       </div>
@@ -142,6 +157,21 @@ import { ShowLoadComponent } from '../../../components/showLoad/showLoad.compone
       margin-bottom: 24px;
     }
 
+    ::ng-deep .mat-mdc-card.request-card {
+      background-color: #2c2c2c !important;
+    }
+
+    ::ng-deep .mat-mdc-standard-chip:not(.mdc-evolution-chip--disabled) .mdc-evolution-chip__text-label {
+      color: #fff !important;
+    }
+
+    .filters-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
     mat-form-field {
       min-width: 250px;
     }
@@ -158,7 +188,7 @@ import { ShowLoadComponent } from '../../../components/showLoad/showLoad.compone
 
     .request-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     .request-card mat-card-title {
@@ -176,8 +206,10 @@ import { ShowLoadComponent } from '../../../components/showLoad/showLoad.compone
       font-size: 16px;
     }
 
+
+
+
     mat-chip {
-      color: white !important;
       font-weight: 500;
     }
 
@@ -196,7 +228,7 @@ import { ShowLoadComponent } from '../../../components/showLoad/showLoad.compone
     }
 
     .business-days {
-      color: #666;
+      color: #939393;
       font-size: 13px;
       margin: 4px 0 0 0;
     }
@@ -210,7 +242,7 @@ import { ShowLoadComponent } from '../../../components/showLoad/showLoad.compone
 
     .note {
       padding: 8px;
-      background: #f5f5f5;
+      background: #323232;
       border-radius: 4px;
       font-size: 13px;
     }
@@ -245,6 +277,10 @@ export class VacationApprovalsComponent implements OnInit {
   private loadingBar = inject(LoadingBarService);
   private cdr = inject(ChangeDetectorRef);
 
+  departments: string[] = [];
+  selectedDepartment: string | null = null;
+  isLoadingDepartments = false;
+
   allRequests: VacationRequest[] = [];
   filteredRequests: VacationRequest[] = [];
   statusFilter: number = 0;
@@ -255,14 +291,40 @@ export class VacationApprovalsComponent implements OnInit {
   VacationStatusLabels = VacationStatusLabels;
 
   ngOnInit() {
-    this.loadRequests();
+    this.loadDepartments();
+  }
+
+  loadDepartments() {
+    this.isLoadingDepartments = true;
+    this.vacationService.getDepartments().subscribe({
+      next: (deps) => {
+        this.departments = deps;
+        this.isLoadingDepartments = false;
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.snackBar.open('Erro ao carregar times', 'OK', {
+          horizontalPosition: 'right',
+          verticalPosition: 'top'
+        });
+        this.isLoadingDepartments = false;
+      }
+    });
+  }
+
+  onDepartmentChange() {
+    if (this.selectedDepartment) {
+      this.loadRequests();
+    }
   }
 
   loadRequests() {
+    if (!this.selectedDepartment) return;
+
     this.isLoading = true;
     this.loadingBar.start();
 
-    this.vacationService.getAllRequests().subscribe({
+    this.vacationService.getAllRequests(this.selectedDepartment).subscribe({
       next: (requests) => {
         this.allRequests = requests;
         this.applyFilter();

@@ -1,18 +1,37 @@
 .vacations-container {
   padding: 20px;
-  max-width: 1400px;
+  max-width: 100vw;
   margin: 0 auto;
 }
 
+.vacations-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
 .header-card {
-  margin-bottom: 20px;
+  flex: 0 0 10%;
+  width: 30%;
+  position: sticky;
+  top: 20px;
+}
+
+::ng-deep .mat-mdc-tab-header {
+  border-radius: 5px 5px 5px 5px;
+  background-color: var(--mat-sys-surface);
+}
+
+.vacations-tabs {
+  flex: 1 1 90%;
+  min-width: 0;
 }
 
 .balance-info {
   display: flex;
-  gap: 30px;
+  flex-direction: column;
+  gap: 12px;
   margin-top: 16px;
-  flex-wrap: wrap;
 }
 
 .balance-item {
@@ -37,6 +56,12 @@
   color: #1976d2;
 }
 
+.department-select {
+  min-width: 260px;
+  margin-top: 16px;
+  display: block;
+}
+
 .tab-content {
   padding: 20px 0;
 }
@@ -58,7 +83,7 @@
 .calendar {
   padding: 12px;
   width: 100%;
-  max-width: 700px;
+  max-width: 600px;
   margin: 0 auto;
   overflow: hidden;
 }
@@ -118,8 +143,7 @@
 }
 
 .calendar-day.occupied {
-  background: #fff3e0;
-  border-color: #ff9800;
+  border-width: 2px;
 }
 
 .day-number {
@@ -134,7 +158,6 @@
   gap: 2px;
   margin-top: 2px;
   font-size: 10px;
-  color: #ff9800;
 }
 
 .small-icon {
@@ -145,6 +168,141 @@
 
 .occupancy-count {
   font-weight: bold;
+}
+
+.status-dots {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 3px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* ── Custom calendar tooltip ── */
+.calendar-custom-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  min-width: 240px;
+  max-width: 360px;
+  pointer-events: none;
+  font-size: 13px;
+}
+
+.tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #374151;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.tooltip-header-icon {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: #6b7280;
+}
+
+.tooltip-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin-bottom: 8px;
+}
+
+.tooltip-separator {
+  height: 1px;
+  background: #f3f4f6;
+  margin: 6px 0;
+}
+
+.tooltip-person {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tooltip-person-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tooltip-person-icon {
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  color: #9ca3af;
+}
+
+.tooltip-person-name {
+  font-weight: 500;
+  color: #111827;
+}
+
+.tooltip-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid;
+  font-size: 11px;
+  font-weight: 500;
+  width: fit-content;
+}
+
+.tooltip-status-icon {
+  font-size: 12px;
+  width: 12px;
+  height: 12px;
+}
+
+.tooltip-meta {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.tooltip-meta-icon {
+  font-size: 12px;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.tooltip-meta--approved {
+  color: #1d4ed8;
+}
+
+.tooltip-meta--approved .tooltip-meta-icon {
+  color: #3b82f6;
+}
+
+.tooltip-meta--hr {
+  color: #065f46;
+}
+
+.tooltip-meta--hr .tooltip-meta-icon {
+  color: #10b981;
 }
 
 .action-buttons {
@@ -191,12 +349,22 @@
 .request-dates {
   flex: 1;
   font-size: 16px;
+  color: black;
 }
 
 .business-days {
   color: #666;
   font-size: 14px;
   margin-left: 8px;
+}
+
+::ng-deep .white-text {
+  color: white !important;
+}
+
+::ng-deep .mat-mdc-standard-chip:not(.mdc-evolution-chip--disabled) .mdc-evolution-chip__text-label {
+  color: white !important;
+  font-weight: 500;
 }
 
 .request-notes {
@@ -229,6 +397,21 @@ mat-chip {
 @media (max-width: 768px) {
   .vacations-container {
     padding: 12px;
+  }
+
+  .vacations-layout {
+    flex-direction: column;
+  }
+
+  .header-card {
+    flex: none;
+    width: 100%;
+    position: static;
+  }
+
+  .vacations-tabs {
+    flex: none;
+    width: 100%;
   }
 
   .balance-info {

@@ -76,6 +76,15 @@ export interface CalendarOccupancy {
   userId: string;
   userName: string;
   vacationRequestId: number;
+  statusId: number;
+  statusName: string;
+  createdAt?: string | null;
+  approvedByManagerId?: string | null;
+  approvedByManagerAt?: string | null;
+  approvedByManagerName?: string | null;
+  authorizedByHRId?: string | null;
+  authorizedByHRAt?: string | null;
+  authorizedByHRName?: string | null;
 }
 
 export enum VacationStatus {
@@ -87,7 +96,7 @@ export enum VacationStatus {
 }
 
 export const VacationStatusLabels: Record<VacationStatus, { label: string; color: string }> = {
-  [VacationStatus.PendingApproval]: { label: 'Aguardando Aprovação', color: 'yellow' },
+  [VacationStatus.PendingApproval]: { label: 'Aguardando Aprovação', color: 'orange' },
   [VacationStatus.ApprovedByManager]: { label: 'Aprovado pelo Gestor', color: 'blue' },
   [VacationStatus.AuthorizedByHR]: { label: 'Autorizado pelo RH', color: 'green' },
   [VacationStatus.Completed]: { label: 'Concluído', color: 'gray' },

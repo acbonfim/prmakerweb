@@ -1,3 +1,73 @@
-<p>
-  home works!
-</p>
+<div class="home-container">
+
+  <!-- Hero / Saudação -->
+  <div class="hero-section">
+    <div class="hero-text">
+      <h1 class="greeting">{{ greeting }}, <span class="user-name">{{ firstName }}</span> 👋</h1>
+      <p class="current-date">{{ currentDate }}</p>
+      <p class="subtitle">O que você precisa fazer hoje?</p>
+    </div>
+    <div class="hero-decoration" aria-hidden="true">
+      <mat-icon class="hero-icon">dashboard</mat-icon>
+    </div>
+  </div>
+
+  <!-- Resumo de Saldo de Férias -->
+  <div class="balance-banner" *ngIf="!isLoadingBalance && activeBalances.length > 0">
+    <div class="balance-banner-title">
+      <mat-icon>beach_access</mat-icon>
+      <span>Seu saldo de férias</span>
+    </div>
+    <div class="balance-stats">
+      <div class="balance-stat">
+        <span class="stat-value">{{ totalAvailable }}</span>
+        <span class="stat-label">Disponíveis</span>
+      </div>
+      <div class="balance-divider"></div>
+      <div class="balance-stat">
+        <span class="stat-value used">{{ totalUsed }}</span>
+        <span class="stat-label">Utilizados</span>
+      </div>
+      <div class="balance-divider"></div>
+      <div class="balance-stat">
+        <span class="stat-value remaining">{{ totalRemaining }}</span>
+        <span class="stat-label">Restantes</span>
+      </div>
+    </div>
+    <button mat-stroked-button class="balance-action-btn" (click)="navigate('/auth/vacations')">
+      <mat-icon>arrow_forward</mat-icon>
+      Ver calendário
+    </button>
+  </div>
+
+  <!-- Atalhos -->
+  <div class="section-header">
+    <h2 class="section-title">Acesso rápido</h2>
+    <span class="section-subtitle" *ngIf="isManager">
+      <mat-icon class="admin-icon">shield</mat-icon>
+      Acesso de gestor ativo
+    </span>
+  </div>
+
+  <div class="cards-grid">
+    <div
+      class="quick-card"
+      *ngFor="let card of visibleCards"
+      (click)="navigate(card.route)"
+      [style.--card-color]="card.color"
+      [style.--card-bg]="card.bgColor"
+      role="button"
+      [attr.aria-label]="'Ir para ' + card.title"
+    >
+      <div class="card-icon-wrap">
+        <mat-icon [style.color]="card.color">{{ card.icon }}</mat-icon>
+      </div>
+      <div class="card-body">
+        <h3 class="card-title">{{ card.title }}</h3>
+        <p class="card-description">{{ card.description }}</p>
+      </div>
+      <mat-icon class="card-arrow">chevron_right</mat-icon>
+    </div>
+  </div>
+
+</div>

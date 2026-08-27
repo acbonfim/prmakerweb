@@ -39,8 +39,9 @@ export class VacationService {
     return this.http.get<VacationRequest[]>(`${this.apiUrl}/my-requests`);
   }
 
-  getAllRequests(): Observable<VacationRequest[]> {
-    return this.http.get<VacationRequest[]>(`${this.apiUrl}/all-requests`);
+  getAllRequests(department: string): Observable<VacationRequest[]> {
+    const params = new HttpParams().set('department', department);
+    return this.http.get<VacationRequest[]>(`${this.apiUrl}/all-requests`, { params });
   }
 
   approveVacationRequest(id: number, request: ApproveVacationRequest): Observable<VacationRequest> {
@@ -55,12 +56,23 @@ export class VacationService {
     return this.http.delete<void>(`${this.apiUrl}/request/${id}`);
   }
 
+  // Departamentos
+  getDepartments(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/departments`);
+  }
+
   // Calendário
-  getCalendar(month: number, year: number): Observable<CalendarDay[]> {
+  getCalendar(month: number, year: number, department: string): Observable<CalendarDay[]> {
     const params = new HttpParams()
       .set('month', month.toString())
-      .set('year', year.toString());
+      .set('year', year.toString())
+      .set('department', department);
     return this.http.get<CalendarDay[]>(`${this.apiUrl}/calendar`, { params });
+  }
+
+  getAllBalances(department: string): Observable<VacationRequest[]> {
+    const params = new HttpParams().set('department', department);
+    return this.http.get<VacationRequest[]>(`${this.apiUrl}/all-balances`, { params });
   }
 
   // Saldo de Férias - NOVOS ENDPOINTS (Recomendados)

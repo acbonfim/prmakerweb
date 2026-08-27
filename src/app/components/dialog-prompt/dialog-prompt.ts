@@ -1,8 +1,18 @@
-import {Component, EventEmitter, inject, OnInit, Output, output, signal, ViewChild} from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  EventEmitter,
+  inject,
+  OnInit,
+  Output,
+  output,
+  signal,
+  ViewChild
+} from '@angular/core';
 import {MAT_DIALOG_DATA, MatDialogActions, MatDialogContent, MatDialogRef} from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { CliipboardService } from '../../services/cliipboard.service';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, FormControl, ReactiveFormsModule } from '@angular/forms';
 import {MatInput, MatLabel} from '@angular/material/input';
 import { MatFormFieldModule} from '@angular/material/form-field';
 import {MatIconModule} from '@angular/material/icon';
@@ -11,12 +21,14 @@ import {environment} from '../../../environments/environment';
 import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {SafeHtmlPipe} from 'primeng/menu';
 import {MatStepper, MatStepperModule} from '@angular/material/stepper';
-import { GitDiffViewerComponent } from "../git-diff-viewer/git-diff-viewer";
+import {StepperSelectionEvent} from '@angular/cdk/stepper';
 import { marked } from 'marked';
 import {GlobalService} from '../../services/global.service';
 import {GdsService} from '../../services/gds.service';
 import {firstValueFrom} from 'rxjs';
 import {tap} from 'rxjs/internal/operators/tap';
+import {MatAutocompleteModule} from '@angular/material/autocomplete';
+import { GitDiffViewerComponent } from "../git-diff-viewer/git-diff-viewer";
 
 @Component({
   selector: 'app-dialog-prompt',
@@ -37,7 +49,8 @@ import {tap} from 'rxjs/internal/operators/tap';
     SafeHtmlPipe,
     MatStepperModule,
     GitDiffViewerComponent,
-
+    MatAutocompleteModule,
+    ReactiveFormsModule,
 ]
 })
 export class DialogPrompt implements OnInit {
@@ -49,6 +62,7 @@ export class DialogPrompt implements OnInit {
   showCardDetails = signal(false);
   isAzureLoading = signal(false);
   isGitHubLoading = signal(false);
+  isCommitsLoading = signal(false);
   isAiLoading = signal(false);
   promptText = "";
   urlBase = environment.apiUrl;
@@ -57,6 +71,10 @@ export class DialogPrompt implements OnInit {
   githubCommitDiff: any;
   generatedText: string = "";
   generatedTextRaw: string = "";
+  commits: any[] = [];
+  filteredCommits: any[] = [];
+  selectedCommit: any = null;
+  commitSearchControl = new FormControl('');
   private pullRequestDescriptionAiGenerated: string = "";
   private rootCauseAnalysisAiGenerated: string = "";
   private configurationService = inject(GdsService);
@@ -65,7 +83,7 @@ export class DialogPrompt implements OnInit {
   private configurations: any = {};
 
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private cdr: ChangeDetectorRef,) {
     marked.setOptions({
       breaks: true,
       gfm: true
@@ -103,6 +121,115 @@ export class DialogPrompt implements OnInit {
     if (this.stepper) {
       this.stepper.previous();
     }
+  }
+
+  onStepChange(event: StepperSelectionEvent) {
+    if (event.selectedIndex === 1 && this.commits.length === 0) {
+      this.getCommits();
+    }
+  }
+
+  getCommits() {
+    if (!this.data.branch || !this.data.repository) return;
+
+    this.isCommitsLoading.set(true);
+    const branch = encodeURIComponent(this.data.branch);
+    const repo = encodeURIComponent(this.data.repository);
+
+    this.http.get<any[]>(`${this.urlBase}GitHub/commits?repository=${repo}&branch=${branch}`).subscribe({
+      next: (response) => {
+        this.isCommitsLoading.set(false);
+        this.commits = response || [];
+        this.filteredCommits = [...this.commits];
+        if (this.commits.length > 0) {
+          console.log('[Commits] Estrutura do primeiro commit:', JSON.stringify(this.commits[0], null, 2));
+        }
+
+        this.commitSearchControl.valueChanges.subscribe(value => {
+          const text = (typeof value === 'string' ? value : '').toLowerCase();
+          this.filteredCommits = this.commits.filter(c =>
+            this.getCommitTitle(c).toLowerCase().includes(text) ||
+            this.getCommitDescription(c).toLowerCase().includes(text)
+          );
+        });
+      },
+      error: (err) => {
+        this.isCommitsLoading.set(false);
+        console.error('Error fetching commits:', err);
+      }
+    });
+  }
+
+  getCommitTitle(commit: any): string {
+    const fullMsg: string =
+      commit?.commit?.message ||
+      commit?.message ||
+      commit?.title ||
+      commit?.subject ||
+      commit?.commitMessage ||
+      '';
+    return fullMsg.split('\n')[0].trim();
+  }
+
+  getCommitDescription(commit: any): string {
+    const fullMsg: string =
+      commit?.commit?.message ||
+      commit?.message ||
+      commit?.description ||
+      commit?.body ||
+      '';
+    return fullMsg.split('\n').slice(1).join('\n').trim();
+  }
+
+  getCommitAuthor(commit: any): string {
+    return (
+      commit?.commit?.author?.name ||
+      commit?.commit?.committer?.name ||
+      commit?.author?.login ||
+      commit?.author?.name ||
+      commit?.authorName ||
+      commit?.committer?.name ||
+      commit?.author ||
+      ''
+    );
+  }
+
+  getCommitDate(commit: any): string {
+    const date =
+      commit?.commit?.author?.date ||
+      commit?.commit?.committer?.date ||
+      commit?.authorDate ||
+      commit?.date ||
+      commit?.createdAt ||
+      commit?.timestamp ||
+      '';
+    return date ? new Date(date).toLocaleString('pt-BR') : '';
+  }
+
+  getCommitSha(commit: any): string {
+    return commit?.sha || commit?.id || commit?.commitId || commit?.hash || '';
+  }
+
+  displayCommit(commit: any): string {
+    if (!commit) return '';
+    const title = this.getCommitTitle(commit);
+    const desc = this.getCommitDescription(commit);
+    return desc ? `${title} - ${desc.split('\n')[0]}` : title;
+  }
+
+  selectCommit(commit: any) {
+    this.selectedCommit = commit;
+    this.commitId = this.getCommitSha(commit);
+    this.githubCommitDiff = null;
+  }
+
+  advanceToAI() {
+    this.getGitHubCommitDiff();
+  }
+
+  goToGenerateWithAI() {
+    this.gerarPrompt();
+    this.next();
   }
 
   canProceedFromStep2(): boolean {
@@ -198,16 +325,14 @@ export class DialogPrompt implements OnInit {
 
     this.isGitHubLoading.set(true);
 
-    this.http.get(`${this.urlBase}GitHub/commit/${this.commitId}/diff`).subscribe(
+    var repo = this.data.repository;
+
+    this.http.get(`${this.urlBase}GitHub/commit/${this.commitId}/diff?repository=${repo}`).subscribe(
       (response: any) => {
         this.isGitHubLoading.set(false);
         if (response) {
           this.githubCommitDiff = response;
-          this.gerarPrompt();
-          setTimeout(() => {
-              this.next()
-            }, 3000
-          );
+          this.cdr.detectChanges();
         }
       },
       error => {

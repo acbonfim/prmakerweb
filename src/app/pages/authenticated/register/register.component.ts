@@ -21,6 +21,7 @@ import {MenuModule} from 'primeng/menu';
 import {InputNumberModule} from 'primeng/inputnumber';
 import {LMarkdownEditorModule} from 'ngx-markdown-editor';
 import {SplitButton} from 'primeng/splitbutton';
+import {AutoCompleteModule} from 'primeng/autocomplete';
 import {MenuItem, MenuItemCommandEvent} from 'primeng/api';
 import {UserService} from '../../../services/UserService.service';
 import {CliipboardService} from '../../../services/cliipboard.service';
@@ -60,7 +61,8 @@ import {JsonPipe} from '@angular/common';
     MenuModule,
     InputNumberModule,
     SplitButton,
-    JsonPipe
+    JsonPipe,
+    AutoCompleteModule
   ]
 })
 export class RegisterComponent implements OnInit {
@@ -85,6 +87,10 @@ export class RegisterComponent implements OnInit {
   branchPrefix: string = 'hotfix/';
   isEditingPrefix: boolean = false;
   branchName: string = '';
+
+  repositoryOptions: { label: string; value: string; id?: number }[] = [];
+  selectedRepositoryObj: { label: string; value: string; id?: number } | null = null;
+  filteredRepositories: { label: string; value: string; id?: number }[] = [];
 
   justifyOptions = [
     {
@@ -219,21 +225,43 @@ export class RegisterComponent implements OnInit {
 
   initializeBranchConfigurations(){
     const activeBranchsStr = this.configurations.PullRequest.ActiveBranchs;
-
     if (activeBranchsStr) {
       try {
         const rawBranches = eval(activeBranchsStr);
-
         this.justifyOptions = rawBranches.map((branch: any) => ({
           label: branch.label,
           value: branch.branchName
         }));
-
         this.cdr.detectChanges();
       } catch (error) {
         console.error('Erro ao processar ActiveBranchs:', error);
       }
     }
+
+    const activeRepositoriesStr = this.configurations.PullRequest.ActiveRepositories;
+    if (activeRepositoriesStr) {
+      try {
+        this.repositoryOptions = JSON.parse(activeRepositoriesStr);
+        this.filteredRepositories = [...this.repositoryOptions];
+        if (this.repositoryOptions.length > 0) {
+          this.selectedRepositoryObj = this.repositoryOptions[0];
+        }
+        this.cdr.detectChanges();
+      } catch (error) {
+        console.error('Erro ao processar ActiveRepositories:', error);
+      }
+    }
+  }
+
+  filterRepositories(event: { query: string }) {
+    const q = event.query.toLowerCase();
+    this.filteredRepositories = this.repositoryOptions.filter(r =>
+      r.label.toLowerCase().includes(q)
+    );
+  }
+
+  onRepositorySelect() {
+    this.makeUrlLink();
   }
 
   getPullRequestConfigurations(){
@@ -293,13 +321,20 @@ export class RegisterComponent implements OnInit {
     this.fullDescription = null;
     this.branchPrefix = 'hotfix/';
     this.branchName = '';
-    this.link = "https://github.com/electradv/edv-solvace/compare/my-environment...hotfix/";
+    this.selectedRepositoryObj = this.repositoryOptions.length > 0 ? this.repositoryOptions[0] : null;
+    const repo = this.selectedRepositoryObj?.value ?? 'edv-solvace-apps';
+    this.link = `https://github.com/electradv/${repo}/compare/my-environment...hotfix/`;
     this.cardType = '';
   }
 
   savePullRequest() {
     this.isPullRequestLoading = true;
     this.loadingBar.start();
+    const repo =
+      typeof this.selectedRepositoryObj === 'string'
+        ? this.selectedRepositoryObj
+        : this.selectedRepositoryObj?.value ?? 'edv-solvace';
+
     let cardNumber = this.cardNumber ? this.cardNumber.toString() : "0";
     let pullRequestModel = {
       description: this.pullRequest.description,
@@ -309,6 +344,7 @@ export class RegisterComponent implements OnInit {
       rootCause: this.pullRequest.rootCause,
       branchPrefix: this.branchPrefix,
       branchName: this.branchName,
+      repositoryId: repo,
     };
 
     this.http.post(`${this.urlBase}PullRequest`, pullRequestModel).subscribe(
@@ -368,16 +404,25 @@ export class RegisterComponent implements OnInit {
   }
 
   generatePullRequestWithAi() {
+    const repo =
+      typeof this.selectedRepositoryObj === 'string'
+        ? this.selectedRepositoryObj
+        : this.selectedRepositoryObj?.value ?? 'edv-solvace';
+
+    const fullBranch = `${this.branchPrefix}${this.branchName}`;
+
     const dialogRef = this.dialog.open(DialogPrompt, {
       data: {
         cardNumber: this.cardNumber,
         isAiGenerate: true,
-        cardType: this.cardType
+        cardType: this.cardType,
+        repository: repo,
+        branch: fullBranch,
       },
       width: '1200px',
-      height: '80vh',
+      height: '90vh',
       maxWidth: '90vw',
-      maxHeight: '90vh',
+      maxHeight: '100vh',
       panelClass: 'custom-dialog-container'
     });
 
@@ -398,7 +443,14 @@ export class RegisterComponent implements OnInit {
     {
       this.isPullRequestLoading = true;
       this.loadingBar.start();
-      this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}`).subscribe(
+
+      const repositoryId =
+        typeof this.selectedRepositoryObj === 'string'
+          ? this.selectedRepositoryObj
+          : this.selectedRepositoryObj?.value ?? 'edv-solvace';
+
+      const repoParam = repositoryId != null ? `&repositoryId=${repositoryId}` : '';
+      this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}${repoParam}`).subscribe(
         (response: any) => {
 
           this.isPullRequestLoading = false;
@@ -566,8 +618,12 @@ export class RegisterComponent implements OnInit {
 
   makeUrlLink() {
     if(this.cardNumber == null) return;
-    this.link = `https://github.com/electradv/edv-solvace-apps/compare/my-environment...${this.branchPrefix}${this.branchName}`;
-    this.link = this.link.replace("my-environment",this.environmentName.toLowerCase());
+    const repo =
+      typeof this.selectedRepositoryObj === 'string'
+        ? this.selectedRepositoryObj
+        : this.selectedRepositoryObj?.value ?? 'edv-solvace';
+    this.link = `https://github.com/electradv/${repo}/compare/my-environment...${this.branchPrefix}${this.branchName}`;
+    this.link = this.link.replace("my-environment", this.environmentName.toLowerCase());
 
     this.cdr.detectChanges();
   }

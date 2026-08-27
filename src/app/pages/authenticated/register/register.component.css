@@ -67,3 +67,30 @@
   background-color: var(--mat-button-protected-disabled-container-color, color-mix(in srgb, var(--mat-sys-on-surface) 25%, transparent))
 }
 
+/* ── Repositório autocomplete ── */
+::ng-deep .repo-autocomplete,
+::ng-deep .repo-autocomplete .p-autocomplete,
+::ng-deep .repo-autocomplete .p-autocomplete-input {
+  height: 56px !important;
+  width: 100% !important;
+}
+
+::ng-deep .repo-autocomplete .p-autocomplete-input {
+  border-radius: 5px 0px 0px 5px !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  font-size: 14px;
+}
+
+::ng-deep .repo-autocomplete .p-autocomplete-dropdown {
+  height: 56px !important;
+  border-left: 1px solid var(--p-inputgroup-addon-border-color, rgba(255,255,255,0.15)) !important;
+  background: transparent !important;
+  color: inherit !important;
+  border-radius: 0px 5px 5px 0px !important;
+}
+
+::ng-deep .repo-autocomplete .p-autocomplete-dropdown:hover {
+  background: rgba(255,255,255,0.05) !important;
+}
+
