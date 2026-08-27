@@ -1,0 +1,137 @@
+<div class="timeline">
+  <div class="timeline__header">
+    <mat-icon class="timeline__header-icon">forum</mat-icon>
+    <span class="timeline__title">Linha do tempo</span>
+    @if (!isLoading() && entries().length) {
+      <span class="timeline__count">{{ entries().length }}</span>
+    }
+  </div>
+
+  <div class="timeline__body" #body>
+    @if (isLoading()) {
+      <div class="timeline__state">
+        <mat-spinner diameter="30"></mat-spinner>
+        <span>Carregando linha do tempo...</span>
+      </div>
+    } @else if (loadError()) {
+      <div class="timeline__state timeline__state--error">
+        <mat-icon>error_outline</mat-icon>
+        <span>Não foi possível carregar a linha do tempo.</span>
+        <button mat-button color="primary" (click)="load()">Tentar novamente</button>
+      </div>
+    } @else if (!cardNumber) {
+      <div class="timeline__state timeline__state--empty">
+        <mat-icon>badge</mat-icon>
+        <span>Informe e busque um card para ver a linha do tempo.</span>
+      </div>
+    } @else if (!entries().length) {
+      <div class="timeline__state timeline__state--empty">
+        <mat-icon>chat_bubble_outline</mat-icon>
+        <span>Nenhum registro ainda.<br />Seja o primeiro a comentar.</span>
+      </div>
+    } @else {
+      @for (entry of entries(); track trackById($index, entry)) {
+        <div class="comment" [class.comment--editing]="editingId() === entry.id">
+          <div class="comment__avatar" [style.background]="avatarColor(entry.userName)">
+            {{ initials(entry.userName) }}
+          </div>
+          <div class="comment__body">
+            <div class="comment__meta">
+              <span class="comment__author">{{ entry.userName }}</span>
+              @if (!entry.userId) {
+                <span class="comment__badge" matTooltip="Registro criado externamente">externo</span>
+              }
+              <span class="comment__time" [matTooltip]="formatDateTime(entry.createdAt)">
+                {{ relativeTime(entry.createdAt) }}
+              </span>
+              @if (entry.updatedAt) {
+                <span
+                  class="comment__edited"
+                  [matTooltip]="'Editado em ' + formatDateTime(entry.updatedAt)"
+                >(editado)</span>
+              }
+
+              @if (isMine(entry) && editingId() !== entry.id && confirmDeleteId() !== entry.id) {
+                <span class="comment__actions">
+                  <button mat-icon-button class="comment__action"
+                          (click)="startEdit(entry)"
+                          matTooltip="Editar" matTooltipPosition="above">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button mat-icon-button class="comment__action"
+                          (click)="requestDelete(entry)"
+                          matTooltip="Excluir" matTooltipPosition="above">
+                    <mat-icon>delete</mat-icon>
+                  </button>
+                </span>
+              }
+            </div>
+
+            @if (editingId() === entry.id) {
+              <textarea
+                class="comment__edit-input"
+                [(ngModel)]="editText"
+                rows="2"
+                [disabled]="isSavingEdit()"></textarea>
+              <div class="comment__edit-actions">
+                <button mat-button (click)="cancelEdit()" [disabled]="isSavingEdit()">Cancelar</button>
+                <button mat-flat-button color="primary"
+                        [disabled]="!editText.trim() || isSavingEdit()"
+                        (click)="saveEdit(entry)">
+                  @if (isSavingEdit()) {
+                    <mat-spinner diameter="16"></mat-spinner>
+                  } @else {
+                    Salvar
+                  }
+                </button>
+              </div>
+            } @else {
+              <div class="comment__content">{{ entry.description }}</div>
+
+              @if (confirmDeleteId() === entry.id) {
+                <div class="comment__confirm">
+                  <span>Excluir este registro?</span>
+                  <button mat-button (click)="cancelDelete()" [disabled]="deletingId() === entry.id">Cancelar</button>
+                  <button mat-flat-button color="warn"
+                          [disabled]="deletingId() === entry.id"
+                          (click)="deleteEntry(entry)">
+                    @if (deletingId() === entry.id) {
+                      <mat-spinner diameter="16"></mat-spinner>
+                    } @else {
+                      Excluir
+                    }
+                  </button>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <div class="timeline__footer">
+    <textarea
+      class="timeline__input"
+      [(ngModel)]="newEntry"
+      (keydown)="onKeydown($event)"
+      [disabled]="!canPost || !cardNumber || isPosting()"
+      rows="1"
+      placeholder="Escreva um registro... (Enter envia, Shift+Enter quebra linha)"
+    ></textarea>
+    <button
+      mat-icon-button
+      class="timeline__send"
+      color="primary"
+      [disabled]="!canSubmit"
+      (click)="submit()"
+      matTooltip="Enviar (Enter)"
+    >
+      @if (isPosting()) {
+        <mat-spinner diameter="20"></mat-spinner>
+      } @else {
+        <mat-icon>send</mat-icon>
+      }
+    </button>
+  </div>
+</div>

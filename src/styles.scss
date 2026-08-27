@@ -7,6 +7,8 @@
 @use '@angular/material' as mat;
 @import "bootstrap/scss/bootstrap";
 @import "primeicons/primeicons.css";
+// Tema "snow" do Quill — necessário para renderizar a toolbar do editor WYSIWYG (p-editor).
+@import "quill/dist/quill.snow.css";
 
 
 

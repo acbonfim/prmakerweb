@@ -7,6 +7,280 @@
   width: 100%;
 }
 
+/* O mat-card-header envolve o título num wrapper que não estica por padrão; forçamos
+   a largura total para que os alertas (margin-left:auto no título) alcancem a direita. */
+:host ::ng-deep .mat-mdc-card-header {
+  align-items: center;
+}
+
+:host ::ng-deep .mat-mdc-card-header-text {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Header mais enxuto (~30% menor na vertical): reduz o padding do p-3 e aperta a
+   altura da linha do título. */
+:host ::ng-deep .mat-mdc-card-header.p-3 {
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+}
+
+:host ::ng-deep .mat-mdc-card-header .mat-mdc-card-title {
+  line-height: 1.2;
+  margin: 0;
+}
+
+/* ── A tela inteira ocupa a altura disponível; só as áreas internas rolam ── */
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.pr-root {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+:host ::ng-deep .mat-mdc-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+:host ::ng-deep .mat-mdc-card-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Layout: campos (60%) + linha do tempo (40%), mesma altura ── */
+.pr-content-row {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 15px;
+  margin-top: 5px;
+  padding-right: 16px;
+}
+
+.pr-fields {
+  flex: 0 0 60%;
+  max-width: 60%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Cada painel (Descrição / Root Cause) divide a altura da coluna */
+.pr-panel {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.pr-timeline {
+  flex: 0 0 40%;
+  max-width: 40%;
+  min-height: 0;
+}
+
+/* Botão de ícone no cabeçalho do painel (Descrição montada / Root Cause) */
+.panel-action.mat-mdc-icon-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  margin: -4px 0;
+  --mdc-icon-button-state-layer-size: 34px;
+  color: var(--mat-sys-primary);
+}
+
+.panel-action .mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+/* Textarea dentro do painel — sem bordas, preenche o corpo e rola internamente */
+.panel-textarea {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--mat-sys-on-surface);
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.panel-textarea::placeholder {
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+}
+
+/* Editor WYSIWYG (p-editor/Quill) — preenche 100% do corpo do painel (cancela o
+   padding do corpo para ficar edge-to-edge) e rola internamente */
+.panel-editor {
+  flex: 1 1 auto;
+  width: auto;
+  min-height: 0;
+  margin: -10px -12px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Toolbar no tema escuro do painel */
+:host ::ng-deep .panel-editor .ql-toolbar.ql-snow {
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: #323232;
+  border-radius: 0;
+}
+
+/* Área de conteúdo cresce e rola dentro do painel — mesmo fundo do corpo do painel */
+:host ::ng-deep .panel-editor .p-editor-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #2a2a2a;
+}
+
+:host ::ng-deep .panel-editor .ql-container.ql-snow {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: none;
+  background: #2a2a2a;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+  font-size: 13px;
+}
+
+:host ::ng-deep .panel-editor .ql-editor {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  background: #2a2a2a;
+  color: var(--mat-sys-on-surface);
+  line-height: 1.5;
+}
+
+:host ::ng-deep .panel-editor .ql-editor.ql-blank::before {
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+  font-style: normal;
+}
+
+/* Ícones/labels da toolbar visíveis sobre o fundo escuro */
+:host ::ng-deep .panel-editor .ql-snow .ql-stroke { stroke: #cfcfcf; }
+:host ::ng-deep .panel-editor .ql-snow .ql-fill { fill: #cfcfcf; }
+:host ::ng-deep .panel-editor .ql-snow .ql-picker { color: #cfcfcf; }
+
+:host ::ng-deep .panel-editor .ql-snow.ql-toolbar button:hover .ql-stroke,
+:host ::ng-deep .panel-editor .ql-snow.ql-toolbar button.ql-active .ql-stroke {
+  stroke: var(--mat-sys-primary);
+}
+:host ::ng-deep .panel-editor .ql-snow.ql-toolbar button:hover .ql-fill,
+:host ::ng-deep .panel-editor .ql-snow.ql-toolbar button.ql-active .ql-fill {
+  fill: var(--mat-sys-primary);
+}
+:host ::ng-deep .panel-editor .ql-snow.ql-toolbar button:hover,
+:host ::ng-deep .panel-editor .ql-snow.ql-toolbar button.ql-active,
+:host ::ng-deep .panel-editor .ql-snow.ql-toolbar .ql-picker-label:hover {
+  color: var(--mat-sys-primary);
+}
+
+/* Dropdown de cabeçalho (picker) no tema escuro */
+:host ::ng-deep .panel-editor .ql-snow .ql-picker-options {
+  background: #2a2a2a;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Marcadores de lista — o Quill 2 renderiza toda lista dentro de <ol> e desenha o
+   marcador no .ql-ui::before (bullet = •, ordered = contador), escondendo o marcador
+   nativo. Resets globais (Bootstrap) ou a ordem de carga do CSS podem deixar a
+   numeração nativa do <ol> vazar, fazendo bullets (*) aparecerem como 1, 2, 3.
+   Para ser robusto, desenhamos o marcador direto no li::before a partir do atributo
+   data-list (que o Quill sempre grava no <li>, independente de CSS) e desligamos o
+   marcador do .ql-ui para não duplicar. */
+:host ::ng-deep .panel-editor .ql-editor {
+  counter-reset: list-0 list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9;
+}
+
+:host ::ng-deep .panel-editor .ql-editor ol,
+:host ::ng-deep .panel-editor .ql-editor ul {
+  padding-left: 1.5em;
+  list-style: none;
+}
+
+:host ::ng-deep .panel-editor .ql-editor li {
+  list-style-type: none;
+  padding-left: 1.5em;
+  position: relative;
+}
+
+/* Neutraliza o marcador do .ql-ui do Quill para evitar marcador duplicado */
+:host ::ng-deep .panel-editor .ql-editor li > .ql-ui::before {
+  content: none;
+}
+
+:host ::ng-deep .panel-editor .ql-editor li::before {
+  position: absolute;
+  left: 0;
+  width: 1.2em;
+  margin-left: 0.1em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+:host ::ng-deep .panel-editor .ql-editor li[data-list='bullet']::before {
+  content: '\2022';
+}
+
+:host ::ng-deep .panel-editor .ql-editor li[data-list='ordered'] {
+  counter-increment: list-0;
+}
+
+:host ::ng-deep .panel-editor .ql-editor li[data-list='ordered']::before {
+  content: counter(list-0, decimal) '. ';
+}
+
+/* Empilha em telas estreitas (permite scroll normal da página) */
+@media (max-width: 900px) {
+  :host {
+    height: auto;
+  }
+
+  :host ::ng-deep .mat-mdc-card-content {
+    overflow: visible;
+  }
+
+  .pr-content-row {
+    flex-direction: column;
+  }
+
+  .pr-fields,
+  .pr-timeline {
+    flex: 1 1 auto;
+    max-width: 100%;
+  }
+
+  .pr-panel {
+    height: 220px;
+  }
+
+  .pr-timeline {
+    height: 360px;
+  }
+}
+
 ::ng-deep .custom-select-button {
   height: 56px !important;
 }

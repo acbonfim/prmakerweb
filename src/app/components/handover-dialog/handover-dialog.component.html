@@ -1,0 +1,70 @@
+<div class="handover">
+  <div class="handover__header">
+    <mat-icon class="handover__lead">swap_horiz</mat-icon>
+    <span class="handover__title">Passagem de conhecimento</span>
+    <span class="handover__spacer"></span>
+    <button mat-icon-button (click)="close()" matTooltip="Fechar">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <div class="handover__body">
+    @if (loading()) {
+      <div class="handover__state">
+        <mat-spinner diameter="36"></mat-spinner>
+        <span>Carregando…</span>
+      </div>
+    } @else if (generating()) {
+      <div class="handover__state">
+        <mat-spinner diameter="36"></mat-spinner>
+        <span>Gerando passagem de conhecimento com IA…</span>
+      </div>
+    } @else if (hasHandover) {
+      <!-- Cabeçalho destacado -->
+      <div class="summary-header">
+        <div class="summary-header__item">
+          <span class="summary-header__label">Work Item</span>
+          <span class="summary-header__value">#{{ cardNumber }}</span>
+        </div>
+        <div class="summary-header__item summary-header__item--grow">
+          <span class="summary-header__label">Título</span>
+          <span class="summary-header__value">{{ cardTitle || '—' }}</span>
+        </div>
+        @if (generatedAt()) {
+          <div class="summary-header__item">
+            <span class="summary-header__label">Gerado em</span>
+            <span class="summary-header__value">{{ generatedAt() | date: 'dd/MM/yyyy HH:mm' }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Resumo ilustrativo: markdown renderizado -->
+      <div class="summary-body markdown-body" [innerHTML]="contentHtml() | safeHtml"></div>
+    } @else {
+      <!-- Estado vazio -->
+      <div class="handover__empty">
+        <mat-icon class="handover__empty-icon">forum</mat-icon>
+        <p class="handover__empty-title">Ainda não há passagem de conhecimento para este card.</p>
+        <p class="handover__empty-sub">
+          Gere um handover para que o próximo turno continue o tratamento sem perder contexto.
+        </p>
+        <button mat-raised-button color="primary" (click)="generate()">
+          Gerar handover<mat-icon>auto_awesome</mat-icon>
+        </button>
+      </div>
+    }
+  </div>
+
+  @if (!loading() && !generating() && hasHandover) {
+    <div class="handover__actions">
+      <button mat-raised-button (click)="copy()">
+        Copiar formulário<mat-icon>content_copy</mat-icon>
+      </button>
+      <button mat-raised-button (click)="generate()">
+        Gerar novamente<mat-icon>refresh</mat-icon>
+      </button>
+      <span class="handover__spacer"></span>
+      <button mat-button (click)="close()">Fechar</button>
+    </div>
+  }
+</div>

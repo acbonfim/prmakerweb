@@ -1,4 +1,4 @@
-import {ChangeDetectorRef, Component, HostListener, inject, OnInit} from '@angular/core';
+import {ChangeDetectorRef, Component, HostListener, inject, OnInit, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -34,6 +34,14 @@ import {firstValueFrom} from 'rxjs';
 import {tap} from 'rxjs/internal/operators/tap';
 import {GdsService} from '../../../services/gds.service';
 import {JsonPipe} from '@angular/common';
+import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
+import {CardPanelComponent} from '../../../components/card-panel/card-panel.component';
+import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
+import {CardDetailsDialogComponent} from '../../../components/card-details-dialog/card-details-dialog.component';
+import {HandoverDialogComponent} from '../../../components/handover-dialog/handover-dialog.component';
+import {CardFull} from '../../../components/card-details-dialog/card-full.model';
+import {marked} from 'marked';
+import TurndownService from 'turndown';
 
 @Component({
   selector: 'app-register',
@@ -62,10 +70,27 @@ import {JsonPipe} from '@angular/common';
     InputNumberModule,
     SplitButton,
     JsonPipe,
-    AutoCompleteModule
+    AutoCompleteModule,
+    CardTimelineComponent,
+    CardPanelComponent,
+    CardAlertBarComponent
   ]
 })
 export class RegisterComponent implements OnInit {
+
+  @ViewChild(CardTimelineComponent) timeline?: CardTimelineComponent;
+
+  cardFull: CardFull | null = null;
+  isCardDetailsLoading = false;
+
+  // Conteúdo HTML dos editores WYSIWYG (a fonte da verdade continua em markdown).
+  descriptionHtml = '';
+  rootCauseHtml = '';
+  private turndown = new TurndownService({
+    headingStyle: 'atx',
+    codeBlockStyle: 'fenced',
+    bulletListMarker: '-'
+  });
 
   environmentName = 'development';
   template:any = null;
@@ -197,7 +222,14 @@ export class RegisterComponent implements OnInit {
     private loadingBar: LoadingBarService,
     private storageService: StorageService,
     private cdr: ChangeDetectorRef,
-  ) { }
+  ) {
+    // Tachado (~~texto~~) não é tratado pelo turndown por padrão — mapeamos manualmente
+    // para manter o markdown limpo ao converter o HTML do editor de volta.
+    this.turndown.addRule('strikethrough', {
+      filter: ['del', 's', 'strike'] as any,
+      replacement: (content: string) => `~~${content}~~`,
+    });
+  }
 
   async ngOnInit() {
     try {
@@ -277,39 +309,45 @@ export class RegisterComponent implements OnInit {
       if(data) {
         this.pullRequest.description = data.pullRequestDescriptionAiGenerated;
         this.pullRequest.rootCause = data.rootCauseAnalysisAiGenerated;
+        this.syncEditorsFromModel();
         this.generateFullDescriptionHandler();
         this.cdr.detectChanges();
       }
     })
   }
 
-  processTextForEditor(text: string): string {
-    if (!text) return '';
-
-    return text
-      .replace(/\\n/g, '\n')  // Converter \n literais em quebras de linha
-      .replace(/\n\n/g, '</p><p>')  // Parágrafos duplos
-      .replace(/\n/g, '<br>')       // Quebras de linha simples
-      .replace(/^/, '<p>')          // Início do parágrafo
-      .replace(/$/, '</p>');        // Fim do parágrafo
+  /**
+   * Converte markdown (a fonte da verdade — salvo no banco / enviado ao GitHub) em HTML
+   * para exibir formatado nos editores WYSIWYG.
+   */
+  private mdToHtml(markdown: string | null | undefined): string {
+    if (!markdown) return '';
+    marked.setOptions({ gfm: true, breaks: true });
+    return (marked.parse(markdown) as string) ?? '';
   }
 
-  processMarkdown(text: string): string {
-    if (!text) return '';
-
-    return text
-      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-      .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-      .replace(/^\* (.*$)/gim, '<li>$1</li>')
-      .replace(/^\d+\. (.*$)/gim, '<li>$1</li>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>');
+  /**
+   * Popula os editores a partir do markdown do modelo. Chamar apenas em cargas externas
+   * (geração por IA, busca do card, limpar) — nunca durante a digitação, para não
+   * reposicionar o cursor do editor.
+   */
+  private syncEditorsFromModel() {
+    this.descriptionHtml = this.mdToHtml(this.pullRequest?.description);
+    this.rootCauseHtml = this.mdToHtml(this.pullRequest?.rootCause);
+    this.cdr.detectChanges();
   }
 
-  onEditorTextChange(event: any) {
-    let processedText = this.processTextForEditor(event.textValue || '');
-    processedText = this.processMarkdown(processedText);
-    this.pullRequest.rootCause = processedText;
+  /** Edição no editor de Descrição: converte o HTML de volta para markdown antes de salvar/enviar. */
+  onDescriptionEditorChange(event: any) {
+    const html = event?.htmlValue ?? '';
+    this.pullRequest.description = html ? this.turndown.turndown(html) : '';
+    this.generateFullDescriptionHandler();
+  }
+
+  /** Edição no editor de Root Cause: converte o HTML de volta para markdown antes de salvar/enviar. */
+  onRootCauseEditorChange(event: any) {
+    const html = event?.htmlValue ?? '';
+    this.pullRequest.rootCause = html ? this.turndown.turndown(html) : '';
     this.generateFullDescriptionHandler();
   }
 
@@ -317,6 +355,8 @@ export class RegisterComponent implements OnInit {
     this.environmentName = 'development';
     this.template = null;
     this.pullRequest = {};
+    this.descriptionHtml = '';
+    this.rootCauseHtml = '';
     this.cardNumber = null;
     this.fullDescription = null;
     this.branchPrefix = 'hotfix/';
@@ -369,8 +409,17 @@ export class RegisterComponent implements OnInit {
     this.isAzureLoading = true;
     this.loadingBar.start();
 
+    // O campo de Root Cause no DevOps é HTML. Como o usuário escreve em markdown,
+    // convertemos para HTML antes de enviar para que o conteúdo fique formatado
+    // (evita ter que alternar o campo para markdown manualmente no DevOps).
+    const rootCauseMarkdown = this.pullRequest.rootCause ?? '';
+    marked.setOptions({ gfm: true, breaks: true });
+    const rootCauseHtml = rootCauseMarkdown
+      ? (marked.parse(rootCauseMarkdown) as string)
+      : '';
+
     let model = {
-      rootCause: this.pullRequest.rootCause,
+      rootCause: rootCauseHtml,
     };
 
     this.http.post(`${this.urlBase}Azure/card/${this.cardNumber}/rootcause`, model).subscribe(
@@ -439,6 +488,65 @@ export class RegisterComponent implements OnInit {
   }
 
 
+    loadCardDetails()
+    {
+      if (!this.cardNumber) {
+        this.cardFull = null;
+        return;
+      }
+
+      this.isCardDetailsLoading = true;
+      this.cardFull = null;
+
+      this.http.get<CardFull>(`${this.urlBase}Azure/card/${this.cardNumber}/full`).subscribe(
+        (response) => {
+          this.cardFull = response ?? null;
+          this.isCardDetailsLoading = false;
+          this.cdr.detectChanges();
+        },
+        () => {
+          this.cardFull = null;
+          this.isCardDetailsLoading = false;
+          this.cdr.detectChanges();
+        });
+    }
+
+    openCardDetails()
+    {
+      if (!this.cardFull) return;
+
+      this.dialog.open(CardDetailsDialogComponent, {
+        data: { card: this.cardFull, cardNumber: this.cardNumber },
+        width: '1000px',
+        height: '80vh',
+        maxWidth: '92vw',
+        maxHeight: '90vh',
+        panelClass: 'custom-dialog-container'
+      });
+    }
+
+    openHandover() {
+      const repositoryId =
+        typeof this.selectedRepositoryObj === 'string'
+          ? this.selectedRepositoryObj
+          : this.selectedRepositoryObj?.value ?? null;
+
+      this.dialog.open(HandoverDialogComponent, {
+        data: {
+          cardNumber: this.cardNumber,
+          cardFull: this.cardFull,
+          pullRequest: this.pullRequest,
+          timeline: this.timeline?.entries() ?? [],
+          repositoryId,
+        },
+        width: '1000px',
+        height: '85vh',
+        maxWidth: '92vw',
+        maxHeight: '90vh',
+        panelClass: 'custom-dialog-container'
+      });
+    }
+
     getPullRequestByCardNumber()
     {
       this.isPullRequestLoading = true;
@@ -450,6 +558,10 @@ export class RegisterComponent implements OnInit {
           : this.selectedRepositoryObj?.value ?? 'edv-solvace';
 
       const repoParam = repositoryId != null ? `&repositoryId=${repositoryId}` : '';
+      // Carrega a linha do tempo e os detalhes do card (DevOps) em paralelo à busca do PR.
+      this.timeline?.load(this.cardNumber ?? undefined);
+      this.loadCardDetails();
+
       this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}${repoParam}`).subscribe(
         (response: any) => {
 
@@ -461,6 +573,7 @@ export class RegisterComponent implements OnInit {
             this.branchName = response.branchName;
             this.branchPrefix = response.branchPrefix;
 
+            this.syncEditorsFromModel();
             this.cdr.detectChanges();
 
             this.generateFullDescriptionHandler();

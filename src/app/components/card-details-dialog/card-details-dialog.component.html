@@ -1,0 +1,97 @@
+<div class="dialog-container">
+  <div class="dialog-header">
+    <h2 mat-dialog-title>
+      <mat-icon>fact_check</mat-icon>
+      <span class="dialog-header__title">Card {{ card?.id }}{{ title ? ' — ' + title : '' }}</span>
+      @if (state) {
+        <span class="state-chip">{{ state }}</span>
+      }
+    </h2>
+    @if (workItemType) {
+      <div class="dialog-header__subtitle">{{ workItemType }}</div>
+    }
+  </div>
+
+  <mat-dialog-content class="dialog-content">
+    <mat-tab-group>
+      <!-- Campos -->
+      <mat-tab label="Campos">
+        <div class="tab-body">
+          @for (group of groups; track group.title) {
+            <div class="field-group">
+              <div class="field-group__title">{{ group.title }}</div>
+              @for (item of group.items; track item.key) {
+                <div class="field-row">
+                  <div class="field-row__label" [matTooltip]="item.key" matTooltipPosition="above">
+                    {{ item.label }}
+                  </div>
+                  <div class="field-row__value">{{ item.value }}</div>
+                </div>
+              }
+            </div>
+          }
+          @if (!groups.length) {
+            <div class="empty">Nenhum campo preenchido.</div>
+          }
+        </div>
+      </mat-tab>
+
+      <!-- Histórico -->
+      <mat-tab label="Histórico ({{ card?.history?.length || 0 }})">
+        <div class="tab-body">
+          @for (h of historyDesc; track h.rev) {
+            <div class="history-item">
+              <div class="history-item__head">
+                <mat-icon>history</mat-icon>
+                <span class="history-item__author">{{ h.changedByName || 'Sistema' }}</span>
+                <span class="history-item__date">{{ formatDate(h.changedDate) }}</span>
+                <span class="history-item__rev">rev {{ h.rev }}</span>
+              </div>
+              @for (c of h.changes; track c.field) {
+                <div class="change-row">
+                  <span class="change-row__field" [matTooltip]="c.field" matTooltipPosition="above">
+                    {{ friendlyLabel(c.field) }}
+                  </span>
+                  <span class="change-row__old">{{ stripHtml(c.oldValue || '') || '—' }}</span>
+                  <mat-icon class="change-row__arrow">arrow_forward</mat-icon>
+                  <span class="change-row__new">{{ stripHtml(c.newValue || '') || '—' }}</span>
+                </div>
+              }
+            </div>
+          }
+          @if (!historyDesc.length) {
+            <div class="empty">Sem histórico disponível.</div>
+          }
+        </div>
+      </mat-tab>
+
+      <!-- Comentários -->
+      <mat-tab label="Comentários ({{ card?.comments?.length || 0 }})">
+        <div class="tab-body">
+          @for (c of card?.comments; track c.id) {
+            <div class="comment-item">
+              <div class="comment-item__head">
+                <mat-icon>chat_bubble</mat-icon>
+                <span class="comment-item__author">{{ c.createdByName || '—' }}</span>
+                <span class="comment-item__date">{{ formatDate(c.createdDate) }}</span>
+              </div>
+              <div class="comment-item__text" [innerHTML]="c.text"></div>
+            </div>
+          }
+          @if (!card?.comments?.length) {
+            <div class="empty">Nenhum comentário.</div>
+          }
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </mat-dialog-content>
+
+  <mat-dialog-actions class="dialog-footer">
+    @if (card?.url) {
+      <a matButton [href]="card.url" target="_blank" rel="noopener">
+        Abrir no DevOps<mat-icon>open_in_new</mat-icon>
+      </a>
+    }
+    <button matButton (click)="dialogRef.close()">Fechar</button>
+  </mat-dialog-actions>
+</div>

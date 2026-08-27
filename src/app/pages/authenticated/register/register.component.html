@@ -1,10 +1,16 @@
-<div>
+<div class="pr-root">
   <mat-card appearance="outlined">
     <mat-card-header class="p-3"
                      style="background-color: #252525; border-radius: 10px">
-      <mat-card-title class="" style="display: flex; align-items: center; gap: 8px;">
+      <mat-card-title class="" style="display: flex; align-items: center; gap: 8px; width: 100%;">
         <mat-icon>merge</mat-icon>
-        Criação de template para Pull Requests
+        Gerenciamento de tratamento do card
+        @if (cardFull) {
+          <app-card-alert-bar
+            style="margin-left: auto;"
+            [inline]="true"
+            [alerts]="cardFull.alerts"></app-card-alert-bar>
+        }
       </mat-card-title>
     </mat-card-header>
   <mat-card-content>
@@ -96,38 +102,100 @@
                   style="margin-bottom: 10px"><mat-icon>article_shortcut</mat-icon>Template carregado</button>
         }-->
 
-        @if (fullDescription !== null){
-          <button matButton
-                  (click)="openDialogFullDescription()"
-                  matTooltip="Clique para ver a descrição completa"
-                  matTooltipPosition="above"
-                  style="margin-bottom: 10px"><mat-icon>article_shortcut</mat-icon>Descrição montada</button>
-        }
+        <div class="pr-content-row">
+          <div class="pr-fields">
+            <app-card-panel class="pr-panel" title="Descrição" icon="description">
+              @if (fullDescription !== null) {
+                <button panel-actions mat-icon-button class="panel-action"
+                        (click)="openDialogFullDescription()"
+                        matTooltip="Descrição montada"
+                        matTooltipPosition="above">
+                  <mat-icon>article_shortcut</mat-icon>
+                </button>
+              }
+              <p-editor class="panel-editor"
+                        [(ngModel)]="descriptionHtml"
+                        (onTextChange)="onDescriptionEditorChange($event)"
+                        placeholder="Ex. It makes me feel...">
+                <ng-template pTemplate="header">
+                  <span class="ql-formats">
+                    <select class="ql-header">
+                      <option value="1"></option>
+                      <option value="2"></option>
+                      <option value="3"></option>
+                      <option selected></option>
+                    </select>
+                  </span>
+                  <span class="ql-formats">
+                    <button class="ql-bold" aria-label="Negrito" type="button"></button>
+                    <button class="ql-italic" aria-label="Itálico" type="button"></button>
+                    <button class="ql-strike" aria-label="Tachado" type="button"></button>
+                  </span>
+                  <span class="ql-formats">
+                    <button class="ql-list" value="ordered" aria-label="Lista ordenada" type="button"></button>
+                    <button class="ql-list" value="bullet" aria-label="Lista" type="button"></button>
+                    <button class="ql-blockquote" aria-label="Citação" type="button"></button>
+                    <button class="ql-code-block" aria-label="Código" type="button"></button>
+                  </span>
+                  <span class="ql-formats">
+                    <button class="ql-link" aria-label="Link" type="button"></button>
+                    <button class="ql-clean" aria-label="Limpar formatação" type="button"></button>
+                  </span>
+                </ng-template>
+              </p-editor>
+            </app-card-panel>
 
-        @if (pullRequest.rootCause && pullRequest.rootCause.length && this.cardType !== 'us'){
-          <button matButton
-                  class="ms-2"
-                  (click)="openDialogRCA()"
-                  matTooltip="Clique para ver o RCA"
-                  matTooltipPosition="above"
-                  style="margin-bottom: 10px"><mat-icon>article_shortcut</mat-icon>Root Cause</button>
-        }
+            @if(this.cardType !== 'us'){
+              <app-card-panel class="pr-panel" title="Root Cause" icon="troubleshoot">
+                @if (pullRequest.rootCause && pullRequest.rootCause.length) {
+                  <button panel-actions mat-icon-button class="panel-action"
+                          (click)="openDialogRCA()"
+                          matTooltip="Root Cause"
+                          matTooltipPosition="above">
+                    <mat-icon>article_shortcut</mat-icon>
+                  </button>
+                }
+                <p-editor class="panel-editor"
+                          [(ngModel)]="rootCauseHtml"
+                          (onTextChange)="onRootCauseEditorChange($event)"
+                          placeholder="Ex. It makes me feel...">
+                  <ng-template pTemplate="header">
+                    <span class="ql-formats">
+                      <select class="ql-header">
+                        <option value="1"></option>
+                        <option value="2"></option>
+                        <option value="3"></option>
+                        <option selected></option>
+                      </select>
+                    </span>
+                    <span class="ql-formats">
+                      <button class="ql-bold" aria-label="Negrito" type="button"></button>
+                      <button class="ql-italic" aria-label="Itálico" type="button"></button>
+                      <button class="ql-strike" aria-label="Tachado" type="button"></button>
+                    </span>
+                    <span class="ql-formats">
+                      <button class="ql-list" value="ordered" aria-label="Lista ordenada" type="button"></button>
+                      <button class="ql-list" value="bullet" aria-label="Lista" type="button"></button>
+                      <button class="ql-blockquote" aria-label="Citação" type="button"></button>
+                      <button class="ql-code-block" aria-label="Código" type="button"></button>
+                    </span>
+                    <span class="ql-formats">
+                      <button class="ql-link" aria-label="Link" type="button"></button>
+                      <button class="ql-clean" aria-label="Limpar formatação" type="button"></button>
+                    </span>
+                  </ng-template>
+                </p-editor>
+              </app-card-panel>
+            }
+          </div>
 
-
-        <mat-form-field class="full-width" style="height: 100%">
-          <mat-label>Descrição</mat-label>
-          <textarea [(ngModel)]="pullRequest.description"   matInput placeholder="Ex. It makes me feel..." cols="30" rows="4"></textarea>
-        </mat-form-field>
-
-        @if(this.cardType !== 'us'){
-          <mat-form-field class="full-width" >
-            <mat-label>Root Cause</mat-label>
-            <textarea [(ngModel)]="pullRequest.rootCause" (ngModelChange)="generateFullDescriptionHandler()" matInput placeholder="Ex. It makes me feel..." cols="30" rows="4"></textarea>
-          </mat-form-field>
-        }
+          <div class="pr-timeline">
+            <app-card-timeline [cardNumber]="cardNumber"></app-card-timeline>
+          </div>
+        </div>
 
       </mat-card-content>
-      <mat-card-actions style="background-color: #5b5b5b; margin-top: 20px; border-radius: 10px;">
+      <mat-card-actions style="background-color: #252525; margin-top: 20px; border-radius: 10px;">
         @if(!isMobile){
           <p-splitbutton class="custom-buttom"
                          label="Copiar"
@@ -144,6 +212,18 @@
           <button mat-raised-button style="margin-left: 10px"
                   [disabled]="isPullRequestLoading || fullDescription === null"
                   (click)="clearAll()">Limpar<mat-icon>clear</mat-icon></button>
+
+          <button mat-raised-button style="margin-left: 10px"
+                  [disabled]="!cardFull || isCardDetailsLoading"
+                  (click)="openCardDetails()">
+            Detalhes do Card<mat-icon>fact_check</mat-icon>
+          </button>
+
+          <button mat-raised-button style="margin-left: 10px"
+                  [disabled]="!cardFull"
+                  (click)="openHandover()">
+            Handover<mat-icon>swap_horiz</mat-icon>
+          </button>
 
           <!-- Button to generate prompt for AI processing
           <button mat-raised-button style="margin-left: 10px"
