@@ -209,6 +209,68 @@
   color: var(--mat-sys-on-surface);
 }
 
+/* ── Skeleton discreto (atualização via WebSocket) ── */
+.comment--skeleton {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.09),
+    transparent
+  );
+  animation: timeline-shimmer 1.2s ease-in-out infinite;
+}
+
+.skeleton--avatar {
+  border-radius: 50%;
+}
+
+.skeleton--line {
+  height: 10px;
+  margin-bottom: 7px;
+}
+
+.comment__body .skeleton--line:last-child {
+  margin-bottom: 0;
+}
+
+.skeleton--meta {
+  width: 40%;
+  height: 8px;
+}
+
+.skeleton--short {
+  width: 60%;
+  margin-bottom: 0;
+}
+
+@keyframes timeline-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
+}
+
 /* Ações (editar / excluir) — aparecem no hover do comentário */
 .comment__actions {
   margin-left: auto;

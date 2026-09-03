@@ -1,4 +1,4 @@
-import {ChangeDetectorRef, Component, HostListener, inject, OnInit, ViewChild} from '@angular/core';
+import {ChangeDetectorRef, Component, HostListener, inject, OnDestroy, OnInit, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -33,6 +33,7 @@ import {GlobalService} from '../../../services/global.service';
 import {firstValueFrom} from 'rxjs';
 import {tap} from 'rxjs/internal/operators/tap';
 import {GdsService} from '../../../services/gds.service';
+import {WsService} from '../../../services/ws.service';
 import {JsonPipe} from '@angular/common';
 import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
 import {CardPanelComponent} from '../../../components/card-panel/card-panel.component';
@@ -42,6 +43,10 @@ import {HandoverDialogComponent} from '../../../components/handover-dialog/hando
 import {CardFull} from '../../../components/card-details-dialog/card-full.model';
 import {marked} from 'marked';
 import TurndownService from 'turndown';
+
+/** Evento e grupo do tempo real da configuração de PR (em sincronia com o backend). */
+const PULLREQUEST_CONFIG_GROUP = 'pullrequest-config';
+const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
 
 @Component({
   selector: 'app-register',
@@ -76,7 +81,7 @@ import TurndownService from 'turndown';
     CardAlertBarComponent
   ]
 })
-export class RegisterComponent implements OnInit {
+export class RegisterComponent implements OnInit, OnDestroy {
 
   @ViewChild(CardTimelineComponent) timeline?: CardTimelineComponent;
 
@@ -243,6 +248,7 @@ export class RegisterComponent implements OnInit {
     private loadingBar: LoadingBarService,
     private storageService: StorageService,
     private cdr: ChangeDetectorRef,
+    private ws: WsService,
   ) {
     // Tachado (~~texto~~) não é tratado pelo turndown por padrão — mapeamos manualmente
     // para manter o markdown limpo ao converter o HTML do editor de volta.
@@ -268,12 +274,71 @@ export class RegisterComponent implements OnInit {
       console.log(this.userSelected);
       this.initAiGeneratedListener();
       this.initializeBranchConfigurations();
+      this.initRealtimeConfig();
 
     } catch (error) {
       console.error('Falha ao inicializar configurações', error);
     }
 
 
+  }
+
+  ngOnDestroy(): void {
+    this.ws.removeFromGroup(PULLREQUEST_CONFIG_GROUP);
+    this.ws.off(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
+  }
+
+  /** Atualização em tempo real: repositórios/branches mudam para todos na tela de PR. */
+  private initRealtimeConfig(): void {
+    this.ws.startConnection();
+    this.ws.addToGroup(PULLREQUEST_CONFIG_GROUP);
+    this.ws.on(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
+  }
+
+  private onPullRequestConfigUpdated = (): void => {
+    firstValueFrom(this.getPullRequestConfigurations())
+      .then(() => this.reapplyPullRequestConfigurations())
+      .catch((e) => console.error('Falha ao atualizar configurações em tempo real', e));
+  };
+
+  /** Re-aplica repositórios/branches preservando a seleção atual do usuário quando possível. */
+  private reapplyPullRequestConfigurations(): void {
+    const prevRepoValue = this.selectedRepositoryObj?.value ?? null;
+    const prevEnv = this.environmentName;
+
+    const activeBranchsStr = this.configurations.PullRequest?.ActiveBranchs;
+    if (activeBranchsStr) {
+      try {
+        const rawBranches = eval(activeBranchsStr);
+        this.justifyOptions = rawBranches.map((branch: any) => ({
+          label: branch.label,
+          value: branch.branchName
+        }));
+        if (prevEnv && this.justifyOptions.length > 0 &&
+            !this.justifyOptions.some((o: any) => o.value === prevEnv)) {
+          this.environmentName = this.justifyOptions[0].value;
+        }
+      } catch (error) {
+        console.error('Erro ao processar ActiveBranchs:', error);
+      }
+    }
+
+    const activeRepositoriesStr = this.configurations.PullRequest?.ActiveRepositories;
+    if (activeRepositoriesStr) {
+      try {
+        this.repositoryOptions = JSON.parse(activeRepositoriesStr);
+        this.filteredRepositories = [...this.repositoryOptions];
+        const stillThere = prevRepoValue
+          ? this.repositoryOptions.find(r => r.value === prevRepoValue)
+          : undefined;
+        this.selectedRepositoryObj =
+          stillThere ?? (this.repositoryOptions.length > 0 ? this.repositoryOptions[0] : null);
+      } catch (error) {
+        console.error('Erro ao processar ActiveRepositories:', error);
+      }
+    }
+
+    this.cdr.detectChanges();
   }
 
   initializeBranchConfigurations(){

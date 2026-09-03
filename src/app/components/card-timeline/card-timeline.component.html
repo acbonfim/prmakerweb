@@ -60,10 +60,11 @@
 
   <div class="timeline__body" #body>
     @if (isLoading()) {
-      <div class="timeline__state">
-        <mat-spinner diameter="30"></mat-spinner>
-        <span>Carregando linha do tempo...</span>
-      </div>
+      @for (sk of loadingSkeletons; track $index) {
+        <ng-container
+          *ngTemplateOutlet="skeletonComment; context: { meta: sk.meta, lines: sk.lines }"
+        ></ng-container>
+      }
     } @else if (loadError()) {
       <div class="timeline__state timeline__state--error">
         <mat-icon>error_outline</mat-icon>
@@ -82,7 +83,13 @@
       </div>
     } @else {
       @for (entry of entries(); track trackById($index, entry)) {
-        <div class="comment" [class.comment--editing]="editingId() === entry.id">
+        @if (refreshingIds().has(entry.id)) {
+          <!-- Comentário sendo editado/excluído por outro cliente: skeleton no próprio lugar. -->
+          <ng-container
+            *ngTemplateOutlet="skeletonComment; context: { meta: '35%', lines: ['85%', '55%'], entryId: entry.id }"
+          ></ng-container>
+        } @else {
+        <div class="comment" [class.comment--editing]="editingId() === entry.id" [attr.data-entry-id]="entry.id">
           <div class="comment__avatar" [style.background]="avatarColor(entry.userName)">
             {{ initials(entry.userName) }}
           </div>
@@ -157,6 +164,14 @@
             }
           </div>
         </div>
+        }
+      }
+
+      @if (isRefreshing()) {
+        <!-- Atualização discreta via WebSocket: placeholder de um comentário novo chegando. -->
+        <ng-container
+          *ngTemplateOutlet="skeletonComment; context: { meta: '30%', lines: ['80%', '55%'] }"
+        ></ng-container>
       }
     }
   </div>
@@ -186,3 +201,20 @@
     </button>
   </div>
 </div>
+
+<!--
+  Skeleton no formato de comentário. Reutilizado na carga inicial (vários, tamanhos variados),
+  na atualização de um comentário específico e na chegada de um comentário novo via WebSocket.
+  `meta` = largura da linha do cabeçalho; `lines` = larguras das linhas de conteúdo.
+-->
+<ng-template #skeletonComment let-meta="meta" let-lines="lines" let-entryId="entryId">
+  <div class="comment comment--skeleton" aria-hidden="true" [attr.data-entry-id]="entryId">
+    <div class="comment__avatar skeleton skeleton--avatar"></div>
+    <div class="comment__body">
+      <div class="skeleton skeleton--line skeleton--meta" [style.width]="meta"></div>
+      @for (w of lines; track $index) {
+        <div class="skeleton skeleton--line" [style.width]="w"></div>
+      }
+    </div>
+  </div>
+</ng-template>

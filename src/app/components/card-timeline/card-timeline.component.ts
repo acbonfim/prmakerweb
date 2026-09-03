@@ -18,7 +18,12 @@ import { Subscription, firstValueFrom } from 'rxjs';
 import { TimelineService } from '../../services/timeline.service';
 import { StorageService } from '../../services/storage.service';
 import { TeamsGraphService, TeamsChat } from '../../services/teams-graph.service';
+import { WsService } from '../../services/ws.service';
 import { TimelineEntry } from './timeline.model';
+
+/** Evento e prefixo de grupo do tempo real da timeline (em sincronia com o backend). */
+const TIMELINE_EVENT = 'timelineUpdated';
+const timelineGroup = (card: string) => `timeline:${card}`;
 
 /**
  * Componente compartilhado de linha do tempo de um card.
@@ -44,9 +49,30 @@ import { TimelineEntry } from './timeline.model';
 export class CardTimelineComponent implements OnDestroy {
   readonly entries = signal<TimelineEntry[]>([]);
   readonly isLoading = signal(false);
+  /** Atualização discreta (via WebSocket) de um comentário NOVO: mostra um skeleton no fim. */
+  readonly isRefreshing = signal(false);
+  /**
+   * Ids dos comentários sendo atualizados/excluídos por outro cliente (via WebSocket).
+   * Cada um renderiza um skeleton no lugar do próprio comentário até o refetch concluir.
+   */
+  readonly refreshingIds = signal<ReadonlySet<number>>(new Set());
   readonly isPosting = signal(false);
   readonly loadError = signal(false);
   newEntry = '';
+
+  /**
+   * Placeholders da carga inicial (não-realtime): vários comentários de tamanhos variados
+   * que preenchem o container enquanto os dados chegam. Gerados uma vez (visual estável).
+   */
+  readonly loadingSkeletons = Array.from({ length: 8 }, () => {
+    const rnd = (min: number, max: number) => Math.round(min + Math.random() * (max - min));
+    const lineCount = 1 + Math.floor(Math.random() * 3); // 1 a 3 linhas de conteúdo
+    return {
+      meta: `${rnd(24, 46)}%`,
+      lines: Array.from({ length: lineCount }, (_, i) =>
+        `${i === lineCount - 1 ? rnd(30, 55) : rnd(72, 98)}%`)
+    };
+  });
 
   // Edição / exclusão dos próprios registros
   currentUserId: string | null = null;
@@ -86,6 +112,7 @@ export class CardTimelineComponent implements OnDestroy {
     }
 
     this._cardNumber = normalized;
+    this.switchTimelineGroup(normalized);
 
     if (!normalized) {
       this.entries.set([]);
@@ -112,14 +139,59 @@ export class CardTimelineComponent implements OnDestroy {
   @ViewChild('body') private bodyRef?: ElementRef<HTMLDivElement>;
 
   private sub?: Subscription;
+  private currentGroup: string | null = null;
 
   constructor(
     private timelineService: TimelineService,
     private storageService: StorageService,
-    private teamsGraph: TeamsGraphService
+    private teamsGraph: TeamsGraphService,
+    private ws: WsService
   ) {
     const access = this.storageService.getAccess();
     this.currentUserId = access && access.user ? (access.user.externalId ?? null) : null;
+
+    // Atualização em tempo real: recarrega quando a timeline deste card muda em outro cliente.
+    this.ws.startConnection();
+    this.ws.on(TIMELINE_EVENT, this.onTimelineUpdated);
+  }
+
+  /** Recebe o sinal do servidor e refaz o fetch autenticado (padrão sinal + refetch). */
+  private onTimelineUpdated = (payload: any): void => {
+    const card =
+      payload?.cardNumber !== null && payload?.cardNumber !== undefined
+        ? `${payload.cardNumber}`.trim()
+        : null;
+    if (!(card && this._cardNumber && card === this._cardNumber)) {
+      return;
+    }
+
+    const action = payload?.action;
+    const entryId = Number(payload?.entryId);
+    const hasEntry = Number.isFinite(entryId) && entryId > 0;
+
+    // update/delete de um comentário existente: skeleton NO comentário afetado.
+    if ((action === 'update' || action === 'delete') && hasEntry && this.entries().some((e) => e.id === entryId)) {
+      this.refreshingIds.update((set) => new Set(set).add(entryId));
+      // Leva o usuário até o registro que está mudando.
+      this.scrollToEntry(entryId);
+    } else {
+      // create (ou payload sem detalhe): skeleton de comentário novo no fim.
+      this.isRefreshing.set(true);
+      // Revela o skeleton do novo comentário mesmo com a lista cheia/rolada pra cima.
+      this.scrollToBottom();
+    }
+
+    // Atualização discreta: mantém a lista e refaz o fetch, sem tela cheia de "carregando".
+    this.load(undefined, { silent: true });
+  };
+
+  /** Entra no grupo do card atual e sai do anterior. */
+  private switchTimelineGroup(card: string | null): void {
+    const group = card ? timelineGroup(card) : null;
+    if (group === this.currentGroup) return;
+    if (this.currentGroup) this.ws.removeFromGroup(this.currentGroup);
+    this.currentGroup = group;
+    if (group) this.ws.addToGroup(group);
   }
 
   get canSubmit(): boolean {
@@ -131,8 +203,13 @@ export class CardTimelineComponent implements OnDestroy {
     );
   }
 
-  /** (Re)carrega a linha do tempo de um card. */
-  load(cardNumber?: string | number): void {
+  /**
+   * (Re)carrega a linha do tempo de um card.
+   * `silent` (atualização via WebSocket): mantém a lista atual visível e não rola nem mostra
+   * estado de erro. Qual skeleton exibir (comentário novo no fim vs. um comentário específico)
+   * é decidido por quem chama, via `isRefreshing` / `refreshingIds`.
+   */
+  load(cardNumber?: string | number, options?: { silent?: boolean }): void {
     const card =
       cardNumber !== null && cardNumber !== undefined
         ? `${cardNumber}`.trim()
@@ -144,8 +221,14 @@ export class CardTimelineComponent implements OnDestroy {
     }
 
     this._cardNumber = card;
-    this.isLoading.set(true);
-    this.loadError.set(false);
+    this.switchTimelineGroup(card);
+
+    // Só é discreto quando já há algo na tela para preservar; senão, carga normal (skeletons cheios).
+    const silent = options?.silent === true && this.entries().length > 0;
+    if (!silent) {
+      this.isLoading.set(true);
+      this.loadError.set(false);
+    }
 
     this.sub?.unsubscribe();
     this.sub = this.timelineService.getByCardNumber(card).subscribe({
@@ -155,15 +238,28 @@ export class CardTimelineComponent implements OnDestroy {
           .slice()
           .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         this.entries.set(sorted);
-        this.isLoading.set(false);
-        this.scrollToBottom();
+        this.clearSkeletons();
+        // Numa atualização discreta preserva a posição de leitura; só rola na carga inicial.
+        if (!silent) this.scrollToBottom();
       },
       error: () => {
+        // Best-effort: numa atualização discreta, não destrói a lista nem mostra erro.
+        if (silent) {
+          this.clearSkeletons();
+          return;
+        }
         this.entries.set([]);
-        this.isLoading.set(false);
+        this.clearSkeletons();
         this.loadError.set(true);
       }
     });
+  }
+
+  /** Zera todos os indicadores de skeleton (carga concluída ou interrompida). */
+  private clearSkeletons(): void {
+    this.isLoading.set(false);
+    this.isRefreshing.set(false);
+    if (this.refreshingIds().size > 0) this.refreshingIds.set(new Set());
   }
 
   submit(): void {
@@ -439,7 +535,27 @@ export class CardTimelineComponent implements OnDestroy {
     });
   }
 
+  /** Rola o container até centralizar o comentário (ou seu skeleton) de um id específico. */
+  private scrollToEntry(entryId: number): void {
+    // Aguarda o render (o comentário pode ter virado skeleton neste tick).
+    setTimeout(() => {
+      const container = this.bodyRef?.nativeElement;
+      const target = container?.querySelector<HTMLElement>(`[data-entry-id="${entryId}"]`);
+      if (!container || !target) {
+        return;
+      }
+      // Posição relativa ao container (independe do offsetParent) para centralizar o alvo.
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const delta =
+        targetRect.top - containerRect.top - (container.clientHeight - target.clientHeight) / 2;
+      container.scrollTo({ top: Math.max(0, container.scrollTop + delta), behavior: 'smooth' });
+    });
+  }
+
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
+    if (this.currentGroup) this.ws.removeFromGroup(this.currentGroup);
+    this.ws.off(TIMELINE_EVENT, this.onTimelineUpdated);
   }
 }

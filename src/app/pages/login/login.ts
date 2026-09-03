@@ -95,7 +95,7 @@ export class Login implements OnInit {
                     this._storageService.setItem("apiKey", retApiKey.object.apiKey);
 
                     this._globalService.navigateTo('/auth/dashboard');
-                    //this._wsService.startConnection();
+                    this._wsService.startConnection();
                     this._globalService.sendAlert(_retorno.message, 'Ok');
 
                     if (this.salvarLogin) {
