@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { HttpClient } from '@angular/common/http';
 import { marked } from 'marked';
 import { firstValueFrom } from 'rxjs';
@@ -36,6 +37,7 @@ import { GdsService } from '../../services/gds.service';
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    MatSlideToggleModule,
     SafeHtmlPipe,
   ],
 })
@@ -54,6 +56,8 @@ export class HandoverDialogComponent implements OnInit {
   contentMarkdown = signal<string>(''); // markdown salvo (formulário preenchido)
   contentHtml = signal<string>(''); // markdown renderizado
   generatedAt = signal<string | null>(null);
+  isPublic = signal<boolean>(true); // acesso pelo link público habilitado
+  savingVisibility = signal<boolean>(false);
 
   get cardNumber(): string {
     return this.data?.cardNumber != null ? this.data.cardNumber.toString() : '';
@@ -80,6 +84,7 @@ export class HandoverDialogComponent implements OnInit {
         next: (res) => {
           if (res && res.content) {
             this.applyContent(res.content, res.updatedAt || res.createdAt);
+            this.isPublic.set(res.isPublic !== false);
           }
           this.loading.set(false);
           this.cdr.detectChanges();
@@ -193,6 +198,36 @@ ${JSON.stringify(context, null, 2)}
 
   copy() {
     this.clipboard.copyFullDescriptionToClipboard(this.contentMarkdown());
+  }
+
+  /** Copia o link público (somente leitura) desta passagem de conhecimento. */
+  copyPublicLink() {
+    const link = `${window.location.origin}/handover/${encodeURIComponent(this.cardNumber)}`;
+    this.clipboard.copyFullDescriptionToClipboard(link);
+  }
+
+  /** Habilita/desabilita o acesso pelo link público e persiste a alteração. */
+  setVisibility(isPublic: boolean) {
+    if (this.savingVisibility()) return;
+    const previous = this.isPublic();
+    this.isPublic.set(isPublic);
+    this.savingVisibility.set(true);
+    this.cdr.detectChanges();
+
+    this.http
+      .put<any>(`${this.urlBase}Handover/${encodeURIComponent(this.cardNumber)}/visibility`, { isPublic })
+      .subscribe({
+        next: () => {
+          this.savingVisibility.set(false);
+          this.cdr.detectChanges();
+        },
+        error: () => {
+          // Reverte visualmente se a persistência falhar.
+          this.isPublic.set(previous);
+          this.savingVisibility.set(false);
+          this.cdr.detectChanges();
+        },
+      });
   }
 
   close() {

@@ -1,0 +1,47 @@
+<div class="hv">
+  <header class="hv__header">
+    <span class="hv__lead material-icons">swap_horiz</span>
+    <span class="hv__title">Passagem de conhecimento</span>
+  </header>
+
+  <main class="hv__body">
+    @if (loading()) {
+      <div class="hv__state">
+        <span class="hv__spinner"></span>
+        <span>Carregando…</span>
+      </div>
+    } @else if (notPublic()) {
+      <div class="hv__empty">
+        <span class="hv__empty-icon material-icons">lock</span>
+        <p class="hv__empty-title">Este handover não é público.</p>
+        <p class="hv__empty-sub">
+          O acesso a esta passagem de conhecimento foi restrito. Apenas pessoas autenticadas
+          no sistema podem visualizá-la.
+        </p>
+      </div>
+    } @else if (hasHandover) {
+      <div class="hv__content">
+        <div class="summary-header">
+          <div class="summary-header__item">
+            <span class="summary-header__label">Work Item</span>
+            <span class="summary-header__value">#{{ cardNumber() }}</span>
+          </div>
+          @if (generatedAt()) {
+            <div class="summary-header__item">
+              <span class="summary-header__label">Gerado em</span>
+              <span class="summary-header__value">{{ generatedAt() | date: 'dd/MM/yyyy HH:mm' }}</span>
+            </div>
+          }
+        </div>
+
+        <div class="summary-body markdown-body" [innerHTML]="contentHtml() | safeHtml"></div>
+      </div>
+    } @else {
+      <div class="hv__empty">
+        <span class="hv__empty-icon material-icons">forum</span>
+        <p class="hv__empty-title">Nenhuma passagem de conhecimento encontrada para este card.</p>
+        <p class="hv__empty-sub">Verifique se o número do card no link está correto.</p>
+      </div>
+    }
+  </main>
+</div>

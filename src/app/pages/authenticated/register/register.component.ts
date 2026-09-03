@@ -139,6 +139,25 @@ export class RegisterComponent implements OnInit {
 
 
 
+  /**
+   * Habilita o botão "Limpar" assim que o usuário preencher/carregar qualquer coisa:
+   * número do card, branch, descrição, root cause, descrição montada, detalhes do card
+   * (DevOps) ou linha do tempo.
+   */
+  get hasAnythingToClear(): boolean {
+    const hasText = (v: any) => typeof v === 'string' && v.trim().length > 0;
+    return !!(
+      this.cardNumber ||
+      hasText(this.branchName) ||
+      hasText(this.pullRequest?.description) ||
+      hasText(this.pullRequest?.rootCause) ||
+      hasText(this.descriptionHtml) ||
+      hasText(this.rootCauseHtml) ||
+      this.fullDescription ||
+      this.cardFull
+    );
+  }
+
   onPrefixDoubleClick() {
     this.isEditingPrefix = true;
   }
@@ -204,8 +223,10 @@ export class RegisterComponent implements OnInit {
 
   updateMobileButtonsState() {
     this.mobileButtons.forEach(button => {
-      if (button.label === 'Copiar' || button.label === 'Abrir PR' || button.label === 'Limpar') {
+      if (button.label === 'Copiar' || button.label === 'Abrir PR') {
         button.disabled = this.isPullRequestLoading || this.fullDescription === null;
+      } else if (button.label === 'Limpar') {
+        button.disabled = this.isPullRequestLoading || !this.hasAnythingToClear;
       }
     });
   }
@@ -793,6 +814,10 @@ export class RegisterComponent implements OnInit {
 
   onCardNumberChange() {
     this.branchName = this.cardNumber!.toString();
+    // Ao trocar o número do card, os detalhes do DevOps carregados anteriormente ficam
+    // obsoletos: invalida para que o Handover só volte a ser liberado após um novo "Buscar"
+    // que encontre o card no DevOps.
+    this.cardFull = null;
   }
 }
 

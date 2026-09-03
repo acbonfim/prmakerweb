@@ -31,6 +31,20 @@ export class TimelineService {
     return this.http.put<TimelineEntry>(`${this.apiUrl}/${id}`, request);
   }
 
+  /**
+   * Ingesta uma mensagem do Teams (lida pelo frontend via MSAL) na linha do tempo do card.
+   * O backend não duplica: retorna imported=false quando a mensagem já existe.
+   */
+  ingestTeamsMessage(payload: {
+    cardNumber: string;
+    messageId: string;
+    text: string;
+    userName: string;
+    occurredAt?: string;
+  }): Observable<{ imported: boolean }> {
+    return this.http.post<{ imported: boolean }>(`${this.apiUrl}/ingest-teams`, payload);
+  }
+
   delete(id: number): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${id}`);
   }

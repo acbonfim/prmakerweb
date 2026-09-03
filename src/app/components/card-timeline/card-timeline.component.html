@@ -5,7 +5,58 @@
     @if (!isLoading() && entries().length) {
       <span class="timeline__count">{{ entries().length }}</span>
     }
+    @if (cardNumber) {
+      <button mat-button class="timeline__import-toggle" (click)="toggleImport()"
+              matTooltip="Importar mensagens de um grupo do Teams">
+        <mat-icon>groups</mat-icon> Importar do Teams
+      </button>
+    }
   </div>
+
+  @if (showImport() && cardNumber) {
+    <div class="timeline__import">
+      @if (!teamsConfigured) {
+        <span class="timeline__import-error">
+          Integração com o Teams ainda não liberada (aguardando o app e o consentimento do administrador).
+        </span>
+      } @else if (!teamsConnected()) {
+        <button mat-raised-button color="primary" (click)="connectTeams()" [disabled]="isConnecting()">
+          <mat-icon>login</mat-icon>
+          @if (isConnecting()) { Conectando… } @else { Conectar Teams }
+        </button>
+        <span class="timeline__import-hint">Entre com sua conta para escolher um grupo.</span>
+      } @else {
+        <span class="timeline__import-account">
+          <mat-icon>account_circle</mat-icon> {{ teamsAccount() }}
+        </span>
+
+        @if (isLoadingChats()) {
+          <span class="timeline__import-hint">Carregando grupos…</span>
+        } @else {
+          <select class="timeline__import-select" [(ngModel)]="selectedChatId" [disabled]="isImporting()">
+            <option value="" disabled selected>Selecione um grupo…</option>
+            @for (chat of chats(); track chat.id) {
+              <option [value]="chat.id">{{ chatLabel(chat) }}</option>
+            }
+          </select>
+
+          <button mat-raised-button color="primary" (click)="importSelected()"
+                  [disabled]="isImporting() || !selectedChatId">
+            @if (isImporting()) { Importando… } @else { Importar mensagens }
+          </button>
+        }
+      }
+
+      @if (importResult(); as r) {
+        <span class="timeline__import-result">
+          {{ r.imported }} importada(s), {{ r.skipped }} já existia(m).
+        </span>
+      }
+      @if (importError()) {
+        <span class="timeline__import-error">{{ importError() }}</span>
+      }
+    </div>
+  }
 
   <div class="timeline__body" #body>
     @if (isLoading()) {

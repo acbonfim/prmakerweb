@@ -14,9 +14,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import { TimelineService } from '../../services/timeline.service';
 import { StorageService } from '../../services/storage.service';
+import { TeamsGraphService, TeamsChat } from '../../services/teams-graph.service';
 import { TimelineEntry } from './timeline.model';
 
 /**
@@ -54,6 +55,22 @@ export class CardTimelineComponent implements OnDestroy {
   readonly isSavingEdit = signal(false);
   readonly confirmDeleteId = signal<number | null>(null);
   readonly deletingId = signal<number | null>(null);
+
+  // Importação de mensagens do Teams (login do próprio usuário via MSAL)
+  readonly showImport = signal(false);
+  readonly teamsConnected = signal(false);
+  readonly teamsAccount = signal<string | null>(null);
+  readonly chats = signal<TeamsChat[]>([]);
+  selectedChatId = '';
+  readonly isConnecting = signal(false);
+  readonly isLoadingChats = signal(false);
+  readonly isImporting = signal(false);
+  readonly importResult = signal<{ imported: number; skipped: number; total: number } | null>(null);
+  readonly importError = signal<string | null>(null);
+
+  get teamsConfigured(): boolean {
+    return this.teamsGraph.isConfigured;
+  }
 
   private _cardNumber: string | null = null;
 
@@ -98,7 +115,8 @@ export class CardTimelineComponent implements OnDestroy {
 
   constructor(
     private timelineService: TimelineService,
-    private storageService: StorageService
+    private storageService: StorageService,
+    private teamsGraph: TeamsGraphService
   ) {
     const access = this.storageService.getAccess();
     this.currentUserId = access && access.user ? (access.user.externalId ?? null) : null;
@@ -175,6 +193,93 @@ export class CardTimelineComponent implements OnDestroy {
           this.isPosting.set(false);
         }
       });
+  }
+
+  toggleImport(): void {
+    this.showImport.update((v) => !v);
+    this.importResult.set(null);
+    this.importError.set(null);
+  }
+
+  /** Login do próprio usuário no Teams e carregamento dos grupos a que ele tem acesso. */
+  async connectTeams(): Promise<void> {
+    if (this.isConnecting()) {
+      return;
+    }
+    this.isConnecting.set(true);
+    this.importError.set(null);
+
+    try {
+      const name = await this.teamsGraph.login();
+      this.teamsAccount.set(name);
+      this.teamsConnected.set(true);
+      await this.loadChats();
+    } catch {
+      this.importError.set('Não foi possível conectar ao Teams.');
+    } finally {
+      this.isConnecting.set(false);
+    }
+  }
+
+  private async loadChats(): Promise<void> {
+    this.isLoadingChats.set(true);
+    try {
+      const chats = await this.teamsGraph.listChats();
+      this.chats.set(chats);
+    } catch {
+      this.importError.set('Não foi possível carregar os grupos do Teams.');
+    } finally {
+      this.isLoadingChats.set(false);
+    }
+  }
+
+  chatLabel(chat: TeamsChat): string {
+    return chat.topic?.trim() || '(grupo sem nome)';
+  }
+
+  /** Lê as mensagens do grupo selecionado e as importa para a linha do tempo do card. */
+  async importSelected(): Promise<void> {
+    const card = this._cardNumber;
+    const chatId = this.selectedChatId;
+    if (!card || !chatId || this.isImporting()) {
+      return;
+    }
+
+    this.isImporting.set(true);
+    this.importResult.set(null);
+    this.importError.set(null);
+
+    try {
+      const messages = await this.teamsGraph.listMessages(chatId);
+      let imported = 0;
+      let skipped = 0;
+      let total = 0;
+
+      for (const m of messages) {
+        if (m.messageType !== 'message' || m.deletedDateTime) continue;
+        if (!m.text || m.text.length < 3) continue;
+
+        total++;
+        const res = await firstValueFrom(
+          this.timelineService.ingestTeamsMessage({
+            cardNumber: card,
+            messageId: m.id,
+            text: m.text,
+            userName: m.fromDisplayName ?? 'Teams',
+            occurredAt: m.createdDateTime
+          })
+        );
+        if (res?.imported) imported++;
+        else skipped++;
+      }
+
+      this.importResult.set({ imported, skipped, total });
+      this.load(); // recarrega a linha do tempo com as novas mensagens
+    } catch {
+      this.importError.set('Não foi possível importar as mensagens do Teams.');
+    } finally {
+      this.isImporting.set(false);
+    }
   }
 
   onKeydown(event: KeyboardEvent): void {

@@ -57,8 +57,20 @@
 
   @if (!loading() && !generating() && hasHandover) {
     <div class="handover__actions">
+      <mat-slide-toggle
+        [checked]="isPublic()"
+        [disabled]="savingVisibility()"
+        (change)="setVisibility($event.checked)"
+        matTooltip="Quando desligado, apenas usuários autenticados acessam este handover">
+        {{ isPublic() ? 'Público' : 'Não público' }}
+      </mat-slide-toggle>
       <button mat-raised-button (click)="copy()">
         Copiar formulário<mat-icon>content_copy</mat-icon>
+      </button>
+      <button mat-raised-button (click)="copyPublicLink()"
+              [disabled]="!isPublic()"
+              matTooltip="Copiar link público (somente leitura)">
+        Copiar link<mat-icon>link</mat-icon>
       </button>
       <button mat-raised-button (click)="generate()">
         Gerar novamente<mat-icon>refresh</mat-icon>

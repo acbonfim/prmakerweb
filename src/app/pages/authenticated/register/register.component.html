@@ -210,7 +210,7 @@
                   [disabled]="isPullRequestLoading || fullDescription === null"
                   (click)="savePullRequest()">Salvar<mat-icon>save</mat-icon></button>
           <button mat-raised-button style="margin-left: 10px"
-                  [disabled]="isPullRequestLoading || fullDescription === null"
+                  [disabled]="isPullRequestLoading || !hasAnythingToClear"
                   (click)="clearAll()">Limpar<mat-icon>clear</mat-icon></button>
 
           <button mat-raised-button style="margin-left: 10px"
@@ -220,7 +220,7 @@
           </button>
 
           <button mat-raised-button style="margin-left: 10px"
-                  [disabled]="!cardFull"
+                  [disabled]="!cardFull || isCardDetailsLoading"
                   (click)="openHandover()">
             Handover<mat-icon>swap_horiz</mat-icon>
           </button>

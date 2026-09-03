@@ -10,6 +10,12 @@ export const routes: Routes = [
     loadChildren: () => import('./pages/authenticated/authenticated.routes').then(m => m.AUTHENTICATED_ROUTES)
   },
   {
+    // Link público (somente leitura) da passagem de conhecimento, acessível sem login.
+    // Tela cheia, sem menus/topbar. A URL termina com o número do card.
+    path: 'handover/:cardNumber',
+    loadComponent: () => import('./pages/public/handover-view/handover-view.component').then(m => m.HandoverViewComponent)
+  },
+  {
     path: '',
     redirectTo: 'login',
     pathMatch: 'full'
