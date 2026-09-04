@@ -2,6 +2,7 @@ import {Component, EventEmitter, inject, Input, OnInit, Output} from '@angular/c
 import {CommonModule} from '@angular/common';
 import {MatListModule} from '@angular/material/list';
 import {MatIconModule} from '@angular/material/icon';
+import {MatTooltipModule} from '@angular/material/tooltip';
 import {NavigationEnd, Router, RouterLink} from '@angular/router';
 import {MatDialog} from '@angular/material/dialog';
 import {filter} from 'rxjs';
@@ -11,7 +12,7 @@ import {StorageService} from '../../services/storage.service';
   selector: 'app-side-menu',
   templateUrl: './side-menu.component.html',
   styleUrls: ['./side-menu.component.css'],
-  imports: [CommonModule, MatListModule, MatIconModule],
+  imports: [CommonModule, MatListModule, MatIconModule, MatTooltipModule],
   standalone: true,
 })
 export class SideMenuComponent implements OnInit {
@@ -36,24 +37,22 @@ export class SideMenuComponent implements OnInit {
       link: 'auth/register'
     },
     {
-      label: 'Ambientes clientes',
-      icon: 'language',
-      link: 'auth/client-access'
-    },
-    {
       label: 'Gestão de usuários',
       icon: 'manage_accounts',
-      link: 'auth/user/manager'
+      link: 'auth/user/manager',
+      allowedRoles: ['admin']
     },
     {
       label: 'Serviços',
       icon: 'lan',
-      link: 'auth/services'
+      link: 'auth/services',
+      allowedRoles: ['admin']
     },
     {
       label: 'Plugins',
       icon: 'hub',
-      link: 'auth/plugin-manager'
+      link: 'auth/plugin-manager',
+      allowedRoles: ['admin']
     },
     {
       label: 'Férias',

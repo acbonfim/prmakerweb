@@ -1,4 +1,4 @@
-import {ChangeDetectorRef, Component, HostListener, inject, OnDestroy, OnInit, ViewChild} from '@angular/core';
+import {ChangeDetectorRef, Component, ElementRef, HostListener, inject, OnDestroy, OnInit, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -7,6 +7,7 @@ import {MatTooltipModule} from '@angular/material/tooltip';
 import {FormsModule} from '@angular/forms';
 import {MatIconModule} from '@angular/material/icon';
 import {HttpClient} from '@angular/common/http';
+import {ActivatedRoute} from '@angular/router';
 import {MatDialog} from '@angular/material/dialog';
 import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {MatAutocompleteModule} from '@angular/material/autocomplete';
@@ -23,6 +24,8 @@ import {LMarkdownEditorModule} from 'ngx-markdown-editor';
 import {SplitButton} from 'primeng/splitbutton';
 import {AutoCompleteModule} from 'primeng/autocomplete';
 import {MenuItem, MenuItemCommandEvent} from 'primeng/api';
+import {MatButtonToggleModule} from '@angular/material/button-toggle';
+import {MatFormFieldModule} from '@angular/material/form-field';
 import {UserService} from '../../../services/UserService.service';
 import {CliipboardService} from '../../../services/cliipboard.service';
 import {environment} from '../../../../environments/environment';
@@ -34,7 +37,9 @@ import {firstValueFrom} from 'rxjs';
 import {tap} from 'rxjs/internal/operators/tap';
 import {GdsService} from '../../../services/gds.service';
 import {WsService} from '../../../services/ws.service';
-import {JsonPipe} from '@angular/common';
+import {JsonPipe, DatePipe} from '@angular/common';
+import {UserAvatarComponent} from '../../../components/user-avatar/user-avatar.component';
+import {AuthService} from '../../../services/auth.service';
 import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
 import {CardPanelComponent} from '../../../components/card-panel/card-panel.component';
 import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
@@ -76,6 +81,10 @@ const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
     SplitButton,
     JsonPipe,
     AutoCompleteModule,
+    MatButtonToggleModule,
+    MatFormFieldModule,
+    DatePipe,
+    UserAvatarComponent,
     CardTimelineComponent,
     CardPanelComponent,
     CardAlertBarComponent
@@ -84,6 +93,7 @@ const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
 export class RegisterComponent implements OnInit, OnDestroy {
 
   @ViewChild(CardTimelineComponent) timeline?: CardTimelineComponent;
+  @ViewChild('prefixInput') prefixInputRef?: ElementRef<HTMLInputElement>;
 
   cardFull: CardFull | null = null;
   isCardDetailsLoading = false;
@@ -103,6 +113,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
   urlBase = environment.apiUrl;
   isTemplateLoading = false;
   isPullRequestLoading = false;
+  // Enquanto as configurações (branches p/ PR e repositórios) do plugin não chegam,
+  // mostramos skeletons no mesmo estilo shimmer da linha do tempo.
+  isConfigLoading = true;
   readonly dialog = inject(MatDialog);
   private configurationService = inject(GdsService);
   userSelected: any = null;
@@ -117,6 +130,15 @@ export class RegisterComponent implements OnInit, OnDestroy {
   branchPrefix: string = 'hotfix/';
   isEditingPrefix: boolean = false;
   branchName: string = '';
+
+  // Metadados do PR encontrado (quem abriu, quando abriu, última atualização).
+  // null quando não há registro salvo — nesse caso o card de infos não aparece.
+  prInfo: {
+    openedAt: string | null;
+    updatedAt: string | null;
+    userName: string;
+    userPhoto: string | null;
+  } | null = null;
 
   repositoryOptions: { label: string; value: string; id?: number }[] = [];
   selectedRepositoryObj: { label: string; value: string; id?: number } | null = null;
@@ -163,8 +185,28 @@ export class RegisterComponent implements OnInit, OnDestroy {
     );
   }
 
+  /**
+   * Há alguma não conformidade no card carregado do DevOps? (qualquer alerta de
+   * preenchimento pendente). Usado para piscar o cabeçalho e chamar a atenção.
+   */
+  get hasCardNonConformity(): boolean {
+    const a = this.cardFull?.alerts;
+    if (!a) return false;
+    return !!(
+      a.missingRootCause ||
+      a.missingResolutionType ||
+      a.missingGeneralClassification ||
+      a.missingClassification ||
+      a.remainingNotZero
+    );
+  }
+
   onPrefixDoubleClick() {
     this.isEditingPrefix = true;
+    // Zoneless: força o render do input antes de focar; o setTimeout garante que o
+    // elemento já exista no DOM quando chamamos focus().
+    this.cdr.detectChanges();
+    setTimeout(() => this.prefixInputRef?.nativeElement.focus());
   }
 
   onPrefixBlur() {
@@ -175,6 +217,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.branchPrefix = this.branchPrefix + '/';
     }
     this.makeUrlLink();
+    // makeUrlLink pode sair cedo (sem cardNumber) sem disparar CD; garante o volta ao texto.
+    this.cdr.detectChanges();
   }
 
   onPrefixChange() {
@@ -242,6 +286,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
   private _snackBar = inject(MatSnackBar);
   private _clipboardService = inject(CliipboardService);
   private _globalService = inject(GlobalService);
+  private route = inject(ActivatedRoute);
 
   constructor(
     private http: HttpClient,
@@ -249,6 +294,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     private storageService: StorageService,
     private cdr: ChangeDetectorRef,
     private ws: WsService,
+    private authService: AuthService,
   ) {
     // Tachado (~~texto~~) não é tratado pelo turndown por padrão — mapeamos manualmente
     // para manter o markdown limpo ao converter o HTML do editor de volta.
@@ -276,8 +322,16 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.initializeBranchConfigurations();
       this.initRealtimeConfig();
 
+      // Card vindo por querystring (ex.: atalho "últimos cards" da home): já preenche
+      // o número e dispara a busca, o mesmo comportamento do botão "Buscar".
+      this.autoSearchFromQueryParams();
+
     } catch (error) {
       console.error('Falha ao inicializar configurações', error);
+    } finally {
+      // App é zoneless: sem detectChanges o skeleton ficaria preso mesmo com os dados prontos.
+      this.isConfigLoading = false;
+      this.cdr.detectChanges();
     }
 
 
@@ -286,6 +340,31 @@ export class RegisterComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.ws.removeFromGroup(PULLREQUEST_CONFIG_GROUP);
     this.ws.off(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
+  }
+
+  /**
+   * Lê o card (e opcionalmente o repositório) da querystring e reproduz o clique em "Buscar":
+   * preenche o número, seleciona o repositório correspondente quando informado e carrega
+   * PR, detalhes do DevOps e linha do tempo daquele card.
+   */
+  private autoSearchFromQueryParams(): void {
+    const params = this.route.snapshot.queryParamMap;
+    const card = params.get('card');
+    if (!card) return;
+
+    const repositoryId = params.get('repositoryId');
+    if (repositoryId) {
+      const match = this.repositoryOptions.find(r => r.value === repositoryId);
+      if (match) this.selectedRepositoryObj = match;
+    }
+
+    this.cardNumber = card;
+    this.onCardNumberChange();
+    this.cdr.detectChanges();
+
+    // setTimeout garante que os @ViewChild (ex.: linha do tempo) já estejam resolvidos
+    // antes de disparar a busca — o mesmo caminho do botão "Buscar".
+    setTimeout(() => this.getPullRequestByCardNumber());
   }
 
   /** Atualização em tempo real: repositórios/branches mudam para todos na tela de PR. */
@@ -378,6 +457,19 @@ export class RegisterComponent implements OnInit, OnDestroy {
     );
   }
 
+  /** Exibe o label do repositório no input do mat-autocomplete (o valor é o objeto). */
+  repoDisplay = (repo: any): string =>
+    repo && typeof repo === 'object' ? repo.label : (repo ?? '');
+
+  /** Filtra os repositórios conforme o usuário digita (recebe string enquanto digita
+   *  e o objeto quando algo é selecionado). */
+  filterRepoInput(value: any) {
+    const q = (typeof value === 'string' ? value : value?.label ?? '').toLowerCase();
+    this.filteredRepositories = this.repositoryOptions.filter(r =>
+      r.label.toLowerCase().includes(q)
+    );
+  }
+
   onRepositorySelect() {
     this.makeUrlLink();
   }
@@ -445,6 +537,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.rootCauseHtml = '';
     this.cardNumber = null;
     this.fullDescription = null;
+    // Zera os detalhes do DevOps para também apagar as não conformidades (para o pisca do cabeçalho).
+    this.cardFull = null;
+    this.prInfo = null;
     this.branchPrefix = 'hotfix/';
     this.branchName = '';
     this.selectedRepositoryObj = this.repositoryOptions.length > 0 ? this.repositoryOptions[0] : null;
@@ -515,6 +610,12 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
         this.isAzureLoading = false
         this.loadingBar.stop();
+
+        // Reexecuta a busca do card para atualizar as não conformidades (o RC salvo
+        // no DevOps resolve a pendência de root cause).
+        if (this.cardNumber) {
+          this.getPullRequestByCardNumber();
+        }
       }, error => {
         this._snackBar.open('Erro ao tentar salvar RCA no DevOps', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
 
@@ -554,11 +655,11 @@ export class RegisterComponent implements OnInit, OnDestroy {
         repository: repo,
         branch: fullBranch,
       },
-      width: '1200px',
-      height: '90vh',
-      maxWidth: '90vw',
-      maxHeight: '100vh',
-      panelClass: 'custom-dialog-container'
+      width: '920px',
+      height: '82vh',
+      maxWidth: '94vw',
+      maxHeight: '90vh',
+      panelClass: ['custom-dialog-container', 'ai-dialog-panel']
     });
 
     dialogRef.afterClosed().subscribe((result) => {
@@ -585,8 +686,11 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.cardFull = null;
 
       this.http.get<CardFull>(`${this.urlBase}Azure/card/${this.cardNumber}/full`).subscribe(
-        (response) => {
-          this.cardFull = response ?? null;
+        (response: any) => {
+          // O backend retorna 200 com { error } quando o card não existe no DevOps.
+          // Nesse caso tratamos como "não encontrado" para desabilitar Detalhes/Handover.
+          const found = !!response && !response.error && !!response.id;
+          this.cardFull = found ? response : null;
           this.isCardDetailsLoading = false;
           this.cdr.detectChanges();
         },
@@ -633,10 +737,52 @@ export class RegisterComponent implements OnInit, OnDestroy {
       });
     }
 
+    /**
+     * Monta o card de infos do PR (quem abriu, datas) e resolve nome + foto do autor
+     * pelo UserId (externalId). CreatedBy não é confiável (não é preenchido no banco),
+     * por isso o nome vem do serviço de usuários.
+     */
+    private loadPrAuthorInfo(response: any): void {
+      const userId = response?.userId;
+      this.prInfo = {
+        openedAt: response?.createdAt ?? null,
+        updatedAt: response?.updatedAt ?? null,
+        userName: '',
+        userPhoto: null,
+      };
+
+      if (!userId) {
+        this.cdr.detectChanges();
+        return;
+      }
+
+      this.authService.getPhotosByExternalIds([userId]).subscribe({
+        next: (res: any) => {
+          const list = res?.object ?? res?.Object ?? [];
+          const u = list.find((x: any) =>
+            (x.externalId || x.ExternalId || '').toLowerCase() === String(userId).toLowerCase()
+          ) ?? list[0];
+          if (u && this.prInfo) {
+            this.prInfo.userName = u.fullName || u.FullName || '';
+            this.prInfo.userPhoto = u.imageUrl || u.ImageUrl || null;
+          }
+          this.cdr.detectChanges();
+        },
+        error: () => this.cdr.detectChanges(),
+      });
+    }
+
     getPullRequestByCardNumber()
     {
       this.isPullRequestLoading = true;
       this.loadingBar.start();
+      // Zera o conteúdo do PR anterior: se o novo card não tiver registro salvo,
+      // Descrição/Root Cause não podem manter os dados do card antigo.
+      this.prInfo = null;
+      this.pullRequest = {};
+      this.descriptionHtml = '';
+      this.rootCauseHtml = '';
+      this.fullDescription = null;
 
       const repositoryId =
         typeof this.selectedRepositoryObj === 'string'
@@ -653,12 +799,15 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
           this.isPullRequestLoading = false;
           this.loadingBar.stop();
+          // Zoneless: garante que o skeleton dos painéis saia mesmo quando não há PR salvo.
+          this.cdr.detectChanges();
 
           if(response) {
             this.pullRequest = response;
             this.branchName = response.branchName;
             this.branchPrefix = response.branchPrefix;
 
+            this.loadPrAuthorInfo(response);
             this.syncEditorsFromModel();
             this.cdr.detectChanges();
 
@@ -669,6 +818,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
         error => {
           this.isPullRequestLoading = false;
           this.loadingBar.stop();
+          this.cdr.detectChanges();
         });
     }
 

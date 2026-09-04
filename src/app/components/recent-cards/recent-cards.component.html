@@ -1,0 +1,41 @@
+<div class="recent-section" *ngIf="isLoading || cards.length > 0">
+  <div class="section-header">
+    <mat-icon class="header-icon">history</mat-icon>
+    <span class="section-title">Seus últimos cards</span>
+    <span class="header-count" *ngIf="!isLoading && cards.length > 0">{{ cards.length }}</span>
+  </div>
+
+  <!-- Skeleton enquanto busca -->
+  <div class="recent-list" *ngIf="isLoading">
+    <div class="recent-card skeleton-card" *ngFor="let s of skeletons">
+      <div class="sk sk-icon"></div>
+      <div class="recent-card-body">
+        <div class="sk sk-title"></div>
+        <div class="sk sk-line"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lista (com scroll vertical quando passar da altura) -->
+  <div class="recent-list scrollable" *ngIf="!isLoading">
+    <div
+      class="recent-card"
+      *ngFor="let card of cards"
+      (click)="open(card)"
+      role="button"
+      [attr.aria-label]="'Abrir card ' + card.cardNumber"
+    >
+      <div class="recent-card-icon">
+        <mat-icon>confirmation_number</mat-icon>
+      </div>
+      <div class="recent-card-body">
+        <span class="recent-card-number">AB#{{ card.cardNumber }}</span>
+        <span class="recent-card-desc">{{ preview(card.description) }}</span>
+        <span class="recent-card-repo" *ngIf="card.repositoryId">
+          <mat-icon>folder</mat-icon>{{ card.repositoryId }}
+        </span>
+      </div>
+      <mat-icon class="recent-card-arrow">chevron_right</mat-icon>
+    </div>
+  </div>
+</div>

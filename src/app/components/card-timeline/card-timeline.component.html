@@ -90,8 +90,12 @@
           ></ng-container>
         } @else {
         <div class="comment" [class.comment--editing]="editingId() === entry.id" [attr.data-entry-id]="entry.id">
-          <div class="comment__avatar" [style.background]="avatarColor(entry.userName)">
-            {{ initials(entry.userName) }}
+          <div class="comment__avatar" [style.background]="photoFor(entry.userId) ? 'transparent' : avatarColor(entry.userName)">
+            @if (photoFor(entry.userId)) {
+              <img class="comment__avatar-img" [src]="photoFor(entry.userId)" alt="">
+            } @else {
+              {{ initials(entry.userName) }}
+            }
           </div>
           <div class="comment__body">
             <div class="comment__meta">

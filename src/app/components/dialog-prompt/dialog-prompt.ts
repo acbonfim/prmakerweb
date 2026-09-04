@@ -60,6 +60,7 @@ export class DialogPrompt implements OnInit {
   private _globalService = inject(GlobalService);
 
   showCardDetails = signal(false);
+  currentStep = signal(0);
   isAzureLoading = signal(false);
   isGitHubLoading = signal(false);
   isCommitsLoading = signal(false);
@@ -91,22 +92,20 @@ export class DialogPrompt implements OnInit {
   }
 
   async ngOnInit() {
-    this.isAzureLoading.set(true);
-
     try {
       await Promise.all([
         firstValueFrom(this.getDevOpsConfigurations()),
         firstValueFrom(this.getAiConfigurations())
       ]);
 
-      // Agora que as configs chegaram, prossegue
       if (this.data.isAiGenerate) {
+        // O card já foi carregado na tela de register: buscamos os dados apenas
+        // em segundo plano (para montar o prompt), sem um passo visível.
         this.getCardById();
-      } else {
-        this.isAzureLoading.set(false);
+        // A seleção de commit já é a primeira etapa do fluxo.
+        this.getCommits();
       }
     } catch (error) {
-      this.isAzureLoading.set(false);
       console.error('Falha ao inicializar configurações', error);
     }
   }
@@ -124,9 +123,7 @@ export class DialogPrompt implements OnInit {
   }
 
   onStepChange(event: StepperSelectionEvent) {
-    if (event.selectedIndex === 1 && this.commits.length === 0) {
-      this.getCommits();
-    }
+    this.currentStep.set(event.selectedIndex);
   }
 
   getCommits() {
@@ -221,6 +218,8 @@ export class DialogPrompt implements OnInit {
     this.selectedCommit = commit;
     this.commitId = this.getCommitSha(commit);
     this.githubCommitDiff = null;
+    // Já busca o diff automaticamente — remove o passo manual de "Buscar Diff".
+    this.getGitHubCommitDiff();
   }
 
   advanceToAI() {
@@ -290,11 +289,9 @@ export class DialogPrompt implements OnInit {
           this.isAzureLoading.set(false);
           if (response) {
             this.cardData = response;
+            // Marca que os dados do card estão prontos (habilita "Gerar com IA").
             this.showCardDetails.set(true);
-            setTimeout(() => {
-                this.next()
-              }, 3000
-            );
+            this.cdr.detectChanges();
           }
         },
         error => {

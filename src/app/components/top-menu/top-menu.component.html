@@ -1,51 +1,55 @@
-<div class="d-flex align-items-center  h-100" >
-  <button mat-icon-button class="ms-1" (click)="onToggleSidebar()">
-    <mat-icon>
-      {{isCollapsed ? 'menu' : 'menu_open'}}
-    </mat-icon>
+<div class="topbar-inner">
+  <button mat-icon-button class="menu-toggle" (click)="onToggleSidebar()"
+          [matTooltip]="isCollapsed ? 'Expandir menu' : 'Recolher menu'" matTooltipPosition="right"
+          aria-label="Alternar menu lateral">
+    <mat-icon>{{ isCollapsed ? 'menu' : 'menu_open' }}</mat-icon>
   </button>
 
+  <span class="env-badge" *ngIf="!isProduction">DEV</span>
 
-  <span class="example-spacer "></span>
-  <button hidden mat-icon-button class="example-icon favorite-icon" aria-label="Example icon-button with heart icon">
-    <mat-icon >manage_accounts</mat-icon>
+  <span class="topbar-spacer"></span>
+
+  <button mat-icon-button class="topbar-icon-btn" matTooltip="Notificações" aria-label="Notificações">
+    <mat-icon>notifications</mat-icon>
   </button>
-  <button hidden mat-icon-button class="example-icon" aria-label="Example icon-button with share icon">
-    <mat-icon >mark_chat_unread</mat-icon>
-  </button>
-  <button mat-icon-button class="example-icon" aria-label="Example icon-button with share icon">
-    <mat-icon >notifications</mat-icon>
-  </button>
-  <a style="cursor: pointer">
 
-
-    <a mat-fab class="example-icon ms-4" style="width: 40px; height: 40px; background-color: black;">
-      <img src="assets/images/user.png" class="avatar status {{isOn? 'is-on':'is-off'}}">
-    </a>
-
-      <span class="ms-2" style="font-size: 15px;">
-      {{
-          user.firstName + ' ' + user.lastName
-        }}
+  <button type="button" class="profile-chip" [matMenuTriggerFor]="menuUser" aria-label="Menu do usuário">
+    <span class="profile-avatar">
+      @if (profilePhoto) {
+        <img [src]="profilePhoto" class="avatar-img {{ isOn ? 'is-on' : 'is-off' }}" alt="">
+      } @else {
+        <app-user-avatar [name]="user?.fullName" [size]="36"></app-user-avatar>
+      }
     </span>
-
-  </a>
-
-  <a [matMenuTriggerFor]="menuUser" class="mt-2 text-white" style="cursor: pointer">
-    <mat-icon>arrow_drop_down</mat-icon>
-  </a>
+    <span class="profile-name">{{ user.firstName }} {{ user.lastName }}</span>
+    <mat-icon class="profile-caret">arrow_drop_down</mat-icon>
+  </button>
 </div>
 
 
-<mat-menu #menuUser="matMenu">
-  <button [routerLink]="['administracao/userMananger']" mat-menu-item>
+<mat-menu #menuUser="matMenu" class="profile-menu" xPosition="before">
+  <div class="pm-header" (click)="$event.stopPropagation()">
+    <span class="pm-avatar">
+      @if (profilePhoto) {
+        <img [src]="profilePhoto" alt="">
+      } @else {
+        <app-user-avatar [name]="user?.fullName" [size]="44"></app-user-avatar>
+      }
+    </span>
+    <div class="pm-info">
+      <span class="pm-name">{{ user.firstName }} {{ user.lastName }}</span>
+      @if (user?.userName) {
+        <span class="pm-sub">{{ user.userName }}</span>
+      }
+    </div>
+  </div>
+
+  <button (click)="openProfile()" mat-menu-item>
     <mat-icon>person</mat-icon>
     <span>Meu perfil</span>
   </button>
-  <mat-divider></mat-divider>
-  <button mat-menu-item (click)="logOut()">
-    <mat-icon>logout
-    </mat-icon>
+  <button mat-menu-item class="pm-danger" (click)="logOut()">
+    <mat-icon>logout</mat-icon>
     <span>Sair</span>
   </button>
 </mat-menu>

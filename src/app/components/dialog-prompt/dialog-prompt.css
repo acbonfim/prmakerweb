@@ -1,258 +1,220 @@
-
-.dialog-container {
+/* ── Shell do dialog "Gerar com IA" ── */
+.ai-dialog {
   display: flex;
   flex-direction: column;
   height: 100%;
   max-height: 90vh;
   width: 100%;
   overflow: hidden;
-}
-
-.dialog-header {
-  flex-shrink: 0;
-  padding: 16px 24px 0 24px;
-  border-bottom: 1px solid #e0e0e0;
-  background-color: var(--mat-sys-surface);
-}
-
-.dialog-header h2 {
-  margin: 0 0 16px 0;
-  font-size: 1.25rem;
-  font-weight: 500;
   color: var(--mat-sys-on-surface);
 }
 
-.dialog-content {
+/* ── Header ── */
+.ai-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--surface-3, #252525);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.ai-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
   flex: 1;
-  overflow: hidden;
-
 }
 
-::ng-deep .mat-mdc-dialog-content{
-  max-height: 80vh !important;
-}
-
-.scrollable-content {
-  height: 300px;
-  overflow: auto;
-  padding: 16px 24px;
-}
-
-.scrollable-content pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  margin: 0;
-  font-family: 'Courier New', monospace;
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--mat-sys-on-surface);
-  background-color: var(--mat-sys-surface-variant);
-  padding: 16px;
-  border-radius: 4px;
-  border: 1px solid var(--mat-sys-outline-variant);
-}
-
-.dialog-footer {
+.ai-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   flex-shrink: 0;
-  padding: 8px 24px 16px 24px !important;
-  margin: 0 !important;
-  border-top: 1px solid #e0e0e0;
-  background-color: var(--mat-sys-surface);
-  justify-content: flex-end;
+  background: color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
+  color: var(--mat-sys-primary);
 }
 
-.dialog-footer button {
-  margin-left: 8px;
-}
+.ai-title-text { display: flex; flex-direction: column; min-width: 0; }
 
-/* Scrollbar personalizada para o conteúdo */
-.scrollable-content::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.scrollable-content::-webkit-scrollbar-track {
-  background: var(--mat-sys-surface-variant);
-  border-radius: 4px;
-}
-
-.scrollable-content::-webkit-scrollbar-thumb {
-  background: var(--mat-sys-outline);
-  border-radius: 4px;
-}
-
-.scrollable-content::-webkit-scrollbar-thumb:hover {
-  background: var(--mat-sys-on-surface-variant);
-}
-
-/* Para Firefox */
-.scrollable-content {
-  scrollbar-width: thin;
-  scrollbar-color: var(--mat-sys-outline) var(--mat-sys-surface-variant);
-}
-
-/* Responsividade */
-@media (max-width: 768px) {
-  .dialog-container {
-    max-height: 90vh;
-  }
-
-  .dialog-header,
-  .dialog-footer {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .scrollable-content {
-    padding: 16px;
-  }
-}
-
-.diff-viewer-container {
-  width: 100%;
-}
-
-.commit-scroll-area {
-  max-height: 60vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--mat-sys-outline) var(--mat-sys-surface-variant);
-}
-
-.commit-scroll-area::-webkit-scrollbar {
-  width: 6px;
-}
-
-.commit-scroll-area::-webkit-scrollbar-track {
-  background: var(--mat-sys-surface-variant);
-  border-radius: 4px;
-}
-
-.commit-scroll-area::-webkit-scrollbar-thumb {
-  background: var(--mat-sys-outline);
-  border-radius: 4px;
-}
-
-.scrollable-content {
-  max-height: 500px;
-  overflow-y: auto;
-  overflow-x: auto;
-  background-color: #f5f5f5;
-  padding: 15px;
-  border-radius: 4px;
-}
-
-.scrollable-content pre {
+.ai-title-text h2 {
   margin: 0;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-
-
-.markdown-viewer {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  line-height: 1.6;
-  color: #e6edf3;
-}
-
-.markdown-viewer h1,
-.markdown-viewer h2,
-.markdown-viewer h3,
-.markdown-viewer h4,
-.markdown-viewer h5,
-.markdown-viewer h6 {
-  margin-top: 24px;
-  margin-bottom: 16px;
+  font-size: 1.15rem;
   font-weight: 600;
-  line-height: 1.25;
-  color: #ffffff;
+  line-height: 1.2;
+  color: var(--mat-sys-on-surface);
 }
 
-.markdown-viewer h1:first-child,
-.markdown-viewer h2:first-child,
-.markdown-viewer h3:first-child,
-.markdown-viewer h4:first-child {
-  margin-top: 0;
+.ai-subtitle {
+  font-size: 12.5px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.markdown-viewer h1 {
-  font-size: 2em;
-  border-bottom: 1px solid #30363d;
-  padding-bottom: 0.3em;
+.ai-close { color: color-mix(in srgb, var(--mat-sys-on-surface) 70%, transparent); }
+
+/* ── Conteúdo ── */
+.ai-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px !important;
+  background: transparent;
 }
 
-.markdown-viewer p {
-  margin-top: 0;
-  margin-bottom: 16px;
+/* Sobrescreve o max-height padrão (65vh) do mat-dialog-content: sem isso o
+   conteúdo para no meio e o footer "flutua" acima do fundo do modal. */
+.ai-content.mat-mdc-dialog-content {
+  max-height: none;
 }
 
-.markdown-viewer ul,
-.markdown-viewer ol {
-  margin-top: 0;
-  margin-bottom: 16px;
-  padding-left: 2em;
+/* ── Stepper (Material) ── */
+.ai-stepper { background: transparent; }
+
+::ng-deep .ai-stepper .mat-horizontal-stepper-wrapper { background: transparent; }
+
+::ng-deep .ai-stepper .mat-horizontal-content-container {
+  padding: 16px 0 0 0;
 }
 
-.markdown-viewer li {
-  margin-bottom: 4px;
+::ng-deep .ai-stepper .mat-step-header {
+  border-radius: 10px;
+  padding: 8px 14px;
 }
 
-.markdown-viewer code {
-  padding: 0.2em 0.4em;
+::ng-deep .ai-stepper .mat-step-header:hover {
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 6%, transparent);
+}
+
+::ng-deep .ai-stepper .mat-step-label {
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
+  font-weight: 500;
+}
+
+::ng-deep .ai-stepper .mat-step-label.mat-step-label-selected {
+  color: var(--mat-sys-on-surface);
+}
+
+/* ── Estados de carregamento ── */
+.ai-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 14px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 75%, transparent);
+}
+
+.ai-generating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 40px 20px;
+}
+
+.ai-generating h3 {
+  margin: 12px 0 0;
+  font-size: 18px;
+  color: var(--mat-sys-on-surface);
+}
+
+.ai-generating p {
   margin: 0;
-  font-size: 85%;
-  background-color: rgba(110, 118, 129, 0.4);
-  border-radius: 6px;
-  font-family: 'Courier New', monospace;
+  max-width: 420px;
+  font-size: 13.5px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
 }
 
-.markdown-viewer pre {
+/* ── Seções / painéis ── */
+.ai-section { display: flex; flex-direction: column; gap: 10px; }
+
+.ai-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 78%, transparent);
+}
+
+.ai-section-label mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--mat-sys-primary);
+}
+
+.ai-section-label.success mat-icon { color: #66bb6a; }
+
+.ai-panel {
+  background: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
   padding: 16px;
+}
+
+.ai-scroll {
   overflow: auto;
-  font-size: 85%;
-  line-height: 1.45;
-  background-color: #161b22;
-  border-radius: 6px;
-  margin-bottom: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
-.markdown-viewer pre code {
-  padding: 0;
-  margin: 0;
-  background-color: transparent;
-  border-radius: 0;
+.ai-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.ai-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
 }
 
-.markdown-viewer blockquote {
-  padding: 0 1em;
-  color: #8b949e;
-  border-left: 0.25em solid #30363d;
-  margin: 0 0 16px 0;
+/* O próprio .ai-content rola; as áreas internas apenas fluem. */
+.ai-scroll.commits { display: flex; flex-direction: column; gap: 12px; }
+
+.ai-field { width: 100%; }
+
+/* ── Estado vazio (nenhum commit selecionado) ── */
+.ai-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 32px 20px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
 }
 
-.markdown-viewer strong {
-  font-weight: 600;
+.ai-empty mat-icon {
+  font-size: 34px;
+  width: 34px;
+  height: 34px;
+  opacity: 0.7;
 }
 
-.markdown-viewer em {
-  font-style: italic;
+.ai-empty span { font-size: 13px; max-width: 320px; }
+
+/* ── Footer fixo e flutuante (barra elevada colada embaixo) ── */
+.ai-footer {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px !important;
+  margin: 0 !important;
+  background: var(--surface-3, #252525);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.28);
+  z-index: 2;
 }
 
-.markdown-viewer a {
-  color: #58a6ff;
-  text-decoration: none;
-}
+.ai-footer-spacer { flex: 1 1 auto; }
 
-.markdown-viewer a:hover {
-  text-decoration: underline;
-}
-
-.generated-content h4 {
-  color: #e6edf3;
-  margin-bottom: 12px;
-}
-
+/* ── Commit ── */
 .commit-option {
   display: flex;
   align-items: center;
@@ -262,33 +224,23 @@
 .commit-sha {
   font-family: 'Courier New', monospace;
   font-size: 12px;
-  color: #58a6ff;
-  background: rgba(88, 166, 255, 0.1);
-  padding: 1px 5px;
-  border-radius: 4px;
+  color: var(--mat-sys-primary);
+  background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
+  padding: 1px 6px;
+  border-radius: 5px;
   flex-shrink: 0;
 }
 
-.commit-msg {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.commit-msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commit-desc { color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); font-size: 0.9em; }
 
-.commit-desc {
-  color: #8b949e;
-  font-size: 0.9em;
-}
-
-.commit-details {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
+.commit-card { display: flex; flex-direction: column; gap: 6px; }
 
 .commit-detail-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #e6edf3;
+  color: var(--mat-sys-on-surface);
   font-size: 14px;
 }
 
@@ -296,38 +248,101 @@
   font-size: 16px;
   width: 16px;
   height: 16px;
-  color: #8b949e;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
 }
 
-.commit-detail-label {
-  color: #8b949e;
-  font-weight: 500;
-}
-
-.commit-detail-value {
-  color: #e6edf3;
-}
-
-.commit-sha-full {
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  color: #58a6ff;
-}
+.commit-detail-label { color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); font-weight: 500; }
+.commit-detail-value { color: var(--mat-sys-on-surface); }
+.commit-sha-full { font-family: 'Courier New', monospace; font-size: 12px; color: var(--mat-sys-primary); }
 
 .commit-message-text {
-  color: #e6edf3;
+  color: var(--mat-sys-on-surface);
   font-size: 14px;
   font-weight: 500;
   padding-left: 22px;
+  margin-top: 4px;
 }
 
 .commit-body-text {
-  color: #8b949e;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
   font-size: 13px;
   padding-left: 22px;
   white-space: pre-wrap;
 }
 
-.full-width {
-  width: 100%;
+.diff-viewer-container { width: 100%; }
+
+/* ── Markdown gerado ── */
+.markdown-viewer {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.6;
+  color: var(--mat-sys-on-surface);
+}
+
+.markdown-viewer h1,
+.markdown-viewer h2,
+.markdown-viewer h3,
+.markdown-viewer h4,
+.markdown-viewer h5,
+.markdown-viewer h6 {
+  margin-top: 22px;
+  margin-bottom: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #fff;
+}
+
+.markdown-viewer h1:first-child,
+.markdown-viewer h2:first-child,
+.markdown-viewer h3:first-child,
+.markdown-viewer h4:first-child { margin-top: 0; }
+
+.markdown-viewer h1 {
+  font-size: 1.7em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.3em;
+}
+
+.markdown-viewer p { margin: 0 0 14px; }
+
+.markdown-viewer ul,
+.markdown-viewer ol { margin: 0 0 14px; padding-left: 1.6em; }
+
+.markdown-viewer li { margin-bottom: 4px; }
+
+.markdown-viewer code {
+  padding: 0.2em 0.4em;
+  font-size: 85%;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent);
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+}
+
+.markdown-viewer pre {
+  padding: 14px;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  background: var(--surface-input, #161b22);
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.markdown-viewer pre code { padding: 0; background: transparent; border-radius: 0; }
+
+.markdown-viewer blockquote {
+  padding: 0 1em;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
+  border-left: 0.25em solid rgba(255, 255, 255, 0.12);
+  margin: 0 0 14px;
+}
+
+.markdown-viewer strong { font-weight: 600; }
+.markdown-viewer a { color: var(--mat-sys-primary); text-decoration: none; }
+.markdown-viewer a:hover { text-decoration: underline; }
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .ai-header, .ai-footer { padding-left: 16px; padding-right: 16px; }
+  .ai-content { padding: 16px !important; }
 }

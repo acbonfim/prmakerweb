@@ -1,64 +1,70 @@
-.container {
-    padding: 10px;
-
-}
-
-.full-width {
-  width: 100%;
-}
-
-/* O mat-card-header envolve o título num wrapper que não estica por padrão; forçamos
-   a largura total para que os alertas (margin-left:auto no título) alcancem a direita. */
-:host ::ng-deep .mat-mdc-card-header {
-  align-items: center;
-}
-
-:host ::ng-deep .mat-mdc-card-header-text {
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
-}
-
-/* Header mais enxuto (~30% menor na vertical): reduz o padding do p-3 e aperta a
-   altura da linha do título. */
-:host ::ng-deep .mat-mdc-card-header.p-3 {
-  padding-top: 9px !important;
-  padding-bottom: 9px !important;
-}
-
-:host ::ng-deep .mat-mdc-card-header .mat-mdc-card-title {
-  line-height: 1.2;
-  margin: 0;
-}
-
-/* ── A tela inteira ocupa a altura disponível; só as áreas internas rolam ── */
+/* ── A tela inteira ocupa a altura disponível; só as áreas internas rolam.
+   Sem card de fundo: título, conteúdo e rodapé ficam soltos (padrão das telas
+   de plugin/usuários). ── */
 :host {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  color: var(--mat-sys-on-surface);
 }
 
-.pr-root {
-  flex: 1 1 auto;
-  min-height: 0;
+/* ── Cabeçalho (mesmo layout das telas de plugin e gestão de usuários) ── */
+.page-header {
+  flex: 0 0 auto;
   display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--surface-3, #252525);
+  border-radius: 10px;
+  padding: 10px 16px;
+  /* Nas telas de referência (plugin/usuários) a altura do header é definida pelos
+     botões de ação (mat-button = 40px). Como aqui o header só tem ícone + título,
+     fixamos a mesma altura mínima para bater com aquelas telas. */
+  min-height: 60px;
+  box-sizing: border-box;
+  margin-bottom: 12px;
 }
 
-:host ::ng-deep .mat-mdc-card {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
+/* Não conformidade no card: pisca uma borda + sombra vermelho-alaranjada em
+   fade in/out. Feito com box-shadow (anel interno + brilho externo) para não
+   alterar a altura do cabeçalho — mantém o mesmo tamanho das telas de referência. */
+.page-header--alert {
+  animation: header-alert-pulse 2.8s ease-in-out infinite;
 }
 
-:host ::ng-deep .mat-mdc-card-content {
-  flex: 1 1 auto;
-  min-height: 0;
+@keyframes header-alert-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 0 1px rgba(255, 85, 25, 0.18), 0 0 0 0 rgba(255, 85, 25, 0);
+  }
+  50% {
+    box-shadow: inset 0 0 0 1px rgba(255, 85, 25, 0.9), 0 0 14px 1px rgba(255, 85, 25, 0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-header--alert {
+    animation: none;
+    box-shadow: inset 0 0 0 1px rgba(255, 85, 25, 0.9), 0 0 10px rgba(255, 85, 25, 0.45);
+  }
+}
+
+.header-icon { color: var(--mat-sys-primary); }
+.header-title { font-size: 20px; font-weight: 500; }
+.ms-auto { margin-left: auto; }
+
+/* ── Rodapé de ações — card contido, no mesmo padrão dos demais componentes ── */
+.page-footer {
+  flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: 10px;
+  background-color: var(--surface-3, #252525);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-top: 12px;
 }
 
 /* ── Layout: campos (60%) + linha do tempo (40%), mesma altura ── */
@@ -69,27 +75,36 @@
   align-items: stretch;
   gap: 15px;
   margin-top: 5px;
-  padding-right: 16px;
 }
 
 .pr-fields {
-  flex: 0 0 60%;
-  max-width: 60%;
+  flex: 1 1 60%;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 15px;
 }
 
-/* Cada painel (Descrição / Root Cause) divide a altura da coluna */
+/* Descrição e Root Cause lado a lado, dividindo a largura da coluna de campos */
+.pr-editors {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 15px;
+}
+
+/* Cada painel (Descrição / Root Cause) divide a largura da linha */
 .pr-panel {
   flex: 1 1 0;
+  min-width: 0;
   min-height: 0;
 }
 
 .pr-timeline {
-  flex: 0 0 40%;
-  max-width: 40%;
+  flex: 1 1 40%;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -134,6 +149,9 @@
   flex: 1 1 auto;
   width: auto;
   min-height: 0;
+  /* Sem isto, a largura mínima de conteúdo do editor impede o painel de encolher
+     (lado a lado), o texto transborda à direita e fica inacessível para edição. */
+  min-width: 0;
   margin: -10px -12px;
   display: flex;
   flex-direction: column;
@@ -143,7 +161,7 @@
 :host ::ng-deep .panel-editor .ql-toolbar.ql-snow {
   border: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: #323232;
+  background: var(--surface-2, #323232);
   border-radius: 0;
 }
 
@@ -151,16 +169,18 @@
 :host ::ng-deep .panel-editor .p-editor-content {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  background: #2a2a2a;
+  background: var(--surface-1, #2a2a2a);
 }
 
 :host ::ng-deep .panel-editor .ql-container.ql-snow {
   flex: 1 1 auto;
   min-height: 0;
+  min-width: 0;
   border: none;
-  background: #2a2a2a;
+  background: var(--surface-1, #2a2a2a);
   font-family: Roboto, "Helvetica Neue", sans-serif;
   font-size: 13px;
 }
@@ -168,9 +188,13 @@
 :host ::ng-deep .panel-editor .ql-editor {
   flex: 1 1 auto;
   overflow-y: auto;
-  background: #2a2a2a;
+  overflow-x: hidden;
+  background: var(--surface-1, #2a2a2a);
   color: var(--mat-sys-on-surface);
   line-height: 1.5;
+  /* Quebra o texto/URLs longos para caber na largura do painel (sem scroll lateral) */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 :host ::ng-deep .panel-editor .ql-editor.ql-blank::before {
@@ -199,7 +223,7 @@
 
 /* Dropdown de cabeçalho (picker) no tema escuro */
 :host ::ng-deep .panel-editor .ql-snow .ql-picker-options {
-  background: #2a2a2a;
+  background: var(--surface-1, #2a2a2a);
   border-color: rgba(255, 255, 255, 0.12);
 }
 
@@ -266,6 +290,11 @@
     flex-direction: column;
   }
 
+  /* Em telas estreitas, Descrição e Root Cause voltam a empilhar */
+  .pr-editors {
+    flex-direction: column;
+  }
+
   .pr-fields,
   .pr-timeline {
     flex: 1 1 auto;
@@ -280,43 +309,6 @@
     height: 360px;
   }
 }
-
-::ng-deep .custom-select-button {
-  height: 56px !important;
-}
-
-::ng-deep .custom-select-button .p-button {
-  height: 56px !important;
-  display: flex;
-  align-items: center;
-}
-
-::ng-deep .custom-input-group {
-  height: 56px !important;
-  max-width: 300px !important;
-}
-
-::ng-deep .custom-input-group .p-inputgroup {
-  height: 56px !important;
-}
-
-::ng-deep .custom-input-group .p-inputnumber,
-::ng-deep .custom-input-group .p-inputnumber-input,
-::ng-deep .custom-input-group .p-inputgroup-addon {
-  height: 56px !important;
-}
-
-::ng-deep .custom-input-group .p-inputgroup-addon .p-button {
-  height: 56px !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-::ng-deep p-button {
-  height: 56px !important;
-}
-
 
 ::ng-deep .custom-buttom .p-button {
   height: 40px !important;
@@ -341,30 +333,252 @@
   background-color: var(--mat-button-protected-disabled-container-color, color-mix(in srgb, var(--mat-sys-on-surface) 25%, transparent))
 }
 
-/* ── Repositório autocomplete ── */
-::ng-deep .repo-autocomplete,
-::ng-deep .repo-autocomplete .p-autocomplete,
-::ng-deep .repo-autocomplete .p-autocomplete-input {
-  height: 56px !important;
-  width: 100% !important;
+/* ── Toolbar de configuração do PR (Angular Material) ────────────────────────
+   Campos coesos com o resto da tela: mesmo tema Material 3 (azure/dark), cantos
+   arredondados e o mesmo container escuro dos painéis. */
+.pr-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  margin: 0 0 12px 0;
+  background-color: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
 }
 
-::ng-deep .repo-autocomplete .p-autocomplete-input {
-  border-radius: 5px 0px 0px 5px !important;
-  box-shadow: none !important;
-  background: transparent !important;
-  font-size: 14px;
+.pr-field { margin: 0; }
+.pr-field--card { width: 190px; }
+.pr-field--branch { width: 210px; }
+.pr-field--repo { width: 220px; }
+.pr-field--branches {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: auto;
 }
 
-::ng-deep .repo-autocomplete .p-autocomplete-dropdown {
-  height: 56px !important;
-  border-left: 1px solid var(--p-inputgroup-addon-border-color, rgba(255,255,255,0.15)) !important;
-  background: transparent !important;
-  color: inherit !important;
-  border-radius: 0px 5px 5px 0px !important;
+/* Label da toolbar (usado só onde não há mat-label flutuante, ex.: toggle group) */
+.pr-field__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
+  padding-left: 2px;
 }
 
-::ng-deep .repo-autocomplete .p-autocomplete-dropdown:hover {
-  background: rgba(255,255,255,0.05) !important;
+/* Prefixo da branch (hotfix/ etc.) como "chip" no accent primário */
+.pr-prefix {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--mat-sys-primary);
+  white-space: nowrap;
+}
+
+.pr-prefix-input {
+  width: 78px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--mat-sys-primary);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0;
+}
+
+/* Esconde os spinners do input numérico do card */
+:host ::ng-deep .pr-field--card input[type='number']::-webkit-outer-spin-button,
+:host ::ng-deep .pr-field--card input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+:host ::ng-deep .pr-field--card input[type='number'] { -moz-appearance: textfield; }
+
+/* Botão de busca compacto dentro do form-field */
+:host ::ng-deep .pr-field--card .mat-mdc-form-field-icon-suffix .mat-mdc-icon-button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+/* ── Segmented control das branches para PR (mat-button-toggle-group) ── */
+.pr-toggle {
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  background: transparent;
+  gap: 6px;
+  display: inline-flex;
+  flex-wrap: wrap;
+}
+
+/* Cada opção é um "chip" independente e totalmente arredondado. O !important vence
+   as regras do grupo do Material, que zeram os cantos dos itens do meio e arredondam
+   só as pontas — o que deixava a borda clara "cortada" nas extremidades. */
+:host ::ng-deep .pr-toggle .mat-button-toggle {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 8px !important;
+  background: var(--surface-input, #1f1f1f);
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 78%, transparent);
+  overflow: hidden;
+}
+
+:host ::ng-deep .pr-toggle .mat-button-toggle-button { height: 40px; }
+
+:host ::ng-deep .pr-toggle .mat-button-toggle .mat-button-toggle-label-content {
+  line-height: 40px;
+  padding: 0 14px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+:host ::ng-deep .pr-toggle .mat-button-toggle-checked {
+  background: var(--mat-sys-primary);
+  border-color: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+:host ::ng-deep .pr-toggle .mat-button-toggle:hover:not(.mat-button-toggle-checked) {
+  border-color: color-mix(in srgb, var(--mat-sys-primary) 55%, transparent);
+}
+
+/* ── Skeleton (mesmo shimmer da linha do tempo) ── */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.09),
+    transparent
+  );
+  animation: register-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes register-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; }
+}
+
+.pr-field-skeleton {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.skeleton--label { width: 90px; height: 10px; }
+.skeleton--control { width: 100%; height: 40px; border-radius: 8px; }
+
+.pr-skel-row { display: flex; gap: 6px; }
+.skeleton--toggle { width: 54px; height: 40px; border-radius: 8px; }
+
+/* Skeleton dos editores (Descrição / Root Cause) durante a busca do card */
+.editor-skeleton {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editor-skeleton .sk-toolbar {
+  height: 30px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.editor-skeleton .sk-line {
+  height: 12px;
+  border-radius: 6px;
+}
+
+/* ── Card de infos do PR encontrado ──────────────────────────────────────────
+   flex:0 0 auto = altura natural; como os painéis Descrição/Root Cause são
+   flex:1 1 0, eles encolhem sozinhos para abrir espaço quando este card aparece.
+   Some quando não há registro → painéis voltam ao tamanho cheio. */
+/* Card compacto (sem header/título) com o mesmo visual dos painéis */
+.pr-info-card {
+  flex: 0 0 auto;
+  background-color: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.pr-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  width: 100%;
+}
+
+.pr-info__author {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pr-info__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+}
+
+.pr-info__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pr-info__item mat-icon {
+  color: var(--mat-sys-primary);
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+.pr-info__col {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.pr-info__label {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
+}
+
+.pr-info__value {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Empilha a toolbar em telas estreitas */
+@media (max-width: 900px) {
+  .pr-toolbar { flex-direction: column; align-items: stretch; }
+  .pr-field--card,
+  .pr-field--branch,
+  .pr-field--repo { width: 100%; }
+  .pr-field--branches { margin-left: 0; }
 }
 

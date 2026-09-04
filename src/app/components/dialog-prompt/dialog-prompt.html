@@ -1,57 +1,47 @@
-<div class="dialog-container">
-  <div class="dialog-header">
-    <h2 mat-dialog-title>Gerar informações automáticas</h2>
+<div class="ai-dialog">
+  <!-- Header -->
+  <div class="ai-header">
+    <div class="ai-title">
+      <span class="ai-title-icon"><mat-icon>auto_awesome</mat-icon></span>
+      <div class="ai-title-text">
+        <h2 mat-dialog-title>Gerar com IA</h2>
+        <span class="ai-subtitle">
+          Card #{{ data.cardNumber }}
+          @if (data.repository) { · {{ data.repository }} }
+        </span>
+      </div>
+    </div>
+    <button mat-icon-button class="ai-close" (click)="onClose()" matTooltip="Fechar" aria-label="Fechar">
+      <mat-icon>close</mat-icon>
+    </button>
   </div>
 
-  <mat-dialog-content class="dialog-content p-3">
+  <mat-dialog-content class="ai-content">
+    @if (data.isAiGenerate) {
+      <mat-stepper linear #stepper (selectionChange)="onStepChange($event)" class="ai-stepper">
 
-    @if(data.isAiGenerate){
-      <mat-stepper linear #stepper (selectionChange)="onStepChange($event)">
-        <mat-step>
-          <ng-template matStepLabel>Azure DevOps</ng-template>
-          <ng-template matStepContent>
-            @if(isAzureLoading()){
-              <div class="d-inline-flex align-items-center">
-                Carregando informações do card no Azure...
-                <mat-spinner class="ms-2" diameter="20"></mat-spinner>
-              </div>
-            }
-            @if (data.isAiGenerate && showCardDetails() && !isAzureLoading()) {
-              <div class="container overflow-auto">
-                <div class="mt-2 p-2 bg-dark rounded" [innerHTML]="reproSteps | safeHtml"
-                     style="max-width: 100%; height: calc(100vh - 330px); overflow: auto;"></div>
-              </div>
-
-            }
-
-          </ng-template>
-        </mat-step>
-        <mat-step [editable]="!this.reproSteps.length" [completed]="this.reproSteps.length" >
-          <ng-template matStepLabel>GitHub</ng-template>
+        <!-- Etapa 1: selecionar commit -->
+        <mat-step [completed]="!!githubCommitDiff">
+          <ng-template matStepLabel>Commit</ng-template>
           <ng-template matStepContent>
             @if (isCommitsLoading()) {
-              <div class="d-inline-flex align-items-center">
-                Carregando commits da branch...
-                <mat-spinner class="ms-2" diameter="20"></mat-spinner>
+              <div class="ai-loading">
+                <mat-spinner diameter="22"></mat-spinner>
+                <span>Carregando commits da branch...</span>
               </div>
             }
 
             @if (!isCommitsLoading()) {
-              <br>
-              <mat-form-field class="full-width">
+              <mat-form-field appearance="outline" class="ai-field">
                 <mat-label>Buscar commit</mat-label>
-                <input
-                  matInput
-                  [formControl]="commitSearchControl"
-                  [matAutocomplete]="auto"
-                  placeholder="Digite para filtrar por mensagem..."
-                />
+                <input matInput
+                       [formControl]="commitSearchControl"
+                       [matAutocomplete]="auto"
+                       placeholder="Digite para filtrar por mensagem..." />
                 <mat-icon matSuffix>search</mat-icon>
-                <mat-autocomplete
-                  #auto="matAutocomplete"
-                  [displayWith]="displayCommit.bind(this)"
-                  (optionSelected)="selectCommit($event.option.value)"
-                >
+                <mat-autocomplete #auto="matAutocomplete"
+                                  [displayWith]="displayCommit.bind(this)"
+                                  (optionSelected)="selectCommit($event.option.value)">
                   @for (commit of filteredCommits; track getCommitSha(commit)) {
                     <mat-option [value]="commit">
                       <div class="commit-option">
@@ -68,103 +58,100 @@
                 </mat-autocomplete>
               </mat-form-field>
 
-              <div class="commit-scroll-area">
-
-                @if (isGitHubLoading()) {
-                  <div class="d-inline-flex align-items-center mt-2">
-                    Carregando informações do commit no GitHub...
-                    <mat-spinner class="ms-2" diameter="20"></mat-spinner>
-                  </div>
-                }
-
-                @if (selectedCommit && !isGitHubLoading()) {
-                  <div class="commit-details p-3 bg-dark rounded">
+              <div class="ai-scroll commits">
+                @if (selectedCommit) {
+                  <div class="ai-panel commit-card">
                     <div class="commit-detail-row">
                       <mat-icon class="commit-detail-icon">person</mat-icon>
                       <span class="commit-detail-label">Autor:</span>
                       <span class="commit-detail-value">{{ getCommitAuthor(selectedCommit) }}</span>
                     </div>
-                    <div class="commit-detail-row mt-1">
+                    <div class="commit-detail-row">
                       <mat-icon class="commit-detail-icon">schedule</mat-icon>
                       <span class="commit-detail-label">Data:</span>
                       <span class="commit-detail-value">{{ getCommitDate(selectedCommit) }}</span>
                     </div>
-                    <div class="commit-detail-row mt-1">
+                    <div class="commit-detail-row">
                       <mat-icon class="commit-detail-icon">tag</mat-icon>
                       <span class="commit-detail-label">SHA:</span>
                       <span class="commit-detail-value commit-sha-full">{{ getCommitSha(selectedCommit).substring(0, 12) }}</span>
                     </div>
-                    <div class="commit-detail-row mt-2">
-                      <mat-icon class="commit-detail-icon">message</mat-icon>
-                      <span class="commit-detail-label">Mensagem:</span>
-                    </div>
-                    <div class="commit-message-text mt-1">{{ getCommitTitle(selectedCommit) }}</div>
+                    <div class="commit-message-text">{{ getCommitTitle(selectedCommit) }}</div>
                     @if (getCommitDescription(selectedCommit)) {
-                      <div class="commit-body-text mt-1">{{ getCommitDescription(selectedCommit) }}</div>
+                      <div class="commit-body-text">{{ getCommitDescription(selectedCommit) }}</div>
                     }
+                  </div>
+                }
 
-                    @if (!githubCommitDiff) {
-                      <div class="d-flex justify-content-end mt-3">
-                        <button mat-raised-button color="primary" (click)="advanceToAI()">
-                          <mat-icon>search</mat-icon>
-                          Buscar Diff
-                        </button>
-                      </div>
-                    }
+                @if (isGitHubLoading()) {
+                  <div class="ai-loading">
+                    <mat-spinner diameter="20"></mat-spinner>
+                    <span>Carregando o diff do commit...</span>
                   </div>
                 }
 
                 @if (githubCommitDiff) {
-                  <div class="diff-viewer-container mt-3">
+                  <div class="diff-viewer-container">
                     <app-git-diff-viewer [commitData]="githubCommitDiff"></app-git-diff-viewer>
                   </div>
-
                 }
 
+                @if (!selectedCommit && !isGitHubLoading()) {
+                  <div class="ai-empty">
+                    <mat-icon>commit</mat-icon>
+                    <span>Selecione um commit para carregar o diff das alterações.</span>
+                  </div>
+                }
               </div>
             }
-
           </ng-template>
         </mat-step>
-        <mat-step [editable]="false" >
-          <ng-template matStepLabel>Gerar com IA</ng-template>
+
+        <!-- Etapa 2: resultado -->
+        <mat-step [editable]="false">
+          <ng-template matStepLabel>Resultado</ng-template>
           <ng-template matStepContent>
-            @if(isAiLoading()){
-              <div class="d-inline-flex align-items-center">
-                Gerando seu texto de Pull Request com IA...
-                <mat-spinner class="ms-2" diameter="20"></mat-spinner>
+            @if (isAiLoading()) {
+              <div class="ai-generating">
+                <mat-spinner diameter="40"></mat-spinner>
+                <h3>Gerando conteúdo com IA...</h3>
+                <p>Analisando o card e o diff do commit para montar a descrição e o RCA.</p>
               </div>
             }
 
-            @if(!isAiLoading() && generatedText) {
-              <div class="generated-content mt-3">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                  <h4 class="mb-0">Texto Gerado:</h4>
+            @if (!isAiLoading() && generatedText) {
+              <div class="ai-section">
+                <div class="ai-section-label success">
+                  <mat-icon>check_circle</mat-icon>
+                  <span>Conteúdo gerado — já aplicado nos campos de Descrição e Root Cause</span>
                 </div>
-                <div class="markdown-viewer p-3 bg-dark rounded"
-                     style="max-height: calc(100vh - 400px); overflow-y: auto;"
-                     [innerHTML]="generatedText | safeHtml">
-                </div>
+                <div class="ai-panel ai-scroll markdown-viewer" [innerHTML]="generatedText | safeHtml"></div>
               </div>
             }
           </ng-template>
         </mat-step>
       </mat-stepper>
-
     }
-
-
   </mat-dialog-content>
 
-  <mat-dialog-actions class="dialog-footer">
-    <button matButton (click)="onClose()">Fechar</button>
+  <!-- Footer fixo/flutuante com as ações da etapa -->
+  <mat-dialog-actions class="ai-footer">
+    <button mat-button (click)="onClose()">Fechar</button>
+    <span class="ai-footer-spacer"></span>
 
-    @if (githubCommitDiff) {
-      <button mat-raised-button color="primary" (click)="goToGenerateWithAI()">
-        <mat-icon>auto_awesome</mat-icon>
-        Avançar para Gerar com IA
+    @if (currentStep() === 0) {
+      <button mat-flat-button color="primary"
+              [disabled]="!githubCommitDiff || isGitHubLoading() || !showCardDetails()"
+              (click)="goToGenerateWithAI()">
+        <mat-icon>auto_awesome</mat-icon> Gerar com IA
+      </button>
+    } @else if (currentStep() === 1 && generatedText && !isAiLoading()) {
+      <button mat-stroked-button (click)="copyPromptToClipboard()">
+        <mat-icon>content_copy</mat-icon> Copiar
+      </button>
+      <button mat-flat-button color="primary" (click)="onClose()">
+        <mat-icon>done</mat-icon> Concluir
       </button>
     }
-
   </mat-dialog-actions>
 </div>

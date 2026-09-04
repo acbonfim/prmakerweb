@@ -47,11 +47,11 @@ interface UserFormData {
           <input matInput [ngModel]="fullName()" (ngModelChange)="fullName.set($event)" name="fullName" required>
         </mat-form-field>
 
-        <mat-form-field appearance="outline">
+        <mat-form-field appearance="outline" *ngIf="isEdit">
           <mat-label>Usuário</mat-label>
           <input matInput [ngModel]="userName()" (ngModelChange)="userName.set($event)"
-                 name="userName" [readonly]="isEdit" required>
-          <mat-hint *ngIf="isEdit">O nome de usuário não pode ser alterado</mat-hint>
+                 name="userName" readonly>
+          <mat-hint>O nome de usuário não pode ser alterado</mat-hint>
         </mat-form-field>
 
         <mat-form-field appearance="outline">
@@ -82,20 +82,10 @@ interface UserFormData {
           </div>
         </div>
 
-        <ng-container *ngIf="!isEdit">
-          <mat-form-field appearance="outline">
-            <mat-label>Senha</mat-label>
-            <input matInput type="password" [ngModel]="password()" (ngModelChange)="password.set($event)"
-                   name="password" required>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline">
-            <mat-label>Confirmar senha</mat-label>
-            <input matInput type="password" [ngModel]="confirmPassword()" (ngModelChange)="confirmPassword.set($event)"
-                   name="confirmPassword" required>
-            <mat-error *ngIf="confirmPassword() && password() !== confirmPassword()">As senhas não conferem</mat-error>
-          </mat-form-field>
-        </ng-container>
+        <div *ngIf="!isEdit" class="create-note">
+          <mat-icon>mail</mat-icon>
+          <span>O usuário definirá a própria senha no primeiro acesso, pelo link enviado ao e-mail informado.</span>
+        </div>
       </div>
     </mat-dialog-content>
 
@@ -117,6 +107,13 @@ interface UserFormData {
     .roles-block { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 16px; }
     .roles-title { font-size: 12px; opacity: 0.75; }
     .roles-list { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+    .create-note {
+      display: flex; gap: 8px; align-items: flex-start; font-size: 13px;
+      color: var(--mat-sys-on-surface); opacity: 0.9;
+      background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
+      border-radius: 8px; padding: 10px 12px; margin-top: 4px;
+    }
+    .create-note mat-icon { color: var(--mat-sys-primary); font-size: 20px; width: 20px; height: 20px; }
     button mat-spinner { display: inline-block; }
   `]
 })
@@ -129,8 +126,6 @@ export class UserFormDialogComponent implements OnInit {
   email = signal('');
   departamento = signal('');
   role = signal('');
-  password = signal('');
-  confirmPassword = signal('');
   selectedRoles = signal<string[]>([]);
 
   private id = 0;
@@ -140,9 +135,8 @@ export class UserFormDialogComponent implements OnInit {
     if (this.isEdit) {
       return !!this.fullName() && !!this.email();
     }
-    return !!this.fullName() && !!this.userName() && !!this.email()
-      && !!this.role() && !!this.password()
-      && this.password() === this.confirmPassword();
+    // Na criação não há usuário/senha: o usuário define a senha no primeiro acesso.
+    return !!this.fullName() && !!this.email() && !!this.role();
   });
 
   constructor(
@@ -190,19 +184,22 @@ export class UserFormDialogComponent implements OnInit {
     this.loading.set(true);
 
     if (!this.isEdit) {
+      const email = this.email().trim();
       const payload = {
         fullName: this.fullName(),
-        userName: this.userName(),
-        email: this.email(),
+        // Sem campo de usuário/senha: username = e-mail; senha temporária forte.
+        // O usuário definirá a própria senha no primeiro acesso (link por e-mail).
+        userName: email,
+        email: email,
         departamento: this.departamento(),
         role: this.role(),
-        password: this.password(),
+        password: this.generateTempPassword(),
         companyId: 1,
         imagemUrlUser: '',
         channelOrigin: 'WEB'
       };
       this._authService.register(payload as any).subscribe({
-        next: () => this.done('Usuário criado com sucesso'),
+        next: () => this.done('Usuário criado. Um e-mail de primeiro acesso foi enviado.'),
         error: (err) => this.fail(err)
       });
       return;
@@ -241,6 +238,20 @@ export class UserFormDialogComponent implements OnInit {
     this.loading.set(false);
     const msg = err?.error?.message || err?.error?.Message || 'Erro ao salvar usuário';
     this._globalService.sendAlertError(msg, 'OK');
+  }
+
+  // Senha temporária forte (atende às regras do Identity). Nunca é exibida:
+  // serve só para criar o usuário; a senha real é definida no primeiro acesso.
+  private generateTempPassword(): string {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghijkmnpqrstuvwxyz';
+    const digit = '23456789';
+    const special = '!@#$%&*?';
+    const all = upper + lower + digit + special;
+    const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+    let pass = pick(upper) + pick(lower) + pick(digit) + pick(special);
+    for (let i = 0; i < 12; i++) pass += pick(all);
+    return pass;
   }
 
   close(): void {

@@ -86,7 +86,7 @@ interface AlertDefinition {
       gap: 10px;
       margin: 12px 4px 0 4px;
       padding: 8px 14px;
-      background-color: #2f2f2f;
+      background-color: var(--surface-2, #2f2f2f);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 10px;
       box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);

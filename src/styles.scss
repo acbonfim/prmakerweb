@@ -44,3 +44,226 @@ body {
 
 html, body { height: 100%; }
 body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
+
+/* ──────────────────────────────────────────────────────────────
+   Menus do sistema (overlays do CDK → estilizados globalmente via
+   panelClass). Base compartilhada "app-menu" + "profile-menu".
+   Mesma linguagem visual do resto da interface.
+   ────────────────────────────────────────────────────────────── */
+.mat-mdc-menu-panel.app-menu,
+.mat-mdc-menu-panel.profile-menu {
+  min-width: 220px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #232323;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+
+  .mat-mdc-menu-content {
+    padding: 6px;
+  }
+
+  /* Itens (base neutra — preserva ícones coloridos existentes) */
+  .mat-mdc-menu-item {
+    border-radius: 10px;
+    min-height: 44px;
+    color: var(--mat-sys-on-surface);
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+
+  .mat-mdc-menu-item:hover:not([disabled]) {
+    background: color-mix(in srgb, var(--mat-sys-on-surface) 9%, transparent);
+  }
+}
+
+/* ── Menu de perfil do topo: cabeçalho de conta + acentos ── */
+.mat-mdc-menu-panel.profile-menu {
+  min-width: 240px;
+
+  /* Cabeçalho com avatar + nome do usuário */
+  .pm-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 12px 12px 10px;
+    margin-bottom: 6px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--mat-sys-on-surface) 5%, transparent);
+    cursor: default;
+  }
+
+  .pm-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+
+    img { width: 100%; height: 100%; object-fit: cover; }
+  }
+
+  .pm-info { display: flex; flex-direction: column; min-width: 0; }
+
+  .pm-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mat-sys-on-surface);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pm-sub {
+    font-size: 12px;
+    color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Itens */
+  .mat-mdc-menu-item {
+    border-radius: 10px;
+    min-height: 44px;
+    color: var(--mat-sys-on-surface);
+    transition: background 0.18s ease, color 0.18s ease;
+
+    .mat-icon {
+      color: color-mix(in srgb, var(--mat-sys-on-surface) 70%, transparent);
+      transition: color 0.18s ease;
+    }
+
+    &:hover:not([disabled]) {
+      background: color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+      color: var(--mat-sys-primary);
+
+      .mat-icon { color: var(--mat-sys-primary); }
+    }
+  }
+
+  /* Ação destrutiva (Sair) */
+  .pm-danger:hover:not([disabled]) {
+    background: color-mix(in srgb, #ef5350 16%, transparent);
+    color: #ff6b67;
+
+    .mat-icon { color: #ff6b67; }
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   Menus do PrimeNG (SplitButton → TieredMenu) na tela de register.
+   Mesma linguagem visual dos mat-menu do sistema.
+   ────────────────────────────────────────────────────────────── */
+
+/* Overlay do dropdown (menu de itens do split button) */
+.p-tieredmenu.p-tieredmenu-overlay {
+  min-width: 210px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #232323;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  color: var(--mat-sys-on-surface);
+}
+
+.p-tieredmenu .p-tieredmenu-item-content {
+  border-radius: 10px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.p-tieredmenu .p-tieredmenu-item-link {
+  padding: 10px 12px;
+  gap: 10px;
+  color: var(--mat-sys-on-surface);
+}
+
+.p-tieredmenu .p-tieredmenu-item-icon {
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 70%, transparent);
+}
+
+.p-tieredmenu .p-tieredmenu-item-label {
+  font-size: 14px;
+}
+
+/* Hover: acento na cor primária do tema */
+.p-tieredmenu .p-tieredmenu-item:not(.p-disabled) > .p-tieredmenu-item-content:hover {
+  background: color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+  color: var(--mat-sys-primary);
+}
+
+.p-tieredmenu .p-tieredmenu-item:not(.p-disabled) > .p-tieredmenu-item-content:hover .p-tieredmenu-item-icon,
+.p-tieredmenu .p-tieredmenu-item:not(.p-disabled) > .p-tieredmenu-item-content:hover .p-tieredmenu-item-label {
+  color: var(--mat-sys-primary);
+}
+
+.p-tieredmenu .p-tieredmenu-separator {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 6px 4px;
+}
+
+/* Botão gatilho (SplitButton "Copiar") — igual aos mat-raised-button vizinhos,
+   que usam --mat-sys-surface de fundo e --mat-sys-primary no texto. */
+.p-splitbutton .p-splitbutton-button,
+.p-splitbutton .p-splitbutton-dropdown {
+  background: var(--mat-sys-surface);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--mat-sys-primary);
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.p-splitbutton .p-splitbutton-button:not(:disabled):hover,
+.p-splitbutton .p-splitbutton-dropdown:not(:disabled):hover {
+  background: color-mix(in srgb, var(--mat-sys-primary) 10%, var(--mat-sys-surface));
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* =========================================================================
+   Tema visual da aplicação: fundo em gradiente (igual ao login) +
+   paleta de superfícies puxada discretamente para o azul.
+   Aplicado em todas as telas e componentes.
+   ========================================================================= */
+
+/* Paleta de superfícies azuladas (usadas via var(--surface-*, <cinza>) nos componentes). */
+:root {
+  --surface-1: #262b33;      /* cards / painéis        (era #2a2a2a) */
+  --surface-2: #2e343f;      /* cabeçalhos de painel   (era #323232) */
+  --surface-3: #212730;      /* header/rodapé da tela  (era #252525) */
+  --surface-input: #1a1f28;  /* inputs / toggles       (era #1f1f1f) */
+}
+
+/* Fundo em gradiente para toda a área autenticada. */
+.page-container {
+  background: radial-gradient(1200px 600px at 50% -10%, #1e3a5f 0%, #14181d 55%, #0e1013 100%) !important;
+}
+
+.page-container .top-bar,
+.page-container .main-content,
+.page-container .content-area,
+.page-container .sidebar {
+  background: transparent !important;
+}
+
+/* Superfícies do Material (diálogos, cards preenchidos) alinhadas à paleta. */
+.mat-mdc-dialog-surface {
+  background-color: var(--surface-1) !important;
+}
+
+.mat-mdc-card:not(.mat-mdc-card-outlined) {
+  background-color: var(--surface-1);
+}
+/* ===================== FIM DO TESTE DE FUNDO ============================= */
+
+/* ──────────────────────────────────────────────────────────────
+   Modal "Gerar com IA" — o shell (header/conteúdo/footer) controla o
+   próprio padding, então zeramos o padding da surface e arredondamos,
+   para o footer ficar realmente colado embaixo.
+   ────────────────────────────────────────────────────────────── */
+.ai-dialog-panel .mat-mdc-dialog-surface {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 16px;
+}

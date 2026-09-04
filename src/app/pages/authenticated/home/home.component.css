@@ -1,10 +1,21 @@
+:host {
+  display: block;
+  color: var(--mat-sys-on-surface);
+}
+
 .home-container {
-  padding: 28px 32px;
+  padding: 20px 24px;
   max-width: 1200px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 18px;
+}
+
+.home-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* ── Hero ── */
@@ -13,9 +24,9 @@
   justify-content: space-between;
   align-items: center;
   background: linear-gradient(135deg, #1565c0 0%, #0d47a1 100%);
-  border-radius: 16px;
-  padding: 32px 40px;
-  color: white;
+  border-radius: 14px;
+  padding: 24px 32px;
+  color: #fff;
   overflow: hidden;
   position: relative;
 }
@@ -23,12 +34,12 @@
 .hero-text {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   z-index: 1;
 }
 
 .greeting {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   margin: 0;
   line-height: 1.2;
@@ -40,136 +51,55 @@
 
 .current-date {
   font-size: 14px;
-  opacity: 0.8;
+  opacity: 0.85;
   margin: 0;
   text-transform: capitalize;
 }
 
 .subtitle {
-  font-size: 16px;
+  font-size: 15px;
   opacity: 0.9;
-  margin: 8px 0 0 0;
+  margin: 6px 0 0 0;
 }
 
 .hero-decoration {
   position: absolute;
   right: 32px;
-  opacity: 0.08;
+  opacity: 0.1;
 }
 
 .hero-icon {
-  font-size: 160px;
-  width: 160px;
-  height: 160px;
-  color: white;
+  font-size: 150px;
+  width: 150px;
+  height: 150px;
+  color: #fff;
 }
 
-/* ── Banner de Saldo ── */
-.balance-banner {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  padding: 20px 28px;
-  flex-wrap: wrap;
-}
-
-.balance-banner-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 15px;
-  color: #374151;
-  white-space: nowrap;
-}
-
-.balance-banner-title mat-icon {
-  color: #e65100;
-}
-
-.balance-stats {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  flex: 1;
-}
-
-.balance-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 60px;
-}
-
-.stat-value {
-  font-size: 26px;
-  font-weight: 700;
-  color: #1565c0;
-  line-height: 1;
-}
-
-.stat-value.used {
-  color: #e65100;
-}
-
-.stat-value.remaining {
-  color: #2e7d32;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: #6b7280;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.balance-divider {
-  width: 1px;
-  height: 36px;
-  background: #e0e0e0;
-}
-
-.balance-action-btn {
-  margin-left: auto;
-  white-space: nowrap;
-  color: #1565c0 !important;
-  border-color: #1565c0 !important;
-}
-
-.balance-action-btn mat-icon {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
-  margin-right: 4px;
-}
-
-/* ── Section header ── */
+/* ── Cabeçalho de seção (linguagem visual de register / gestão de usuários) ── */
 .section-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
+  background-color: var(--surface-3, #252525);
+  border-radius: 10px;
+  padding: 10px 16px;
 }
+
+.header-icon { color: var(--mat-sys-primary); }
 
 .section-title {
   font-size: 18px;
-  font-weight: 600;
-  color: #111827;
-  margin: 0;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
 }
 
 .section-subtitle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin-left: auto;
   font-size: 13px;
-  color: #6a1b9a;
+  color: var(--mat-sys-primary);
   font-weight: 500;
 }
 
@@ -183,17 +113,17 @@
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .quick-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 20px;
+  gap: 14px;
+  background: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 16px;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   position: relative;
@@ -208,14 +138,14 @@
   bottom: 0;
   width: 4px;
   background: var(--card-color);
-  border-radius: 12px 0 0 12px;
+  border-radius: 10px 0 0 10px;
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
 .quick-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   border-color: var(--card-color);
 }
 
@@ -248,13 +178,14 @@
 .card-title {
   font-size: 15px;
   font-weight: 600;
-  color: #111827;
+  color: var(--mat-sys-on-surface);
   margin: 0 0 4px 0;
 }
 
 .card-description {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--mat-sys-on-surface);
+  opacity: 0.65;
   margin: 0;
   line-height: 1.4;
   display: -webkit-box;
@@ -265,8 +196,9 @@
 
 .card-arrow {
   flex-shrink: 0;
-  color: #d1d5db;
-  transition: color 0.15s, transform 0.15s;
+  color: var(--mat-sys-on-surface);
+  opacity: 0.35;
+  transition: color 0.15s, transform 0.15s, opacity 0.15s;
   font-size: 20px;
   width: 20px;
   height: 20px;
@@ -274,18 +206,126 @@
 
 .quick-card:hover .card-arrow {
   color: var(--card-color);
+  opacity: 1;
   transform: translateX(3px);
+}
+
+/* ── Banner de Saldo (Férias) ── */
+.balance-banner {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  background: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 18px 24px;
+  flex-wrap: wrap;
+}
+
+.balance-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--mat-sys-on-surface);
+  white-space: nowrap;
+}
+
+.balance-banner-title mat-icon {
+  color: #ffa726;
+}
+
+.balance-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+}
+
+.balance-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 60px;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--mat-sys-primary);
+  line-height: 1;
+}
+
+.stat-value.used {
+  color: #ffa726;
+}
+
+.stat-value.remaining {
+  color: #66bb6a;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--mat-sys-on-surface);
+  opacity: 0.6;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.balance-divider {
+  width: 1px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.balance-action-btn {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.balance-action-btn mat-icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+}
+
+/* ── Skeleton shimmer (mesmo padrão de gestão de usuários) ── */
+.skeleton-card { pointer-events: none; }
+
+.sk {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.12) 37%,
+    rgba(255, 255, 255, 0.05) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.sk-balance-title { height: 18px; width: 160px; }
+.sk-balance-stat { height: 34px; width: 64px; border-radius: 8px; }
+.sk-balance-btn { height: 36px; width: 150px; margin-left: auto; border-radius: 18px; }
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
 }
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .home-container {
     padding: 16px;
-    gap: 20px;
+    gap: 14px;
   }
 
   .hero-section {
-    padding: 24px 20px;
+    padding: 20px;
   }
 
   .greeting {

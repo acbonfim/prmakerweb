@@ -1,39 +1,100 @@
-mat-list-item {
-  height: auto !important;
+:host {
+  display: block;
+  color: var(--mat-sys-on-surface);
 }
 
-mat-list-item .mat-list-item-content {
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px;
-  padding: 0 16px !important;
+.side-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.menu-item-container {
+/* ── Item de navegação ── */
+.nav-item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
   width: 100%;
-}
-
-.active-route {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.active-route .mat-icon {
-  color: #007bff;
-}
-
-.active-route span {
-  color: #007bff;
+  padding: 11px 14px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 72%, transparent);
+  font: inherit;
+  font-size: 14px;
   font-weight: 500;
-}
-
-mat-list-item {
+  text-align: left;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  overflow: hidden;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
-mat-list-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+.nav-item:hover {
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent);
+  color: var(--mat-sys-on-surface);
+}
+
+.nav-item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mat-sys-primary) 60%, transparent);
+  outline-offset: -2px;
+}
+
+.nav-item.active {
+  background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent);
+  color: var(--mat-sys-primary);
+}
+
+/* Indicador lateral que desliza ao ativar */
+.nav-indicator {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 62%;
+  border-radius: 0 3px 3px 0;
+  background: var(--mat-sys-primary);
+  transform: translateY(-50%) scaleY(0);
+  transform-origin: center;
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-item.active .nav-indicator {
+  transform: translateY(-50%) scaleY(1);
+}
+
+.nav-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  font-size: 22px;
+  color: inherit;
+  transition: transform 0.2s ease;
+}
+
+.nav-item:hover .nav-icon {
+  transform: translateX(1px) scale(1.05);
+}
+
+.nav-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: labelIn 0.25s ease;
+}
+
+@keyframes labelIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ── Modo colapsado: ícones centralizados ── */
+.side-nav.collapsed .nav-item {
+  justify-content: center;
+  gap: 0;
+  padding: 12px;
+}
+
+.side-nav.collapsed .nav-item:hover .nav-icon {
+  transform: scale(1.1);
 }

@@ -12,7 +12,8 @@ export const environment =
     apiKeyWS: '123456789',
     urlWs: `${host}/ws/`,
     secretKey: 'as8&6ahh$#oa(23)K8t$#',
-    urlApiAuth: `${hostAuth}/api/`,
+    //urlApiAuth: `${hostAuth}/api/`,
+    urlApiAuth: `http://localhost:2023/api/`,
     title: 'Title test',
     // Integração com o Teams (login MSAL do próprio usuário para importar mensagens).
     // Fica inerte enquanto clientId estiver vazio (aguardando o app SPA + consentimento do admin).

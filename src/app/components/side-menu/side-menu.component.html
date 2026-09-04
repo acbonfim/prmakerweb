@@ -1,14 +1,22 @@
-<mat-nav-list>
-  @for (item of menu; track item) { @if (isMenuItemVisible(item)) {
-    <mat-list-item
-      class="pt-2 pb-2"
-      [class.active-route]="isActiveRoute(item.link)"
-      (click)="navigateTo(item.link)">
-      <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
-      @if (!isCollapsed) {
-        <span matListItemTitle>{{ item.label }}</span>
-      }
-    </mat-list-item>
-    <mat-divider class="mb-2 mt-2" style="border-top-color: rgb(33,33,33)"></mat-divider>
-  } }
-</mat-nav-list>
+<nav class="side-nav" [class.collapsed]="isCollapsed">
+  @for (item of menu; track item.link) {
+    @if (isMenuItemVisible(item)) {
+      <button
+        type="button"
+        class="nav-item"
+        [class.active]="isActiveRoute(item.link)"
+        (click)="navigateTo(item.link)"
+        [matTooltip]="isCollapsed ? item.label : ''"
+        matTooltipPosition="right"
+        [attr.aria-label]="item.label"
+        [attr.aria-current]="isActiveRoute(item.link) ? 'page' : null"
+      >
+        <span class="nav-indicator" aria-hidden="true"></span>
+        <mat-icon class="nav-icon">{{ item.icon }}</mat-icon>
+        @if (!isCollapsed) {
+          <span class="nav-label">{{ item.label }}</span>
+        }
+      </button>
+    }
+  }
+</nav>

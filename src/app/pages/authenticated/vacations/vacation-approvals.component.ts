@@ -242,7 +242,7 @@ import { ShowLoadComponent } from '../../../components/showLoad/showLoad.compone
 
     .note {
       padding: 8px;
-      background: #323232;
+      background: var(--surface-2, #323232);
       border-radius: 4px;
       font-size: 13px;
     }

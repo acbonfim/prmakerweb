@@ -50,7 +50,12 @@ export class AuthInterceptor implements HttpInterceptor {
 
       let token = this.storageService.getAccess().accessToken;
 
-      if (token !== null) {
+      // Endpoints de autenticação (login/refresh) NÃO devem disparar o fluxo de
+      // "sessão expirada": um 401 aqui significa credencial inválida, tratado na
+      // própria tela de login. Sem isso, a senha errada mostrava "Sessão encerrada".
+      const isAuthEndpoint = /oauth\/login|user\/refreshtoken/i.test(req.url);
+
+      if (token && !isAuthEndpoint) {
         const cloneReq = req.clone({
           headers: req.headers.set('Authorization', `Bearer ${token}`)
         });

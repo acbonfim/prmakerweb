@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import {Component} from '@angular/core';
 import {AuthGuard} from '../../../auth/auth.guard';
+import {AdminGuard} from '../../../auth/admin.guard';
 import {PageContainerComponent} from '../../../components/page-container/page-container.component';
 
 export const USER_ROUTES: Routes = [
@@ -12,7 +13,7 @@ export const USER_ROUTES: Routes = [
       },
       {
         path: 'manager',
-        canActivate: [AuthGuard],
+        canActivate: [AuthGuard, AdminGuard],
         loadComponent: () => import('./manager/manager.component').then(m => m.ManagerComponent)
       },
       {

@@ -1,7 +1,7 @@
 <div>
   <mat-card appearance="outlined"  >
     <mat-card-header class="p-3"
-                     style="background-color: #252525; border-radius: 10px">
+                     style="background-color: var(--surface-3, #252525); border-radius: 10px">
       <mat-card-title class="" style="display: flex; align-items: center; gap: 8px;">
         <mat-icon>hub</mat-icon>
         Plugins
@@ -80,7 +80,7 @@
 
 
 
-<mat-menu #actionsMenu="matMenu" yPosition="above">
+<mat-menu #actionsMenu="matMenu" class="app-menu" yPosition="above">
   <ng-template matMenuContent let-name="name" >
     <button class="" mat-menu-item
     (click)="openDialogEdit(name, 'url')">

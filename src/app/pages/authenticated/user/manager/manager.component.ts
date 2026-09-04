@@ -16,6 +16,7 @@ import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserFormDialogComponent } from '../dialogs/user-form-dialog.component';
 import { UserServicesDialogComponent } from '../dialogs/user-services-dialog.component';
 import { ApiKeyDialogComponent } from '../dialogs/api-key-dialog.component';
+import { UserAvatarComponent } from '../../../../components/user-avatar/user-avatar.component';
 
 @Component({
   selector: 'app-manager',
@@ -30,7 +31,8 @@ import { ApiKeyDialogComponent } from '../dialogs/api-key-dialog.component';
     MatSlideToggleModule,
     MatTooltipModule,
     MatInputModule,
-    MatButtonModule
+    MatButtonModule,
+    UserAvatarComponent
   ]
 })
 export class ManagerComponent implements OnInit {
@@ -118,7 +120,7 @@ export class ManagerComponent implements OnInit {
       this.loadingMore.set(true);
     }
 
-    this._authService.getAllUsers(page, 6, this.filterName()).subscribe({
+    this._authService.getAllUsers(page, 10, this.filterName()).subscribe({
       next: (res: any) => {
         const data = res?.object ?? res?.Object ?? {};
         const elements = data.elements ?? [];
@@ -164,6 +166,38 @@ export class ManagerComponent implements OnInit {
     this.dialog.open(UserServicesDialogComponent, {
       width: '620px',
       data: { user }
+    });
+  }
+
+  emailingId = signal<number | null>(null);
+
+  resendWelcome(user: any) {
+    this.emailingId.set(user.id);
+    this._authService.sendWelcomeEmail(user.userName).subscribe({
+      next: () => {
+        this.emailingId.set(null);
+        this._globalService.sendAlert(`E-mail de boas-vindas enviado para ${user.userName}`, 'OK');
+      },
+      error: (err) => {
+        this.emailingId.set(null);
+        const msg = err?.error?.message || err?.error?.Message || 'Erro ao enviar e-mail';
+        this._globalService.sendAlertError(msg, 'OK');
+      }
+    });
+  }
+
+  resetPassword(user: any) {
+    this.emailingId.set(user.id);
+    this._authService.sendResetPasswordEmail(user.userName).subscribe({
+      next: () => {
+        this.emailingId.set(null);
+        this._globalService.sendAlert(`E-mail de redefinição de senha enviado para ${user.userName}`, 'OK');
+      },
+      error: (err) => {
+        this.emailingId.set(null);
+        const msg = err?.error?.message || err?.error?.Message || 'Erro ao enviar e-mail';
+        this._globalService.sendAlertError(msg, 'OK');
+      }
     });
   }
 

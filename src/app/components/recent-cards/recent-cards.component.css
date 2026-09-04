@@ -1,0 +1,154 @@
+:host {
+  display: block;
+  color: var(--mat-sys-on-surface);
+}
+
+/* ── Cabeçalho (mesma linguagem visual de register / gestão de usuários) ── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--surface-3, #252525);
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+}
+
+.header-icon { color: var(--mat-sys-primary); }
+
+.section-title {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.header-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  font-size: 12px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+/* ── Lista ── */
+.recent-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+/* Scroll vertical quando há muitos cards (~10). */
+.recent-list.scrollable {
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.recent-list.scrollable::-webkit-scrollbar { width: 8px; }
+.recent-list.scrollable::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 18%, transparent);
+  border-radius: 8px;
+}
+
+.recent-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.recent-card:hover {
+  border-color: color-mix(in srgb, var(--mat-sys-primary) 55%, transparent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transform: translateY(-2px);
+}
+
+.recent-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mat-sys-primary) 22%, transparent);
+}
+
+.recent-card-icon mat-icon { color: var(--mat-sys-primary); }
+
+.recent-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.recent-card-number {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--mat-sys-primary);
+}
+
+.recent-card-desc {
+  font-size: 0.85rem;
+  color: var(--mat-sys-on-surface);
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-card-repo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: var(--mat-sys-on-surface);
+  opacity: 0.55;
+}
+
+.recent-card-repo mat-icon {
+  font-size: 14px;
+  width: 14px;
+  height: 14px;
+}
+
+.recent-card-arrow {
+  color: var(--mat-sys-on-surface);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
+/* ── Skeleton shimmer (mesmo padrão de gestão de usuários) ── */
+.skeleton-card { pointer-events: none; cursor: default; }
+
+.sk {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.12) 37%,
+    rgba(255, 255, 255, 0.05) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.sk-icon { width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0; }
+.sk-title { height: 16px; width: 45%; margin-bottom: 8px; }
+.sk-line { height: 12px; width: 80%; }
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}

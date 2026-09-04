@@ -9,6 +9,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { StorageService } from '../../../services/storage.service';
 import { VacationService } from '../../../services/vacation.service';
 import { VacationBalance } from '../vacations/models/vacation.model';
+import { RecentCardsComponent } from '../../../components/recent-cards/recent-cards.component';
 
 interface QuickAccessCard {
   title: string;
@@ -18,6 +19,7 @@ interface QuickAccessCard {
   color: string;
   bgColor: string;
   adminOnly?: boolean;
+  admin?: boolean;
   badge?: string;
 }
 
@@ -33,6 +35,7 @@ interface QuickAccessCard {
     MatIconModule,
     MatDividerModule,
     MatChipsModule,
+    RecentCardsComponent,
   ],
 })
 export class HomeComponent implements OnInit {
@@ -43,6 +46,7 @@ export class HomeComponent implements OnInit {
 
   currentUser: any = null;
   isManager = false;
+  isAdmin = false;
   greeting = '';
   currentDate = '';
   activeBalances: VacationBalance[] = [];
@@ -56,14 +60,6 @@ export class HomeComponent implements OnInit {
       route: '/auth/register',
       color: '#1565c0',
       bgColor: '#e3f2fd',
-    },
-    {
-      title: 'Ambientes Clientes',
-      description: 'Visualize e gerencie ambientes de implantação e acessos dos clientes.',
-      icon: 'cloud',
-      route: '/auth/client-access',
-      color: '#00695c',
-      bgColor: '#e0f2f1',
     },
     {
       title: 'Férias',
@@ -88,6 +84,7 @@ export class HomeComponent implements OnInit {
       route: '/auth/plugin-manager',
       color: '#4527a0',
       bgColor: '#ede7f6',
+      admin: true,
     },
     {
       title: 'Aprovar Férias',
@@ -105,12 +102,12 @@ export class HomeComponent implements OnInit {
       route: '/auth/user/manager',
       color: '#37474f',
       bgColor: '#eceff1',
-      adminOnly: true,
+      admin: true,
     },
   ];
 
   get visibleCards(): QuickAccessCard[] {
-    return this.allCards.filter(c => !c.adminOnly || this.isManager);
+    return this.allCards.filter(c => (!c.adminOnly || this.isManager) && (!c.admin || this.isAdmin));
   }
 
   get totalAvailable(): number {
@@ -139,6 +136,7 @@ export class HomeComponent implements OnInit {
         const payload = JSON.parse(atob(token.split('.')[1]));
         const roles = Array.isArray(payload.role) ? payload.role : [payload.role];
         this.isManager = roles.includes('gestor') || roles.includes('admin');
+        this.isAdmin = roles.includes('admin');
       } catch {}
     }
   }

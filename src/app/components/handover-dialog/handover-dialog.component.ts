@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClient } from '@angular/common/http';
 import { marked } from 'marked';
 import { firstValueFrom } from 'rxjs';
@@ -38,6 +39,7 @@ import { GdsService } from '../../services/gds.service';
     MatProgressSpinnerModule,
     MatTooltipModule,
     MatSlideToggleModule,
+    MatSnackBarModule,
     SafeHtmlPipe,
   ],
 })
@@ -48,6 +50,7 @@ export class HandoverDialogComponent implements OnInit {
   private clipboard = inject(CliipboardService);
   private gds = inject(GdsService);
   private cdr = inject(ChangeDetectorRef);
+  private snackBar = inject(MatSnackBar);
 
   private urlBase = environment.apiUrl;
 
@@ -127,6 +130,12 @@ export class HandoverDialogComponent implements OnInit {
       this.applyContent(content, saved?.updatedAt || saved?.createdAt);
     } catch (e) {
       console.error('Erro ao gerar handover', e);
+      this.snackBar.open('Falha ao gerar o handover. Tente novamente.', 'Ok', {
+        direction: 'ltr',
+        horizontalPosition: 'right',
+        verticalPosition: 'top',
+        duration: 6000,
+      });
     } finally {
       this.generating.set(false);
       this.cdr.detectChanges();

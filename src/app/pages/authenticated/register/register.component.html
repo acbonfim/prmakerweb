@@ -1,96 +1,96 @@
-<div class="pr-root">
-  <mat-card appearance="outlined">
-    <mat-card-header class="p-3"
-                     style="background-color: #252525; border-radius: 10px">
-      <mat-card-title class="" style="display: flex; align-items: center; gap: 8px; width: 100%;">
-        <mat-icon>merge</mat-icon>
-        Gerenciamento de tratamento do card
-        @if (cardFull) {
-          <app-card-alert-bar
-            style="margin-left: auto;"
-            [inline]="true"
-            [alerts]="cardFull.alerts"></app-card-alert-bar>
+<div class="page-header" [class.page-header--alert]="hasCardNonConformity">
+  <mat-icon class="header-icon">merge</mat-icon>
+  <span class="header-title">Gerenciamento de tratamento do card</span>
+  @if (cardFull) {
+    <app-card-alert-bar class="ms-auto"
+      [inline]="true"
+      [alerts]="cardFull.alerts"></app-card-alert-bar>
+  }
+</div>
+
+    <div class="pr-toolbar">
+      <!-- Número do card -->
+      <mat-form-field appearance="outline" subscriptSizing="dynamic"
+                      class="pr-field pr-field--card">
+        <mat-label>Número do card</mat-label>
+        <input matInput type="number"
+               [(ngModel)]="cardNumber"
+               (ngModelChange)="onCardNumberChange()"
+               (keyup.enter)="getPullRequestByCardNumber()"
+               placeholder="Ex. 12345"/>
+        <button matSuffix mat-icon-button aria-label="Buscar card"
+                matTooltip="Buscar" matTooltipPosition="above"
+                (click)="getPullRequestByCardNumber()"
+                [disabled]="!cardNumber || !environmentName || isPullRequestLoading">
+          <mat-icon>search</mat-icon>
+        </button>
+      </mat-form-field>
+
+      <!-- Branch -->
+      <mat-form-field appearance="outline" subscriptSizing="dynamic"
+                      class="pr-field pr-field--branch">
+        <mat-label>Branch</mat-label>
+        @if (isEditingPrefix) {
+          <input matTextPrefix #prefixInput class="pr-prefix-input"
+                 [(ngModel)]="branchPrefix"
+                 (blur)="onPrefixBlur()"
+                 (ngModelChange)="onPrefixChange()"
+                 (click)="$event.stopPropagation()"
+                 (keydown.enter)="onPrefixBlur()"/>
+        } @else {
+          <span matTextPrefix class="pr-prefix"
+                (dblclick)="onPrefixDoubleClick()"
+                matTooltip="Duplo clique para editar o prefixo" matTooltipPosition="above">
+            {{ branchPrefix }}
+          </span>
         }
-      </mat-card-title>
-    </mat-card-header>
-  <mat-card-content>
-    <div class="mt-2 mb-2 row" style="display: flex; align-items: flex-start; gap: 15px; margin-top: 10px;">
-      <div style="display: flex; gap: 10px; width: 100%">
-        <p-inputgroup styleClass="custom-input-group">
-          <p-inputnumber
-            [(ngModel)]="cardNumber"
-            (ngModelChange)="onCardNumberChange()"
-            placeholder="Número do card"
-            inputId="minmaxfraction"
-            mode="decimal" [useGrouping]="false">
-          </p-inputnumber>
-          <p-inputgroup-addon>
-            <p-button
-              (onClick)="getPullRequestByCardNumber()"
-              [disabled]="!cardNumber || !environmentName || isPullRequestLoading"
-              icon="pi pi-search" severity="secondary" variant="text"/>
-          </p-inputgroup-addon>
-        </p-inputgroup>
+        <input matInput class="pr-branch-input" placeholder="nome da branch" [(ngModel)]="branchName"/>
+      </mat-form-field>
 
-        <p-inputgroup style="width: auto">
-          <p-inputgroup-addon
-            (dblclick)="onPrefixDoubleClick()"
-            [style.cursor]="'pointer'"
-            [style.user-select]="'none'"
-          >
-            @if (!isEditingPrefix) {
-              {{ branchPrefix }}
-            } @else {
-              <input
-                pInputText
-                [(ngModel)]="branchPrefix"
-                (blur)="onPrefixBlur()"
-                (ngModelChange)="onPrefixChange()"
-                style="width: 80px; padding: 0.25rem; height: 100%;"
-                autofocus
-              />
+      <!-- Repositório -->
+      @if (isConfigLoading) {
+        <div class="pr-field pr-field--repo pr-field-skeleton">
+          <div class="skeleton skeleton--label"></div>
+          <div class="skeleton skeleton--control"></div>
+        </div>
+      } @else {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic"
+                        class="pr-field pr-field--repo">
+          <mat-label>Repositório</mat-label>
+          <input matInput type="text" placeholder="Repositório"
+                 [matAutocomplete]="repoAuto"
+                 [(ngModel)]="selectedRepositoryObj"
+                 (ngModelChange)="filterRepoInput($event)"
+                 (focus)="filterRepoInput(selectedRepositoryObj)"/>
+          <mat-icon matSuffix>expand_more</mat-icon>
+          <mat-autocomplete #repoAuto="matAutocomplete"
+                            [displayWith]="repoDisplay"
+                            (optionSelected)="onRepositorySelect()">
+            @for (repo of filteredRepositories; track repo.value) {
+              <mat-option [value]="repo">{{ repo.label }}</mat-option>
             }
-          </p-inputgroup-addon>
-          <input pInputText placeholder="branch name" [(ngModel)]="branchName"/>
-        </p-inputgroup>
+          </mat-autocomplete>
+        </mat-form-field>
+      }
 
-        <p-inputgroup style="width: auto; min-width: 190px;">
-          <p-autoComplete
-            [(ngModel)]="selectedRepositoryObj"
-            [suggestions]="filteredRepositories"
-            (completeMethod)="filterRepositories($event)"
-            (onSelect)="onRepositorySelect()"
-            (onClear)="onRepositorySelect()"
-            field="label"
-            placeholder="Repositório"
-            [dropdown]="true"
-            [forceSelection]="true"
-            styleClass="repo-autocomplete"
-          ></p-autoComplete>
-        </p-inputgroup>
-
-        <p-selectbutton
-          class="mr-auto"
-          [options]="justifyOptions"
-          [(ngModel)]="environmentName"
-          optionLabel="label"
-          optionValue="value"
-          styleClass="custom-select-button">
-        </p-selectbutton>
-
-
-
-<!--        <p-selectbutton-->
-<!--          class="mr-auto"-->
-<!--          [options]="cardTypeOptions"-->
-<!--          [(ngModel)]="cardType"-->
-<!--          optionLabel="label"-->
-<!--          optionValue="value"-->
-<!--          styleClass="custom-select-button">-->
-<!--        </p-selectbutton>-->
+      <!-- Branch para PR -->
+      <div class="pr-field pr-field--branches">
+        <label class="pr-field__label">Branch para PR</label>
+        @if (isConfigLoading) {
+          <div class="pr-skel-row">
+            @for (s of [1, 2, 3, 4]; track s) {
+              <div class="skeleton skeleton--toggle"></div>
+            }
+          </div>
+        } @else {
+          <mat-button-toggle-group class="pr-toggle" [(ngModel)]="environmentName"
+                                   hideSingleSelectionIndicator>
+            @for (opt of justifyOptions; track opt.value) {
+              <mat-button-toggle [value]="opt.value">{{ opt.label }}</mat-button-toggle>
+            }
+          </mat-button-toggle-group>
+        }
       </div>
-
-
     </div>
 
     <!--
@@ -104,6 +104,38 @@
 
         <div class="pr-content-row">
           <div class="pr-fields">
+            @if (prInfo) {
+              <div class="pr-info-card">
+                <div class="pr-info">
+                  <div class="pr-info__author">
+                    <app-user-avatar [name]="prInfo.userName" [imageUrl]="prInfo.userPhoto" [size]="36"></app-user-avatar>
+                    <div class="pr-info__col">
+                      <span class="pr-info__label">Aberto por</span>
+                      <strong class="pr-info__value">{{ prInfo.userName || '—' }}</strong>
+                    </div>
+                  </div>
+
+                  <div class="pr-info__meta">
+                    <div class="pr-info__item">
+                      <mat-icon>event</mat-icon>
+                      <div class="pr-info__col">
+                        <span class="pr-info__label">Aberto em</span>
+                        <strong class="pr-info__value">{{ (prInfo.openedAt | date:'dd/MM/yyyy HH:mm') || '—' }}</strong>
+                      </div>
+                    </div>
+                    <div class="pr-info__item">
+                      <mat-icon>update</mat-icon>
+                      <div class="pr-info__col">
+                        <span class="pr-info__label">Última atualização</span>
+                        <strong class="pr-info__value">{{ prInfo.updatedAt ? (prInfo.updatedAt | date:'dd/MM/yyyy HH:mm') : '—' }}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
+
+            <div class="pr-editors">
             <app-card-panel class="pr-panel" title="Descrição" icon="description">
               @if (fullDescription !== null) {
                 <button panel-actions mat-icon-button class="panel-action"
@@ -113,6 +145,17 @@
                   <mat-icon>article_shortcut</mat-icon>
                 </button>
               }
+              @if (isPullRequestLoading) {
+                <div class="editor-skeleton" aria-hidden="true">
+                  <div class="skeleton sk-toolbar"></div>
+                  <div class="skeleton sk-line" style="width: 94%"></div>
+                  <div class="skeleton sk-line" style="width: 82%"></div>
+                  <div class="skeleton sk-line" style="width: 88%"></div>
+                  <div class="skeleton sk-line" style="width: 70%"></div>
+                  <div class="skeleton sk-line" style="width: 90%"></div>
+                  <div class="skeleton sk-line" style="width: 58%"></div>
+                </div>
+              } @else {
               <p-editor class="panel-editor"
                         [(ngModel)]="descriptionHtml"
                         (onTextChange)="onDescriptionEditorChange($event)"
@@ -143,6 +186,7 @@
                   </span>
                 </ng-template>
               </p-editor>
+              }
             </app-card-panel>
 
             @if(this.cardType !== 'us'){
@@ -155,6 +199,15 @@
                     <mat-icon>article_shortcut</mat-icon>
                   </button>
                 }
+                @if (isPullRequestLoading) {
+                  <div class="editor-skeleton" aria-hidden="true">
+                    <div class="skeleton sk-toolbar"></div>
+                    <div class="skeleton sk-line" style="width: 90%"></div>
+                    <div class="skeleton sk-line" style="width: 76%"></div>
+                    <div class="skeleton sk-line" style="width: 84%"></div>
+                    <div class="skeleton sk-line" style="width: 64%"></div>
+                  </div>
+                } @else {
                 <p-editor class="panel-editor"
                           [(ngModel)]="rootCauseHtml"
                           (onTextChange)="onRootCauseEditorChange($event)"
@@ -185,8 +238,10 @@
                     </span>
                   </ng-template>
                 </p-editor>
+                }
               </app-card-panel>
             }
+            </div>
           </div>
 
           <div class="pr-timeline">
@@ -194,8 +249,7 @@
           </div>
         </div>
 
-      </mat-card-content>
-      <mat-card-actions style="background-color: #252525; margin-top: 20px; border-radius: 10px;">
+      <div class="page-footer">
         @if(!isMobile){
           <p-splitbutton class="custom-buttom"
                          label="Copiar"
@@ -257,8 +311,6 @@
 
 
 
-  </mat-card-actions>
-</mat-card>
-</div>
+      </div>
 <ngx-loading-bar></ngx-loading-bar>
 

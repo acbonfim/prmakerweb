@@ -16,6 +16,11 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/public/handover-view/handover-view.component').then(m => m.HandoverViewComponent)
   },
   {
+    // Primeiro acesso / redefinição de senha (link enviado por e-mail). Sem login.
+    path: 'first-access',
+    loadComponent: () => import('./pages/public/first-access/first-access.component').then(m => m.FirstAccessComponent)
+  },
+  {
     path: '',
     redirectTo: 'login',
     pathMatch: 'full'

@@ -12,62 +12,86 @@
     </div>
   </div>
 
-  <!-- Resumo de Saldo de Férias -->
-  <div class="balance-banner" *ngIf="!isLoadingBalance && activeBalances.length > 0">
-    <div class="balance-banner-title">
-      <mat-icon>beach_access</mat-icon>
-      <span>Seu saldo de férias</span>
+  <!-- 1. Acesso rápido -->
+  <section class="home-section">
+    <div class="section-header">
+      <mat-icon class="header-icon">bolt</mat-icon>
+      <span class="section-title">Acesso rápido</span>
+      <span class="section-subtitle" *ngIf="isManager">
+        <mat-icon class="admin-icon">shield</mat-icon>
+        Acesso de gestor ativo
+      </span>
     </div>
-    <div class="balance-stats">
-      <div class="balance-stat">
-        <span class="stat-value">{{ totalAvailable }}</span>
-        <span class="stat-label">Disponíveis</span>
-      </div>
-      <div class="balance-divider"></div>
-      <div class="balance-stat">
-        <span class="stat-value used">{{ totalUsed }}</span>
-        <span class="stat-label">Utilizados</span>
-      </div>
-      <div class="balance-divider"></div>
-      <div class="balance-stat">
-        <span class="stat-value remaining">{{ totalRemaining }}</span>
-        <span class="stat-label">Restantes</span>
-      </div>
-    </div>
-    <button mat-stroked-button class="balance-action-btn" (click)="navigate('/auth/vacations')">
-      <mat-icon>arrow_forward</mat-icon>
-      Ver calendário
-    </button>
-  </div>
 
-  <!-- Atalhos -->
-  <div class="section-header">
-    <h2 class="section-title">Acesso rápido</h2>
-    <span class="section-subtitle" *ngIf="isManager">
-      <mat-icon class="admin-icon">shield</mat-icon>
-      Acesso de gestor ativo
-    </span>
-  </div>
-
-  <div class="cards-grid">
-    <div
-      class="quick-card"
-      *ngFor="let card of visibleCards"
-      (click)="navigate(card.route)"
-      [style.--card-color]="card.color"
-      [style.--card-bg]="card.bgColor"
-      role="button"
-      [attr.aria-label]="'Ir para ' + card.title"
-    >
-      <div class="card-icon-wrap">
-        <mat-icon [style.color]="card.color">{{ card.icon }}</mat-icon>
+    <div class="cards-grid">
+      <div
+        class="quick-card"
+        *ngFor="let card of visibleCards"
+        (click)="navigate(card.route)"
+        [style.--card-color]="card.color"
+        [style.--card-bg]="card.bgColor"
+        role="button"
+        [attr.aria-label]="'Ir para ' + card.title"
+      >
+        <div class="card-icon-wrap">
+          <mat-icon [style.color]="card.color">{{ card.icon }}</mat-icon>
+        </div>
+        <div class="card-body">
+          <h3 class="card-title">{{ card.title }}</h3>
+          <p class="card-description">{{ card.description }}</p>
+        </div>
+        <mat-icon class="card-arrow">chevron_right</mat-icon>
       </div>
-      <div class="card-body">
-        <h3 class="card-title">{{ card.title }}</h3>
-        <p class="card-description">{{ card.description }}</p>
-      </div>
-      <mat-icon class="card-arrow">chevron_right</mat-icon>
     </div>
-  </div>
+  </section>
+
+  <!-- 2. Seus últimos cards -->
+  <app-recent-cards></app-recent-cards>
+
+  <!-- 3. Férias -->
+  <section class="home-section" *ngIf="isLoadingBalance || activeBalances.length > 0">
+    <div class="section-header">
+      <mat-icon class="header-icon">beach_access</mat-icon>
+      <span class="section-title">Suas férias</span>
+    </div>
+
+    <!-- Skeleton enquanto busca o saldo -->
+    <div class="balance-banner skeleton-card" *ngIf="isLoadingBalance">
+      <div class="sk sk-balance-title"></div>
+      <div class="balance-stats">
+        <div class="sk sk-balance-stat"></div>
+        <div class="sk sk-balance-stat"></div>
+        <div class="sk sk-balance-stat"></div>
+      </div>
+      <div class="sk sk-balance-btn"></div>
+    </div>
+
+    <div class="balance-banner" *ngIf="!isLoadingBalance && activeBalances.length > 0">
+      <div class="balance-banner-title">
+        <mat-icon>beach_access</mat-icon>
+        <span>Seu saldo de férias</span>
+      </div>
+      <div class="balance-stats">
+        <div class="balance-stat">
+          <span class="stat-value">{{ totalAvailable }}</span>
+          <span class="stat-label">Disponíveis</span>
+        </div>
+        <div class="balance-divider"></div>
+        <div class="balance-stat">
+          <span class="stat-value used">{{ totalUsed }}</span>
+          <span class="stat-label">Utilizados</span>
+        </div>
+        <div class="balance-divider"></div>
+        <div class="balance-stat">
+          <span class="stat-value remaining">{{ totalRemaining }}</span>
+          <span class="stat-label">Restantes</span>
+        </div>
+      </div>
+      <button mat-stroked-button class="balance-action-btn" (click)="navigate('/auth/vacations')">
+        <mat-icon>arrow_forward</mat-icon>
+        Ver calendário
+      </button>
+    </div>
+  </section>
 
 </div>

@@ -35,6 +35,12 @@ export class GdsService {
       .get<PluginData>(`${this.baseUrl}PluginConfiguration/get-all-by-id?id=${id}`);
   }
 
+  // Upload assinado de imagem via API prform (lê o plugin id 11 no servidor).
+  uploadImage(base64: string) {
+    return this.http
+      .post<any>(`${this.baseUrl}Image/upload`, { image: base64 });
+  }
+
   postCreatePluginConfiguration(plugin: any) {
     return this.http
       .post<any>(`${this.baseUrl}PluginConfiguration`, plugin);

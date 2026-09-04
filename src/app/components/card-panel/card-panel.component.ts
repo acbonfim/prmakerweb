@@ -36,7 +36,7 @@ import { MatIconModule } from '@angular/material/icon';
       flex-direction: column;
       height: 100%;
       min-height: 0;
-      background-color: #2a2a2a;
+      background-color: var(--surface-1, #2a2a2a);
       border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 10px;
       overflow: hidden;
@@ -47,7 +47,7 @@ import { MatIconModule } from '@angular/material/icon';
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background-color: #323232;
+      background-color: var(--surface-2, #323232);
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 

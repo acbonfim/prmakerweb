@@ -1,36 +1,125 @@
-.topbar-color {
-  background-color: rgb(36, 36, 36);
-  position:fixed;
-  margin-top: 0px !important;
-  z-index: 999;
+:host {
+  display: block;
+  height: 100%;
+  color: var(--mat-sys-on-surface);
 }
 
-.topbar-color-dev {
-  background-color: rgb(213, 110, 0);
-  position:fixed;
-  margin-top: 0px !important;
-  z-index: 999;
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
 }
 
-.example-spacer {
+.topbar-spacer {
   flex: 1 1 auto;
 }
 
-.avatar {
-  vertical-align: middle;
+/* ── Botão hambúrguer ── */
+.menu-toggle {
+  color: var(--mat-sys-on-surface);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.menu-toggle:hover {
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 10%, transparent);
+  color: var(--mat-sys-primary);
+}
+
+.menu-toggle mat-icon {
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Badge de ambiente ── */
+.env-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #ffb74d;
+  background: color-mix(in srgb, #ffa726 22%, transparent);
+  border: 1px solid color-mix(in srgb, #ffa726 40%, transparent);
+}
+
+/* ── Ícones de ação (notificações) ── */
+.topbar-icon-btn {
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 80%, transparent);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.topbar-icon-btn:hover {
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 10%, transparent);
+  color: var(--mat-sys-on-surface);
+}
+
+/* ── Chip de perfil ── */
+.profile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 4px 8px 4px 4px;
+  margin-left: 4px;
+  border: 1px solid transparent;
+  border-radius: 26px;
+  background: transparent;
+  color: var(--mat-sys-on-surface);
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.profile-chip:hover {
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent);
+  border-color: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent);
+}
+
+.profile-avatar {
+  display: inline-flex;
   width: 40px;
   height: 40px;
   border-radius: 50%;
+  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #000;
 }
 
-.status {
-  border-radius: 50%; width: 100%; height: 100%; object-fit: cover;
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
-.is-on {
-  border: 3px solid green;
+.is-on { border: 2px solid #66bb6a; }
+.is-off { border: 2px solid #ef5350; }
+
+.profile-name {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.is-off {
-  border: 3px solid rgb(255, 0, 0);
+.profile-caret {
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
+  transition: transform 0.2s ease;
+}
+
+/* Gira o chevron quando o menu está aberto */
+.profile-chip[aria-expanded="true"] .profile-caret {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 576px) {
+  .profile-name { display: none; }
+  .profile-chip { border-radius: 50%; padding: 4px; }
 }

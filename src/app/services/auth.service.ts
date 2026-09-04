@@ -67,6 +67,54 @@ export class AuthService {
       .put<any>(`${this.baseUrl}user/UpdateRoles`, { userId, roles }, { headers: this.authHeaders() });
   }
 
+  // Salva a URL da foto (Cloudinary) no usuário autenticado.
+  updatePhoto(imageUrl: string) {
+    return this.http
+      .post<any>(`${this.baseUrl}user/UpdatePhoto`, { imageUrl }, { headers: this.authHeaders() });
+  }
+
+  // Fotos/nomes por externalId (para avatares na timeline). Endpoint anônimo.
+  getPhotosByExternalIds(externalIds: string[]) {
+    return this.http
+      .post<any>(`${this.baseUrl}user/PhotosByExternalIds`, externalIds);
+  }
+
+  // Troca da própria senha (usuário autenticado, informa a senha atual).
+  changePassword(currentPassword: string, newPassword: string) {
+    return this.http
+      .post<any>(`${this.baseUrl}user/ChangePassword`, { currentPassword, newPassword }, { headers: this.authHeaders() });
+  }
+
+  // Valida se o código de acesso existe e não expirou (antes de exibir o formulário).
+  validateAccessCode(userName: string, code: string) {
+    return this.http
+      .get<any>(`${this.baseUrl}Password/ValidateCode?userName=${encodeURIComponent(userName)}&code=${encodeURIComponent(code)}`);
+  }
+
+  // Define senha via código (primeiro acesso / redefinição) — endpoint anônimo.
+  setPasswordWithCode(userName: string, password: string, code: string) {
+    return this.http
+      .post<any>(`${this.baseUrl}Password/UpdatePassword?code=${encodeURIComponent(code)}`, { userName, password });
+  }
+
+  // Reenvia e-mail de boas-vindas / primeiro acesso (gestão).
+  sendWelcomeEmail(userName: string) {
+    return this.http
+      .get<any>(`${this.baseUrl}Password/SendWelcomeByUsername?userName=${encodeURIComponent(userName)}`, { headers: this.authHeaders() });
+  }
+
+  // Dispara e-mail de redefinição de senha (gestão).
+  sendResetPasswordEmail(userName: string) {
+    return this.http
+      .get<any>(`${this.baseUrl}Password/GenerateForgetCodeByUsername?userName=${encodeURIComponent(userName)}`, { headers: this.authHeaders() });
+  }
+
+  // "Esqueci minha senha" na tela de login (público, sem token).
+  forgotPassword(userName: string) {
+    return this.http
+      .get<any>(`${this.baseUrl}Password/GenerateForgetCodeByUsername?userName=${encodeURIComponent(userName)}`);
+  }
+
   activeToggle(userId: number, isActive: boolean) {
     let query = `userId=${userId}&isActive=${isActive}`;
     return this.http
@@ -78,7 +126,7 @@ export class AuthService {
       .get<any>(`${this.baseUrl}role/GetAll`, { headers: this.authHeaders() });
   }
 
-  getAllUsers(page: number, itemsPerPage: number = 6, search: string = '') {
+  getAllUsers(page: number, itemsPerPage: number = 10, search: string = '') {
     let query = `page=${page}&itemsPerPage=${itemsPerPage}`;
     if (search && search.trim().length > 0) {
       query += `&search=${encodeURIComponent(search.trim())}`;

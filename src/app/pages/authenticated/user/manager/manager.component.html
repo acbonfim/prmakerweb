@@ -52,7 +52,7 @@
     @for (user of users(); track user.id) {
       <div class="user-card" [class.inactive]="!user.active">
         <div class="user-head">
-          <div class="avatar">{{ (user.fullName || user.userName || '?').charAt(0) }}</div>
+          <app-user-avatar [name]="user.fullName || user.userName" [imageUrl]="user.imagemUrlUser" [size]="42"></app-user-avatar>
           <div class="user-titles">
             <strong class="user-name">{{ getDisplayName(user.fullName) }}</strong>
             <span class="user-sub">{{ user.departamento }} · {{ user.userName }}</span>
@@ -76,6 +76,14 @@
           </button>
           <button mat-icon-button matTooltip="Permissões de serviços" (click)="openServices(user)">
             <mat-icon>lan</mat-icon>
+          </button>
+          <button mat-icon-button matTooltip="Reenviar e-mail de boas-vindas"
+                  [disabled]="emailingId() === user.id" (click)="resendWelcome(user)">
+            <mat-icon>mail</mat-icon>
+          </button>
+          <button mat-icon-button matTooltip="Enviar redefinição de senha"
+                  [disabled]="emailingId() === user.id" (click)="resetPassword(user)">
+            <mat-icon>lock_reset</mat-icon>
           </button>
 
           <span class="toggle-area">

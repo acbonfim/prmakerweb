@@ -33,4 +33,5 @@ export interface PluginData {
   fromToCompany: string;
   key?: any;
   configurations?: Configuration;
+  adminOnly?: boolean;
 }

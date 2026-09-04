@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import {PageContainerComponent} from '../../components/page-container/page-container.component';
 import {Component} from '@angular/core';
 import {AuthGuard} from '../../auth/auth.guard';
+import {AdminGuard} from '../../auth/admin.guard';
 
 export const AUTHENTICATED_ROUTES: Routes = [
   {
@@ -29,12 +30,12 @@ export const AUTHENTICATED_ROUTES: Routes = [
       },
       {
         path: 'services',
-        canActivate: [AuthGuard],
+        canActivate: [AuthGuard, AdminGuard],
         loadComponent: () => import('./services/services.component').then(m => m.ServicesComponent)
       },
       {
         path: 'plugin-manager',
-        canActivate: [AuthGuard],
+        canActivate: [AuthGuard, AdminGuard],
         loadComponent: () => import('./plugin/plugin.component').then(m => m.PluginComponent)
       },
       {

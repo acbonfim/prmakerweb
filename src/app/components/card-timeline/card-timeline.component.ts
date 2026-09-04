@@ -16,6 +16,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { TimelineService } from '../../services/timeline.service';
+import { AuthService } from '../../services/auth.service';
 import { StorageService } from '../../services/storage.service';
 import { TeamsGraphService, TeamsChat } from '../../services/teams-graph.service';
 import { WsService } from '../../services/ws.service';
@@ -141,11 +142,14 @@ export class CardTimelineComponent implements OnDestroy {
   private sub?: Subscription;
   private currentGroup: string | null = null;
 
+  readonly photos = signal<Record<string, string>>({});
+
   constructor(
     private timelineService: TimelineService,
     private storageService: StorageService,
     private teamsGraph: TeamsGraphService,
-    private ws: WsService
+    private ws: WsService,
+    private authService: AuthService
   ) {
     const access = this.storageService.getAccess();
     this.currentUserId = access && access.user ? (access.user.externalId ?? null) : null;
@@ -238,6 +242,7 @@ export class CardTimelineComponent implements OnDestroy {
           .slice()
           .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
         this.entries.set(sorted);
+        this.ensurePhotos(sorted);
         this.clearSkeletons();
         // Numa atualização discreta preserva a posição de leitura; só rola na carga inicial.
         if (!silent) this.scrollToBottom();
@@ -454,6 +459,38 @@ export class CardTimelineComponent implements OnDestroy {
       error: () => {
         this.deletingId.set(null);
       }
+    });
+  }
+
+  // URL da foto do autor (por externalId), ou null para cair nas iniciais.
+  photoFor(userId?: string | null): string | null {
+    if (!userId) return null;
+    return this.photos()[userId.toLowerCase()] || null;
+  }
+
+  // Busca as fotos dos autores das entradas (por externalId) que ainda não temos.
+  private ensurePhotos(entries: TimelineEntry[]): void {
+    const current = this.photos();
+    const ids = Array.from(new Set(
+      entries.map(e => e.userId).filter((x): x is string => !!x).map(x => x.toLowerCase())
+    )).filter(id => !(id in current));
+
+    if (!ids.length) return;
+
+    this.authService.getPhotosByExternalIds(ids).subscribe({
+      next: (res: any) => {
+        const list = res?.object ?? res?.Object ?? [];
+        const map = { ...this.photos() };
+        for (const u of list) {
+          const ext = (u.externalId || u.ExternalId || '').toLowerCase();
+          const url = u.imageUrl || u.ImageUrl;
+          if (ext && url) map[ext] = url;
+        }
+        // Marca ids sem foto (valor vazio) para não re-buscar sempre.
+        for (const id of ids) if (!(id in map)) map[id] = '';
+        this.photos.set(map);
+      },
+      error: () => {}
     });
   }
 

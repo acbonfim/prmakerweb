@@ -1,0 +1,72 @@
+<div class="fa-wrapper">
+  <div class="fa-card">
+    <div class="fa-brand">
+      <mat-icon>lock_open</mat-icon>
+      <span>Solvace PRForm</span>
+    </div>
+
+    @if (validating()) {
+      <div class="fa-center">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p class="fa-sub">Validando o link de acesso...</p>
+      </div>
+    } @else if (done()) {
+      <div class="fa-success">
+        <mat-icon>check_circle</mat-icon>
+        <h1>Tudo certo!</h1>
+        <p class="fa-sub">Sua senha foi definida com sucesso. Agora você já pode entrar.</p>
+        <button mat-raised-button color="primary" class="fa-submit" (click)="goToLogin()">Ir para o login</button>
+      </div>
+    } @else if (codeValid()) {
+      <h1>{{ isWelcome() ? 'Bem-vindo(a)!' : 'Redefinir senha' }}</h1>
+      <p class="fa-sub">
+        {{ isWelcome()
+          ? 'Crie sua senha para acessar sua conta pela primeira vez.'
+          : 'Defina uma nova senha para sua conta.' }}
+      </p>
+
+      @if (username()) {
+        <p class="fa-user">Usuário: <strong>{{ username() }}</strong></p>
+      }
+
+      <mat-form-field appearance="outline" class="fa-field">
+        <mat-label>Nova senha</mat-label>
+        <input matInput [type]="hide() ? 'password' : 'text'" [ngModel]="password()" (ngModelChange)="password.set($event)" autocomplete="new-password">
+        <button matSuffix mat-icon-button type="button" (click)="hide.set(!hide())" [attr.aria-label]="hide() ? 'Mostrar senha' : 'Ocultar senha'">
+          <mat-icon>{{ hide() ? 'visibility' : 'visibility_off' }}</mat-icon>
+        </button>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="fa-field">
+        <mat-label>Confirmar senha</mat-label>
+        <input matInput [type]="hide() ? 'password' : 'text'" [ngModel]="confirm()" (ngModelChange)="confirm.set($event)" autocomplete="new-password">
+        @if (confirm() && password() !== confirm()) {
+          <mat-error>As senhas não conferem</mat-error>
+        }
+      </mat-form-field>
+
+      <ul class="fa-rules">
+        <li [class.ok]="rules().length"><mat-icon>{{ rules().length ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon> Mínimo de 8 caracteres</li>
+        <li [class.ok]="rules().lower"><mat-icon>{{ rules().lower ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon> Uma letra minúscula</li>
+        <li [class.ok]="rules().upper"><mat-icon>{{ rules().upper ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon> Uma letra maiúscula</li>
+        <li [class.ok]="rules().special"><mat-icon>{{ rules().special ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon> Um caractere especial</li>
+      </ul>
+
+      <button mat-raised-button color="primary" class="fa-submit"
+              [disabled]="loading() || !canSubmit()" (click)="submit()">
+        @if (loading()) {
+          <mat-spinner diameter="20"></mat-spinner>
+        } @else {
+          <span>{{ isWelcome() ? 'Criar senha e acessar' : 'Salvar nova senha' }}</span>
+        }
+      </button>
+    } @else {
+      <div class="fa-invalid">
+        <mat-icon>link_off</mat-icon>
+        <h1>Link indisponível</h1>
+        <p class="fa-sub">{{ invalidMsg() }}</p>
+        <button mat-raised-button color="primary" class="fa-submit" (click)="goToLogin()">Ir para o login</button>
+      </div>
+    }
+  </div>
+</div>

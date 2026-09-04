@@ -4,6 +4,15 @@
 
   </div>
   <mat-divider class="mt-2"></mat-divider>
+
+  <div class="mt-3 mb-1 d-flex align-items-center" style="gap: 10px;">
+    <mat-slide-toggle color="primary" [(ngModel)]="data.adminOnly" [ngModelOptions]="{standalone: true}">
+      Somente administradores
+    </mat-slide-toggle>
+    <mat-icon matTooltip="Se marcado, apenas admins podem ler esta configuração. Desmarcado, qualquer usuário logado pode."
+              style="font-size: 18px; height: 18px; width: 18px; opacity: 0.7; cursor: help;">info</mat-icon>
+  </div>
+
   <form  class="mb-2 mt-2" style="max-height: 300px; overflow-y: auto;">
     @for (property of getObjectKeys(urlApiModel); track property)
     {
