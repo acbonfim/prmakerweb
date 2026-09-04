@@ -1,0 +1,116 @@
+:host {
+  display: block;
+  color: var(--mat-sys-on-surface);
+}
+
+/* ── Barra de cabeçalho (mesma linguagem da tela de register) ── */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: #252525;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.header-icon { color: var(--mat-sys-primary); }
+
+.header-title {
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.header-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  font-size: 12px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+.ms-auto { margin-left: auto; }
+
+/* ── Grid de cards ── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.svc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #2a2a2a;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.svc-head { display: flex; align-items: flex-start; gap: 10px; }
+.svc-icon { color: var(--mat-sys-primary); }
+.svc-titles { display: flex; flex-direction: column; min-width: 0; }
+.svc-name { font-weight: 600; }
+.svc-desc { font-size: 12px; opacity: 0.7; }
+
+.ext-id {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent);
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+.ext-id .ext-icon { font-size: 18px; height: 18px; width: 18px; opacity: 0.7; }
+
+.ext-id code {
+  flex: 1;
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--mat-sys-on-surface);
+}
+
+.svc-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 32px;
+  opacity: 0.7;
+}
+
+/* ── Skeleton shimmer ── */
+.skeleton-card { pointer-events: none; }
+
+.sk {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.12) 37%,
+    rgba(255, 255, 255, 0.05) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.sk-title { height: 18px; width: 60%; }
+.sk-line { height: 12px; width: 90%; }
+.sk-chip { height: 28px; width: 100%; }
+.sk-actions { height: 24px; width: 40%; align-self: flex-end; }
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}

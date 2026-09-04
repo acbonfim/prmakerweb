@@ -1,0 +1,58 @@
+<div class="page-header">
+  <mat-icon class="header-icon">lan</mat-icon>
+  <span class="header-title">Serviços</span>
+  <span class="header-count" *ngIf="!loading()">{{ services().length }}</span>
+  <button mat-raised-button color="primary" class="ms-auto" (click)="openCreate()">
+    Novo serviço <mat-icon>add</mat-icon>
+  </button>
+</div>
+
+<div class="cards-grid">
+
+  @if (loading()) {
+    @for (s of skeletons; track $index) {
+      <div class="svc-card skeleton-card">
+        <div class="sk sk-title"></div>
+        <div class="sk sk-line"></div>
+        <div class="sk sk-chip"></div>
+        <div class="sk sk-actions"></div>
+      </div>
+    }
+  } @else {
+    @for (service of services(); track service.externalId) {
+      <div class="svc-card">
+        <div class="svc-head">
+          <mat-icon class="svc-icon">lan</mat-icon>
+          <div class="svc-titles">
+            <strong class="svc-name">{{ service.name }}</strong>
+            <span class="svc-desc">{{ service.description }}</span>
+          </div>
+        </div>
+
+        <div class="ext-id" matTooltip="External ID">
+          <mat-icon class="ext-icon">tag</mat-icon>
+          <code>{{ service.externalId }}</code>
+          <button mat-icon-button matTooltip="Copiar External ID" (click)="copyId(service)">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </div>
+
+        <mat-divider></mat-divider>
+
+        <div class="svc-actions">
+          <button mat-button (click)="openEdit(service)">
+            Editar <mat-icon>edit</mat-icon>
+          </button>
+          <button mat-button color="warn" (click)="confirmDelete(service)">
+            Excluir <mat-icon>delete</mat-icon>
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (services().length === 0) {
+      <div class="empty-state">Nenhum serviço cadastrado.</div>
+    }
+  }
+
+</div>

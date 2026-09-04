@@ -28,6 +28,11 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadChildren: () => import('./user/user.routes').then(m => m.USER_ROUTES)
       },
       {
+        path: 'services',
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./services/services.component').then(m => m.ServicesComponent)
+      },
+      {
         path: 'plugin-manager',
         canActivate: [AuthGuard],
         loadComponent: () => import('./plugin/plugin.component').then(m => m.PluginComponent)

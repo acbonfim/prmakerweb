@@ -49,30 +49,51 @@ export class AuthService {
 
   generateApiKey() {
     return this.http
-      .get<any>(`${this.baseUrl}v2/integration/key/generate`);
+      .get<any>(`${this.baseUrl}v2/integration/key/generate`, { headers: this.authHeaders() });
   }
 
   register(user: CreateUser) {
     return this.http
-      .post<login>(`${this.baseUrl}/user/register`, user);
+      .post<login>(`${this.baseUrl}user/Register`, user, { headers: this.authHeaders() });
+  }
+
+  updateUser(user: { id: number; fullName: string; email: string; departamento: string }) {
+    return this.http
+      .put<any>(`${this.baseUrl}user/Update`, user, { headers: this.authHeaders() });
+  }
+
+  updateUserRoles(userId: number, roles: string[]) {
+    return this.http
+      .put<any>(`${this.baseUrl}user/UpdateRoles`, { userId, roles }, { headers: this.authHeaders() });
   }
 
   activeToggle(userId: number, isActive: boolean) {
     let query = `userId=${userId}&isActive=${isActive}`;
     return this.http
-      .patch<any>(`${this.baseUrl}/user/ActiveToggle?${query}`,null);
+      .patch<any>(`${this.baseUrl}user/ActiveToggle?${query}`, null, { headers: this.authHeaders() });
   }
 
   getAllRoles() {
     return this.http
-      .get<any>(`${this.baseUrl}/role/getAll`
-      );
+      .get<any>(`${this.baseUrl}role/GetAll`, { headers: this.authHeaders() });
   }
 
-  getAllUsers(page: number) {
-    let paginationQuery = `page=${page}&itemsPerPage=6`;
+  getAllUsers(page: number, itemsPerPage: number = 6, search: string = '') {
+    let query = `page=${page}&itemsPerPage=${itemsPerPage}`;
+    if (search && search.trim().length > 0) {
+      query += `&search=${encodeURIComponent(search.trim())}`;
+    }
     return this.http
-      .get<any>(`${this.baseUrl}/user/getAll?${paginationQuery}`);
+      .post<any>(`${this.baseUrl}user/GetAll?${query}`, {}, { headers: this.authHeaders() });
+  }
+
+  // A API de autenticação usa esquema Bearer (JWT). Em rotas 'auth/*' o interceptor
+  // injeta apenas x-api-key (esquema da API prform), então anexamos o Bearer aqui
+  // explicitamente para autorizar nas chamadas ao serviço de autenticação.
+  private authHeaders(): HttpHeaders {
+    const access: any = this._storageService.getAccess();
+    const token = access && access.accessToken ? access.accessToken : '';
+    return new HttpHeaders({ Authorization: `Bearer ${token}` });
   }
 
   public async tryRefreshingTokens(): Promise<boolean> {
