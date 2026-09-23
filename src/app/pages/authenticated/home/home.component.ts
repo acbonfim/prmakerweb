@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
@@ -10,6 +10,7 @@ import { StorageService } from '../../../services/storage.service';
 import { VacationService } from '../../../services/vacation.service';
 import { VacationBalance } from '../vacations/models/vacation.model';
 import { RecentCardsComponent } from '../../../components/recent-cards/recent-cards.component';
+import { RecentHandoversComponent } from '../../../components/recent-handovers/recent-handovers.component';
 
 interface QuickAccessCard {
   title: string;
@@ -36,6 +37,7 @@ interface QuickAccessCard {
     MatDividerModule,
     MatChipsModule,
     RecentCardsComponent,
+    RecentHandoversComponent,
   ],
 })
 export class HomeComponent implements OnInit {
@@ -51,6 +53,11 @@ export class HomeComponent implements OnInit {
   currentDate = '';
   activeBalances: VacationBalance[] = [];
   isLoadingBalance = false;
+
+  // Visibilidade de cada bloco de "recentes": quando um fica vazio, o outro
+  // ocupa 100% da largura (o vazio é ocultado e o grid colapsa para 1 coluna).
+  cardsVisible = signal(true);
+  handoversVisible = signal(true);
 
   readonly allCards: QuickAccessCard[] = [
     {

@@ -41,7 +41,6 @@
   gap: 12px;
 }
 
-/* Scroll vertical quando há muitos cards (~10). */
 .recent-list.scrollable {
   max-height: 320px;
   overflow-y: auto;
@@ -67,24 +66,19 @@
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
+.recent-card-arrow {
+  color: var(--mat-sys-on-surface);
+  opacity: 0.4;
+  flex-shrink: 0;
+}
+
 .recent-card:hover {
   border-color: color-mix(in srgb, var(--mat-sys-primary) 55%, transparent);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   transform: translateY(-2px);
 }
 
-.recent-card-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--mat-sys-primary) 22%, transparent);
-}
-
-.recent-card-icon mat-icon { color: var(--mat-sys-primary); }
+.recent-card-avatar { flex-shrink: 0; }
 
 .recent-card-body {
   display: flex;
@@ -100,37 +94,52 @@
   color: var(--mat-sys-primary);
 }
 
-.recent-card-desc {
+.recent-card-author {
   font-size: 0.85rem;
   color: var(--mat-sys-on-surface);
-  opacity: 0.75;
+  opacity: 0.85;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.recent-card-repo {
+.recent-card-date {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.25rem;
   font-size: 0.75rem;
   color: var(--mat-sys-on-surface);
   opacity: 0.55;
 }
 
-.recent-card-repo mat-icon {
+.recent-card-date mat-icon {
   font-size: 14px;
   width: 14px;
   height: 14px;
 }
 
-.recent-card-arrow {
-  color: var(--mat-sys-on-surface);
-  opacity: 0.4;
-  flex-shrink: 0;
+/* ── Vazio ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
+  background: var(--surface-1, #2a2a2a);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  font-size: 0.9rem;
 }
 
-/* ── Skeleton shimmer (mesmo padrão de gestão de usuários) ── */
+.empty-state mat-icon {
+  font-size: 32px;
+  width: 32px;
+  height: 32px;
+  opacity: 0.7;
+}
+
+/* ── Skeleton shimmer ── */
 .skeleton-card { pointer-events: none; cursor: default; }
 
 .sk {
@@ -145,7 +154,7 @@
   animation: shimmer 1.4s ease infinite;
 }
 
-.sk-icon { width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0; }
+.sk-icon { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; }
 .sk-title { height: 16px; width: 45%; margin-bottom: 8px; }
 .sk-line { height: 12px; width: 80%; }
 

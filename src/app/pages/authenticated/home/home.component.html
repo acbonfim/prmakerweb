@@ -45,8 +45,15 @@
     </div>
   </section>
 
-  <!-- 2. Seus últimos cards -->
-  <app-recent-cards></app-recent-cards>
+  <!-- 2. Seus últimos cards + Últimos handovers (duas colunas; um vazio → o outro ocupa 100%) -->
+  <div class="recent-columns"
+       *ngIf="cardsVisible() || handoversVisible()"
+       [class.single]="!(cardsVisible() && handoversVisible())">
+    <app-recent-cards [class.col-hidden]="!cardsVisible()"
+                      (visibilityChange)="cardsVisible.set($event)"></app-recent-cards>
+    <app-recent-handovers [class.col-hidden]="!handoversVisible()"
+                          (visibilityChange)="handoversVisible.set($event)"></app-recent-handovers>
+  </div>
 
   <!-- 3. Férias -->
   <section class="home-section" *ngIf="isLoadingBalance || activeBalances.length > 0">

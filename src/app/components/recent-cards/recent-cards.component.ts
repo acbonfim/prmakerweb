@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, OnInit, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -25,24 +25,37 @@ export class RecentCardsComponent implements OnInit {
   private pullRequestService = inject(PullRequestService);
   private cdr = inject(ChangeDetectorRef);
 
+  /** Emite se a seção tem conteúdo (carregando ou com itens). O pai usa para
+   *  colapsar o layout e dar 100% da largura ao outro bloco quando este fica vazio. */
+  @Output() visibilityChange = new EventEmitter<boolean>();
+
   cards: RecentPullRequest[] = [];
   isLoading = false;
   readonly skeletons = Array.from({ length: 6 });
 
+  private get isVisible(): boolean {
+    return this.isLoading || this.cards.length > 0;
+  }
+
   ngOnInit() {
     const access = this.storageService.getAccess();
     const userId = access && access.user ? access.user.externalId : null;
-    if (!userId) return;
+    if (!userId) {
+      this.visibilityChange.emit(false);
+      return;
+    }
 
     this.isLoading = true;
     this.pullRequestService.getRecentByUser(userId, 10).subscribe({
       next: (cards) => {
         this.cards = cards ?? [];
         this.isLoading = false;
+        this.visibilityChange.emit(this.isVisible);
         this.cdr.detectChanges();
       },
       error: () => {
         this.isLoading = false;
+        this.visibilityChange.emit(this.isVisible);
         this.cdr.detectChanges();
       },
     });

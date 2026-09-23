@@ -3,6 +3,30 @@
   color: var(--mat-sys-on-surface);
 }
 
+/* Duas colunas: "Seus últimos cards" | "Últimos handovers" */
+.recent-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+/* Só um bloco tem conteúdo → ocupa 100% da largura. */
+.recent-columns.single {
+  grid-template-columns: 1fr;
+}
+
+/* O bloco vazio é removido do fluxo (não ocupa coluna). */
+.recent-columns .col-hidden {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .recent-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
 .home-container {
   padding: 20px 24px;
   max-width: 1200px;

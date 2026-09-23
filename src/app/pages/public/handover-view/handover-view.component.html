@@ -1,7 +1,10 @@
 <div class="hv">
   <header class="hv__header">
-    <span class="hv__lead material-icons">swap_horiz</span>
-    <span class="hv__title">Passagem de conhecimento</span>
+    <img src="assets/images/logo.svg" alt="Solvace PRForm" class="hv__logo" />
+    <div class="hv__header-title">
+      <span class="hv__lead material-icons">swap_horiz</span>
+      <span class="hv__title">Passagem de conhecimento</span>
+    </div>
   </header>
 
   <main class="hv__body">
@@ -21,7 +24,7 @@
       </div>
     } @else if (hasHandover) {
       <div class="hv__content">
-        <div class="summary-header">
+        <div class="hv__content-head">
           <div class="summary-header__item">
             <span class="summary-header__label">Work Item</span>
             <span class="summary-header__value">#{{ cardNumber() }}</span>

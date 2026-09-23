@@ -24,6 +24,12 @@ export class StorageService {
   }
 
 
+  // Chave (hash) usada no localStorage para o "access". Útil para reagir a
+  // mudanças vindas de outra aba via evento `window:storage`.
+  getAccessStorageKey(): string {
+    return identificadores.filter(e => e.name === "access")[0].hash;
+  }
+
   getAccess() {
     const nameHash = identificadores.filter(e => e.name === "access")[0].hash;
     const usuarioDecrypt = this.serviceGlobal.decrypt(

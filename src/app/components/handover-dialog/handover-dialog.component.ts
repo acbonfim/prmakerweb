@@ -14,6 +14,7 @@ import { SafeHtmlPipe } from 'primeng/menu';
 import { environment } from '../../../environments/environment';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { GdsService } from '../../services/gds.service';
+import { StorageService } from '../../services/storage.service';
 
 /**
  * Modal de Passagem de Conhecimento (handover) de um card.
@@ -51,6 +52,7 @@ export class HandoverDialogComponent implements OnInit {
   private gds = inject(GdsService);
   private cdr = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
+  private storage = inject(StorageService);
 
   private urlBase = environment.apiUrl;
 
@@ -124,6 +126,7 @@ export class HandoverDialogComponent implements OnInit {
           cardNumber: this.cardNumber,
           content,
           repositoryId: this.data?.repositoryId ?? null,
+          userId: this.storage.getAccess()?.user?.externalId ?? null,
         }),
       );
 

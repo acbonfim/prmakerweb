@@ -1,136 +1,102 @@
-<div>
-  <mat-card appearance="outlined"  >
-    <mat-card-header class="p-3"
-                     style="background-color: var(--surface-3, #252525); border-radius: 10px">
-      <mat-card-title class="" style="display: flex; align-items: center; gap: 8px;">
-        <mat-icon>hub</mat-icon>
-        Plugins
-        <button mat-raised-button class="ms-auto"
-                (click)="openDialogManager()"
-        ><mat-icon>add</mat-icon> Novo plugin</button>
-      </mat-card-title>
-    </mat-card-header>
+<div class="page-header">
+  <mat-icon class="header-icon">hub</mat-icon>
+  <span class="header-title">Plugins</span>
+  @if (!loading()) {
+    <span class="header-count">{{ filtered().length }}</span>
+  }
 
+  <div class="header-actions ms-auto">
+    <div class="search" [class.open]="searchOpen()">
+      <input #searchInput class="search-input" type="text"
+             placeholder="Buscar por descrição, plugin ou URL"
+             [ngModel]="filterText()" (ngModelChange)="onSearchChange($event)"
+             (keyup.escape)="toggleSearch()">
+      @if (searchOpen() && filterText()) {
+        <button mat-icon-button class="search-clear" matTooltip="Limpar" (click)="clearSearch()">
+          <mat-icon>backspace</mat-icon>
+        </button>
+      }
+      <button mat-icon-button class="search-toggle" [matTooltip]="searchOpen() ? 'Fechar busca' : 'Buscar'"
+              (click)="toggleSearch()">
+        <mat-icon>{{ searchOpen() ? 'close' : 'search' }}</mat-icon>
+      </button>
+    </div>
 
-
-    <mat-card-content>
-      <div class="mt-2 mb-2 row" style="display: flex; align-items: flex-start; gap: 15px; margin-top: 10px;">
-
-        @if(load.getAllPlugin){
-          <app-showLoad ></app-showLoad>
-        }
-
-        <mat-form-field class="w-100">
-          <mat-label>Filter</mat-label>
-          <input matInput (keyup)="applyFilter($event)" placeholder="Ex. Clickbus" #input>
-        </mat-form-field>
-
-        <div class="mat-elevation-z8">
-          <table mat-table [dataSource]="dataSource" matSort class="rounded">
-
-
-            <ng-container matColumnDef="description">
-              <th mat-header-cell *matHeaderCellDef mat-sort-header> Descrição </th>
-              <td mat-cell *matCellDef="let row"> {{row.description}} </td>
-            </ng-container>
-
-
-            <ng-container matColumnDef="actions" >
-              <th mat-header-cell *matHeaderCellDef mat-sort-header> # </th>
-              <td mat-cell *matCellDef="let row">
-
-
-                <button class="ms-2" mat-mini-fab color="accent" id="{{'btn-'+row.id}}"
-                        matTooltip="Ações" matTooltipPosition="above"
-                        [disabled]="load.createPlugin && (load.createPlugin && ('btn-'+row.id === actionId))"
-                        [matMenuTriggerFor]="actionsMenu" [matMenuTriggerData]="{name: row}"
-                >
-                  @if(load.createPlugin && ('btn-'+row.id) == actionId){
-                    <mat-spinner diameter="20"
-                                 color="primary"></mat-spinner>
-                  }
-
-                  @if(!load.createPlugin || (load.createPlugin && ('btn-'+row.id !== actionId))){
-                    <mat-icon>more_vert</mat-icon>
-                  }
-
-                </button>
-
-              </td>
-            </ng-container>
-
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-
-            <tr class="mat-row" *matNoDataRow>
-              <td class="mat-cell" colspan="4">No data matching the filter "{{input.value}}"</td>
-            </tr>
-          </table>
-
-          <mat-paginator [pageSizeOptions]="[5, 10, 25, 100]" aria-label="Select page of users"></mat-paginator>
-        </div>
-      </div>
-
-
-    </mat-card-content>
-  </mat-card>
+    <button mat-raised-button color="primary" (click)="openDialogManager()">
+      Novo plugin <mat-icon>add</mat-icon>
+    </button>
+  </div>
 </div>
 
+<div class="cards-grid">
 
+  @if (loading()) {
+    @for (s of skeletons; track $index) {
+      <div class="plugin-card skeleton-card">
+        <div class="plugin-head">
+          <div class="sk sk-avatar"></div>
+          <div class="sk-titles">
+            <div class="sk sk-title"></div>
+            <div class="sk sk-line"></div>
+          </div>
+        </div>
+        <div class="sk sk-actions"></div>
+      </div>
+    }
+  } @else {
+    @for (plugin of filtered(); track plugin.id) {
+      <div class="plugin-card" [class.processing]="processingId() === plugin.id">
+        <div class="plugin-head">
+          <div class="plugin-icon">
+            <mat-icon>extension</mat-icon>
+          </div>
+          <div class="plugin-titles">
+            <strong class="plugin-name" [matTooltip]="plugin.description">{{ plugin.description }}</strong>
+            @if (plugin.plugin?.name || plugin.apiBaseUrl) {
+              <span class="plugin-sub">{{ plugin.plugin?.name || plugin.apiBaseUrl }}</span>
+            }
+          </div>
+        </div>
 
+        <mat-divider></mat-divider>
 
+        <div class="plugin-actions">
+          @if (processingId() === plugin.id) {
+            <div class="plugin-processing">
+              <mat-spinner diameter="22"></mat-spinner>
+            </div>
+          } @else {
+            <button mat-icon-button matTooltip="Editar plugin" (click)="openDialogManager(plugin)">
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button mat-icon-button matTooltip="Editar URLs" (click)="openDialogEdit(plugin, 'url')">
+              <mat-icon>link</mat-icon>
+            </button>
+            <button mat-icon-button matTooltip="Editar autenticação" (click)="openDialogEdit(plugin, 'auth')">
+              <mat-icon>lock</mat-icon>
+            </button>
+            <button mat-icon-button matTooltip="Editar configurações" (click)="openDialogEdit(plugin, 'settings')">
+              <mat-icon>settings</mat-icon>
+            </button>
+            <button mat-icon-button matTooltip="Duplicar plugin" (click)="copyPlugin(plugin)">
+              <mat-icon>dynamic_feed</mat-icon>
+            </button>
 
-<mat-menu #actionsMenu="matMenu" class="app-menu" yPosition="above">
-  <ng-template matMenuContent let-name="name" >
-    <button class="" mat-menu-item
-    (click)="openDialogEdit(name, 'url')">
-      <mat-icon class="text-warning">link</mat-icon>
-      Editar URLS
-    </button>
+            <button mat-icon-button class="danger ms-auto" matTooltip="Deletar plugin"
+                    (click)="openDialogConfirm(plugin)">
+              <mat-icon>delete</mat-icon>
+            </button>
+          }
+        </div>
+      </div>
+    }
 
-    <button class="" mat-menu-item
-    (click)="openDialogEdit(name, 'auth')">
-      <mat-icon class="text-warning">lock</mat-icon>
-      Editar Autenticação
-    </button>
+    @if (filtered().length === 0) {
+      <div class="empty-state">
+        <mat-icon>extension_off</mat-icon>
+        <span>{{ filterText() ? 'Nenhum plugin encontrado para a busca.' : 'Nenhum plugin cadastrado.' }}</span>
+      </div>
+    }
+  }
 
-    <button class="" mat-menu-item
-    (click)="openDialogEdit(name, 'settings')">
-      <mat-icon class="text-warning">settings</mat-icon>
-      Editar Configurações
-    </button>
-
-    <button class="" mat-menu-item
-    (click)="openDialogManager(name)">
-      <mat-icon class="text-warning">edit</mat-icon>
-      Editar Plugin
-    </button>
-
-    <button class="" mat-menu-item
-    (click)="copyPlugin(name)">
-      <mat-icon class="text-warning">dynamic_feed</mat-icon>
-      Duplicar Plugin
-    </button>
-
-    <mat-divider class="m-3"></mat-divider>
-
-    <button class="" mat-menu-item
-    (click)="openDialogConfirm(name)">
-      <mat-icon class="text-danger">delete</mat-icon>
-      Deletar Plugin
-    </button>
-
-    <mat-divider class="m-3"></mat-divider>
-
-
-    <button class="" mat-menu-item disabled matTooltip="Em desenvolvimento">
-      <mat-icon class="text-primary">translate</mat-icon>
-      Tradutor Cidades
-    </button>
-
-
-  </ng-template>
-</mat-menu>
-
-
-
+</div>

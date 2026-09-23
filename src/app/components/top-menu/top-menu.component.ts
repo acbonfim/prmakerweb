@@ -1,4 +1,4 @@
-import {Component, EventEmitter, HostListener, Input, OnInit, Output} from '@angular/core';
+import {ChangeDetectorRef, Component, EventEmitter, HostListener, Input, OnInit, Output} from '@angular/core';
 import {MatIconModule} from '@angular/material/icon';
 import {MatButtonModule} from '@angular/material/button';
 import {MatMenuModule} from '@angular/material/menu';
@@ -71,7 +71,19 @@ export class TopMenuComponent implements OnInit {
     public _storageService: StorageService,
     private _wsService: WsService,
     public dialog: MatDialog,
+    private cdr: ChangeDetectorRef,
   ) { }
+
+  // Sincroniza o avatar/nome do topo quando o "access" muda em OUTRA aba
+  // (ex.: troca de foto de perfil). O evento `storage` só dispara nas demais
+  // abas; a aba que fez a alteração já atualiza via afterClosed do perfil.
+  @HostListener('window:storage', ['$event'])
+  onStorageChange(event: StorageEvent) {
+    if (event.key === this._storageService.getAccessStorageKey()) {
+      this.loadUser();
+      this.cdr.detectChanges();
+    }
+  }
 
   ngOnInit(): void {
     this.title = environment.title;

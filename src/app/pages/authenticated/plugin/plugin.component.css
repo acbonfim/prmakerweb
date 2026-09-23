@@ -1,0 +1,191 @@
+:host {
+  display: block;
+  color: var(--mat-sys-on-surface);
+}
+
+/* ── Cabeçalho (mesma linguagem visual de register / gestão de usuários) ── */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--surface-3, #252525);
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+}
+
+.header-icon { color: var(--mat-sys-primary); }
+.header-title { font-size: 20px; font-weight: 500; }
+
+.header-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  font-size: 12px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+}
+
+.ms-auto { margin-left: auto; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-actions button mat-icon { margin-left: 4px; }
+
+/* ── Filtro colapsável ── */
+.search {
+  display: flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent);
+  border-radius: 24px;
+  padding-left: 6px;
+  transition: background 0.2s ease;
+}
+.search.open {
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 14%, transparent);
+}
+
+.search-input {
+  width: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--mat-sys-on-surface);
+  font-size: 14px;
+  opacity: 0;
+  transition: width 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+}
+.search.open .search-input {
+  width: 240px;
+  padding: 0 6px 0 10px;
+  opacity: 1;
+}
+.search-input::placeholder {
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+}
+
+/* ── Grid de cards ── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.plugin-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.plugin-card:hover {
+  border-color: color-mix(in srgb, var(--mat-sys-primary) 45%, transparent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.plugin-card.processing { opacity: 0.7; }
+
+.plugin-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+.plugin-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--mat-sys-primary) 20%, transparent);
+  color: var(--mat-sys-primary);
+}
+
+.plugin-titles { display: flex; flex-direction: column; min-width: 0; }
+
+.plugin-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plugin-sub {
+  font-size: 12px;
+  opacity: 0.65;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plugin-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+}
+
+.plugin-actions .danger:hover { color: #ff6b67; }
+
+.plugin-processing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 40px;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  padding: 40px 20px;
+  opacity: 0.7;
+}
+
+.empty-state mat-icon {
+  font-size: 40px;
+  width: 40px;
+  height: 40px;
+  opacity: 0.6;
+}
+
+/* ── Skeleton shimmer (mesmo padrão de gestão de usuários) ── */
+.skeleton-card { pointer-events: none; }
+
+.sk {
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.12) 37%,
+    rgba(255, 255, 255, 0.05) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+.sk-avatar { width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0; }
+.sk-titles { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.sk-title { height: 16px; width: 65%; }
+.sk-line { height: 12px; width: 45%; }
+.sk-actions { height: 28px; width: 60%; margin-top: 4px; }
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
