@@ -1,0 +1,12 @@
+node_modules
+dist
+.angular
+.git
+.github
+.idea
+.vscode
+deploy
+**/*.md
+.DS_Store
+**/.DS_Store
+npm-debug.log
