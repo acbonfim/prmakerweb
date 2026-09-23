@@ -1,0 +1,8 @@
+# Copie para terraform.tfvars (gitignorado) e ajuste.
+project_id  = "cime-prod"
+region      = "us-central1"
+github_repo = "acbonfim/prmakerweb"
+
+domain                = "softhouse.app.br"
+subdomain             = "app"
+enable_domain_mapping = false
