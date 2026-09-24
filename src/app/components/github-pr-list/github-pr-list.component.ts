@@ -3,7 +3,6 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { OrderListModule } from 'primeng/orderlist';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import { AuthService } from '../../services/auth.service';
@@ -19,22 +18,27 @@ interface Author { name: string; photo: string | null; }
 @Component({
   selector: 'app-github-pr-list',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatIconModule, MatTooltipModule, MatProgressBarModule, OrderListModule, UserAvatarComponent],
+  imports: [DatePipe, FormsModule, MatIconModule, MatTooltipModule, OrderListModule, UserAvatarComponent],
   template: `
-    @if (loading() && prs().length === 0) {
-      <div class="pr-skeleton" aria-hidden="true">
-        @for (s of [1, 2, 3]; track s) {
-          <div class="cime-skeleton pr-skeleton__item"></div>
+    @if (loading()) {
+      <!-- Skeleton no formato de cada registro: um por PR já listado (3 na primeira carga) -->
+      <div class="pr-skeleton" aria-busy="true" aria-label="Carregando pull requests">
+        @for (s of skeletonRows(); track $index) {
+          <div class="pr-skeleton__item" aria-hidden="true">
+            <div class="cime-skeleton pr-skeleton__avatar"></div>
+            <div class="pr-skeleton__main">
+              <div class="cime-skeleton pr-skeleton__line pr-skeleton__line--title"></div>
+              <div class="cime-skeleton pr-skeleton__line pr-skeleton__line--meta"></div>
+              <div class="cime-skeleton pr-skeleton__line pr-skeleton__line--meta-short"></div>
+            </div>
+            <div class="cime-skeleton pr-skeleton__chip"></div>
+          </div>
         }
       </div>
     } @else if (prs().length === 0) {
       <div class="pr-empty">{{ emptyMessage() }}</div>
     } @else {
-      <!-- Atualizando com itens já na tela: barra no topo e itens esmaecidos (sem sumir com a lista) -->
-      @if (loading()) {
-        <mat-progress-bar class="pr-refreshing" mode="indeterminate" aria-label="Atualizando status dos PRs"></mat-progress-bar>
-      }
-      <p-orderList class="pr-orderlist" [class.pr-orderlist--refreshing]="loading()"
+      <p-orderList class="pr-orderlist"
                    [value]="items()"
                    [selection]="selection"
                    (onSelectionChange)="onSelect($event.value)"
@@ -84,17 +88,31 @@ interface Author { name: string; photo: string | null; }
       overflow-y: auto;
     }
 
-    .pr-skeleton { display: flex; flex-direction: column; gap: 8px; }
-    .pr-skeleton__item { height: 62px; border-radius: 8px; }
+    .pr-skeleton { display: flex; flex-direction: column; gap: 6px; }
+
+    /* Mesmas medidas do .pr-item para não "pular" quando os registros voltam */
+    .pr-skeleton__item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--surface-input, #1f1f1f);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .pr-skeleton__avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; }
+    .pr-skeleton__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .pr-skeleton__line { height: 10px; border-radius: 5px; }
+    .pr-skeleton__line--title { width: 45%; height: 12px; }
+    .pr-skeleton__line--meta { width: 65%; }
+    .pr-skeleton__line--meta-short { width: 38%; }
+    .pr-skeleton__chip { width: 58px; height: 20px; border-radius: 999px; flex-shrink: 0; }
 
     .pr-empty {
       margin: auto;
       font-size: 13px;
       color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
     }
-
-    .pr-refreshing { flex: 0 0 auto; margin-bottom: 6px; border-radius: 4px; }
-    .pr-orderlist--refreshing { opacity: 0.55; pointer-events: none; transition: opacity 0.2s; }
 
     /* p-orderList como lista simples: sem controles de ordenação, sem bordas/fundo próprios */
     :host ::ng-deep .pr-orderlist .p-orderlist-controls { display: none; }
@@ -174,6 +192,11 @@ export class GithubPrListComponent {
 
   /** p-orderList trabalha com uma cópia (ele reordena o array que recebe). */
   readonly items = computed(() => [...this.prs()]);
+  /** Quantidade de linhas de skeleton: os PRs já exibidos (atualização) ou 3 (primeira carga), até 8. */
+  readonly skeletonRows = computed(() => {
+    const count = this.prs().length > 0 ? Math.min(this.prs().length, 8) : 3;
+    return Array.from({ length: count });
+  });
   selection: GithubPullRequest[] = [];
 
   private readonly authors = signal<Record<string, Author>>({});
