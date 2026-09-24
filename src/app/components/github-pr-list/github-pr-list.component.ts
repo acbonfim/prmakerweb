@@ -8,6 +8,10 @@ import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import { AuthService } from '../../services/auth.service';
 import { GithubPullRequest } from '../../services/pull-request.service';
 import { FilterBarComponent } from '../filter-bar/filter-bar.component';
+import { PrQuickActionsComponent } from '../pr-quick-actions/pr-quick-actions.component';
+import { TargetBranchOption } from '../target-branch-toggle/target-branch-toggle.component';
+import { MatButtonModule } from '@angular/material/button';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FilterOption, FilterProvider, FilterValues } from '../filter-bar/filter-bar.models';
 import { of } from 'rxjs';
 
@@ -55,7 +59,8 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
 @Component({
   selector: 'app-github-pr-list',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatIconModule, MatTooltipModule, OrderListModule, UserAvatarComponent, FilterBarComponent],
+  imports: [DatePipe, FormsModule, MatIconModule, MatTooltipModule, OrderListModule, UserAvatarComponent, FilterBarComponent,
+    MatButtonModule, MatProgressSpinnerModule, PrQuickActionsComponent],
   template: `
     <!-- Filtros (0005): recriados a cada card (resetKey) para começar sem seleção -->
     @if (prs().length > 0) {
@@ -95,7 +100,10 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
                    [metaKeySelection]="false"
                    dataKey="id">
         <ng-template let-pr #item>
-          <div class="pr-item">
+          <!-- 0007: botão direito = atalhos rápidos (mesmo menu do ⚡) -->
+          <div class="pr-item" (contextmenu)="actions.openFromContextMenu(pr, $event)"
+               matTooltip="Clique para abrir · botão direito para atalhos rápidos"
+               [matTooltipShowDelay]="900" matTooltipPosition="above">
             <app-user-avatar [name]="authorOf(pr).name" [imageUrl]="authorOf(pr).photo" [size]="32"></app-user-avatar>
             <div class="pr-item__main">
               <span class="pr-item__branch">{{ pr.branchPrefix }}{{ pr.branchName }}</span>
@@ -106,6 +114,30 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
               <span class="pr-item__meta">
                 {{ authorOf(pr).name || '—' }} · {{ pr.createdAt | date:'dd/MM/yyyy HH:mm' }}
               </span>
+            </div>
+            <div class="pr-item__side">
+            <div class="pr-item__tools">
+              <!-- Pedir aprovação no Teams (0007): desabilitado até configurar / para PR não aberto -->
+              <span [matTooltip]="actions.approvalBlockReason(pr) ?? 'Pedir aprovação no Teams'" matTooltipPosition="above">
+                <button mat-icon-button class="pr-tool"
+                        [disabled]="!!actions.approvalBlockReason(pr) || actions.isSendingApproval(pr)"
+                        (mousedown)="$event.stopPropagation()"
+                        (click)="$event.stopPropagation(); actions.requestApproval(pr)"
+                        aria-label="Pedir aprovação no Teams">
+                  @if (actions.isSendingApproval(pr)) {
+                    <mat-spinner diameter="14"></mat-spinner>
+                  } @else {
+                    <mat-icon>forum</mat-icon>
+                  }
+                </button>
+              </span>
+              <button mat-icon-button class="pr-tool pr-tool--bolt"
+                      matTooltip="Atalhos rápidos (ou botão direito na linha)" matTooltipPosition="above"
+                      (mousedown)="$event.stopPropagation()"
+                      (click)="$event.stopPropagation(); actions.openFromButton(pr, $any($event.currentTarget))"
+                      aria-label="Atalhos rápidos">
+                <mat-icon>bolt</mat-icon>
+              </button>
             </div>
             <div class="pr-item__status">
               @if (pr.statusStale) {
@@ -123,11 +155,14 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
                 <span [class]="'pr-chip pr-chip--' + pr.status.toLowerCase()">{{ pr.status }}</span>
               }
             </div>
+            </div>
           </div>
         </ng-template>
       </p-orderList>
     }
     </div>
+
+    <app-pr-quick-actions #actions [targetOptions]="targetOptions()" [userId]="userId()"></app-pr-quick-actions>
   `,
   styles: [`
     :host {
@@ -223,6 +258,19 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
     }
     .pr-item__meta mat-icon { font-size: 14px; width: 14px; height: 14px; }
 
+    /* Coluna da direita: ferramentas (Teams, ⚡) no topo, status embaixo (0007) */
+    .pr-item__side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; align-self: stretch; justify-content: space-between; }
+    .pr-item__tools { display: flex; align-items: center; gap: 2px; margin: -4px -6px 0 0; }
+    .pr-tool.mat-mdc-icon-button {
+      width: 26px; height: 26px; padding: 0;
+      --mdc-icon-button-state-layer-size: 26px;
+      color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
+    }
+    .pr-tool.mat-mdc-icon-button:not(:disabled):hover { color: var(--mat-sys-primary); }
+    .pr-tool--bolt.mat-mdc-icon-button { color: color-mix(in srgb, #d29922 80%, transparent); }
+    .pr-tool--bolt.mat-mdc-icon-button:hover { color: #d29922; }
+    .pr-tool .mat-icon { font-size: 17px; width: 17px; height: 17px; }
+    .pr-tool mat-spinner { margin: auto; }
     .pr-item__status { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .pr-item__stale { color: #d29922; font-size: 18px; width: 18px; height: 18px; }
 
@@ -248,6 +296,10 @@ export class GithubPrListComponent {
   readonly prs = input<GithubPullRequest[]>([]);
   readonly loading = input(false);
   readonly emptyMessage = input('Nenhum PR aberto para este card.');
+  /** Destinos para "Abrir PR rápido" (ActiveBranchs), os mesmos do modal. */
+  readonly targetOptions = input<TargetBranchOption[]>([]);
+  /** ExternalId de quem está logado (autor do PR aberto pelos atalhos). */
+  readonly userId = input<string | undefined>(undefined);
   /** Muda a cada card: limpa os filtros (ex.: o número do card). */
   readonly resetKey = input<string | null>(null);
   readonly select = output<GithubPullRequest>();
