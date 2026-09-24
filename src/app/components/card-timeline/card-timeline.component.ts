@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { TimelineService } from '../../services/timeline.service';
@@ -151,7 +152,8 @@ export class CardTimelineComponent implements OnDestroy {
     private storageService: StorageService,
     private teamsGraph: TeamsGraphService,
     private ws: WsService,
-    private authService: AuthService
+    private authService: AuthService,
+    private snackBar: MatSnackBar
   ) {
     const access = this.storageService.getAccess();
     this.currentUserId = access && access.user ? (access.user.externalId ?? null) : null;
@@ -292,8 +294,10 @@ export class CardTimelineComponent implements OnDestroy {
           this.isPosting.set(false);
           this.scrollToBottom();
         },
-        error: () => {
+        error: (err) => {
+          // O texto digitado fica no campo; a mensagem diz o motivo (ex.: acima do limite).
           this.isPosting.set(false);
+          this.showSaveError(err, 'Não foi possível salvar o registro.');
         }
       });
   }
@@ -430,10 +434,18 @@ export class CardTimelineComponent implements OnDestroy {
         this.editText = '';
         this.isSavingEdit.set(false);
       },
-      error: () => {
+      error: (err) => {
         this.isSavingEdit.set(false);
+        this.showSaveError(err, 'Não foi possível salvar a alteração.');
       }
     });
+  }
+
+  /** Mostra a mensagem de validação do backend (400 { error }) ou uma genérica. */
+  private showSaveError(err: any, fallback: string): void {
+    const body = err?.error;
+    const message = (typeof body === 'string' && body) || body?.error || body?.message || fallback;
+    this.snackBar.open(message, 'Fechar', { duration: 8000 });
   }
 
   requestDelete(entry: TimelineEntry): void {
