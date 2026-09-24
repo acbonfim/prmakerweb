@@ -148,7 +148,12 @@
                 </button>
               </div>
             } @else {
-              <div class="comment__content">{{ entry.description }}</div>
+              <!-- Markdown detectado automaticamente → formatado; texto comum → como sempre (feature 0004) -->
+              @if (entry.description | timelineMarkdown; as html) {
+                <div class="comment__content comment__content--md" [innerHTML]="html" (click)="onContentClick($event)"></div>
+              } @else {
+                <div class="comment__content">{{ entry.description }}</div>
+              }
 
               @if (confirmDeleteId() === entry.id) {
                 <div class="comment__confirm">
