@@ -1,0 +1,68 @@
+<div class="dialog-header">
+  <mat-icon class="dialog-header__icon">vpn_key</mat-icon>
+  <div class="dialog-header__titles">
+    <span class="dialog-header__title">Minha API Key</span>
+    <span class="dialog-header__sub">Chave pessoal para integrar com a API (skills, scripts, automações).</span>
+  </div>
+  <button mat-icon-button class="ms-auto" (click)="close()" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+</div>
+
+<mat-dialog-content class="dialog-body">
+  <p class="intro">
+    Envie a chave no header <code>x-api-key</code> das chamadas para <code>{{ apiUrl }}</code>.
+    Ela tem as mesmas permissões que você tem hoje.
+  </p>
+
+  <ul class="notes">
+    <li><mat-icon>all_inclusive</mat-icon><span>A chave <strong>não expira</strong>. Guarde-a como uma senha e não a compartilhe.</span></li>
+    <li><mat-icon>history</mat-icon><span>Gerar outra chave <strong>não invalida</strong> as anteriores. Se uma chave vazar, avise um administrador.</span></li>
+    <li><mat-icon>badge</mat-icon><span>Os cargos ficam gravados na chave: se os seus cargos mudarem, gere uma nova.</span></li>
+  </ul>
+
+  @if (error()) {
+    <div class="error"><mat-icon>error_outline</mat-icon>{{ error() }}</div>
+  }
+
+  @if (apiKey()) {
+    <section class="key">
+      <header class="key__head">
+        <span class="key__label">Sua API Key</span>
+        @for (role of roles(); track role) {
+          <span class="chip">{{ role }}</span>
+        }
+      </header>
+
+      <div class="key__value" [class.key__value--revealed]="reveal()">
+        <code>{{ reveal() ? apiKey() : maskedKey() }}</code>
+        <div class="key__actions">
+          <button mat-icon-button type="button" (click)="reveal.set(!reveal())"
+                  [matTooltip]="reveal() ? 'Ocultar' : 'Mostrar a chave completa'">
+            <mat-icon>{{ reveal() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          <button mat-icon-button type="button" (click)="copyKey()" matTooltip="Copiar a chave">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </div>
+      </div>
+
+      <div class="example">
+        <span class="example__label">Exemplo</span>
+        <div class="example__code">
+          <code>curl -H "x-api-key: &lt;sua-api-key&gt;" "{{ apiUrl }}PullRequest/GetByCardNumber?cardNumber=12345"</code>
+          <button mat-icon-button type="button" (click)="copyExample()" matTooltip="Copiar o exemplo com a sua chave">
+            <mat-icon>content_copy</mat-icon>
+          </button>
+        </div>
+      </div>
+    </section>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions class="dialog-actions">
+  <span class="spacer"></span>
+  <button mat-button (click)="close()">Fechar</button>
+  <button mat-flat-button color="primary" (click)="generate()" [disabled]="generating()">
+    @if (generating()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>{{ apiKey() ? 'autorenew' : 'vpn_key' }}</mat-icon> }
+    {{ apiKey() ? 'Gerar outra' : 'Gerar minha API Key' }}
+  </button>
+</mat-dialog-actions>

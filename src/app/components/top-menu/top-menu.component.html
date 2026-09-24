@@ -58,6 +58,10 @@
       <span class="pm-pending" matTooltip="Há integrações pessoais pendentes">!</span>
     }
   </button>
+  <button (click)="openMyApiKey()" mat-menu-item>
+    <mat-icon>vpn_key</mat-icon>
+    <span>Minha API Key</span>
+  </button>
   <button mat-menu-item class="pm-danger" (click)="logOut()">
     <mat-icon>logout</mat-icon>
     <span>Sair</span>
