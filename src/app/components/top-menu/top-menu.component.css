@@ -123,3 +123,13 @@
   .profile-name { display: none; }
   .profile-chip { border-radius: 50%; padding: 4px; }
 }
+
+/* Bolinha de pendência de "Minhas integrações" (ao lado do nome) */
+.profile-pending {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #d29922;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #d29922 30%, transparent);
+  flex-shrink: 0;
+}
