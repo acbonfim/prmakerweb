@@ -189,3 +189,24 @@
   0% { background-position: 100% 0; }
   100% { background-position: 0 0; }
 }
+
+/* Badge "Uso pessoal" (plugin com configuração por usuário) */
+.plugin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mat-sys-primary);
+  background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
+}
+
+.plugin-badge mat-icon {
+  font-size: 14px;
+  width: 14px;
+  height: 14px;
+}

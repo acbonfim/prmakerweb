@@ -52,6 +52,12 @@
           </div>
           <div class="plugin-titles">
             <strong class="plugin-name" [matTooltip]="plugin.description">{{ plugin.description }}</strong>
+            @if (plugin.isPersonal) {
+              <span class="plugin-badge"
+                    matTooltip="Uso pessoal: cada usuário preenche os próprios valores em Minhas integrações">
+                <mat-icon>person</mat-icon> Uso pessoal
+              </span>
+            }
             @if (plugin.plugin?.name || plugin.apiBaseUrl) {
               <span class="plugin-sub">{{ plugin.plugin?.name || plugin.apiBaseUrl }}</span>
             }

@@ -34,4 +34,6 @@ export interface PluginData {
   key?: any;
   configurations?: Configuration;
   adminOnly?: boolean;
+  /** Uso pessoal: cada usuário preenche os próprios valores em "Minhas integrações". */
+  isPersonal?: boolean;
 }
