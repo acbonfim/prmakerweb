@@ -89,7 +89,8 @@ export class OpenPrDialogComponent implements OnInit {
     const prefix = this.branchPrefix();
     const name = this.branchName().trim();
     if (!repo || !name) return null;
-    return this.state.githubPrs().find(pr =>
+    // Registros LEGACY não têm PR no GitHub: abrir o PR para eles é justamente o caso de uso.
+    return this.state.githubPrs().find(pr => pr.number != null &&
       pr.repositoryId === repo && pr.branchPrefix === prefix && pr.branchName === name) ?? null;
   });
 

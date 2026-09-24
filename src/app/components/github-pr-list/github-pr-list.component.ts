@@ -42,8 +42,8 @@ interface Author { name: string; photo: string | null; }
             <div class="pr-item__main">
               <span class="pr-item__branch">{{ pr.branchPrefix }}{{ pr.branchName }}</span>
               <span class="pr-item__meta">
-                <mat-icon>folder</mat-icon>{{ pr.repositoryId }} → {{ pr.targetBranch }}
-                · #{{ pr.number }}
+                <mat-icon>folder</mat-icon>{{ pr.repositoryId }}
+                @if (pr.number) { → {{ pr.targetBranch }} · #{{ pr.number }} }
               </span>
               <span class="pr-item__meta">
                 {{ authorOf(pr).name || '—' }} · {{ pr.createdAt | date:'dd/MM/yyyy HH:mm' }}
@@ -57,7 +57,13 @@ interface Author { name: string; photo: string | null; }
               @if (pr.isDraft && pr.status === 'OPEN') {
                 <span class="pr-chip pr-chip--draft">DRAFT</span>
               }
-              <span [class]="'pr-chip pr-chip--' + pr.status.toLowerCase()">{{ pr.status }}</span>
+              @if (pr.status === 'LEGACY') {
+                <span class="pr-chip pr-chip--legacy"
+                      matTooltip="Registro anterior (branch/repositório salvos), sem PR no GitHub. Clique para abrir o PR."
+                      matTooltipPosition="above">LEGADO</span>
+              } @else {
+                <span [class]="'pr-chip pr-chip--' + pr.status.toLowerCase()">{{ pr.status }}</span>
+              }
             </div>
           </div>
         </ng-template>
@@ -146,6 +152,7 @@ interface Author { name: string; photo: string | null; }
     .pr-chip--open { color: #3fb950; background: rgba(63, 185, 80, 0.15); border-color: rgba(63, 185, 80, 0.4); }
     .pr-chip--merged { color: #a371f7; background: rgba(163, 113, 247, 0.15); border-color: rgba(163, 113, 247, 0.4); }
     .pr-chip--closed { color: #f85149; background: rgba(248, 81, 73, 0.15); border-color: rgba(248, 81, 73, 0.4); }
+    .pr-chip--legacy { color: #8b949e; background: transparent; border-color: rgba(139, 148, 158, 0.5); border-style: dashed; }
     .pr-chip--draft { color: #8b949e; background: rgba(139, 148, 158, 0.15); border-color: rgba(139, 148, 158, 0.4); }
   `]
 })

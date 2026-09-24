@@ -540,15 +540,20 @@ export class RegisterComponent implements OnInit, OnDestroy {
   openPrDialog(pr?: GithubPullRequest) {
     if (!this.cardNumber) return;
 
+    // Registro LEGACY (sem PR no GitHub): abre em modo criação já com repositório/branch dele;
+    // o backend promove o registro quando o PR é aberto.
+    const legacy = pr?.status === 'LEGACY' ? pr : null;
+    if (legacy) pr = undefined;
+
     const data: OpenPrDialogData = {
       cardNumber: this.cardNumber.toString(),
       cardType: this.cardType,
       userId: this.userSelected?.externalId,
       targetOptions: this.justifyOptions,
       defaultTarget: this.environmentName,
-      defaultPrefix: this.branchPrefix,
-      defaultBranchName: this.branchName || this.cardNumber.toString(),
-      defaultRepository: this.defaultRepositoryValue,
+      defaultPrefix: legacy?.branchPrefix ?? this.branchPrefix,
+      defaultBranchName: legacy?.branchName ?? (this.branchName || this.cardNumber.toString()),
+      defaultRepository: legacy?.repositoryId ?? this.defaultRepositoryValue,
       repositoryFallback: this.repositoryOptions,
       pr: pr ?? null,
     };

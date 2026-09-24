@@ -31,7 +31,8 @@ export interface PullRequestRegister {
   githubPullRequests?: GithubPullRequest[];
 }
 
-export type GithubPullRequestStatus = 'OPEN' | 'MERGED' | 'CLOSED';
+/** LEGACY = registro migrado do modelo antigo (card x repositório), sem PR no GitHub. */
+export type GithubPullRequestStatus = 'OPEN' | 'MERGED' | 'CLOSED' | 'LEGACY';
 
 /** PR aberto no GitHub pelo CIME para um card. */
 export interface GithubPullRequest {
@@ -42,7 +43,8 @@ export interface GithubPullRequest {
   branchPrefix: string;
   branchName: string;
   targetBranch: string;
-  number: number;
+  /** null nos registros LEGACY. */
+  number: number | null;
   url: string;
   title: string;
   description: string;
