@@ -52,7 +52,7 @@
   @if (matchingPr() && !isEdit) {
     <div class="hint">
       <mat-icon>info</mat-icon>
-      Já existe um PR para esta branch neste repositório (#{{ matchingPr()!.number }}, {{ matchingPr()!.status }}).
+      Já existe um PR desta branch para {{ matchingPr()!.targetBranch }} neste repositório (#{{ matchingPr()!.number }}, {{ matchingPr()!.status }}).
       Abrir de novo apenas copia o link do existente.
     </div>
   }

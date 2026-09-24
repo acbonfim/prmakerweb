@@ -55,6 +55,13 @@ import {RepoOption} from '../../../interfaces/RepoOption';
 const PULLREQUEST_CONFIG_GROUP = 'pullrequest-config';
 const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
 
+/**
+ * Tempo real do card aberto (PullRequestRealTimeEvents no backend): registro salvo e PRs do
+ * GitHub abertos/atualizados/com status novo — pela tela, por outro usuário ou pela skill gerar-prmake.
+ */
+const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
+const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
+
 @Component({
   selector: 'app-register',
   templateUrl: './register.component.html',
@@ -129,6 +136,16 @@ export class RegisterComponent implements OnInit, OnDestroy {
   // null quando não há registro salvo — nesse caso o card de infos não aparece.
   /** A busca do registro do card falhou (a barra aparece mesmo assim, com o aviso). */
   prLoadError = false;
+
+  /** Grupo de tempo real do card em tela (null quando nenhum card foi buscado). */
+  private currentCardGroup: string | null = null;
+
+  /** Rótulo do autor na barra do card conforme o estado da busca. */
+  get infoAuthorLabel(): string {
+    if (this.prLoadError) return 'Não foi possível carregar o card salvo';
+    if (this.prInfo && !this.prInfo.openedAt) return 'Card ainda não salvo';
+    return 'Aberto por';
+  }
 
   prInfo: {
     openedAt: string | null;
@@ -324,6 +341,84 @@ export class RegisterComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.ws.removeFromGroup(PULLREQUEST_CONFIG_GROUP);
     this.ws.off(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
+    this.switchCardGroup(null);
+    this.ws.off(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
+  }
+
+  /** Troca a inscrição de tempo real para o card em tela. */
+  private switchCardGroup(card: string | null): void {
+    const group = card ? pullRequestCardGroup(card) : null;
+    if (group === this.currentCardGroup) return;
+    if (this.currentCardGroup) this.ws.removeFromGroup(this.currentCardGroup);
+    if (group) this.ws.addToGroup(group);
+    this.currentCardGroup = group;
+  }
+
+  /**
+   * Evento de tempo real do card em tela. Registro salvo → recarrega descrição/RC/autor
+   * (ou avisa, se houver edição local não salva); PRs → recarrega a lista (sem ir ao GitHub).
+   */
+  private onCardUpdated = (payload: any): void => {
+    const card = this.cardNumber?.toString();
+    if (!card || payload?.cardNumber !== card.trim()) return;
+
+    if (payload.action === 'register-saved') {
+      this.reloadRegisterFromServer();
+    } else {
+      this.reloadGithubPrs();
+    }
+  };
+
+  /** Recarrega os PRs do card do banco (o status já foi atualizado por quem emitiu o evento). */
+  private reloadGithubPrs(): void {
+    const card = this.cardNumber?.toString();
+    if (!card) return;
+    this.prService.listGithubPrs(card, false).subscribe({
+      next: (prs) => {
+        if (this.prState.cardNumber() === card) this.prState.setGithubPrs(prs ?? []);
+      },
+      error: (e) => console.error('Falha ao recarregar os PRs do card', e),
+    });
+  }
+
+  /**
+   * O registro do card foi salvo em outro lugar (outro usuário, skill gerar-prmake…). Sem edição
+   * local pendente, recarrega em silêncio; com edição pendente, pergunta antes de descartar.
+   */
+  private reloadRegisterFromServer(): void {
+    // Durante a busca/salvamento desta própria tela o eco do evento é ignorado.
+    if (this.isPullRequestLoading || !this.cardNumber) return;
+
+    const saved = this.prState.register();
+    const dirty =
+      (this.prState.description() ?? '') !== (saved?.description ?? '') ||
+      (this.prState.rootCause() ?? '') !== (saved?.rootCause ?? '');
+
+    if (!dirty) {
+      this.applyServerRegister();
+      return;
+    }
+
+    const ref = this._snackBar.open('Este card foi atualizado em outro lugar. Suas alterações não salvas serão perdidas se recarregar.',
+      'Recarregar', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top", duration: 15000});
+    ref.onAction().subscribe(() => this.applyServerRegister());
+  }
+
+  private applyServerRegister(): void {
+    const card = this.cardNumber?.toString();
+    if (!card) return;
+    this.prService.getByCardNumber(card).subscribe({
+      next: (response) => {
+        if (!response || this.cardNumber?.toString() !== card) return;
+        this.pullRequest = response;
+        this.prLoadError = false;
+        this.loadPrAuthorInfo(response);
+        this.prState.loadRegister(card, response);
+        this.generateFullDescriptionHandler();
+        this.cdr.detectChanges();
+      },
+      error: (e) => console.error('Falha ao recarregar o card', e),
+    });
   }
 
   /**
@@ -356,6 +451,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.ws.startConnection();
     this.ws.addToGroup(PULLREQUEST_CONFIG_GROUP);
     this.ws.on(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
+    this.ws.on(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
   }
 
   private onPullRequestConfigUpdated = (): void => {
@@ -465,6 +561,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.cardFull = null;
     this.prInfo = null;
     this.prLoadError = false;
+    this.switchCardGroup(null);
     this.branchPrefix = 'hotfix/';
     this.branchName = '';
     this.selectedRepositoryObj = this.repositoryOptions.length > 0 ? this.repositoryOptions[0] : null;
@@ -487,8 +584,13 @@ export class RegisterComponent implements OnInit, OnDestroy {
       description: this.prState.description(),
       rootCause: this.prState.rootCause(),
     }).subscribe({
-      next: () => {
+      next: (saved) => {
         this._snackBar.open('Card salvo com sucesso!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        // Atualiza autor/datas da barra com o que acabou de ser gravado e marca o conteúdo
+        // atual como "salvo" (base para detectar edição pendente nos eventos de tempo real).
+        this.prLoadError = false;
+        this.loadPrAuthorInfo(saved);
+        this.prState.register.set({ ...saved, githubPullRequests: this.prState.githubPrs() });
         this.isPullRequestLoading = false;
         this.loadingBar.stop();
         this.cdr.detectChanges();
@@ -506,12 +608,13 @@ export class RegisterComponent implements OnInit, OnDestroy {
    * Atualiza a lista de PRs do card com o status atual no GitHub (uma chamada; o backend
    * só consulta os PRs abertos, em paralelo, e devolve o persistido para MERGED/CLOSED).
    */
-  refreshGithubPrs() {
+  refreshGithubPrs(force = false) {
     const cardNumber = this.cardNumber?.toString();
     if (!cardNumber) return;
 
     this.prState.githubPrsLoading.set(true);
-    this.prService.listGithubPrs(cardNumber, true).subscribe({
+    // force (botão ⟳): ignora o cache de 60 s do status no backend.
+    this.prService.listGithubPrs(cardNumber, true, force).subscribe({
       next: (prs) => {
         // Descarta a resposta se o usuário já trocou de card.
         if (this.prState.cardNumber() === cardNumber) this.prState.setGithubPrs(prs ?? []);
@@ -783,6 +886,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.pullRequest = {};
       this.prState.loadRegister(this.cardNumber?.toString() ?? null, null);
       this.fullDescription = null;
+
+      // Tempo real do card: atualizações feitas em outro lugar (outro usuário, skill gerar-prmake).
+      this.switchCardGroup(this.cardNumber?.toString() ?? null);
 
       // Carrega a linha do tempo e os detalhes do card (DevOps) em paralelo à busca do PR.
       this.timeline?.load(this.cardNumber ?? undefined);

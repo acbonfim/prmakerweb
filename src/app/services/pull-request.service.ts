@@ -111,9 +111,9 @@ export class PullRequestService {
     );
   }
 
-  /** Salva os dados do card (descrição/root cause opcionais). */
+  /** Salva os dados do card (descrição/root cause opcionais) e devolve o registro salvo. */
   saveCard(request: SaveCardRequest) {
-    return this.http.post<{ id: number }>(`${this.baseUrl}PullRequest`, request);
+    return this.http.post<PullRequestRegister>(`${this.baseUrl}PullRequest`, request);
   }
 
   /** Repositórios do owner configurado no plugin do GitHub. */
@@ -135,10 +135,13 @@ export class PullRequestService {
     );
   }
 
-  /** PRs do GitHub abertos para o card; refreshStatus consulta o status atual no GitHub. */
-  listGithubPrs(cardNumber: string, refreshStatus = true) {
+  /**
+   * PRs do GitHub abertos para o card; refreshStatus consulta o status atual no GitHub
+   * (cache de 60 s no backend) e forceRefresh ignora esse cache.
+   */
+  listGithubPrs(cardNumber: string, refreshStatus = true, forceRefresh = false) {
     return this.http.get<GithubPullRequest[]>(
-      `${this.baseUrl}PullRequest/${encodeURIComponent(cardNumber)}/github?refreshStatus=${refreshStatus}`
+      `${this.baseUrl}PullRequest/${encodeURIComponent(cardNumber)}/github?refreshStatus=${refreshStatus}&forceRefresh=${forceRefresh}`
     );
   }
 }

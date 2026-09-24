@@ -82,16 +82,20 @@ export class OpenPrDialogComponent implements OnInit {
 
   readonly repositoryValue = computed(() => this.resolveRepositoryValue(this.repository()));
 
-  /** PR já registrado para o repositório + branch selecionados (2.2.1). */
+  /** PR já registrado para o repositório + branch + branch de destino selecionados (2.2.1). */
   readonly matchingPr = computed<GithubPullRequest | null>(() => {
     if (this.editingPr) return this.editingPr;
     const repo = this.repositoryValue();
     const prefix = this.branchPrefix();
     const name = this.branchName().trim();
+    const target = this.target();
     if (!repo || !name) return null;
     // Registros LEGACY não têm PR no GitHub: abrir o PR para eles é justamente o caso de uso.
+    // A mesma branch pode ter PRs para destinos diferentes (ex.: qa e master): só é "o mesmo PR"
+    // quando o destino também bate — o GitHub só recusa PR duplicado para o mesmo head→base.
     return this.state.githubPrs().find(pr => pr.number != null &&
-      pr.repositoryId === repo && pr.branchPrefix === prefix && pr.branchName === name) ?? null;
+      pr.repositoryId === repo && pr.branchPrefix === prefix && pr.branchName === name &&
+      pr.targetBranch === target) ?? null;
   });
 
   readonly author = signal<{ name: string; photo: string | null }>({ name: '', photo: null });

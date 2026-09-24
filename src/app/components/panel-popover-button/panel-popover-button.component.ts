@@ -24,6 +24,7 @@ export type PanelPopoverKind = 'description' | 'rootCause';
       <!-- Com texto: deixa claro que dá para escrever a descrição/root cause manualmente -->
       <button mat-stroked-button type="button" class="popover-trigger--label"
               [matTooltip]="tooltipText()" matTooltipPosition="above"
+              [disabled]="disabled()"
               (click)="op.toggle($event)">
         <mat-icon>{{ iconName() }}</mat-icon>
         {{ label() }}
@@ -35,6 +36,7 @@ export type PanelPopoverKind = 'description' | 'rootCause';
       <button mat-icon-button type="button" class="popover-trigger"
               [matTooltip]="tooltipText()" matTooltipPosition="above"
               [attr.aria-label]="tooltipText()"
+              [disabled]="disabled()"
               (click)="op.toggle($event)">
         <mat-icon>{{ iconName() }}</mat-icon>
       </button>
@@ -76,6 +78,7 @@ export class PanelPopoverButtonComponent {
   readonly icon = input<string | null>(null);
   /** Quando informado, vira um botão com texto (ex.: "Descrição") em vez de só o ícone. */
   readonly label = input<string | null>(null);
+  readonly disabled = input(false);
 
   private state = inject(CardPrStateService);
   /** Indica (✓) quando o conteúdo já foi escrito. */

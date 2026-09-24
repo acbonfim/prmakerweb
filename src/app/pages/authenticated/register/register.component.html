@@ -28,24 +28,26 @@
       </mat-form-field>
     </div>
 
-      <!-- Quem abriu / datas + popovers de Descrição e Root Cause (spec 2, 2.3) -->
-      @if (prInfo) {
-        <app-pr-info-card class="pr-toolbar__info"
-                          [userName]="prInfo.userName"
-                          [userPhoto]="prInfo.userPhoto"
-                          [openedAt]="prInfo.openedAt"
-                          [updatedAt]="prInfo.updatedAt"
-                          [authorLabel]="prLoadError ? 'Não foi possível carregar o card salvo' : prInfo.openedAt ? 'Aberto por' : 'Card ainda não salvo'">
-          <ng-container ngProjectAs="[info-actions]">
-            <app-panel-popover-button kind="description" label="Descrição"
-                                      tooltip="Escrever/editar a descrição do PR"></app-panel-popover-button>
-            @if (cardType !== 'us') {
-              <app-panel-popover-button kind="rootCause" label="Root Cause"
-                                        tooltip="Escrever/editar o root cause (um para todos os repositórios)"></app-panel-popover-button>
-            }
-          </ng-container>
-        </app-pr-info-card>
-      }
+      <!-- Quem abriu / datas + popovers de Descrição e Root Cause (spec 2, 2.3). Sempre visível:
+           vazio antes da busca, skeleton durante a busca. -->
+      <app-pr-info-card class="pr-toolbar__info"
+                        [loading]="isPullRequestLoading && !prInfo"
+                        [userName]="prInfo?.userName ?? ''"
+                        [userPhoto]="prInfo?.userPhoto ?? null"
+                        [openedAt]="prInfo?.openedAt ?? null"
+                        [updatedAt]="prInfo?.updatedAt ?? null"
+                        [authorLabel]="infoAuthorLabel">
+        <ng-container ngProjectAs="[info-actions]">
+          <app-panel-popover-button kind="description" label="Descrição"
+                                    [disabled]="!prInfo || isPullRequestLoading"
+                                    tooltip="Escrever/editar a descrição do PR"></app-panel-popover-button>
+          @if (cardType !== 'us') {
+            <app-panel-popover-button kind="rootCause" label="Root Cause"
+                                      [disabled]="!prInfo || isPullRequestLoading"
+                                      tooltip="Escrever/editar o root cause (um para todos os repositórios)"></app-panel-popover-button>
+          }
+        </ng-container>
+      </app-pr-info-card>
     </div>
 
     <!--
@@ -63,7 +65,7 @@
             <app-card-panel class="pr-panel" title="Pull Requests" icon="merge">
               @if (prInfo) {
                 <button panel-actions mat-icon-button class="panel-action"
-                        (click)="refreshGithubPrs()"
+                        (click)="refreshGithubPrs(true)"
                         [disabled]="prState.githubPrsLoading()"
                         matTooltip="Atualizar status no GitHub" matTooltipPosition="above">
                   <mat-icon>refresh</mat-icon>
