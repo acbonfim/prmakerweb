@@ -14,12 +14,12 @@ import { RepoAutocompleteComponent } from '../repo-autocomplete/repo-autocomplet
 import { TargetBranchOption, TargetBranchToggleComponent } from '../target-branch-toggle/target-branch-toggle.component';
 import { PrInfoCardComponent } from '../pr-info-card/pr-info-card.component';
 import { PanelPopoverButtonComponent } from '../panel-popover-button/panel-popover-button.component';
+import { PrDescriptionPanelComponent } from '../pr-description-panel/pr-description-panel.component';
 import { CardPrStateService } from '../../services/card-pr-state.service';
 import { GithubPullRequest, PullRequestService } from '../../services/pull-request.service';
 import { AuthService } from '../../services/auth.service';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { RepoOption } from '../../interfaces/RepoOption';
-import { mdToHtml } from '../../helpers/markdown';
 
 export interface OpenPrDialogData {
   cardNumber: string;
@@ -49,7 +49,7 @@ export interface OpenPrDialogData {
     FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule,
     MatProgressSpinnerModule, MatSlideToggleModule, MatTooltipModule,
     BranchInputComponent, RepoAutocompleteComponent, TargetBranchToggleComponent,
-    PrInfoCardComponent, PanelPopoverButtonComponent,
+    PrInfoCardComponent, PanelPopoverButtonComponent, PrDescriptionPanelComponent,
   ],
   templateUrl: './open-pr-dialog.component.html',
   styleUrls: ['./open-pr-dialog.component.css'],
@@ -97,7 +97,6 @@ export class OpenPrDialogComponent implements OnInit {
   readonly author = signal<{ name: string; photo: string | null }>({ name: '', photo: null });
   private authorCache = new Map<string, { name: string; photo: string | null }>();
 
-  readonly descriptionHtml = computed(() => mdToHtml(this.state.description()));
   readonly showRootCause = (this.data.cardType ?? '').toLowerCase() !== 'us';
 
   readonly canSubmit = computed(() =>

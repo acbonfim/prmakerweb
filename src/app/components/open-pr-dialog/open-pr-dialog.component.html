@@ -41,9 +41,10 @@
                     [updatedAt]="matchingPr()?.updatedAt ?? null"
                     [authorLabel]="matchingPr() ? 'Aberto por' : 'Novo PR — ainda não aberto'">
     <ng-container ngProjectAs="[info-actions]">
-      <app-panel-popover-button kind="description" tooltip="Ver/editar descrição do card"></app-panel-popover-button>
+      <app-panel-popover-button kind="description" tooltip="Ver a descrição em tela maior"></app-panel-popover-button>
       @if (showRootCause) {
-        <app-panel-popover-button kind="rootCause" tooltip="Ver/editar root cause"></app-panel-popover-button>
+        <app-panel-popover-button kind="rootCause" label="Root Cause"
+                                  tooltip="Escrever/editar o root cause (um para todos os repositórios)"></app-panel-popover-button>
       }
     </ng-container>
   </app-pr-info-card>
@@ -56,16 +57,9 @@
     </div>
   }
 
-  <div class="description-preview">
-    <div class="description-preview__label">Descrição que será enviada ao GitHub</div>
-    @if (descriptionHtml()) {
-      <div class="description-preview__content" [innerHTML]="descriptionHtml()"></div>
-    } @else {
-      <div class="description-preview__empty">
-        Sem descrição. Use o botão <mat-icon inline>description</mat-icon> acima para escrever.
-      </div>
-    }
-  </div>
+  <!-- Descrição do PR (spec 2.1): escrita à mão aqui ou gerada com IA; é a mesma do card,
+       então reflete na tela principal e nos popovers. -->
+  <app-pr-description-panel class="description-editor" title="Descrição do PR (enviada ao GitHub)"></app-pr-description-panel>
 
   @if (error()) {
     <div class="error"><mat-icon>error_outline</mat-icon>{{ error() }}</div>

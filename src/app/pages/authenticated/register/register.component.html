@@ -35,11 +35,13 @@
                           [userPhoto]="prInfo.userPhoto"
                           [openedAt]="prInfo.openedAt"
                           [updatedAt]="prInfo.updatedAt"
-                          [authorLabel]="prInfo.openedAt ? 'Aberto por' : 'Card ainda não salvo'">
+                          [authorLabel]="prLoadError ? 'Não foi possível carregar o card salvo' : prInfo.openedAt ? 'Aberto por' : 'Card ainda não salvo'">
           <ng-container ngProjectAs="[info-actions]">
-            <app-panel-popover-button kind="description"></app-panel-popover-button>
+            <app-panel-popover-button kind="description" label="Descrição"
+                                      tooltip="Escrever/editar a descrição do PR"></app-panel-popover-button>
             @if (cardType !== 'us') {
-              <app-panel-popover-button kind="rootCause"></app-panel-popover-button>
+              <app-panel-popover-button kind="rootCause" label="Root Cause"
+                                        tooltip="Escrever/editar o root cause (um para todos os repositórios)"></app-panel-popover-button>
             }
           </ng-container>
         </app-pr-info-card>

@@ -127,6 +127,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   // Metadados do PR encontrado (quem abriu, quando abriu, última atualização).
   // null quando não há registro salvo — nesse caso o card de infos não aparece.
+  /** A busca do registro do card falhou (a barra aparece mesmo assim, com o aviso). */
+  prLoadError = false;
+
   prInfo: {
     openedAt: string | null;
     updatedAt: string | null;
@@ -461,6 +464,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     // Zera os detalhes do DevOps para também apagar as não conformidades (para o pisca do cabeçalho).
     this.cardFull = null;
     this.prInfo = null;
+    this.prLoadError = false;
     this.branchPrefix = 'hotfix/';
     this.branchName = '';
     this.selectedRepositoryObj = this.repositoryOptions.length > 0 ? this.repositoryOptions[0] : null;
@@ -775,6 +779,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
       // Zera o conteúdo do PR anterior: se o novo card não tiver registro salvo,
       // Descrição/Root Cause não podem manter os dados do card antigo.
       this.prInfo = null;
+      this.prLoadError = false;
       this.pullRequest = {};
       this.prState.loadRegister(this.cardNumber?.toString() ?? null, null);
       this.fullDescription = null;
@@ -818,6 +823,14 @@ export class RegisterComponent implements OnInit, OnDestroy {
         error => {
           this.isPullRequestLoading = false;
           this.loadingBar.stop();
+          // A barra (com Descrição/Root Cause/Abrir PR) aparece mesmo assim; o aviso deixa claro
+          // que o conteúdo salvo não foi carregado. Salvar envia null no que não foi editado,
+          // o que mantém o valor salvo no backend.
+          this.prLoadError = true;
+          this.prInfo = { openedAt: null, updatedAt: null, userName: '', userPhoto: null };
+          const detail = error?.error?.error ?? error?.status ?? '';
+          this._snackBar.open(`Não foi possível carregar os dados salvos do card${detail ? ` (${detail})` : ''}`, 'Ok',
+            {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
           this.cdr.detectChanges();
         });
     }

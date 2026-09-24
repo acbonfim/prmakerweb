@@ -52,39 +52,10 @@
   color: #ff8a8e;
 }
 
-.description-preview {
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  background: var(--surface-1, #2a2a2a);
-  overflow: hidden;
-}
-
-.description-preview__label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  padding: 8px 12px;
-  background: var(--surface-2, #323232);
-  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
-}
-
-.description-preview__content,
-.description-preview__empty {
-  padding: 10px 12px;
-  max-height: 240px;
-  overflow-y: auto;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.description-preview__empty {
-  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
-}
-
-.description-preview__empty mat-icon {
-  vertical-align: middle;
+/* Editor da descrição do PR dentro do modal (mesmo painel da tela/popover) */
+.description-editor {
+  display: block;
+  height: 320px;
 }
 
 .dialog-actions {
