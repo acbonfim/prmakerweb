@@ -34,8 +34,7 @@ import {firstValueFrom} from 'rxjs';
 import {tap} from 'rxjs/internal/operators/tap';
 import {GdsService} from '../../../services/gds.service';
 import {WsService} from '../../../services/ws.service';
-import {JsonPipe, DatePipe} from '@angular/common';
-import {UserAvatarComponent} from '../../../components/user-avatar/user-avatar.component';
+import {JsonPipe} from '@angular/common';
 import {AuthService} from '../../../services/auth.service';
 import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
 import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
@@ -43,11 +42,11 @@ import {CardDetailsDialogComponent} from '../../../components/card-details-dialo
 import {HandoverDialogComponent} from '../../../components/handover-dialog/handover-dialog.component';
 import {CardFull} from '../../../components/card-details-dialog/card-full.model';
 import {marked} from 'marked';
-import {BranchInputComponent} from '../../../components/branch-input/branch-input.component';
-import {RepoAutocompleteComponent} from '../../../components/repo-autocomplete/repo-autocomplete.component';
-import {TargetBranchToggleComponent} from '../../../components/target-branch-toggle/target-branch-toggle.component';
-import {PrDescriptionPanelComponent} from '../../../components/pr-description-panel/pr-description-panel.component';
-import {RootCausePanelComponent} from '../../../components/root-cause-panel/root-cause-panel.component';
+import {CardPanelComponent} from '../../../components/card-panel/card-panel.component';
+import {PrInfoCardComponent} from '../../../components/pr-info-card/pr-info-card.component';
+import {PanelPopoverButtonComponent} from '../../../components/panel-popover-button/panel-popover-button.component';
+import {OpenPrDialogComponent, OpenPrDialogData} from '../../../components/open-pr-dialog/open-pr-dialog.component';
+import {GithubPullRequest, PullRequestService} from '../../../services/pull-request.service';
 import {CardPrStateService} from '../../../services/card-pr-state.service';
 import {RepoOption} from '../../../interfaces/RepoOption';
 
@@ -82,15 +81,11 @@ const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
     JsonPipe,
     AutoCompleteModule,
     MatFormFieldModule,
-    DatePipe,
-    UserAvatarComponent,
     CardTimelineComponent,
     CardAlertBarComponent,
-    BranchInputComponent,
-    RepoAutocompleteComponent,
-    TargetBranchToggleComponent,
-    PrDescriptionPanelComponent,
-    RootCausePanelComponent
+    CardPanelComponent,
+    PrInfoCardComponent,
+    PanelPopoverButtonComponent
   ]
 })
 export class RegisterComponent implements OnInit, OnDestroy {
@@ -98,7 +93,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
   @ViewChild(CardTimelineComponent) timeline?: CardTimelineComponent;
 
   /** Descrição/root cause compartilhados com modal, popovers e IA (fonte da verdade dos editores). */
-  private prState = inject(CardPrStateService);
+  readonly prState = inject(CardPrStateService);
+  private prService = inject(PullRequestService);
 
   cardFull: CardFull | null = null;
   isCardDetailsLoading = false;
@@ -117,12 +113,13 @@ export class RegisterComponent implements OnInit, OnDestroy {
   userSelected: any = null;
   cardNumber: null | string = null;
   fullDescription = null;
-  link = "https://github.com/electradv/edv-solvace/compare/my-environment...hotfix/";
   mobileButtons: MenuItem[] = [];
   copyCustomButtons: MenuItem[] = [];
   isMobile = false;
   isAzureLoading: boolean = false;
 
+  // Defaults do modal "Abrir PR" (branch/repositório/destino não ficam mais na tela — spec 2).
+  // Guardam a última escolha feita no modal.
   branchPrefix: string = 'hotfix/';
   branchName: string = '';
 
@@ -194,14 +191,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
     );
   }
 
-  /** Prefixo editado no campo de branch (já normalizado ao sair da edição). */
-  onBranchPrefixChange(prefix: string) {
-    this.branchPrefix = prefix;
-    this.makeUrlLink();
-    // makeUrlLink pode sair cedo (sem cardNumber) sem disparar CD.
-    this.cdr.detectChanges();
-  }
-
   @HostListener('window:resize')
   onResize() {
     this.checkIfMobile();
@@ -224,7 +213,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
         label: 'Abrir PR',
         icon: 'pi pi-github',
         command: (event: MenuItemCommandEvent) => {
-          this.openGithubPullRequestPage();
+          this.openPrDialog();
         }
       },
       {
@@ -249,8 +238,10 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   updateMobileButtonsState() {
     this.mobileButtons.forEach(button => {
-      if (button.label === 'Copiar' || button.label === 'Abrir PR') {
+      if (button.label === 'Copiar') {
         button.disabled = this.isPullRequestLoading || this.fullDescription === null;
+      } else if (button.label === 'Abrir PR') {
+        button.disabled = !this.canOpenPr;
       } else if (button.label === 'Limpar') {
         button.disabled = this.isPullRequestLoading || !this.hasAnythingToClear;
       }
@@ -438,10 +429,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
     }
   }
 
-  onRepositorySelect() {
-    this.makeUrlLink();
-  }
-
   getPullRequestConfigurations(){
     return this.configurationService.getAllById(9).pipe(
       tap((response: any) => {
@@ -475,47 +462,92 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.branchPrefix = 'hotfix/';
     this.branchName = '';
     this.selectedRepositoryObj = this.repositoryOptions.length > 0 ? this.repositoryOptions[0] : null;
-    const repo = this.selectedRepositoryObj?.value ?? 'edv-solvace-apps';
-    this.link = `https://github.com/electradv/${repo}/compare/my-environment...hotfix/`;
     this.cardType = '';
   }
 
+  /**
+   * Salva o registro do card (spec 1.5): sem exigir descrição/root cause e sem branch/repositório,
+   * que agora pertencem a cada PR do GitHub. null mantém o valor salvo; vazio limpa.
+   */
   savePullRequest() {
+    if (!this.cardNumber) return;
     this.isPullRequestLoading = true;
     this.loadingBar.start();
-    const repo =
-      typeof this.selectedRepositoryObj === 'string'
-        ? this.selectedRepositoryObj
-        : this.selectedRepositoryObj?.value ?? 'edv-solvace';
 
-    let cardNumber = this.cardNumber ? this.cardNumber.toString() : "0";
-    let pullRequestModel = {
-      description: this.pullRequest.description,
-      cardNumber: cardNumber,
+    this.prService.saveCard({
+      cardNumber: this.cardNumber.toString(),
       userId: this.userSelected.externalId,
       formId: 1,
-      rootCause: this.pullRequest.rootCause,
-      branchPrefix: this.branchPrefix,
-      branchName: this.branchName,
-      repositoryId: repo,
+      description: this.prState.description(),
+      rootCause: this.prState.rootCause(),
+    }).subscribe({
+      next: () => {
+        this._snackBar.open('Card salvo com sucesso!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        this.isPullRequestLoading = false;
+        this.loadingBar.stop();
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        this._snackBar.open(error?.error?.error ?? 'Erro ao tentar salvar o card', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        this.isPullRequestLoading = false;
+        this.loadingBar.stop();
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  /** "Abrir PR" disponível depois que o card foi buscado. */
+  get canOpenPr(): boolean {
+    return !!this.cardNumber && !!this.prInfo && !this.isPullRequestLoading;
+  }
+
+  /** Repositório padrão (último escolhido no modal / querystring / primeiro da configuração). */
+  private get defaultRepositoryValue(): string | null {
+    return typeof this.selectedRepositoryObj === 'string'
+      ? this.selectedRepositoryObj
+      : this.selectedRepositoryObj?.value ?? null;
+  }
+
+  /** PR do GitHub mais recente do card (a lista vem ordenada do mais novo para o mais antigo). */
+  private get latestGithubPr(): GithubPullRequest | null {
+    return this.prState.githubPrs()[0] ?? null;
+  }
+
+  /**
+   * Abre o modal "Abrir PR" (spec 1.1). Com `pr`, abre em modo edição com os dados daquele PR (3.1).
+   */
+  openPrDialog(pr?: GithubPullRequest) {
+    if (!this.cardNumber) return;
+
+    const data: OpenPrDialogData = {
+      cardNumber: this.cardNumber.toString(),
+      cardType: this.cardType,
+      userId: this.userSelected?.externalId,
+      targetOptions: this.justifyOptions,
+      defaultTarget: this.environmentName,
+      defaultPrefix: this.branchPrefix,
+      defaultBranchName: this.branchName || this.cardNumber.toString(),
+      defaultRepository: this.defaultRepositoryValue,
+      repositoryFallback: this.repositoryOptions,
+      pr: pr ?? null,
     };
 
-    this.http.post(`${this.urlBase}PullRequest`, pullRequestModel).subscribe(
-      x => {
-        if(x)
-          this._snackBar.open('Pull Request salvo com sucesso!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
-
-        this.isPullRequestLoading = false
-        this.loadingBar.stop();
-      }, error => {
-        this._snackBar.open('Erro ao tentar salvar o Pull Request', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
-
-        this.isPullRequestLoading = false
-        this.loadingBar.stop();
-      }
-    )
-
-    console.log(pullRequestModel);
+    this.dialog.open(OpenPrDialogComponent, {
+      data,
+      width: '980px',
+      maxWidth: '94vw',
+      maxHeight: '92vh',
+      panelClass: 'custom-dialog-container'
+    }).afterClosed().subscribe((result?: GithubPullRequest) => {
+      if (!result) return;
+      // Lembra a última escolha como default do próximo PR.
+      this.branchPrefix = result.branchPrefix;
+      this.branchName = result.branchName;
+      this.environmentName = result.targetBranch;
+      this.selectedRepositoryObj =
+        this.repositoryOptions.find(r => r.value === result.repositoryId) ?? { label: result.repositoryId, value: result.repositoryId };
+      this.cdr.detectChanges();
+    });
   }
 
   saveRootCauseToDevOps() {
@@ -572,12 +604,11 @@ export class RegisterComponent implements OnInit, OnDestroy {
   }
 
   generatePullRequestWithAi() {
-    const repo =
-      typeof this.selectedRepositoryObj === 'string'
-        ? this.selectedRepositoryObj
-        : this.selectedRepositoryObj?.value ?? 'edv-solvace';
-
-    const fullBranch = `${this.branchPrefix}${this.branchName}`;
+    const latest = this.latestGithubPr;
+    const repo = latest?.repositoryId ?? this.defaultRepositoryValue ?? 'edv-solvace';
+    const fullBranch = latest
+      ? `${latest.branchPrefix}${latest.branchName}`
+      : `${this.branchPrefix}${this.branchName}`;
 
     const dialogRef = this.dialog.open(DialogPrompt, {
       data: {
@@ -648,10 +679,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     }
 
     openHandover() {
-      const repositoryId =
-        typeof this.selectedRepositoryObj === 'string'
-          ? this.selectedRepositoryObj
-          : this.selectedRepositoryObj?.value ?? null;
+      const repositoryId = this.latestGithubPr?.repositoryId ?? this.defaultRepositoryValue;
 
       this.dialog.open(HandoverDialogComponent, {
         data: {
@@ -712,20 +740,14 @@ export class RegisterComponent implements OnInit, OnDestroy {
       // Descrição/Root Cause não podem manter os dados do card antigo.
       this.prInfo = null;
       this.pullRequest = {};
-      this.prState.setContent(null, null);
+      this.prState.loadRegister(this.cardNumber?.toString() ?? null, null);
       this.fullDescription = null;
 
-      const repositoryId =
-        typeof this.selectedRepositoryObj === 'string'
-          ? this.selectedRepositoryObj
-          : this.selectedRepositoryObj?.value ?? 'edv-solvace';
-
-      const repoParam = repositoryId != null ? `&repositoryId=${repositoryId}` : '';
       // Carrega a linha do tempo e os detalhes do card (DevOps) em paralelo à busca do PR.
       this.timeline?.load(this.cardNumber ?? undefined);
       this.loadCardDetails();
 
-      this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}${repoParam}`).subscribe(
+      this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}`).subscribe(
         (response: any) => {
 
           this.isPullRequestLoading = false;
@@ -735,14 +757,23 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
           if(response) {
             this.pullRequest = response;
+            // Defaults do modal "Abrir PR": vêm do PR do GitHub mais recente do card.
             this.branchName = response.branchName;
             this.branchPrefix = response.branchPrefix;
+            if (response.repositoryId) {
+              this.selectedRepositoryObj = this.repositoryOptions.find(r => r.value === response.repositoryId)
+                ?? { label: response.repositoryId, value: response.repositoryId };
+            }
 
             this.loadPrAuthorInfo(response);
             this.prState.loadRegister(this.cardNumber?.toString() ?? null, response);
             this.cdr.detectChanges();
 
             this.generateFullDescriptionHandler();
+          } else {
+            // Card ainda não salvo: mostra o card de infos vazio para liberar popovers e "Abrir PR".
+            this.prInfo = { openedAt: null, updatedAt: null, userName: '', userPhoto: null };
+            this.cdr.detectChanges();
           }
 
         },
@@ -758,36 +789,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
   openDialogTemplate() {
     const dialogRef = this.dialog.open(DialogTemplateComponent, {
       data: this.template,
-      width: '1200px',
-      height: '80vh',
-      maxWidth: '90vw',
-      maxHeight: '90vh',
-      panelClass: 'custom-dialog-container'
-    });
-  }
-
-  openDialogFullDescription() {
-    const dialogRef = this.dialog.open(DialogTemplateComponent, {
-      data: {
-        id: 1,
-        description: this.fullDescription,
-        environmentName: this.environmentName.toUpperCase(),
-      },
-      width: '1200px',
-      height: '80vh',
-      maxWidth: '90vw',
-      maxHeight: '90vh',
-      panelClass: 'custom-dialog-container'
-    });
-  }
-
-  openDialogRCA() {
-    const dialogRef = this.dialog.open(DialogTemplateComponent, {
-      data: {
-        id: 1,
-        description: this.pullRequest.rootCause,
-        environmentName: this.environmentName.toUpperCase(),
-      },
       width: '1200px',
       height: '80vh',
       maxWidth: '90vw',
@@ -891,41 +892,12 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
     this.fullDescription = this.pullRequest.description;
 
-    this.makeUrlLink();
-
     this.cdr.detectChanges();
   }
 
-  makeUrlLink() {
-    if(this.cardNumber == null) return;
-    const repo =
-      typeof this.selectedRepositoryObj === 'string'
-        ? this.selectedRepositoryObj
-        : this.selectedRepositoryObj?.value ?? 'edv-solvace';
-    this.link = `https://github.com/electradv/${repo}/compare/my-environment...${this.branchPrefix}${this.branchName}`;
-    this.link = this.link.replace("my-environment", this.environmentName.toLowerCase());
-
-    this.cdr.detectChanges();
-  }
-
-  openGithubPullRequestPage() {
-    this.generateFullDescriptionHandler();
-    this.makeUrlLink();
-    let url = new URL(this.link);
-    url.searchParams.set('expand', '1');
-    url.searchParams.set('title', `AB#${this.cardNumber} ${this.getBranchLabelByBranch(this.environmentName).toUpperCase()}`);
-    url.searchParams.set('body', this.fullDescription!);
-
-    window.open(url, '_blank');
-  }
   onBranchChange() {
     this.template = null;
     this.getTemplateByEnvironment();
-  }
-
-  getBranchLabelByBranch(branch: string) {
-    const branchLabel = this.justifyOptions.find(option => option.value === branch);
-    return branchLabel ? branchLabel.label : branch;
   }
 
   protected readonly Number = Number;

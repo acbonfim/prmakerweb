@@ -8,6 +8,7 @@
   }
 </div>
 
+    <div class="pr-top-row">
     <div class="pr-toolbar">
       <!-- Número do card -->
       <mat-form-field appearance="outline" subscriptSizing="dynamic"
@@ -25,25 +26,24 @@
           <mat-icon>search</mat-icon>
         </button>
       </mat-form-field>
+    </div>
 
-      <!-- Branch -->
-      <app-branch-input class="pr-field pr-field--branch"
-                        [prefix]="branchPrefix"
-                        (prefixChange)="onBranchPrefixChange($event)"
-                        [(name)]="branchName"></app-branch-input>
-
-      <!-- Repositório -->
-      <app-repo-autocomplete class="pr-field pr-field--repo"
-                             [options]="repositoryOptions"
-                             [loading]="isConfigLoading"
-                             [(value)]="selectedRepositoryObj"
-                             (selected)="onRepositorySelect()"></app-repo-autocomplete>
-
-      <!-- Branch para PR -->
-      <app-target-branch-toggle class="pr-field pr-field--branches"
-                                [options]="justifyOptions"
-                                [loading]="isConfigLoading"
-                                [(value)]="environmentName"></app-target-branch-toggle>
+      <!-- Quem abriu / datas + popovers de Descrição e Root Cause (spec 2, 2.3) -->
+      @if (prInfo) {
+        <app-pr-info-card class="pr-toolbar__info"
+                          [userName]="prInfo.userName"
+                          [userPhoto]="prInfo.userPhoto"
+                          [openedAt]="prInfo.openedAt"
+                          [updatedAt]="prInfo.updatedAt"
+                          [authorLabel]="prInfo.openedAt ? 'Aberto por' : 'Card ainda não salvo'">
+          <ng-container ngProjectAs="[info-actions]">
+            <app-panel-popover-button kind="description"></app-panel-popover-button>
+            @if (cardType !== 'us') {
+              <app-panel-popover-button kind="rootCause"></app-panel-popover-button>
+            }
+          </ng-container>
+        </app-pr-info-card>
+      }
     </div>
 
     <!--
@@ -57,62 +57,26 @@
 
         <div class="pr-content-row">
           <div class="pr-fields">
-            @if (prInfo) {
-              <div class="pr-info-card">
-                <div class="pr-info">
-                  <div class="pr-info__author">
-                    <app-user-avatar [name]="prInfo.userName" [imageUrl]="prInfo.userPhoto" [size]="36"></app-user-avatar>
-                    <div class="pr-info__col">
-                      <span class="pr-info__label">Aberto por</span>
-                      <strong class="pr-info__value">{{ prInfo.userName || '—' }}</strong>
-                    </div>
-                  </div>
-
-                  <div class="pr-info__meta">
-                    <div class="pr-info__item">
-                      <mat-icon>event</mat-icon>
-                      <div class="pr-info__col">
-                        <span class="pr-info__label">Aberto em</span>
-                        <strong class="pr-info__value">{{ (prInfo.openedAt | date:'dd/MM/yyyy HH:mm') || '—' }}</strong>
-                      </div>
-                    </div>
-                    <div class="pr-info__item">
-                      <mat-icon>update</mat-icon>
-                      <div class="pr-info__col">
-                        <span class="pr-info__label">Última atualização</span>
-                        <strong class="pr-info__value">{{ prInfo.updatedAt ? (prInfo.updatedAt | date:'dd/MM/yyyy HH:mm') : '—' }}</strong>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            }
-
-            <div class="pr-editors">
-            <app-pr-description-panel class="pr-panel" [loading]="isPullRequestLoading">
-              @if (fullDescription !== null) {
-                <button panel-actions mat-icon-button class="panel-action"
-                        (click)="openDialogFullDescription()"
-                        matTooltip="Descrição montada"
-                        matTooltipPosition="above">
-                  <mat-icon>article_shortcut</mat-icon>
-                </button>
-              }
-            </app-pr-description-panel>
-
-            @if(this.cardType !== 'us'){
-              <app-root-cause-panel class="pr-panel" [loading]="isPullRequestLoading">
-                @if (pullRequest.rootCause && pullRequest.rootCause.length) {
-                  <button panel-actions mat-icon-button class="panel-action"
-                          (click)="openDialogRCA()"
-                          matTooltip="Root Cause"
-                          matTooltipPosition="above">
-                    <mat-icon>article_shortcut</mat-icon>
+            <!-- PRs abertos no GitHub para o card (spec 1.4/3 — lista completa na fase F4) -->
+            <app-card-panel class="pr-panel" title="Pull Requests" icon="merge">
+              <div class="pr-list">
+                @for (pr of prState.githubPrs(); track pr.id) {
+                  <button type="button" class="pr-list__item" (click)="openPrDialog(pr)">
+                    <span class="pr-list__branch">{{ pr.branchPrefix }}{{ pr.branchName }}</span>
+                    <span class="pr-list__repo">{{ pr.repositoryId }} → {{ pr.targetBranch }}</span>
+                    <span class="pr-list__status">#{{ pr.number }} · {{ pr.status }}</span>
                   </button>
+                } @empty {
+                  <div class="pr-list__empty">
+                    @if (prInfo) {
+                      Nenhum PR aberto para este card. Use <strong>Abrir PR</strong>.
+                    } @else {
+                      Busque um card para ver os PRs abertos.
+                    }
+                  </div>
                 }
-              </app-root-cause-panel>
-            }
-            </div>
+              </div>
+            </app-card-panel>
           </div>
 
           <div class="pr-timeline">
@@ -128,11 +92,11 @@
                          [disabled]="isPullRequestLoading || fullDescription === null"
                          [model]="copyCustomButtons" (onClick)="copyFullDescriptionToClipboard('full')" rounded severity="secondary"/>
           <button mat-raised-button style="margin-left: 10px"
-                  (click)="openGithubPullRequestPage()"
-                  [disabled]="!this.pullRequest?.description || !this.environmentName.length">Abrir PR<mat-icon>merge</mat-icon></button>
+                  (click)="openPrDialog()"
+                  [disabled]="!canOpenPr">Abrir PR<mat-icon>merge</mat-icon></button>
 
           <button mat-raised-button style="margin-left: 10px"
-                  [disabled]="isPullRequestLoading || fullDescription === null"
+                  [disabled]="isPullRequestLoading || !prInfo"
                   (click)="savePullRequest()">Salvar<mat-icon>save</mat-icon></button>
           <button mat-raised-button style="margin-left: 10px"
                   [disabled]="isPullRequestLoading || !hasAnythingToClear"
@@ -175,7 +139,7 @@
       <p-splitbutton style="width: 100% !important"
         label="Salvar"
                      icon="pi pi-save"
-                     [disabled]="isPullRequestLoading || fullDescription === null"
+                     [disabled]="isPullRequestLoading || !prInfo"
                      [model]="mobileButtons" (onClick)="savePullRequest()" rounded severity="secondary" />
     }
 
