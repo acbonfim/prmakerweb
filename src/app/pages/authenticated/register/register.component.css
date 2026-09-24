@@ -115,6 +115,20 @@
   height: 20px;
 }
 
+/* Ícone girando no próprio centro enquanto consulta (ex.: ⟳ do painel de PRs) */
+.panel-action .mat-icon.panel-action__spin {
+  transform-origin: 50% 50%;
+  animation: panel-action-spin 0.9s linear infinite;
+}
+
+@keyframes panel-action-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-action .mat-icon.panel-action__spin { animation-duration: 2.5s; }
+}
+
 /* Empilha em telas estreitas (permite scroll normal da página) */
 @media (max-width: 900px) {
   :host {
