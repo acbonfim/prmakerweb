@@ -21,6 +21,7 @@ import { StorageService } from '../../services/storage.service';
 import { TeamsGraphService, TeamsChat } from '../../services/teams-graph.service';
 import { WsService } from '../../services/ws.service';
 import { TimelineEntry } from './timeline.model';
+import { TimelineMarkdownPipe } from '../../pipes/timeline-markdown.pipe';
 
 /** Evento e prefixo de grupo do tempo real da timeline (em sincronia com o backend). */
 const TIMELINE_EVENT = 'timelineUpdated';
@@ -37,6 +38,7 @@ const timelineGroup = (card: string) => `timeline:${card}`;
   selector: 'app-card-timeline',
   standalone: true,
   imports: [
+    TimelineMarkdownPipe,
     CommonModule,
     FormsModule,
     MatIconModule,
@@ -594,5 +596,14 @@ export class CardTimelineComponent implements OnDestroy {
     this.sub?.unsubscribe();
     if (this.currentGroup) this.ws.removeFromGroup(this.currentGroup);
     this.ws.off(TIMELINE_EVENT, this.onTimelineUpdated);
+  }
+
+  /** Links dentro de um registro em markdown abrem em nova aba (sem sair da tela do card). */
+  onContentClick(event: MouseEvent): void {
+    const anchor = (event.target as HTMLElement | null)?.closest('a');
+    const href = anchor?.getAttribute('href');
+    if (!anchor || !href || href.startsWith('#')) return;
+    event.preventDefault();
+    window.open(href, '_blank', 'noopener,noreferrer');
   }
 }
