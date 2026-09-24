@@ -75,7 +75,34 @@
           </ng-template>
         </mat-step>
 
-        <!-- Etapa 2: resultado -->
+        <!-- Etapa 2: resumo dos commits escolhidos em cada repositório (spec 4.3) -->
+        <mat-step [completed]="hasAnyDiff()">
+          <ng-template matStepLabel>Resumo</ng-template>
+          <ng-template matStepContent>
+            <p class="repo-hint">
+              Estes commits serão enviados como contexto para gerar a descrição do PR e o root cause
+              (um root cause para todos os repositórios).
+            </p>
+            <div class="summary-list">
+              @for (s of selectedDiffs(); track s.repository) {
+                <div class="summary-item">
+                  <div class="summary-item__title">
+                    <mat-icon>folder</mat-icon>
+                    <span class="repo-step-title">{{ s.repository }}</span>
+                    <span class="repo-step-branch">{{ s.branch }}</span>
+                    <span class="summary-item__files">{{ s.diff?.files?.length ?? 0 }} arquivo(s)</span>
+                  </div>
+                  <app-commit-details [commit]="s.commit"></app-commit-details>
+                </div>
+              }
+            </div>
+            @if (skippedRepos().length) {
+              <p class="repo-hint">Sem commit escolhido (não entram no contexto): {{ skippedRepos().join(', ') }}</p>
+            }
+          </ng-template>
+        </mat-step>
+
+        <!-- Etapa 3: resultado -->
         <mat-step [editable]="false">
           <ng-template matStepLabel>Resultado</ng-template>
           <ng-template matStepContent>
@@ -83,7 +110,7 @@
               <div class="ai-generating">
                 <mat-spinner diameter="40"></mat-spinner>
                 <h3>Gerando conteúdo com IA...</h3>
-                <p>Analisando o card e o diff do commit para montar a descrição e o RCA.</p>
+                <p>Analisando o card e os diffs de {{ selectedDiffs().length }} repositório(s) para montar a descrição e o RCA.</p>
               </div>
             }
 
@@ -109,11 +136,20 @@
 
     @if (currentStep() === 0) {
       <button mat-flat-button color="primary"
+              [disabled]="!hasAnyDiff()"
+              (click)="next()">
+        Resumo <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+      </button>
+    } @else if (currentStep() === 1) {
+      <button mat-button (click)="back()">
+        <mat-icon>arrow_back</mat-icon> Commits
+      </button>
+      <button mat-flat-button color="primary"
               [disabled]="!hasAnyDiff() || !showCardDetails()"
               (click)="goToGenerateWithAI()">
         <mat-icon>auto_awesome</mat-icon> Gerar com IA
       </button>
-    } @else if (currentStep() === 1 && generatedText && !isAiLoading()) {
+    } @else if (currentStep() === 2 && generatedText && !isAiLoading()) {
       <button mat-stroked-button (click)="copyPromptToClipboard()">
         <mat-icon>content_copy</mat-icon> Copiar
       </button>

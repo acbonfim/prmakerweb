@@ -375,3 +375,14 @@
 }
 
 .repo-remove { margin-top: 8px; }
+
+/* ── Resumo (spec 4.3) ── */
+.summary-list { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
+.summary-item { display: flex; flex-direction: column; gap: 6px; }
+.summary-item__title { display: flex; align-items: center; gap: 6px; }
+.summary-item__title mat-icon { color: var(--mat-sys-primary); font-size: 18px; width: 18px; height: 18px; }
+.summary-item__files {
+  margin-left: auto;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
+}

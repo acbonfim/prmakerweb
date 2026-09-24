@@ -30,7 +30,8 @@ import {RepoCommitPickerComponent} from '../repo-commit-picker/repo-commit-picke
 import {RepoAutocompleteComponent} from '../repo-autocomplete/repo-autocomplete.component';
 import {AiRepository, CardPrStateService, RepoCommitSelection} from '../../services/card-pr-state.service';
 import {RepoOption} from '../../interfaces/RepoOption';
-import {getCommitSha, getCommitTitle} from '../../helpers/commit';
+import {CommitDetailsComponent} from '../commit-details/commit-details.component';
+import {buildMultiRepoDiffContext} from '../../helpers/ai-prompt';
 
 /** Dados do dialog "Gerar com IA". */
 export interface DialogPromptData {
@@ -70,6 +71,7 @@ export interface DialogPromptData {
     MatTooltipModule,
     RepoCommitPickerComponent,
     RepoAutocompleteComponent,
+    CommitDetailsComponent,
 ]
 })
 export class DialogPrompt implements OnInit {
@@ -97,6 +99,8 @@ export class DialogPrompt implements OnInit {
   readonly selectedDiffs = this.state.aiSelectedDiffs;
   readonly hasAnyDiff = computed(() => this.selectedDiffs().length > 0);
   readonly repoIds = computed(() => this.repos().map(r => r.repository));
+  /** Repositórios do stepper sem commit escolhido (ficam fora do contexto da IA). */
+  readonly skippedRepos = computed(() => this.repoIds().filter(r => !this.selections()[r]?.diff));
 
   /** Repositório escolhido no autocomplete "Adicionar repositório". */
   readonly repoToAdd = signal<RepoOption | string | null>(null);
@@ -345,7 +349,8 @@ export class DialogPrompt implements OnInit {
 
     CardNumber (Ticket): {cardNumber},
     Reclamação inicial: {description},
-    Arquivos alterados (DIFF DO GIT): {githubCommitDiff}
+    Arquivos alterados (DIFF DO GIT) — pode haver alterações em mais de um repositório (ex.: frontend, backend, legado);
+    considere todos juntos, pois o Root Cause é um só para o card: {githubCommitDiff}
 
     Todo o texto gerado precisa ser em ingles, e conter uma sessão para Root Cause Analysis (RCA), detalhando o que causou o problema e como ele foi resolvido.
 
@@ -392,15 +397,8 @@ export class DialogPrompt implements OnInit {
 
     }
 
-    // Um diff por repositório (o bug pode envolver front, back, legado…). A F6 compacta este bloco.
-    const diffs = this.selectedDiffs().map(s => ({
-      repository: s.repository,
-      branch: s.branch,
-      commit: getCommitSha(s.commit),
-      message: getCommitTitle(s.commit),
-      diff: s.diff,
-    }));
-    prompt = prompt.replace('{githubCommitDiff}', JSON.stringify(diffs, null, 2));
+    // Um bloco por repositório (o bug pode envolver front, back, legado…), só com o essencial do diff.
+    prompt = prompt.replace('{githubCommitDiff}', buildMultiRepoDiffContext(this.selectedDiffs()));
     prompt = prompt.replace('{cardNumber}', this.data.cardNumber);
     prompt = prompt.replace('{description}', this.reproSteps);
       this.promptText = prompt;
