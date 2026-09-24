@@ -50,6 +50,18 @@
 .chip mat-icon { font-size: 14px; width: 14px; height: 14px; }
 .chip--ok { color: #3fb950; background: rgba(63, 185, 80, 0.15); }
 .chip--pending { color: #d29922; background: rgba(210, 153, 34, 0.15); }
+.chip--optional { color: #8b949e; background: rgba(139, 148, 158, 0.15); }
+
+/* Orientação dentro da integração (0007: passo a passo do Workflow do Teams) */
+.integration__help {
+  display: flex; gap: 8px; margin: 12px 14px 0; padding: 10px 12px; border-radius: 8px;
+  font-size: 13px; line-height: 1.45;
+  background: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent);
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 85%, transparent);
+}
+.integration__help > mat-icon { flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--mat-sys-primary); }
+.integration__help ol { margin: 6px 0 0; padding-left: 18px; }
+.integration__help li + li { margin-top: 2px; }
 
 .integration__fields { display: flex; flex-direction: column; gap: 14px; padding: 16px 14px 4px; }
 .field-row { display: flex; align-items: flex-start; gap: 4px; }

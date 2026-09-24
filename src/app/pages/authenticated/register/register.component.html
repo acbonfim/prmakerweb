@@ -93,6 +93,8 @@
               }
               <app-github-pr-list [prs]="prState.githubPrs()"
                                   [resetKey]="prState.cardNumber()"
+                                  [targetOptions]="justifyOptions"
+                                  [userId]="userSelected?.externalId"
                                   [loading]="prState.githubPrsLoading() || isPullRequestLoading"
                                   [emptyMessage]="prInfo ? 'Nenhum PR aberto para este card. Use Abrir PR.' : 'Busque um card para ver os PRs abertos.'"
                                   (select)="openPrDialog($event)"></app-github-pr-list>

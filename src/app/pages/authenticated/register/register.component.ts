@@ -1,3 +1,4 @@
+import { TeamsService } from '../../../services/teams.service';
 import {ChangeDetectorRef, Component, effect, HostListener, inject, OnDestroy, OnInit, untracked, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -107,6 +108,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
   readonly prState = inject(CardPrStateService);
   /** Integrações de uso pessoal (feature 0002): com pendência, a tela fica bloqueada. */
   readonly integrations = inject(UserIntegrationService);
+  /** Pedido de aprovação no Teams (0007): o botão da lista de PRs depende deste status. */
+  private teams = inject(TeamsService);
   private prService = inject(PullRequestService);
 
   cardFull: CardFull | null = null;
@@ -347,6 +350,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
       // Status das integrações pessoais antes de buscar: com pendência a tela fica bloqueada
       // e não adianta disparar a busca (as chamadas ao GitHub/Azure dariam 403).
       if (!this.integrations.status()) await this.integrations.loadStatus();
+      // Teams é opcional (0007): não bloqueia a tela, só habilita o "Pedir aprovação".
+      void this.teams.loadStatus();
 
       // Card vindo por querystring (ex.: atalho "últimos cards" da home): já preenche
       // o número e dispara a busca, o mesmo comportamento do botão "Buscar".

@@ -9,6 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { UserIntegration, UserIntegrationService } from '../../services/user-integration.service';
+import { TEAMS_PLUGIN_NAME, TeamsService } from '../../services/teams.service';
 
 /** Estado de edição de um campo no modal. */
 interface FieldDraft {
@@ -48,6 +49,7 @@ interface PluginDraft {
 export class MyIntegrationsDialogComponent implements OnInit {
   private service = inject(UserIntegrationService);
   private snackBar = inject(MatSnackBar);
+  private teams = inject(TeamsService);
   readonly dialogRef = inject(MatDialogRef<MyIntegrationsDialogComponent>);
 
   readonly drafts = signal<PluginDraft[]>([]);
@@ -104,6 +106,8 @@ export class MyIntegrationsDialogComponent implements OnInit {
       this.drafts.update(list => list.map(d => (d === draft ? this.toDraft(saved) : d)));
       this.snackBar.open(`${saved.description}: integração salva`, 'Ok',
         { horizontalPosition: 'right', verticalPosition: 'top', duration: 4000 });
+      // Habilita/desabilita o "Pedir aprovação" na hora (0007).
+      if (saved.description === TEAMS_PLUGIN_NAME) void this.teams.loadStatus();
     } catch (e: any) {
       draft.saving = false;
       draft.error = e?.error?.error ?? 'Não foi possível salvar. Tente novamente.';
@@ -113,6 +117,16 @@ export class MyIntegrationsDialogComponent implements OnInit {
 
   close(): void {
     this.dialogRef.close();
+  }
+
+  /** Plugin do Teams (0007): mostra o passo a passo para gerar a URL do Workflow. */
+  isTeams(draft: PluginDraft): boolean {
+    return draft.integration.description === TEAMS_PLUGIN_NAME;
+  }
+
+  /** Nome do grupo definido pelo admin (campo fixo GroupName). */
+  teamsGroup(draft: PluginDraft): string {
+    return draft.integration.fields.find(f => f.key === 'GroupName')?.value?.trim() ?? '';
   }
 
   private toDraft(integration: UserIntegration): PluginDraft {
