@@ -233,6 +233,22 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   --surface-2: #2e343f;      /* cabeçalhos de painel   (era #323232) */
   --surface-3: #212730;      /* header/rodapé da tela  (era #252525) */
   --surface-input: #1a1f28;  /* inputs / toggles       (era #1f1f1f) */
+
+  /* Tokens do ComandaCerta usados pelos componentes copiados de lá (cc-filter-bar, cc-popover —
+     feature 0005). Valores do tema escuro do ComandaCerta; o destaque (roxo lá) é um azul médio,
+     no tom da primária do CIME e com contraste para o check branco do checkbox. */
+  --cc-special: #3d8bfd;
+  --cc-brand: var(--mat-sys-primary);
+  --cc-surface-2: var(--surface-2);
+  --cc-surface-input: var(--surface-input);
+  --cc-surface-border: rgba(255, 255, 255, .08);
+  --cc-surface-border-strong: rgba(255, 255, 255, .18);
+  --cc-overlay: #232a33;
+  --cc-text-1: var(--mat-sys-on-surface);
+  --cc-text-2: color-mix(in srgb, var(--mat-sys-on-surface) 66%, transparent);
+  --cc-text-3: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+  --cc-radius-md: 12px;
+  --cc-elev-3: 0 12px 34px rgba(0, 0, 0, .22);
 }
 
 /* Fundo em gradiente para toda a área autenticada. */
