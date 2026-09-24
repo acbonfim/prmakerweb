@@ -42,11 +42,15 @@ import { MatIconModule } from '@angular/material/icon';
       overflow: hidden;
     }
 
+    /* Altura fixa, igual à do cabeçalho da linha do tempo (0005/2), independente dos botões */
     .panel__header {
+      flex: none;
+      box-sizing: border-box;
+      height: 56px;
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 16px;
+      padding: 0 16px;
       background-color: var(--surface-2, #323232);
       border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }

@@ -7,19 +7,66 @@ import { OrderListModule } from 'primeng/orderlist';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import { AuthService } from '../../services/auth.service';
 import { GithubPullRequest } from '../../services/pull-request.service';
+import { FilterBarComponent } from '../filter-bar/filter-bar.component';
+import { FilterOption, FilterProvider, FilterValues } from '../filter-bar/filter-bar.models';
+import { of } from 'rxjs';
 
 interface Author { name: string; photo: string | null; }
+
+/** Ordem de exibição das opções de status (as demais, se surgirem, vão ao fim em ordem alfabética). */
+const STATUS_ORDER = ['OPEN', 'MERGED', 'CLOSED', 'LEGACY'];
+const STATUS_LABEL: Record<string, string> = { LEGACY: 'LEGADO' };
+
+/** Valor de cada filtro para um PR — as opções e o filtro usam a mesma chave. */
+const FILTER_VALUE: Record<string, (pr: GithubPullRequest) => string> = {
+  status: pr => pr.status ?? '',
+  branch: pr => `${pr.branchPrefix ?? ''}${pr.branchName ?? ''}`,
+  repository: pr => pr.repositoryId ?? '',
+};
+
+/** Opções possíveis de um filtro: só os valores que existem nos PRs do card (spec 0005/6). */
+export function filterOptions(prs: GithubPullRequest[], key: string, term = ''): FilterOption[] {
+  const values = [...new Set(prs.map(FILTER_VALUE[key]).filter(Boolean))];
+  if (key === 'status') {
+    const rank = (v: string) => { const i = STATUS_ORDER.indexOf(v); return i < 0 ? STATUS_ORDER.length : i; };
+    values.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  } else {
+    values.sort((a, b) => a.localeCompare(b));
+  }
+  const needle = term.trim().toLowerCase();
+  return values
+    .map(v => ({ value: v, label: key === 'status' ? (STATUS_LABEL[v] ?? v) : v }))
+    .filter(o => !needle || o.label.toLowerCase().includes(needle));
+}
+
+/** Aplica os filtros: OU entre os valores de um mesmo filtro, E entre filtros diferentes. */
+export function filterPrs(prs: GithubPullRequest[], values: FilterValues): GithubPullRequest[] {
+  const active = Object.entries(values).filter(([key, opts]) => FILTER_VALUE[key] && opts.length > 0);
+  if (active.length === 0) return prs;
+  return prs.filter(pr => active.every(([key, opts]) => opts.some(o => o.value === FILTER_VALUE[key](pr))));
+}
 
 /**
  * Lista interativa dos PRs do GitHub do card (spec 3): branch, repositório, data, avatar + nome
  * de quem abriu (usuário do CIME) e status à direita. Usa o p-orderList só como lista
- * selecionável — sem os controles de reordenação.
+ * selecionável — sem os controles de reordenação. Acima da lista, filtros por status, branch e
+ * repositório (feature 0005) com os valores existentes nos PRs do card.
  */
 @Component({
   selector: 'app-github-pr-list',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatIconModule, MatTooltipModule, OrderListModule, UserAvatarComponent],
+  imports: [DatePipe, FormsModule, MatIconModule, MatTooltipModule, OrderListModule, UserAvatarComponent, FilterBarComponent],
   template: `
+    <!-- Filtros (0005): recriados a cada card (resetKey) para começar sem seleção -->
+    @if (prs().length > 0) {
+      @for (key of [resetKey()]; track key) {
+        <div class="pr-filters">
+          <cc-filter-bar [provider]="filterProvider" (valuesChange)="filters.set($event)" />
+        </div>
+      }
+    }
+
+    <div class="pr-scroll">
     @if (loading()) {
       <!-- Skeleton no formato de cada registro: um por PR já listado (3 na primeira carga) -->
       <div class="pr-skeleton" aria-busy="true" aria-label="Carregando pull requests">
@@ -37,6 +84,8 @@ interface Author { name: string; photo: string | null; }
       </div>
     } @else if (prs().length === 0) {
       <div class="pr-empty">{{ emptyMessage() }}</div>
+    } @else if (items().length === 0) {
+      <div class="pr-empty">Nenhum PR corresponde aos filtros.</div>
     } @else {
       <p-orderList class="pr-orderlist"
                    [value]="items()"
@@ -78,9 +127,20 @@ interface Author { name: string; photo: string | null; }
         </ng-template>
       </p-orderList>
     }
+    </div>
   `,
   styles: [`
     :host {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Filtros fixos no topo; só a lista rola */
+    .pr-filters { flex: none; }
+    .pr-scroll {
       flex: 1 1 auto;
       min-height: 0;
       display: flex;
@@ -188,10 +248,24 @@ export class GithubPrListComponent {
   readonly prs = input<GithubPullRequest[]>([]);
   readonly loading = input(false);
   readonly emptyMessage = input('Nenhum PR aberto para este card.');
+  /** Muda a cada card: limpa os filtros (ex.: o número do card). */
+  readonly resetKey = input<string | null>(null);
   readonly select = output<GithubPullRequest>();
 
+  /** Seleção atual dos filtros (0005). */
+  readonly filters = signal<FilterValues>({});
+
+  /** Valores possíveis vindos dos PRs do card no momento da abertura/busca (specs 0005/3 e 6). */
+  readonly filterProvider: FilterProvider = {
+    getFilterDefs: () => [
+      { key: 'status', label: 'Status', multiple: true, search: term => of(filterOptions(this.prs(), 'status', term)) },
+      { key: 'branch', label: 'Branch', multiple: true, search: term => of(filterOptions(this.prs(), 'branch', term)) },
+      { key: 'repository', label: 'Repositório', multiple: true, search: term => of(filterOptions(this.prs(), 'repository', term)) },
+    ],
+  };
+
   /** p-orderList trabalha com uma cópia (ele reordena o array que recebe). */
-  readonly items = computed(() => [...this.prs()]);
+  readonly items = computed(() => [...filterPrs(this.prs(), this.filters())]);
   /** Quantidade de linhas de skeleton: os PRs já exibidos (atualização) ou 3 (primeira carga), até 8. */
   readonly skeletonRows = computed(() => {
     const count = this.prs().length > 0 ? Math.min(this.prs().length, 8) : 3;
@@ -202,6 +276,15 @@ export class GithubPrListComponent {
   private readonly authors = signal<Record<string, Author>>({});
 
   constructor() {
+    // Troca de card (a barra é recriada) ou lista vazia (a barra some): filtros voltam a zero junto
+    // com a barra. Atualizar o status dos PRs mantém os filtros.
+    effect(() => {
+      this.resetKey();
+      untracked(() => this.filters.set({}));
+    });
+    effect(() => {
+      if (this.prs().length === 0) untracked(() => this.filters.set({}));
+    });
     // Resolve nome/foto de todos os autores numa única chamada (userId = externalId do CIME).
     effect(() => {
       const missing = [...new Set(this.prs().map(pr => pr.userId).filter(Boolean))]
