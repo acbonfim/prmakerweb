@@ -42,15 +42,20 @@ export type PanelPopoverKind = 'description' | 'rootCause';
       </button>
     }
 
-    <!-- baseZIndex acima do MatDialog (1000): o popover também é usado dentro do modal "Abrir PR". -->
+    <!-- baseZIndex acima do MatDialog (1000): o popover também é usado dentro do modal "Abrir PR".
+         Conteúdo em <ng-template #content> (e não projetado direto): o PrimeNG só renderiza o
+         template quando o popover ABRE, então o editor nasce com o valor atual do estado. Projetado,
+         ele era criado no carregamento da tela (ainda sem descrição/RC) e abria vazio. -->
     <p-popover #op appendTo="body" [baseZIndex]="1100" styleClass="cime-panel-popover">
-      <div class="cime-panel-popover__body">
-        @if (kind() === 'description') {
-          <app-pr-description-panel></app-pr-description-panel>
-        } @else {
-          <app-root-cause-panel></app-root-cause-panel>
-        }
-      </div>
+      <ng-template #content>
+        <div class="cime-panel-popover__body">
+          @if (kind() === 'description') {
+            <app-pr-description-panel></app-pr-description-panel>
+          } @else {
+            <app-root-cause-panel></app-root-cause-panel>
+          }
+        </div>
+      </ng-template>
     </p-popover>
   `,
   styles: [`
