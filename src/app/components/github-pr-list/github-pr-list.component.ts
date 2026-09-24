@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { OrderListModule } from 'primeng/orderlist';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import { AuthService } from '../../services/auth.service';
@@ -18,7 +19,7 @@ interface Author { name: string; photo: string | null; }
 @Component({
   selector: 'app-github-pr-list',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatIconModule, MatTooltipModule, OrderListModule, UserAvatarComponent],
+  imports: [DatePipe, FormsModule, MatIconModule, MatTooltipModule, MatProgressBarModule, OrderListModule, UserAvatarComponent],
   template: `
     @if (loading() && prs().length === 0) {
       <div class="pr-skeleton" aria-hidden="true">
@@ -29,7 +30,11 @@ interface Author { name: string; photo: string | null; }
     } @else if (prs().length === 0) {
       <div class="pr-empty">{{ emptyMessage() }}</div>
     } @else {
-      <p-orderList class="pr-orderlist"
+      <!-- Atualizando com itens já na tela: barra no topo e itens esmaecidos (sem sumir com a lista) -->
+      @if (loading()) {
+        <mat-progress-bar class="pr-refreshing" mode="indeterminate" aria-label="Atualizando status dos PRs"></mat-progress-bar>
+      }
+      <p-orderList class="pr-orderlist" [class.pr-orderlist--refreshing]="loading()"
                    [value]="items()"
                    [selection]="selection"
                    (onSelectionChange)="onSelect($event.value)"
@@ -87,6 +92,9 @@ interface Author { name: string; photo: string | null; }
       font-size: 13px;
       color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
     }
+
+    .pr-refreshing { flex: 0 0 auto; margin-bottom: 6px; border-radius: 4px; }
+    .pr-orderlist--refreshing { opacity: 0.55; pointer-events: none; transition: opacity 0.2s; }
 
     /* p-orderList como lista simples: sem controles de ordenação, sem bordas/fundo próprios */
     :host ::ng-deep .pr-orderlist .p-orderlist-controls { display: none; }

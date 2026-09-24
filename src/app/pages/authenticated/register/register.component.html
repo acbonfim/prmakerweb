@@ -67,8 +67,13 @@
                 <button panel-actions mat-icon-button class="panel-action"
                         (click)="refreshGithubPrs(true)"
                         [disabled]="prState.githubPrsLoading()"
-                        matTooltip="Atualizar status no GitHub" matTooltipPosition="above">
-                  <mat-icon>refresh</mat-icon>
+                        [matTooltip]="prState.githubPrsLoading() ? 'Consultando o GitHub...' : 'Atualizar status no GitHub'"
+                        matTooltipPosition="above">
+                  @if (prState.githubPrsLoading()) {
+                    <mat-spinner diameter="18"></mat-spinner>
+                  } @else {
+                    <mat-icon>refresh</mat-icon>
+                  }
                 </button>
               }
               <app-github-pr-list [prs]="prState.githubPrs()"
