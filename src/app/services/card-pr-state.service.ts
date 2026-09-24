@@ -3,6 +3,21 @@ import { firstValueFrom } from 'rxjs';
 import { RepoOption } from '../interfaces/RepoOption';
 import { GithubPullRequest, PullRequestRegister, PullRequestService } from './pull-request.service';
 
+/** Commit escolhido (com o diff já carregado) de um repositório, para a geração com IA. */
+export interface RepoCommitSelection {
+  repository: string;
+  branch: string;
+  commit: any;
+  diff: any;
+}
+
+/** Repositório no stepper da IA; `manual` = adicionado pelo usuário (não veio de um PR). */
+export interface AiRepository {
+  repository: string;
+  branch: string;
+  manual?: boolean;
+}
+
 /**
  * Estado do card em tratamento, compartilhado entre a tela de PR, o modal "Abrir PR",
  * os popovers e a geração com IA. Descrição e root cause vivem aqui para que uma edição
@@ -21,6 +36,14 @@ export class CardPrStateService {
 
   readonly githubPrs = signal<GithubPullRequest[]>([]);
   readonly githubPrsLoading = signal(false);
+
+  /**
+   * Geração com IA: repositórios em uso (dos PRs + os adicionados à mão) e o commit/diff
+   * escolhido em cada um. Sobrevive a fechar/reabrir o dialog enquanto o card não mudar.
+   */
+  readonly aiRepositories = signal<AiRepository[]>([]);
+  readonly aiSelections = signal<Record<string, RepoCommitSelection>>({});
+  readonly aiSelectedDiffs = computed(() => Object.values(this.aiSelections()).filter(s => !!s.diff));
 
   readonly repositories = signal<RepoOption[]>([]);
   readonly repositoriesLoading = signal(false);
@@ -45,6 +68,7 @@ export class CardPrStateService {
 
   /** Carrega o registro do card (ou null quando o card ainda não foi salvo). */
   loadRegister(cardNumber: string | null, register: PullRequestRegister | null): void {
+    if (cardNumber !== this.cardNumber()) this.resetAi();
     this.cardNumber.set(cardNumber);
     this.register.set(register);
     this.setContent(register?.description ?? null, register?.rootCause ?? null);
@@ -66,7 +90,26 @@ export class CardPrStateService {
     });
   }
 
+  setAiRepositories(repositories: AiRepository[]): void {
+    this.aiRepositories.set(repositories);
+  }
+
+  setAiSelection(repository: string, selection: RepoCommitSelection | null): void {
+    this.aiSelections.update(current => {
+      const copy = { ...current };
+      if (selection) copy[repository] = selection;
+      else delete copy[repository];
+      return copy;
+    });
+  }
+
+  resetAi(): void {
+    this.aiRepositories.set([]);
+    this.aiSelections.set({});
+  }
+
   reset(): void {
+    this.resetAi();
     this.cardNumber.set(null);
     this.register.set(null);
     this.setContent(null, null);

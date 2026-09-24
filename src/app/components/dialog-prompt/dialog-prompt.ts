@@ -1,19 +1,16 @@
 import {
   ChangeDetectorRef,
   Component,
-  EventEmitter,
+  computed,
   inject,
   OnInit,
-  Output,
-  output,
   signal,
   ViewChild
 } from '@angular/core';
 import {MAT_DIALOG_DATA, MatDialogActions, MatDialogContent, MatDialogRef} from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { CliipboardService } from '../../services/cliipboard.service';
-import { FormsModule, FormControl, ReactiveFormsModule } from '@angular/forms';
-import {MatInput, MatLabel} from '@angular/material/input';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule} from '@angular/material/form-field';
 import {MatIconModule} from '@angular/material/icon';
 import {HttpClient} from '@angular/common/http';
@@ -21,40 +18,63 @@ import {environment} from '../../../environments/environment';
 import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {SafeHtmlPipe} from 'primeng/menu';
 import {MatStepper, MatStepperModule} from '@angular/material/stepper';
-import {StepperSelectionEvent} from '@angular/cdk/stepper';
+import {STEPPER_GLOBAL_OPTIONS, StepperSelectionEvent} from '@angular/cdk/stepper';
 import { marked } from 'marked';
 import {GlobalService} from '../../services/global.service';
 import {GdsService} from '../../services/gds.service';
 import {firstValueFrom} from 'rxjs';
 import {tap} from 'rxjs/internal/operators/tap';
 import {MatAutocompleteModule} from '@angular/material/autocomplete';
-import { GitDiffViewerComponent } from "../git-diff-viewer/git-diff-viewer";
+import {MatTooltipModule} from '@angular/material/tooltip';
+import {RepoCommitPickerComponent} from '../repo-commit-picker/repo-commit-picker.component';
+import {RepoAutocompleteComponent} from '../repo-autocomplete/repo-autocomplete.component';
+import {AiRepository, CardPrStateService, RepoCommitSelection} from '../../services/card-pr-state.service';
+import {RepoOption} from '../../interfaces/RepoOption';
+import {getCommitSha, getCommitTitle} from '../../helpers/commit';
+
+/** Dados do dialog "Gerar com IA". */
+export interface DialogPromptData {
+  cardNumber: string | null;
+  isAiGenerate: boolean;
+  cardType?: string;
+  /** Repositórios com PR aberto para o card (branch do PR mais recente de cada um). */
+  repositories?: { repository: string; branch: string }[];
+  /** Branch sugerida ao adicionar um repositório à mão. */
+  defaultBranch?: string;
+  /** Usado se a lista de repositórios do GitHub não puder ser carregada. */
+  repositoryFallback?: RepoOption[];
+}
 
 @Component({
   selector: 'app-dialog-prompt',
   templateUrl: './dialog-prompt.html',
   styleUrl: './dialog-prompt.css',
   standalone: true,
-  providers: [HttpClient],
+  providers: [
+    HttpClient,
+    // Steps concluídos mostram o ícone de concluído (check), inclusive os editáveis.
+    { provide: STEPPER_GLOBAL_OPTIONS, useValue: { displayDefaultIndicatorType: false } },
+  ],
   imports: [
     MatDialogContent,
     MatDialogActions,
     MatButtonModule,
     FormsModule,
-    MatLabel,
     MatFormFieldModule,
-    MatInput,
     MatIconModule,
     MatProgressSpinnerModule,
     SafeHtmlPipe,
     MatStepperModule,
-    GitDiffViewerComponent,
     MatAutocompleteModule,
     ReactiveFormsModule,
+    MatTooltipModule,
+    RepoCommitPickerComponent,
+    RepoAutocompleteComponent,
 ]
 })
 export class DialogPrompt implements OnInit {
-  readonly data = inject<any>(MAT_DIALOG_DATA);
+  readonly data = inject<DialogPromptData>(MAT_DIALOG_DATA);
+  readonly state = inject(CardPrStateService);
   readonly dialogRef = inject(MatDialogRef<DialogPrompt>);
   private _clipboardService = inject(CliipboardService);
   private _globalService = inject(GlobalService);
@@ -68,14 +88,29 @@ export class DialogPrompt implements OnInit {
   promptText = "";
   urlBase = environment.apiUrl;
   cardData: any;
-  commitId: string = "";
-  githubCommitDiff: any;
   generatedText: string = "";
   generatedTextRaw: string = "";
-  commits: any[] = [];
-  filteredCommits: any[] = [];
-  selectedCommit: any = null;
-  commitSearchControl = new FormControl('');
+
+  /** Repositórios do stepper vertical e o commit/diff escolhido em cada um (estado do card). */
+  readonly repos = this.state.aiRepositories;
+  readonly selections = this.state.aiSelections;
+  readonly selectedDiffs = this.state.aiSelectedDiffs;
+  readonly hasAnyDiff = computed(() => this.selectedDiffs().length > 0);
+  readonly repoIds = computed(() => this.repos().map(r => r.repository));
+
+  /** Repositório escolhido no autocomplete "Adicionar repositório". */
+  readonly repoToAdd = signal<RepoOption | string | null>(null);
+  readonly repoToAddValue = computed(() => {
+    const value = this.repoToAdd();
+    if (!value) return null;
+    if (typeof value !== 'string') return value.value;
+    const text = value.trim().toLowerCase();
+    return this.state.repositories().find(r => r.value.toLowerCase() === text || r.label.toLowerCase() === text)?.value ?? null;
+  });
+  readonly canAddRepo = computed(() => {
+    const value = this.repoToAddValue();
+    return !!value && !this.repoIds().includes(value);
+  });
   private pullRequestDescriptionAiGenerated: string = "";
   private rootCauseAnalysisAiGenerated: string = "";
   private configurationService = inject(GdsService);
@@ -102,8 +137,7 @@ export class DialogPrompt implements OnInit {
         // O card já foi carregado na tela de register: buscamos os dados apenas
         // em segundo plano (para montar o prompt), sem um passo visível.
         this.getCardById();
-        // A seleção de commit já é a primeira etapa do fluxo.
-        this.getCommits();
+        this.initRepositories();
       }
     } catch (error) {
       console.error('Falha ao inicializar configurações', error);
@@ -126,104 +160,48 @@ export class DialogPrompt implements OnInit {
     this.currentStep.set(event.selectedIndex);
   }
 
-  getCommits() {
-    if (!this.data.branch || !this.data.repository) return;
-
-    this.isCommitsLoading.set(true);
-    const branch = encodeURIComponent(this.data.branch);
-    const repo = encodeURIComponent(this.data.repository);
-
-    this.http.get<any[]>(`${this.urlBase}GitHub/commits?repository=${repo}&branch=${branch}`).subscribe({
-      next: (response) => {
-        this.isCommitsLoading.set(false);
-        this.commits = response || [];
-        this.filteredCommits = [...this.commits];
-        if (this.commits.length > 0) {
-          console.log('[Commits] Estrutura do primeiro commit:', JSON.stringify(this.commits[0], null, 2));
-        }
-
-        this.commitSearchControl.valueChanges.subscribe(value => {
-          const text = (typeof value === 'string' ? value : '').toLowerCase();
-          this.filteredCommits = this.commits.filter(c =>
-            this.getCommitTitle(c).toLowerCase().includes(text) ||
-            this.getCommitDescription(c).toLowerCase().includes(text)
-          );
-        });
-      },
-      error: (err) => {
-        this.isCommitsLoading.set(false);
-        console.error('Error fetching commits:', err);
-      }
-    });
+  /**
+   * Repositórios do stepper: os que têm PR aberto para o card + os já adicionados à mão
+   * numa abertura anterior do dialog (mantidos no estado enquanto o card não muda).
+   */
+  private initRepositories() {
+    const merged: AiRepository[] = [...this.repos()];
+    for (const r of this.data.repositories ?? []) {
+      if (!merged.some(m => m.repository === r.repository)) merged.push({ ...r });
+    }
+    this.state.setAiRepositories(merged);
+    this.state.loadRepositories(this.data.repositoryFallback ?? []);
   }
 
-  getCommitTitle(commit: any): string {
-    const fullMsg: string =
-      commit?.commit?.message ||
-      commit?.message ||
-      commit?.title ||
-      commit?.subject ||
-      commit?.commitMessage ||
-      '';
-    return fullMsg.split('\n')[0].trim();
+  selectionFor(repository: string): RepoCommitSelection | null {
+    return this.selections()[repository] ?? null;
   }
 
-  getCommitDescription(commit: any): string {
-    const fullMsg: string =
-      commit?.commit?.message ||
-      commit?.message ||
-      commit?.description ||
-      commit?.body ||
-      '';
-    return fullMsg.split('\n').slice(1).join('\n').trim();
+  isRepoDone(repository: string): boolean {
+    return !!this.selections()[repository]?.diff;
   }
 
-  getCommitAuthor(commit: any): string {
-    return (
-      commit?.commit?.author?.name ||
-      commit?.commit?.committer?.name ||
-      commit?.author?.login ||
-      commit?.author?.name ||
-      commit?.authorName ||
-      commit?.committer?.name ||
-      commit?.author ||
-      ''
-    );
+  addRepository() {
+    const repository = this.repoToAddValue();
+    if (!repository || this.repoIds().includes(repository)) return;
+    this.state.setAiRepositories([
+      ...this.repos(),
+      { repository, branch: this.data.defaultBranch ?? '', manual: true },
+    ]);
+    this.repoToAdd.set(null);
   }
 
-  getCommitDate(commit: any): string {
-    const date =
-      commit?.commit?.author?.date ||
-      commit?.commit?.committer?.date ||
-      commit?.authorDate ||
-      commit?.date ||
-      commit?.createdAt ||
-      commit?.timestamp ||
-      '';
-    return date ? new Date(date).toLocaleString('pt-BR') : '';
+  removeRepository(repository: string) {
+    this.state.setAiRepositories(this.repos().filter(r => r.repository !== repository));
+    this.state.setAiSelection(repository, null);
   }
 
-  getCommitSha(commit: any): string {
-    return commit?.sha || commit?.id || commit?.commitId || commit?.hash || '';
+  onRepoBranchChange(repository: string, branch: string) {
+    this.state.setAiRepositories(this.repos().map(r => r.repository === repository ? { ...r, branch } : r));
   }
 
-  displayCommit(commit: any): string {
-    if (!commit) return '';
-    const title = this.getCommitTitle(commit);
-    const desc = this.getCommitDescription(commit);
-    return desc ? `${title} - ${desc.split('\n')[0]}` : title;
-  }
-
-  selectCommit(commit: any) {
-    this.selectedCommit = commit;
-    this.commitId = this.getCommitSha(commit);
-    this.githubCommitDiff = null;
-    // Já busca o diff automaticamente — remove o passo manual de "Buscar Diff".
-    this.getGitHubCommitDiff();
-  }
-
-  advanceToAI() {
-    this.getGitHubCommitDiff();
+  onRepoSelection(repository: string, selection: RepoCommitSelection | null) {
+    this.state.setAiSelection(repository, selection);
   }
 
   goToGenerateWithAI() {
@@ -317,29 +295,6 @@ export class DialogPrompt implements OnInit {
     );
   }
 
-  getGitHubCommitDiff(){
-    if(!this.commitId) return;
-
-    this.isGitHubLoading.set(true);
-
-    var repo = this.data.repository;
-
-    this.http.get(`${this.urlBase}GitHub/commit/${this.commitId}/diff?repository=${repo}`).subscribe(
-      (response: any) => {
-        this.isGitHubLoading.set(false);
-        if (response) {
-          this.githubCommitDiff = response;
-          this.cdr.detectChanges();
-        }
-      },
-      error => {
-        this.isGitHubLoading.set(false);
-        console.error('Error fetching card:', error);
-      });
-
-  }
-
-
   generateWithAI(){
     if(!this.promptText) return;
 
@@ -383,7 +338,7 @@ export class DialogPrompt implements OnInit {
   };
 
   gerarPrompt() {
-    if(!this.githubCommitDiff || !this.data.cardNumber || !this.reproSteps) return;
+    if(!this.hasAnyDiff() || !this.data.cardNumber || !this.reproSteps) return;
 
     let prompt = `
     Eu como desenvolvedor de software, solicito que crie um texto de descrição para Pull Request com base nos seguintes dados:
@@ -437,7 +392,15 @@ export class DialogPrompt implements OnInit {
 
     }
 
-    prompt = prompt.replace('{githubCommitDiff}', JSON.stringify(this.githubCommitDiff, null, 2));
+    // Um diff por repositório (o bug pode envolver front, back, legado…). A F6 compacta este bloco.
+    const diffs = this.selectedDiffs().map(s => ({
+      repository: s.repository,
+      branch: s.branch,
+      commit: getCommitSha(s.commit),
+      message: getCommitTitle(s.commit),
+      diff: s.diff,
+    }));
+    prompt = prompt.replace('{githubCommitDiff}', JSON.stringify(diffs, null, 2));
     prompt = prompt.replace('{cardNumber}', this.data.cardNumber);
     prompt = prompt.replace('{description}', this.reproSteps);
       this.promptText = prompt;

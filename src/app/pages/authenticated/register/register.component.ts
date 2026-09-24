@@ -27,7 +27,7 @@ import {UserService} from '../../../services/UserService.service';
 import {CliipboardService} from '../../../services/cliipboard.service';
 import {environment} from '../../../../environments/environment';
 import {DialogTemplateComponent} from '../../../components/dialog-template/dialog-template.component';
-import {DialogPrompt} from '../../../components/dialog-prompt/dialog-prompt';
+import {DialogPrompt, DialogPromptData} from '../../../components/dialog-prompt/dialog-prompt';
 import {StorageService} from '../../../services/storage.service';
 import {GlobalService} from '../../../services/global.service';
 import {firstValueFrom} from 'rxjs';
@@ -604,20 +604,30 @@ export class RegisterComponent implements OnInit, OnDestroy {
   }
 
   generatePullRequestWithAi() {
-    const latest = this.latestGithubPr;
-    const repo = latest?.repositoryId ?? this.defaultRepositoryValue ?? 'edv-solvace';
-    const fullBranch = latest
-      ? `${latest.branchPrefix}${latest.branchName}`
-      : `${this.branchPrefix}${this.branchName}`;
+    // Um step por repositório com PR aberto (branch do PR mais recente de cada repo — a lista
+    // vem do mais novo para o mais antigo). Sem PR, sugere o repositório/branch padrão.
+    const repositories: { repository: string; branch: string }[] = [];
+    for (const pr of this.prState.githubPrs()) {
+      if (!repositories.some(r => r.repository === pr.repositoryId)) {
+        repositories.push({ repository: pr.repositoryId, branch: `${pr.branchPrefix}${pr.branchName}` });
+      }
+    }
+    const defaultBranch = repositories[0]?.branch ?? `${this.branchPrefix}${this.branchName}`;
+    if (repositories.length === 0 && this.defaultRepositoryValue) {
+      repositories.push({ repository: this.defaultRepositoryValue, branch: defaultBranch });
+    }
+
+    const data: DialogPromptData = {
+      cardNumber: this.cardNumber,
+      isAiGenerate: true,
+      cardType: this.cardType,
+      repositories,
+      defaultBranch,
+      repositoryFallback: this.repositoryOptions,
+    };
 
     const dialogRef = this.dialog.open(DialogPrompt, {
-      data: {
-        cardNumber: this.cardNumber,
-        isAiGenerate: true,
-        cardType: this.cardType,
-        repository: repo,
-        branch: fullBranch,
-      },
+      data,
       width: '920px',
       height: '82vh',
       maxWidth: '94vw',
