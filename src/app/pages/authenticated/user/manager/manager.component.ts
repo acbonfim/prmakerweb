@@ -15,7 +15,6 @@ import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserFormDialogComponent } from '../dialogs/user-form-dialog.component';
 import { UserServicesDialogComponent } from '../dialogs/user-services-dialog.component';
-import { ApiKeyDialogComponent } from '../dialogs/api-key-dialog.component';
 import { UserAvatarComponent } from '../../../../components/user-avatar/user-avatar.component';
 
 @Component({
@@ -41,7 +40,6 @@ export class ManagerComponent implements OnInit {
   total = signal(0);
   loadingList = signal(false);
   loadingMore = signal(false);
-  apiKeyLoading = signal(false);
   togglingId = signal<number | null>(null);
 
   roles = signal<string[]>([]);
@@ -196,30 +194,6 @@ export class ManagerComponent implements OnInit {
       error: (err) => {
         this.emailingId.set(null);
         const msg = err?.error?.message || err?.error?.Message || 'Erro ao enviar e-mail';
-        this._globalService.sendAlertError(msg, 'OK');
-      }
-    });
-  }
-
-  generateMyApiKey() {
-    this.apiKeyLoading.set(true);
-    this._authService.generateApiKey().subscribe({
-      next: (res: any) => {
-        this.apiKeyLoading.set(false);
-        const data = res?.object ?? res?.Object ?? {};
-        const apiKey = data.apiKey ?? data.ApiKey;
-        if (!apiKey) {
-          this._globalService.sendAlertError('Não foi possível gerar a API Key', 'OK');
-          return;
-        }
-        this.dialog.open(ApiKeyDialogComponent, {
-          width: '560px',
-          data: { apiKey, user: data.user, roles: data.roles }
-        });
-      },
-      error: (err) => {
-        this.apiKeyLoading.set(false);
-        const msg = err?.error?.message || err?.error?.Message || 'Erro ao gerar API Key';
         this._globalService.sendAlertError(msg, 'OK');
       }
     });

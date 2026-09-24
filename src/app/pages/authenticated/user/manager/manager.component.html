@@ -22,15 +22,6 @@
       </button>
     </div>
 
-    <button mat-stroked-button [disabled]="apiKeyLoading()" (click)="generateMyApiKey()">
-      <span>Minha API Key</span>
-      @if (apiKeyLoading()) {
-        <mat-spinner diameter="18"></mat-spinner>
-      } @else {
-        <mat-icon>vpn_key</mat-icon>
-      }
-    </button>
-
     <button mat-raised-button color="primary" (click)="openCreate()">
       Novo usuário <mat-icon>add</mat-icon>
     </button>

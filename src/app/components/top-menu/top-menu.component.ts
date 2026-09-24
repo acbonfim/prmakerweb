@@ -24,6 +24,7 @@ import {WsService} from '../../services/ws.service';
 import {RouterModule} from '@angular/router';
 import {UserIntegrationService} from '../../services/user-integration.service';
 import {MyIntegrationsDialogComponent} from '../my-integrations-dialog/my-integrations-dialog.component';
+import {MyApiKeyDialogComponent} from '../my-api-key-dialog/my-api-key-dialog.component';
 
 interface AutoCompleteCompleteEvent {
   originalEvent: Event;
@@ -128,6 +129,16 @@ export class TopMenuComponent implements OnInit {
   openMyIntegrations() {
     this.dialog.open(MyIntegrationsDialogComponent, {
       width: '640px',
+      maxWidth: '94vw',
+      maxHeight: '90vh',
+      panelClass: 'custom-dialog-container'
+    });
+  }
+
+  /** Chave pessoal (x-api-key) para integrações (feature 0008). */
+  openMyApiKey() {
+    this.dialog.open(MyApiKeyDialogComponent, {
+      width: '600px',
       maxWidth: '94vw',
       maxHeight: '90vh',
       panelClass: 'custom-dialog-container'
