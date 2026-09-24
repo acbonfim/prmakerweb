@@ -311,3 +311,18 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   flex: 1 1 auto;
   min-height: 0;
 }
+
+/* "!" de pendência no item "Minhas integrações" do menu do usuário */
+.mat-mdc-menu-panel.profile-menu .pm-pending {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1f1f1f;
+  background: #d29922;
+}

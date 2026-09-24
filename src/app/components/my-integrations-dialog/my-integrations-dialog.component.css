@@ -1,0 +1,72 @@
+:host { display: flex; flex-direction: column; max-height: 90vh; }
+
+.dialog-header { display: flex; align-items: center; gap: 12px; padding: 16px 16px 8px 24px; }
+.dialog-header__icon { color: var(--mat-sys-primary); }
+.dialog-header__titles { display: flex; flex-direction: column; min-width: 0; }
+.dialog-header__title { font-weight: 600; font-size: 16px; }
+.dialog-header__sub { font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent); }
+
+/* Cabeçalho e rodapé fixos; só o corpo rola. Os blocos NÃO encolhem (flex: 0 0 auto) —
+   senão, com várias integrações, eles se espremiam para caber e o overflow:hidden cortava tudo. */
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.dialog-body > * { flex: 0 0 auto; }
+
+.state {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 32px 12px; text-align: center; font-size: 13px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent);
+}
+.state--error { color: #ff8a8e; }
+
+.integration {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: var(--surface-1, #2a2a2a);
+  overflow: hidden;
+}
+
+.integration__head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface-2, #323232);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.integration__icon { color: var(--mat-sys-primary); }
+.integration__name { font-size: 14px; }
+
+.chip {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 700; padding: 2px 9px 2px 6px; border-radius: 999px;
+}
+.chip mat-icon { font-size: 14px; width: 14px; height: 14px; }
+.chip--ok { color: #3fb950; background: rgba(63, 185, 80, 0.15); }
+.chip--pending { color: #d29922; background: rgba(210, 153, 34, 0.15); }
+
+.integration__fields { display: flex; flex-direction: column; gap: 14px; padding: 16px 14px 4px; }
+.field-row { display: flex; align-items: flex-start; gap: 4px; }
+.field { width: 100%; }
+
+.error {
+  display: flex; align-items: center; gap: 8px; margin: 8px 14px 0;
+  padding: 8px 12px; border-radius: 8px; font-size: 13px;
+  background: color-mix(in srgb, #e5484d 18%, transparent); color: #ff8a8e;
+}
+
+.integration__actions { display: flex; justify-content: flex-end; padding: 12px 14px 14px; }
+.integration__actions mat-spinner { display: inline-block; margin-right: 6px; }
+
+.dialog-actions { display: flex; align-items: center; padding: 8px 24px 16px; }
+.dialog-actions .spacer { flex: 1 1 auto; }
+
+/* Campo fixo (definido pelo administrador): somente leitura, visual atenuado */
+.field--fixed { opacity: 0.75; }
+.field--fixed mat-icon[matSuffix] { color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); margin-right: 8px; }

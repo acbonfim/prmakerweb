@@ -20,12 +20,14 @@ import {MatMenuModule} from '@angular/material/menu';
 import {MatPaginatorModule} from '@angular/material/paginator';
 import {ShowLoadComponent} from '../../../../components/showLoad/showLoad.component';
 import {MatButtonModule} from '@angular/material/button';
+import {MatCheckboxModule} from '@angular/material/checkbox';
 
 @Component({
   selector: 'app-dialogEdit',
   templateUrl: './dialogEdit.component.html',
   styleUrls: ['./dialogEdit.component.css'],
   imports: [
+    MatCheckboxModule,
     MatFormFieldModule,
     MatCardModule,
     MatIconModule,
@@ -108,10 +110,26 @@ export class DialogEditComponent implements OnInit {
 
   addProperty(name: string) {
     this.urlApiModel[name] = '';
+    // Campo novo de plugin pessoal nasce preenchido pelo usuário.
+    if (this.data.personalFields) this.data.personalFields = [...this.data.personalFields, name];
   }
 
   removeProperty(name: string) {
     delete this.urlApiModel[name];
+    if (this.data.personalFields) this.data.personalFields = this.data.personalFields.filter(k => k !== name);
+  }
+
+  /** Plugin pessoal: o campo é preenchido por cada usuário (true) ou fixo com o valor daqui (false). */
+  isUserField(key: string): boolean {
+    const keys = this.data.personalFields;
+    return !keys || keys.some(k => k.toLowerCase() === key.toLowerCase());
+  }
+
+  toggleUserField(key: string, userFills: boolean) {
+    // null = todos do usuário; ao desmarcar o primeiro, materializa a lista explícita.
+    const current = this.data.personalFields ?? this.getObjectKeys(this.urlApiModel);
+    const without = current.filter(k => k.toLowerCase() !== key.toLowerCase());
+    this.data.personalFields = userFills ? [...without, key] : without;
   }
 
   validProperty(name: string) {
@@ -135,6 +153,11 @@ export class DialogEditComponent implements OnInit {
       this.data.apiBaseUrl = JSON.stringify(this.urlApiModel);
     }else if( this.data.key =='settings'){
       this.data.configurations = this.urlApiModel;
+      // Mantém só chaves que existem (campos removidos saem da lista de campos do usuário).
+      if (this.data.personalFields) {
+        const keys = this.getObjectKeys(this.urlApiModel);
+        this.data.personalFields = this.data.personalFields.filter(k => keys.includes(k));
+      }
     }
 
     this._gdsService.putUpdatePluginConfiguration(this.data).subscribe(

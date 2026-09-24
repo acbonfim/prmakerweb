@@ -14,11 +14,18 @@
 .dialog-header__icon { color: var(--mat-sys-primary); }
 .dialog-header__title { font-weight: 600; font-size: 16px; }
 
+/* Só o corpo rola; os blocos não encolhem (evita conteúdo espremido/cortado em telas baixas). */
 .dialog-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
 }
+
+.dialog-body > * { flex: 0 0 auto; }
 
 .pr-fields-row {
   display: flex;

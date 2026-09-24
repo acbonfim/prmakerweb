@@ -22,6 +22,9 @@
       }
     </span>
     <span class="profile-name">{{ user.firstName }} {{ user.lastName }}</span>
+    @if (integrations.hasPending()) {
+      <span class="profile-pending" matTooltip="Configure suas integrações pessoais"></span>
+    }
     <mat-icon class="profile-caret">arrow_drop_down</mat-icon>
   </button>
 </div>
@@ -47,6 +50,13 @@
   <button (click)="openProfile()" mat-menu-item>
     <mat-icon>person</mat-icon>
     <span>Meu perfil</span>
+  </button>
+  <button (click)="openMyIntegrations()" mat-menu-item>
+    <mat-icon>hub</mat-icon>
+    <span>Minhas integrações</span>
+    @if (integrations.hasPending()) {
+      <span class="pm-pending" matTooltip="Há integrações pessoais pendentes">!</span>
+    }
   </button>
   <button mat-menu-item class="pm-danger" (click)="logOut()">
     <mat-icon>logout</mat-icon>

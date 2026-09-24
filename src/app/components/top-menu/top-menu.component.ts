@@ -1,4 +1,4 @@
-import {ChangeDetectorRef, Component, EventEmitter, HostListener, Input, OnInit, Output} from '@angular/core';
+import {ChangeDetectorRef, Component, EventEmitter, HostListener, inject, Input, OnInit, Output} from '@angular/core';
 import {MatIconModule} from '@angular/material/icon';
 import {MatButtonModule} from '@angular/material/button';
 import {MatMenuModule} from '@angular/material/menu';
@@ -22,6 +22,8 @@ import {GlobalService} from '../../services/global.service';
 import {StorageService} from '../../services/storage.service';
 import {WsService} from '../../services/ws.service';
 import {RouterModule} from '@angular/router';
+import {UserIntegrationService} from '../../services/user-integration.service';
+import {MyIntegrationsDialogComponent} from '../my-integrations-dialog/my-integrations-dialog.component';
 
 interface AutoCompleteCompleteEvent {
   originalEvent: Event;
@@ -90,6 +92,8 @@ export class TopMenuComponent implements OnInit {
     this.isProduction = environment.production;
     this.loadUser();
     this.realTimeMethods();
+    // Status das integrações pessoais: indicador no menu e bloqueio da tela de PR.
+    this.integrations.loadStatus();
   }
 
   // Relê o usuário do storage e recalcula firstName/lastName a partir do fullName.
@@ -116,6 +120,18 @@ export class TopMenuComponent implements OnInit {
   toggle() {
     this.sidebarOpen = !this.sidebarOpen;
     this._globalService._sideNavToggle(null);
+  }
+
+  /** Integrações de uso pessoal (feature 0002): status para o indicador de pendência do menu. */
+  readonly integrations = inject(UserIntegrationService);
+
+  openMyIntegrations() {
+    this.dialog.open(MyIntegrationsDialogComponent, {
+      width: '640px',
+      maxWidth: '94vw',
+      maxHeight: '90vh',
+      panelClass: 'custom-dialog-container'
+    });
   }
 
   openProfile() {

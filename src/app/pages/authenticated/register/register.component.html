@@ -8,6 +8,25 @@
   }
 </div>
 
+@if (integrationsBlocked) {
+  <!-- Integrações pessoais pendentes (feature 0002): a tela depende do GitHub/Azure DevOps do usuário -->
+  <div class="integrations-block">
+    <mat-icon class="integrations-block__icon">hub</mat-icon>
+    <h2>Configure suas integrações pessoais</h2>
+    <p>
+      Esta tela usa o GitHub e o Azure DevOps com as <strong>suas</strong> credenciais.
+      Preencha as integrações pendentes para continuar:
+    </p>
+    <ul class="integrations-block__list">
+      @for (item of integrations.status()?.pending ?? []; track item.pluginId) {
+        <li><mat-icon>warning</mat-icon>{{ item.description }}</li>
+      }
+    </ul>
+    <button mat-flat-button color="primary" (click)="openMyIntegrations()">
+      <mat-icon>settings</mat-icon> Configurar minhas integrações
+    </button>
+  </div>
+} @else {
     <div class="pr-top-row">
     <div class="pr-toolbar">
       <!-- Número do card -->
@@ -147,5 +166,6 @@
 
 
       </div>
+}
 <ngx-loading-bar></ngx-loading-bar>
 

@@ -1,0 +1,94 @@
+<div class="dialog-header">
+  <mat-icon class="dialog-header__icon">hub</mat-icon>
+  <div class="dialog-header__titles">
+    <span class="dialog-header__title">Minhas integrações</span>
+    <span class="dialog-header__sub">Configurações de uso pessoal: cada pessoa usa as próprias credenciais.</span>
+  </div>
+  <button mat-icon-button class="ms-auto" (click)="close()" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+</div>
+
+<mat-dialog-content class="dialog-body">
+  @if (loading()) {
+    <div class="state"><mat-spinner diameter="28"></mat-spinner><span>Carregando suas integrações...</span></div>
+  } @else if (loadError()) {
+    <div class="state state--error"><mat-icon>error_outline</mat-icon><span>{{ loadError() }}</span></div>
+  } @else if (drafts().length === 0) {
+    <div class="state"><mat-icon>check_circle</mat-icon><span>Nenhuma integração pessoal é exigida no momento.</span></div>
+  } @else {
+    @for (draft of drafts(); track draft.integration.pluginId) {
+      <section class="integration">
+        <header class="integration__head">
+          <mat-icon class="integration__icon">extension</mat-icon>
+          <strong class="integration__name">{{ draft.integration.description }}</strong>
+          @if (draft.integration.configured) {
+            <span class="chip chip--ok"><mat-icon>check_circle</mat-icon>Configurado</span>
+          } @else {
+            <span class="chip chip--pending"><mat-icon>warning</mat-icon>Pendente</span>
+          }
+        </header>
+
+        <div class="integration__fields">
+          @for (field of draft.fields; track field.key) {
+            @if (!field.editable) {
+              <!-- Fixo: definido pelo administrador na configuração geral (somente leitura) -->
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field field--fixed">
+                <mat-label>{{ field.key }}</mat-label>
+                <input matInput readonly tabindex="-1"
+                       [value]="field.sensitive ? (field.hasSavedValue ? '••••••••' : '') : field.value"
+                       [placeholder]="field.hasSavedValue ? '' : 'Não definido pelo administrador'"/>
+                <mat-icon matSuffix matTooltip="Definido pelo administrador">lock</mat-icon>
+                <mat-hint>Definido pelo administrador</mat-hint>
+              </mat-form-field>
+            } @else if (field.sensitive) {
+              <div class="field-row">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field">
+                  <mat-label>{{ field.key }}</mat-label>
+                  <input matInput autocomplete="new-password"
+                         [type]="field.reveal ? 'text' : 'password'"
+                         [disabled]="field.clear || draft.saving"
+                         [placeholder]="field.hasSavedValue ? '•••••••• salvo — digite para trocar' : 'Obrigatório'"
+                         [(ngModel)]="field.value" (ngModelChange)="touch()"/>
+                  <button matSuffix mat-icon-button type="button" (click)="field.reveal = !field.reveal; touch()"
+                          [matTooltip]="field.reveal ? 'Ocultar' : 'Mostrar o que você digitou'">
+                    <mat-icon>{{ field.reveal ? 'visibility_off' : 'visibility' }}</mat-icon>
+                  </button>
+                  <mat-hint>{{ field.clear ? 'Será apagado ao salvar' : field.hasSavedValue ? 'Valor salvo (protegido)' : 'Campo protegido: gravado criptografado' }}</mat-hint>
+                </mat-form-field>
+                @if (field.hasSavedValue) {
+                  <button mat-icon-button type="button" (click)="toggleClear(field)" [disabled]="draft.saving"
+                          [matTooltip]="field.clear ? 'Manter o valor salvo' : 'Apagar o valor salvo'">
+                    <mat-icon>{{ field.clear ? 'undo' : 'delete_outline' }}</mat-icon>
+                  </button>
+                }
+              </div>
+            } @else {
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field">
+                <mat-label>{{ field.key }}</mat-label>
+                <input matInput [disabled]="draft.saving" [(ngModel)]="field.value" (ngModelChange)="touch()" placeholder="Obrigatório"/>
+                @if (field.suggested && !field.hasSavedValue) {
+                  <mat-hint>Sugestão da configuração geral — confira e salve</mat-hint>
+                }
+              </mat-form-field>
+            }
+          }
+        </div>
+
+        @if (draft.error) {
+          <div class="error"><mat-icon>error_outline</mat-icon>{{ draft.error }}</div>
+        }
+
+        <div class="integration__actions">
+          <button mat-flat-button color="primary" (click)="save(draft)" [disabled]="!canSave(draft)">
+            @if (draft.saving) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>save</mat-icon> }
+            Salvar
+          </button>
+        </div>
+      </section>
+    }
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions class="dialog-actions">
+  <span class="spacer"></span>
+  <button mat-button (click)="close()">Fechar</button>
+</mat-dialog-actions>
