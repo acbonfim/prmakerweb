@@ -1,0 +1,86 @@
+<div class="dialog-header">
+  <mat-icon class="dialog-header__icon">merge</mat-icon>
+  <span class="dialog-header__title">
+    @if (isEdit) {
+      Pull Request #{{ editingPr?.number }} — {{ editingPr?.repositoryId }}
+    } @else {
+      Abrir Pull Request — AB#{{ data.cardNumber }}
+    }
+  </span>
+  <button mat-icon-button class="ms-auto" (click)="close()" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+</div>
+
+<mat-dialog-content class="dialog-body">
+  <div class="pr-fields-row">
+    <app-branch-input class="field field--branch"
+                      [(prefix)]="branchPrefix"
+                      [(name)]="branchName"
+                      [readonly]="isEdit"></app-branch-input>
+
+    <app-repo-autocomplete class="field field--repo"
+                           [options]="state.repositories()"
+                           [loading]="state.repositoriesLoading()"
+                           [readonly]="isEdit"
+                           [(value)]="repository"></app-repo-autocomplete>
+
+    <app-target-branch-toggle class="field field--target"
+                              [options]="data.targetOptions"
+                              [disabled]="isEdit"
+                              [(value)]="target"></app-target-branch-toggle>
+  </div>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field--title">
+    <mat-label>Título do PR</mat-label>
+    <input matInput [ngModel]="title()" (ngModelChange)="onTitleInput($event)" maxlength="500"/>
+  </mat-form-field>
+
+  <!-- 2.2.1: quem abriu / datas do PR do repositório + branch selecionados, e os popovers -->
+  <app-pr-info-card [userName]="author().name"
+                    [userPhoto]="author().photo"
+                    [openedAt]="matchingPr()?.createdAt ?? null"
+                    [updatedAt]="matchingPr()?.updatedAt ?? null"
+                    [authorLabel]="matchingPr() ? 'Aberto por' : 'Novo PR — ainda não aberto'">
+    <ng-container ngProjectAs="[info-actions]">
+      <app-panel-popover-button kind="description" tooltip="Ver a descrição em tela maior"></app-panel-popover-button>
+      @if (showRootCause) {
+        <app-panel-popover-button kind="rootCause" label="Root Cause"
+                                  tooltip="Escrever/editar o root cause (um para todos os repositórios)"></app-panel-popover-button>
+      }
+    </ng-container>
+  </app-pr-info-card>
+
+  @if (matchingPr() && !isEdit) {
+    <div class="hint">
+      <mat-icon>info</mat-icon>
+      Já existe um PR desta branch para {{ matchingPr()!.targetBranch }} neste repositório (#{{ matchingPr()!.number }}, {{ matchingPr()!.status }}).
+      Abrir de novo apenas copia o link do existente.
+    </div>
+  }
+
+  <!-- Descrição do PR (spec 2.1): escrita à mão aqui ou gerada com IA; é a mesma do card,
+       então reflete na tela principal e nos popovers. -->
+  <app-pr-description-panel class="description-editor" title="Descrição do PR (enviada ao GitHub)"></app-pr-description-panel>
+
+  @if (error()) {
+    <div class="error"><mat-icon>error_outline</mat-icon>{{ error() }}</div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions class="dialog-actions">
+  @if (isEdit) {
+    <button mat-button (click)="openInGithub()">Abrir no GitHub<mat-icon>open_in_new</mat-icon></button>
+    <button mat-button (click)="copyCurrentLink()">Copiar link<mat-icon>link</mat-icon></button>
+  } @else {
+    <mat-slide-toggle [ngModel]="draft()" (ngModelChange)="draft.set($event)">Draft</mat-slide-toggle>
+  }
+  <span class="spacer"></span>
+  <button mat-button (click)="close()">Cancelar</button>
+  <button mat-raised-button color="primary" [disabled]="!canSubmit()" (click)="submit()">
+    @if (saving()) {
+      <mat-spinner diameter="18"></mat-spinner>
+    } @else {
+      <mat-icon>{{ isEdit ? 'sync' : 'merge' }}</mat-icon>
+    }
+    {{ isEdit ? 'Atualizar PR' : 'Abrir PR' }}
+  </button>
+</mat-dialog-actions>

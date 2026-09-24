@@ -8,6 +8,7 @@
   }
 </div>
 
+    <div class="pr-top-row">
     <div class="pr-toolbar">
       <!-- Número do card -->
       <mat-form-field appearance="outline" subscriptSizing="dynamic"
@@ -25,72 +26,28 @@
           <mat-icon>search</mat-icon>
         </button>
       </mat-form-field>
+    </div>
 
-      <!-- Branch -->
-      <mat-form-field appearance="outline" subscriptSizing="dynamic"
-                      class="pr-field pr-field--branch">
-        <mat-label>Branch</mat-label>
-        @if (isEditingPrefix) {
-          <input matTextPrefix #prefixInput class="pr-prefix-input"
-                 [(ngModel)]="branchPrefix"
-                 (blur)="onPrefixBlur()"
-                 (ngModelChange)="onPrefixChange()"
-                 (click)="$event.stopPropagation()"
-                 (keydown.enter)="onPrefixBlur()"/>
-        } @else {
-          <span matTextPrefix class="pr-prefix"
-                (dblclick)="onPrefixDoubleClick()"
-                matTooltip="Duplo clique para editar o prefixo" matTooltipPosition="above">
-            {{ branchPrefix }}
-          </span>
-        }
-        <input matInput class="pr-branch-input" placeholder="nome da branch" [(ngModel)]="branchName"/>
-      </mat-form-field>
-
-      <!-- Repositório -->
-      @if (isConfigLoading) {
-        <div class="pr-field pr-field--repo pr-field-skeleton">
-          <div class="skeleton skeleton--label"></div>
-          <div class="skeleton skeleton--control"></div>
-        </div>
-      } @else {
-        <mat-form-field appearance="outline" subscriptSizing="dynamic"
-                        class="pr-field pr-field--repo">
-          <mat-label>Repositório</mat-label>
-          <input matInput type="text" placeholder="Repositório"
-                 [matAutocomplete]="repoAuto"
-                 [(ngModel)]="selectedRepositoryObj"
-                 (ngModelChange)="filterRepoInput($event)"
-                 (focus)="filterRepoInput(selectedRepositoryObj)"/>
-          <mat-icon matSuffix>expand_more</mat-icon>
-          <mat-autocomplete #repoAuto="matAutocomplete"
-                            [displayWith]="repoDisplay"
-                            (optionSelected)="onRepositorySelect()">
-            @for (repo of filteredRepositories; track repo.value) {
-              <mat-option [value]="repo">{{ repo.label }}</mat-option>
-            }
-          </mat-autocomplete>
-        </mat-form-field>
-      }
-
-      <!-- Branch para PR -->
-      <div class="pr-field pr-field--branches">
-        <label class="pr-field__label">Branch para PR</label>
-        @if (isConfigLoading) {
-          <div class="pr-skel-row">
-            @for (s of [1, 2, 3, 4]; track s) {
-              <div class="skeleton skeleton--toggle"></div>
-            }
-          </div>
-        } @else {
-          <mat-button-toggle-group class="pr-toggle" [(ngModel)]="environmentName"
-                                   hideSingleSelectionIndicator>
-            @for (opt of justifyOptions; track opt.value) {
-              <mat-button-toggle [value]="opt.value">{{ opt.label }}</mat-button-toggle>
-            }
-          </mat-button-toggle-group>
-        }
-      </div>
+      <!-- Quem abriu / datas + popovers de Descrição e Root Cause (spec 2, 2.3). Sempre visível:
+           vazio antes da busca, skeleton durante a busca. -->
+      <app-pr-info-card class="pr-toolbar__info"
+                        [loading]="isPullRequestLoading && !prInfo"
+                        [userName]="prInfo?.userName ?? ''"
+                        [userPhoto]="prInfo?.userPhoto ?? null"
+                        [openedAt]="prInfo?.openedAt ?? null"
+                        [updatedAt]="prInfo?.updatedAt ?? null"
+                        [authorLabel]="infoAuthorLabel">
+        <ng-container ngProjectAs="[info-actions]">
+          <app-panel-popover-button kind="description" label="Descrição"
+                                    [disabled]="!prInfo || isPullRequestLoading"
+                                    tooltip="Escrever/editar a descrição do PR"></app-panel-popover-button>
+          @if (cardType !== 'us') {
+            <app-panel-popover-button kind="rootCause" label="Root Cause"
+                                      [disabled]="!prInfo || isPullRequestLoading"
+                                      tooltip="Escrever/editar o root cause (um para todos os repositórios)"></app-panel-popover-button>
+          }
+        </ng-container>
+      </app-pr-info-card>
     </div>
 
     <!--
@@ -104,144 +61,22 @@
 
         <div class="pr-content-row">
           <div class="pr-fields">
-            @if (prInfo) {
-              <div class="pr-info-card">
-                <div class="pr-info">
-                  <div class="pr-info__author">
-                    <app-user-avatar [name]="prInfo.userName" [imageUrl]="prInfo.userPhoto" [size]="36"></app-user-avatar>
-                    <div class="pr-info__col">
-                      <span class="pr-info__label">Aberto por</span>
-                      <strong class="pr-info__value">{{ prInfo.userName || '—' }}</strong>
-                    </div>
-                  </div>
-
-                  <div class="pr-info__meta">
-                    <div class="pr-info__item">
-                      <mat-icon>event</mat-icon>
-                      <div class="pr-info__col">
-                        <span class="pr-info__label">Aberto em</span>
-                        <strong class="pr-info__value">{{ (prInfo.openedAt | date:'dd/MM/yyyy HH:mm') || '—' }}</strong>
-                      </div>
-                    </div>
-                    <div class="pr-info__item">
-                      <mat-icon>update</mat-icon>
-                      <div class="pr-info__col">
-                        <span class="pr-info__label">Última atualização</span>
-                        <strong class="pr-info__value">{{ prInfo.updatedAt ? (prInfo.updatedAt | date:'dd/MM/yyyy HH:mm') : '—' }}</strong>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            }
-
-            <div class="pr-editors">
-            <app-card-panel class="pr-panel" title="Descrição" icon="description">
-              @if (fullDescription !== null) {
+            <!-- PRs abertos no GitHub para o card, com status atual (spec 1.4/3); clique abre o modal (3.1) -->
+            <app-card-panel class="pr-panel" title="Pull Requests" icon="merge">
+              @if (prInfo) {
                 <button panel-actions mat-icon-button class="panel-action"
-                        (click)="openDialogFullDescription()"
-                        matTooltip="Descrição montada"
+                        (click)="refreshGithubPrs(true)"
+                        [disabled]="prState.githubPrsLoading()"
+                        [matTooltip]="prState.githubPrsLoading() ? 'Consultando o GitHub...' : 'Atualizar status no GitHub'"
                         matTooltipPosition="above">
-                  <mat-icon>article_shortcut</mat-icon>
+                  <mat-icon [class.panel-action__spin]="prState.githubPrsLoading()">refresh</mat-icon>
                 </button>
               }
-              @if (isPullRequestLoading) {
-                <div class="editor-skeleton" aria-hidden="true">
-                  <div class="skeleton sk-toolbar"></div>
-                  <div class="skeleton sk-line" style="width: 94%"></div>
-                  <div class="skeleton sk-line" style="width: 82%"></div>
-                  <div class="skeleton sk-line" style="width: 88%"></div>
-                  <div class="skeleton sk-line" style="width: 70%"></div>
-                  <div class="skeleton sk-line" style="width: 90%"></div>
-                  <div class="skeleton sk-line" style="width: 58%"></div>
-                </div>
-              } @else {
-              <p-editor class="panel-editor"
-                        [(ngModel)]="descriptionHtml"
-                        (onTextChange)="onDescriptionEditorChange($event)"
-                        placeholder="Ex. It makes me feel...">
-                <ng-template pTemplate="header">
-                  <span class="ql-formats">
-                    <select class="ql-header">
-                      <option value="1"></option>
-                      <option value="2"></option>
-                      <option value="3"></option>
-                      <option selected></option>
-                    </select>
-                  </span>
-                  <span class="ql-formats">
-                    <button class="ql-bold" aria-label="Negrito" type="button"></button>
-                    <button class="ql-italic" aria-label="Itálico" type="button"></button>
-                    <button class="ql-strike" aria-label="Tachado" type="button"></button>
-                  </span>
-                  <span class="ql-formats">
-                    <button class="ql-list" value="ordered" aria-label="Lista ordenada" type="button"></button>
-                    <button class="ql-list" value="bullet" aria-label="Lista" type="button"></button>
-                    <button class="ql-blockquote" aria-label="Citação" type="button"></button>
-                    <button class="ql-code-block" aria-label="Código" type="button"></button>
-                  </span>
-                  <span class="ql-formats">
-                    <button class="ql-link" aria-label="Link" type="button"></button>
-                    <button class="ql-clean" aria-label="Limpar formatação" type="button"></button>
-                  </span>
-                </ng-template>
-              </p-editor>
-              }
+              <app-github-pr-list [prs]="prState.githubPrs()"
+                                  [loading]="prState.githubPrsLoading() || isPullRequestLoading"
+                                  [emptyMessage]="prInfo ? 'Nenhum PR aberto para este card. Use Abrir PR.' : 'Busque um card para ver os PRs abertos.'"
+                                  (select)="openPrDialog($event)"></app-github-pr-list>
             </app-card-panel>
-
-            @if(this.cardType !== 'us'){
-              <app-card-panel class="pr-panel" title="Root Cause" icon="troubleshoot">
-                @if (pullRequest.rootCause && pullRequest.rootCause.length) {
-                  <button panel-actions mat-icon-button class="panel-action"
-                          (click)="openDialogRCA()"
-                          matTooltip="Root Cause"
-                          matTooltipPosition="above">
-                    <mat-icon>article_shortcut</mat-icon>
-                  </button>
-                }
-                @if (isPullRequestLoading) {
-                  <div class="editor-skeleton" aria-hidden="true">
-                    <div class="skeleton sk-toolbar"></div>
-                    <div class="skeleton sk-line" style="width: 90%"></div>
-                    <div class="skeleton sk-line" style="width: 76%"></div>
-                    <div class="skeleton sk-line" style="width: 84%"></div>
-                    <div class="skeleton sk-line" style="width: 64%"></div>
-                  </div>
-                } @else {
-                <p-editor class="panel-editor"
-                          [(ngModel)]="rootCauseHtml"
-                          (onTextChange)="onRootCauseEditorChange($event)"
-                          placeholder="Ex. It makes me feel...">
-                  <ng-template pTemplate="header">
-                    <span class="ql-formats">
-                      <select class="ql-header">
-                        <option value="1"></option>
-                        <option value="2"></option>
-                        <option value="3"></option>
-                        <option selected></option>
-                      </select>
-                    </span>
-                    <span class="ql-formats">
-                      <button class="ql-bold" aria-label="Negrito" type="button"></button>
-                      <button class="ql-italic" aria-label="Itálico" type="button"></button>
-                      <button class="ql-strike" aria-label="Tachado" type="button"></button>
-                    </span>
-                    <span class="ql-formats">
-                      <button class="ql-list" value="ordered" aria-label="Lista ordenada" type="button"></button>
-                      <button class="ql-list" value="bullet" aria-label="Lista" type="button"></button>
-                      <button class="ql-blockquote" aria-label="Citação" type="button"></button>
-                      <button class="ql-code-block" aria-label="Código" type="button"></button>
-                    </span>
-                    <span class="ql-formats">
-                      <button class="ql-link" aria-label="Link" type="button"></button>
-                      <button class="ql-clean" aria-label="Limpar formatação" type="button"></button>
-                    </span>
-                  </ng-template>
-                </p-editor>
-                }
-              </app-card-panel>
-            }
-            </div>
           </div>
 
           <div class="pr-timeline">
@@ -257,11 +92,11 @@
                          [disabled]="isPullRequestLoading || fullDescription === null"
                          [model]="copyCustomButtons" (onClick)="copyFullDescriptionToClipboard('full')" rounded severity="secondary"/>
           <button mat-raised-button style="margin-left: 10px"
-                  (click)="openGithubPullRequestPage()"
-                  [disabled]="!this.pullRequest?.description || !this.environmentName.length">Abrir PR<mat-icon>merge</mat-icon></button>
+                  (click)="openPrDialog()"
+                  [disabled]="!canOpenPr">Abrir PR<mat-icon>merge</mat-icon></button>
 
           <button mat-raised-button style="margin-left: 10px"
-                  [disabled]="isPullRequestLoading || fullDescription === null"
+                  [disabled]="isPullRequestLoading || !prInfo"
                   (click)="savePullRequest()">Salvar<mat-icon>save</mat-icon></button>
           <button mat-raised-button style="margin-left: 10px"
                   [disabled]="isPullRequestLoading || !hasAnythingToClear"
@@ -304,7 +139,7 @@
       <p-splitbutton style="width: 100% !important"
         label="Salvar"
                      icon="pi pi-save"
-                     [disabled]="isPullRequestLoading || fullDescription === null"
+                     [disabled]="isPullRequestLoading || !prInfo"
                      [model]="mobileButtons" (onClick)="savePullRequest()" rounded severity="secondary" />
     }
 

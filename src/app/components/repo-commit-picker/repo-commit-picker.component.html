@@ -1,0 +1,72 @@
+<div class="picker-row">
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="picker-branch">
+    <mat-label>Branch</mat-label>
+    <input matInput [ngModel]="branch()" (ngModelChange)="branch.set($event)"
+           (keyup.enter)="loadCommits()"/>
+    <button matSuffix mat-icon-button (click)="loadCommits()" [disabled]="isCommitsLoading()"
+            matTooltip="Recarregar commits da branch" matTooltipPosition="above" aria-label="Recarregar commits">
+      <mat-icon>refresh</mat-icon>
+    </button>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="picker-search">
+    <mat-label>Buscar commit</mat-label>
+    <input matInput
+           [ngModel]="search()"
+           (ngModelChange)="search.set($event)"
+           [matAutocomplete]="auto"
+           [disabled]="isCommitsLoading()"
+           placeholder="Digite para filtrar por mensagem..."/>
+    <mat-icon matSuffix>search</mat-icon>
+    <mat-autocomplete #auto="matAutocomplete"
+                      [displayWith]="displayCommit"
+                      (optionSelected)="selectCommit($event.option.value)">
+      @for (commit of filteredCommits(); track getCommitSha(commit)) {
+        <mat-option [value]="commit">
+          <div class="commit-option">
+            <span class="commit-sha">{{ getCommitSha(commit).substring(0, 7) }}</span>
+            <span class="commit-msg">
+              {{ getCommitTitle(commit) }}
+              @if (getCommitDescription(commit)) {
+                <span class="commit-desc"> — {{ getCommitDescription(commit).split('\n')[0] }}</span>
+              }
+            </span>
+          </div>
+        </mat-option>
+      }
+    </mat-autocomplete>
+  </mat-form-field>
+</div>
+
+@if (isCommitsLoading()) {
+  <div class="picker-loading">
+    <mat-spinner diameter="20"></mat-spinner>
+    <span>Carregando commits da branch...</span>
+  </div>
+}
+
+@if (error()) {
+  <div class="picker-error"><mat-icon>error_outline</mat-icon>{{ error() }}</div>
+}
+
+@if (selectedCommit()) {
+  <app-commit-details [commit]="selectedCommit()"></app-commit-details>
+}
+
+@if (isDiffLoading()) {
+  <div class="picker-loading">
+    <mat-spinner diameter="20"></mat-spinner>
+    <span>Carregando o diff do commit...</span>
+  </div>
+}
+
+@if (diff()) {
+  <app-git-diff-viewer [commitData]="diff()"></app-git-diff-viewer>
+}
+
+@if (!selectedCommit() && !isCommitsLoading() && !error()) {
+  <div class="picker-empty">
+    <mat-icon>commit</mat-icon>
+    <span>Selecione um commit para carregar o diff das alterações.</span>
+  </div>
+}

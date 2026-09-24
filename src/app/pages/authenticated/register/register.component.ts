@@ -1,4 +1,4 @@
-import {ChangeDetectorRef, Component, ElementRef, HostListener, inject, OnDestroy, OnInit, ViewChild} from '@angular/core';
+import {ChangeDetectorRef, Component, effect, HostListener, inject, OnDestroy, OnInit, untracked, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -10,10 +10,8 @@ import {HttpClient} from '@angular/common/http';
 import {ActivatedRoute} from '@angular/router';
 import {MatDialog} from '@angular/material/dialog';
 import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
-import {MatAutocompleteModule} from '@angular/material/autocomplete';
 import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
 import {LoadingBarModule, LoadingBarService} from '@ngx-loading-bar/core';
-import {EditorModule} from 'primeng/editor';
 import {SelectButtonModule} from 'primeng/selectbutton';
 import {InputGroupModule} from 'primeng/inputgroup';
 import {InputGroupAddonModule} from 'primeng/inputgroupaddon';
@@ -24,34 +22,45 @@ import {LMarkdownEditorModule} from 'ngx-markdown-editor';
 import {SplitButton} from 'primeng/splitbutton';
 import {AutoCompleteModule} from 'primeng/autocomplete';
 import {MenuItem, MenuItemCommandEvent} from 'primeng/api';
-import {MatButtonToggleModule} from '@angular/material/button-toggle';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {UserService} from '../../../services/UserService.service';
 import {CliipboardService} from '../../../services/cliipboard.service';
 import {environment} from '../../../../environments/environment';
 import {DialogTemplateComponent} from '../../../components/dialog-template/dialog-template.component';
-import {DialogPrompt} from '../../../components/dialog-prompt/dialog-prompt';
+import {DialogPrompt, DialogPromptData} from '../../../components/dialog-prompt/dialog-prompt';
 import {StorageService} from '../../../services/storage.service';
 import {GlobalService} from '../../../services/global.service';
 import {firstValueFrom} from 'rxjs';
 import {tap} from 'rxjs/internal/operators/tap';
 import {GdsService} from '../../../services/gds.service';
 import {WsService} from '../../../services/ws.service';
-import {JsonPipe, DatePipe} from '@angular/common';
-import {UserAvatarComponent} from '../../../components/user-avatar/user-avatar.component';
+import {JsonPipe} from '@angular/common';
 import {AuthService} from '../../../services/auth.service';
 import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
-import {CardPanelComponent} from '../../../components/card-panel/card-panel.component';
 import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
 import {CardDetailsDialogComponent} from '../../../components/card-details-dialog/card-details-dialog.component';
 import {HandoverDialogComponent} from '../../../components/handover-dialog/handover-dialog.component';
 import {CardFull} from '../../../components/card-details-dialog/card-full.model';
 import {marked} from 'marked';
-import TurndownService from 'turndown';
+import {CardPanelComponent} from '../../../components/card-panel/card-panel.component';
+import {PrInfoCardComponent} from '../../../components/pr-info-card/pr-info-card.component';
+import {PanelPopoverButtonComponent} from '../../../components/panel-popover-button/panel-popover-button.component';
+import {GithubPrListComponent} from '../../../components/github-pr-list/github-pr-list.component';
+import {OpenPrDialogComponent, OpenPrDialogData} from '../../../components/open-pr-dialog/open-pr-dialog.component';
+import {GithubPullRequest, PullRequestService} from '../../../services/pull-request.service';
+import {CardPrStateService} from '../../../services/card-pr-state.service';
+import {RepoOption} from '../../../interfaces/RepoOption';
 
 /** Evento e grupo do tempo real da configuração de PR (em sincronia com o backend). */
 const PULLREQUEST_CONFIG_GROUP = 'pullrequest-config';
 const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
+
+/**
+ * Tempo real do card aberto (PullRequestRealTimeEvents no backend): registro salvo e PRs do
+ * GitHub abertos/atualizados/com status novo — pela tela, por outro usuário ou pela skill gerar-prmake.
+ */
+const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
+const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
 
 @Component({
   selector: 'app-register',
@@ -68,10 +77,8 @@ const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
     FormsModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatAutocompleteModule,
     MatSnackBarModule,
     LoadingBarModule,
-    EditorModule,
     SelectButtonModule,
     InputGroupModule,
     InputGroupAddonModule,
@@ -81,31 +88,25 @@ const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
     SplitButton,
     JsonPipe,
     AutoCompleteModule,
-    MatButtonToggleModule,
     MatFormFieldModule,
-    DatePipe,
-    UserAvatarComponent,
     CardTimelineComponent,
+    CardAlertBarComponent,
     CardPanelComponent,
-    CardAlertBarComponent
+    PrInfoCardComponent,
+    PanelPopoverButtonComponent,
+    GithubPrListComponent
   ]
 })
 export class RegisterComponent implements OnInit, OnDestroy {
 
   @ViewChild(CardTimelineComponent) timeline?: CardTimelineComponent;
-  @ViewChild('prefixInput') prefixInputRef?: ElementRef<HTMLInputElement>;
+
+  /** Descrição/root cause compartilhados com modal, popovers e IA (fonte da verdade dos editores). */
+  readonly prState = inject(CardPrStateService);
+  private prService = inject(PullRequestService);
 
   cardFull: CardFull | null = null;
   isCardDetailsLoading = false;
-
-  // Conteúdo HTML dos editores WYSIWYG (a fonte da verdade continua em markdown).
-  descriptionHtml = '';
-  rootCauseHtml = '';
-  private turndown = new TurndownService({
-    headingStyle: 'atx',
-    codeBlockStyle: 'fenced',
-    bulletListMarker: '-'
-  });
 
   environmentName = 'development';
   template:any = null;
@@ -121,18 +122,31 @@ export class RegisterComponent implements OnInit, OnDestroy {
   userSelected: any = null;
   cardNumber: null | string = null;
   fullDescription = null;
-  link = "https://github.com/electradv/edv-solvace/compare/my-environment...hotfix/";
   mobileButtons: MenuItem[] = [];
   copyCustomButtons: MenuItem[] = [];
   isMobile = false;
   isAzureLoading: boolean = false;
 
+  // Defaults do modal "Abrir PR" (branch/repositório/destino não ficam mais na tela — spec 2).
+  // Guardam a última escolha feita no modal.
   branchPrefix: string = 'hotfix/';
-  isEditingPrefix: boolean = false;
   branchName: string = '';
 
   // Metadados do PR encontrado (quem abriu, quando abriu, última atualização).
   // null quando não há registro salvo — nesse caso o card de infos não aparece.
+  /** A busca do registro do card falhou (a barra aparece mesmo assim, com o aviso). */
+  prLoadError = false;
+
+  /** Grupo de tempo real do card em tela (null quando nenhum card foi buscado). */
+  private currentCardGroup: string | null = null;
+
+  /** Rótulo do autor na barra do card conforme o estado da busca. */
+  get infoAuthorLabel(): string {
+    if (this.prLoadError) return 'Não foi possível carregar o card salvo';
+    if (this.prInfo && !this.prInfo.openedAt) return 'Card ainda não salvo';
+    return 'Aberto por';
+  }
+
   prInfo: {
     openedAt: string | null;
     updatedAt: string | null;
@@ -140,9 +154,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
     userPhoto: string | null;
   } | null = null;
 
-  repositoryOptions: { label: string; value: string; id?: number }[] = [];
-  selectedRepositoryObj: { label: string; value: string; id?: number } | null = null;
-  filteredRepositories: { label: string; value: string; id?: number }[] = [];
+  repositoryOptions: RepoOption[] = [];
+  // Objeto selecionado, ou o texto digitado enquanto nenhuma opção foi escolhida.
+  selectedRepositoryObj: RepoOption | string | null = null;
 
   justifyOptions = [
     {
@@ -178,8 +192,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
       hasText(this.branchName) ||
       hasText(this.pullRequest?.description) ||
       hasText(this.pullRequest?.rootCause) ||
-      hasText(this.descriptionHtml) ||
-      hasText(this.rootCauseHtml) ||
       this.fullDescription ||
       this.cardFull
     );
@@ -199,30 +211,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
       a.missingClassification ||
       a.remainingNotZero
     );
-  }
-
-  onPrefixDoubleClick() {
-    this.isEditingPrefix = true;
-    // Zoneless: força o render do input antes de focar; o setTimeout garante que o
-    // elemento já exista no DOM quando chamamos focus().
-    this.cdr.detectChanges();
-    setTimeout(() => this.prefixInputRef?.nativeElement.focus());
-  }
-
-  onPrefixBlur() {
-    this.isEditingPrefix = false;
-    if (!this.branchPrefix || this.branchPrefix.trim() === '') {
-      this.branchPrefix = 'hotfix/';
-    } else if (!this.branchPrefix.endsWith('/')) {
-      this.branchPrefix = this.branchPrefix + '/';
-    }
-    this.makeUrlLink();
-    // makeUrlLink pode sair cedo (sem cardNumber) sem disparar CD; garante o volta ao texto.
-    this.cdr.detectChanges();
-  }
-
-  onPrefixChange() {
-    this.makeUrlLink();
   }
 
   @HostListener('window:resize')
@@ -247,7 +235,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
         label: 'Abrir PR',
         icon: 'pi pi-github',
         command: (event: MenuItemCommandEvent) => {
-          this.openGithubPullRequestPage();
+          this.openPrDialog();
         }
       },
       {
@@ -272,8 +260,10 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   updateMobileButtonsState() {
     this.mobileButtons.forEach(button => {
-      if (button.label === 'Copiar' || button.label === 'Abrir PR') {
+      if (button.label === 'Copiar') {
         button.disabled = this.isPullRequestLoading || this.fullDescription === null;
+      } else if (button.label === 'Abrir PR') {
+        button.disabled = !this.canOpenPr;
       } else if (button.label === 'Limpar') {
         button.disabled = this.isPullRequestLoading || !this.hasAnythingToClear;
       }
@@ -296,12 +286,23 @@ export class RegisterComponent implements OnInit, OnDestroy {
     private ws: WsService,
     private authService: AuthService,
   ) {
-    // Tachado (~~texto~~) não é tratado pelo turndown por padrão — mapeamos manualmente
-    // para manter o markdown limpo ao converter o HTML do editor de volta.
-    this.turndown.addRule('strikethrough', {
-      filter: ['del', 's', 'strike'] as any,
-      replacement: (content: string) => `~~${content}~~`,
+    // Edições feitas nos painéis (aqui, no modal ou nos popovers) chegam pelo estado
+    // compartilhado; espelha no modelo local usado por salvar/copiar/abrir PR.
+    effect(() => {
+      const description = this.prState.description();
+      const rootCause = this.prState.rootCause();
+      untracked(() => this.onSharedContentChange(description, rootCause));
     });
+  }
+
+  private onSharedContentChange(description: string | null, rootCause: string | null) {
+    const current = this.pullRequest ?? {};
+    if ((current.description ?? null) === description && (current.rootCause ?? null) === rootCause) return;
+
+    this.pullRequest.description = description ?? undefined;
+    this.pullRequest.rootCause = rootCause ?? undefined;
+    this.generateFullDescriptionHandler();
+    this.cdr.detectChanges();
   }
 
   async ngOnInit() {
@@ -340,6 +341,84 @@ export class RegisterComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.ws.removeFromGroup(PULLREQUEST_CONFIG_GROUP);
     this.ws.off(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
+    this.switchCardGroup(null);
+    this.ws.off(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
+  }
+
+  /** Troca a inscrição de tempo real para o card em tela. */
+  private switchCardGroup(card: string | null): void {
+    const group = card ? pullRequestCardGroup(card) : null;
+    if (group === this.currentCardGroup) return;
+    if (this.currentCardGroup) this.ws.removeFromGroup(this.currentCardGroup);
+    if (group) this.ws.addToGroup(group);
+    this.currentCardGroup = group;
+  }
+
+  /**
+   * Evento de tempo real do card em tela. Registro salvo → recarrega descrição/RC/autor
+   * (ou avisa, se houver edição local não salva); PRs → recarrega a lista (sem ir ao GitHub).
+   */
+  private onCardUpdated = (payload: any): void => {
+    const card = this.cardNumber?.toString();
+    if (!card || payload?.cardNumber !== card.trim()) return;
+
+    if (payload.action === 'register-saved') {
+      this.reloadRegisterFromServer();
+    } else {
+      this.reloadGithubPrs();
+    }
+  };
+
+  /** Recarrega os PRs do card do banco (o status já foi atualizado por quem emitiu o evento). */
+  private reloadGithubPrs(): void {
+    const card = this.cardNumber?.toString();
+    if (!card) return;
+    this.prService.listGithubPrs(card, false).subscribe({
+      next: (prs) => {
+        if (this.prState.cardNumber() === card) this.prState.setGithubPrs(prs ?? []);
+      },
+      error: (e) => console.error('Falha ao recarregar os PRs do card', e),
+    });
+  }
+
+  /**
+   * O registro do card foi salvo em outro lugar (outro usuário, skill gerar-prmake…). Sem edição
+   * local pendente, recarrega em silêncio; com edição pendente, pergunta antes de descartar.
+   */
+  private reloadRegisterFromServer(): void {
+    // Durante a busca/salvamento desta própria tela o eco do evento é ignorado.
+    if (this.isPullRequestLoading || !this.cardNumber) return;
+
+    const saved = this.prState.register();
+    const dirty =
+      (this.prState.description() ?? '') !== (saved?.description ?? '') ||
+      (this.prState.rootCause() ?? '') !== (saved?.rootCause ?? '');
+
+    if (!dirty) {
+      this.applyServerRegister();
+      return;
+    }
+
+    const ref = this._snackBar.open('Este card foi atualizado em outro lugar. Suas alterações não salvas serão perdidas se recarregar.',
+      'Recarregar', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top", duration: 15000});
+    ref.onAction().subscribe(() => this.applyServerRegister());
+  }
+
+  private applyServerRegister(): void {
+    const card = this.cardNumber?.toString();
+    if (!card) return;
+    this.prService.getByCardNumber(card).subscribe({
+      next: (response) => {
+        if (!response || this.cardNumber?.toString() !== card) return;
+        this.pullRequest = response;
+        this.prLoadError = false;
+        this.loadPrAuthorInfo(response);
+        this.prState.loadRegister(card, response);
+        this.generateFullDescriptionHandler();
+        this.cdr.detectChanges();
+      },
+      error: (e) => console.error('Falha ao recarregar o card', e),
+    });
   }
 
   /**
@@ -372,6 +451,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.ws.startConnection();
     this.ws.addToGroup(PULLREQUEST_CONFIG_GROUP);
     this.ws.on(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
+    this.ws.on(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
   }
 
   private onPullRequestConfigUpdated = (): void => {
@@ -382,7 +462,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   /** Re-aplica repositórios/branches preservando a seleção atual do usuário quando possível. */
   private reapplyPullRequestConfigurations(): void {
-    const prevRepoValue = this.selectedRepositoryObj?.value ?? null;
+    const prevRepoValue = typeof this.selectedRepositoryObj === 'string'
+      ? this.selectedRepositoryObj
+      : this.selectedRepositoryObj?.value ?? null;
     const prevEnv = this.environmentName;
 
     const activeBranchsStr = this.configurations.PullRequest?.ActiveBranchs;
@@ -406,7 +488,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
     if (activeRepositoriesStr) {
       try {
         this.repositoryOptions = JSON.parse(activeRepositoriesStr);
-        this.filteredRepositories = [...this.repositoryOptions];
         const stillThere = prevRepoValue
           ? this.repositoryOptions.find(r => r.value === prevRepoValue)
           : undefined;
@@ -439,7 +520,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
     if (activeRepositoriesStr) {
       try {
         this.repositoryOptions = JSON.parse(activeRepositoriesStr);
-        this.filteredRepositories = [...this.repositoryOptions];
         if (this.repositoryOptions.length > 0) {
           this.selectedRepositoryObj = this.repositoryOptions[0];
         }
@@ -448,30 +528,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
         console.error('Erro ao processar ActiveRepositories:', error);
       }
     }
-  }
-
-  filterRepositories(event: { query: string }) {
-    const q = event.query.toLowerCase();
-    this.filteredRepositories = this.repositoryOptions.filter(r =>
-      r.label.toLowerCase().includes(q)
-    );
-  }
-
-  /** Exibe o label do repositório no input do mat-autocomplete (o valor é o objeto). */
-  repoDisplay = (repo: any): string =>
-    repo && typeof repo === 'object' ? repo.label : (repo ?? '');
-
-  /** Filtra os repositórios conforme o usuário digita (recebe string enquanto digita
-   *  e o objeto quando algo é selecionado). */
-  filterRepoInput(value: any) {
-    const q = (typeof value === 'string' ? value : value?.label ?? '').toLowerCase();
-    this.filteredRepositories = this.repositoryOptions.filter(r =>
-      r.label.toLowerCase().includes(q)
-    );
-  }
-
-  onRepositorySelect() {
-    this.makeUrlLink();
   }
 
   getPullRequestConfigurations(){
@@ -487,103 +543,144 @@ export class RegisterComponent implements OnInit, OnDestroy {
       if(data) {
         this.pullRequest.description = data.pullRequestDescriptionAiGenerated;
         this.pullRequest.rootCause = data.rootCauseAnalysisAiGenerated;
-        this.syncEditorsFromModel();
+        this.prState.setContent(this.pullRequest.description ?? null, this.pullRequest.rootCause ?? null);
         this.generateFullDescriptionHandler();
         this.cdr.detectChanges();
       }
     })
   }
 
-  /**
-   * Converte markdown (a fonte da verdade — salvo no banco / enviado ao GitHub) em HTML
-   * para exibir formatado nos editores WYSIWYG.
-   */
-  private mdToHtml(markdown: string | null | undefined): string {
-    if (!markdown) return '';
-    marked.setOptions({ gfm: true, breaks: true });
-    return (marked.parse(markdown) as string) ?? '';
-  }
-
-  /**
-   * Popula os editores a partir do markdown do modelo. Chamar apenas em cargas externas
-   * (geração por IA, busca do card, limpar) — nunca durante a digitação, para não
-   * reposicionar o cursor do editor.
-   */
-  private syncEditorsFromModel() {
-    this.descriptionHtml = this.mdToHtml(this.pullRequest?.description);
-    this.rootCauseHtml = this.mdToHtml(this.pullRequest?.rootCause);
-    this.cdr.detectChanges();
-  }
-
-  /** Edição no editor de Descrição: converte o HTML de volta para markdown antes de salvar/enviar. */
-  onDescriptionEditorChange(event: any) {
-    const html = event?.htmlValue ?? '';
-    this.pullRequest.description = html ? this.turndown.turndown(html) : '';
-    this.generateFullDescriptionHandler();
-  }
-
-  /** Edição no editor de Root Cause: converte o HTML de volta para markdown antes de salvar/enviar. */
-  onRootCauseEditorChange(event: any) {
-    const html = event?.htmlValue ?? '';
-    this.pullRequest.rootCause = html ? this.turndown.turndown(html) : '';
-    this.generateFullDescriptionHandler();
-  }
-
   clearAll() {
     this.environmentName = 'development';
     this.template = null;
     this.pullRequest = {};
-    this.descriptionHtml = '';
-    this.rootCauseHtml = '';
+    this.prState.reset();
     this.cardNumber = null;
     this.fullDescription = null;
     // Zera os detalhes do DevOps para também apagar as não conformidades (para o pisca do cabeçalho).
     this.cardFull = null;
     this.prInfo = null;
+    this.prLoadError = false;
+    this.switchCardGroup(null);
     this.branchPrefix = 'hotfix/';
     this.branchName = '';
     this.selectedRepositoryObj = this.repositoryOptions.length > 0 ? this.repositoryOptions[0] : null;
-    const repo = this.selectedRepositoryObj?.value ?? 'edv-solvace-apps';
-    this.link = `https://github.com/electradv/${repo}/compare/my-environment...hotfix/`;
     this.cardType = '';
   }
 
+  /**
+   * Salva o registro do card (spec 1.5): sem exigir descrição/root cause e sem branch/repositório,
+   * que agora pertencem a cada PR do GitHub. null mantém o valor salvo; vazio limpa.
+   */
   savePullRequest() {
+    if (!this.cardNumber) return;
     this.isPullRequestLoading = true;
     this.loadingBar.start();
-    const repo =
-      typeof this.selectedRepositoryObj === 'string'
-        ? this.selectedRepositoryObj
-        : this.selectedRepositoryObj?.value ?? 'edv-solvace';
 
-    let cardNumber = this.cardNumber ? this.cardNumber.toString() : "0";
-    let pullRequestModel = {
-      description: this.pullRequest.description,
-      cardNumber: cardNumber,
+    this.prService.saveCard({
+      cardNumber: this.cardNumber.toString(),
       userId: this.userSelected.externalId,
       formId: 1,
-      rootCause: this.pullRequest.rootCause,
-      branchPrefix: this.branchPrefix,
-      branchName: this.branchName,
-      repositoryId: repo,
+      description: this.prState.description(),
+      rootCause: this.prState.rootCause(),
+    }).subscribe({
+      next: (saved) => {
+        this._snackBar.open('Card salvo com sucesso!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        // Atualiza autor/datas da barra com o que acabou de ser gravado e marca o conteúdo
+        // atual como "salvo" (base para detectar edição pendente nos eventos de tempo real).
+        this.prLoadError = false;
+        this.loadPrAuthorInfo(saved);
+        this.prState.register.set({ ...saved, githubPullRequests: this.prState.githubPrs() });
+        this.isPullRequestLoading = false;
+        this.loadingBar.stop();
+        this.cdr.detectChanges();
+      },
+      error: (error) => {
+        this._snackBar.open(error?.error?.error ?? 'Erro ao tentar salvar o card', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        this.isPullRequestLoading = false;
+        this.loadingBar.stop();
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  /**
+   * Atualiza a lista de PRs do card com o status atual no GitHub (uma chamada; o backend
+   * só consulta os PRs abertos, em paralelo, e devolve o persistido para MERGED/CLOSED).
+   */
+  refreshGithubPrs(force = false) {
+    const cardNumber = this.cardNumber?.toString();
+    if (!cardNumber) return;
+
+    this.prState.githubPrsLoading.set(true);
+    // force (botão ⟳): ignora o cache de 60 s do status no backend.
+    this.prService.listGithubPrs(cardNumber, true, force).subscribe({
+      next: (prs) => {
+        // Descarta a resposta se o usuário já trocou de card.
+        if (this.prState.cardNumber() === cardNumber) this.prState.setGithubPrs(prs ?? []);
+        this.prState.githubPrsLoading.set(false);
+      },
+      error: () => this.prState.githubPrsLoading.set(false),
+    });
+  }
+
+  /** "Abrir PR" disponível depois que o card foi buscado. */
+  get canOpenPr(): boolean {
+    return !!this.cardNumber && !!this.prInfo && !this.isPullRequestLoading;
+  }
+
+  /** Repositório padrão (último escolhido no modal / querystring / primeiro da configuração). */
+  private get defaultRepositoryValue(): string | null {
+    return typeof this.selectedRepositoryObj === 'string'
+      ? this.selectedRepositoryObj
+      : this.selectedRepositoryObj?.value ?? null;
+  }
+
+  /** PR do GitHub mais recente do card (a lista vem ordenada do mais novo para o mais antigo). */
+  private get latestGithubPr(): GithubPullRequest | null {
+    return this.prState.githubPrs()[0] ?? null;
+  }
+
+  /**
+   * Abre o modal "Abrir PR" (spec 1.1). Com `pr`, abre em modo edição com os dados daquele PR (3.1).
+   */
+  openPrDialog(pr?: GithubPullRequest) {
+    if (!this.cardNumber) return;
+
+    // Registro LEGACY (sem PR no GitHub): abre em modo criação já com repositório/branch dele;
+    // o backend promove o registro quando o PR é aberto.
+    const legacy = pr?.status === 'LEGACY' ? pr : null;
+    if (legacy) pr = undefined;
+
+    const data: OpenPrDialogData = {
+      cardNumber: this.cardNumber.toString(),
+      cardType: this.cardType,
+      userId: this.userSelected?.externalId,
+      targetOptions: this.justifyOptions,
+      defaultTarget: this.environmentName,
+      defaultPrefix: legacy?.branchPrefix ?? this.branchPrefix,
+      defaultBranchName: legacy?.branchName ?? (this.branchName || this.cardNumber.toString()),
+      defaultRepository: legacy?.repositoryId ?? this.defaultRepositoryValue,
+      repositoryFallback: this.repositoryOptions,
+      pr: pr ?? null,
     };
 
-    this.http.post(`${this.urlBase}PullRequest`, pullRequestModel).subscribe(
-      x => {
-        if(x)
-          this._snackBar.open('Pull Request salvo com sucesso!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
-
-        this.isPullRequestLoading = false
-        this.loadingBar.stop();
-      }, error => {
-        this._snackBar.open('Erro ao tentar salvar o Pull Request', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
-
-        this.isPullRequestLoading = false
-        this.loadingBar.stop();
-      }
-    )
-
-    console.log(pullRequestModel);
+    this.dialog.open(OpenPrDialogComponent, {
+      data,
+      width: '980px',
+      maxWidth: '94vw',
+      maxHeight: '92vh',
+      panelClass: 'custom-dialog-container'
+    }).afterClosed().subscribe((result?: GithubPullRequest) => {
+      if (!result) return;
+      // Lembra a última escolha como default do próximo PR.
+      this.branchPrefix = result.branchPrefix;
+      this.branchName = result.branchName;
+      this.environmentName = result.targetBranch;
+      this.selectedRepositoryObj =
+        this.repositoryOptions.find(r => r.value === result.repositoryId) ?? { label: result.repositoryId, value: result.repositoryId };
+      this.cdr.detectChanges();
+    });
   }
 
   saveRootCauseToDevOps() {
@@ -640,21 +737,30 @@ export class RegisterComponent implements OnInit, OnDestroy {
   }
 
   generatePullRequestWithAi() {
-    const repo =
-      typeof this.selectedRepositoryObj === 'string'
-        ? this.selectedRepositoryObj
-        : this.selectedRepositoryObj?.value ?? 'edv-solvace';
+    // Um step por repositório com PR aberto (branch do PR mais recente de cada repo — a lista
+    // vem do mais novo para o mais antigo). Sem PR, sugere o repositório/branch padrão.
+    const repositories: { repository: string; branch: string }[] = [];
+    for (const pr of this.prState.githubPrs()) {
+      if (!repositories.some(r => r.repository === pr.repositoryId)) {
+        repositories.push({ repository: pr.repositoryId, branch: `${pr.branchPrefix}${pr.branchName}` });
+      }
+    }
+    const defaultBranch = repositories[0]?.branch ?? `${this.branchPrefix}${this.branchName}`;
+    if (repositories.length === 0 && this.defaultRepositoryValue) {
+      repositories.push({ repository: this.defaultRepositoryValue, branch: defaultBranch });
+    }
 
-    const fullBranch = `${this.branchPrefix}${this.branchName}`;
+    const data: DialogPromptData = {
+      cardNumber: this.cardNumber,
+      isAiGenerate: true,
+      cardType: this.cardType,
+      repositories,
+      defaultBranch,
+      repositoryFallback: this.repositoryOptions,
+    };
 
     const dialogRef = this.dialog.open(DialogPrompt, {
-      data: {
-        cardNumber: this.cardNumber,
-        isAiGenerate: true,
-        cardType: this.cardType,
-        repository: repo,
-        branch: fullBranch,
-      },
+      data,
       width: '920px',
       height: '82vh',
       maxWidth: '94vw',
@@ -716,10 +822,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     }
 
     openHandover() {
-      const repositoryId =
-        typeof this.selectedRepositoryObj === 'string'
-          ? this.selectedRepositoryObj
-          : this.selectedRepositoryObj?.value ?? null;
+      const repositoryId = this.latestGithubPr?.repositoryId ?? this.defaultRepositoryValue;
 
       this.dialog.open(HandoverDialogComponent, {
         data: {
@@ -779,22 +882,19 @@ export class RegisterComponent implements OnInit, OnDestroy {
       // Zera o conteúdo do PR anterior: se o novo card não tiver registro salvo,
       // Descrição/Root Cause não podem manter os dados do card antigo.
       this.prInfo = null;
+      this.prLoadError = false;
       this.pullRequest = {};
-      this.descriptionHtml = '';
-      this.rootCauseHtml = '';
+      this.prState.loadRegister(this.cardNumber?.toString() ?? null, null);
       this.fullDescription = null;
 
-      const repositoryId =
-        typeof this.selectedRepositoryObj === 'string'
-          ? this.selectedRepositoryObj
-          : this.selectedRepositoryObj?.value ?? 'edv-solvace';
+      // Tempo real do card: atualizações feitas em outro lugar (outro usuário, skill gerar-prmake).
+      this.switchCardGroup(this.cardNumber?.toString() ?? null);
 
-      const repoParam = repositoryId != null ? `&repositoryId=${repositoryId}` : '';
       // Carrega a linha do tempo e os detalhes do card (DevOps) em paralelo à busca do PR.
       this.timeline?.load(this.cardNumber ?? undefined);
       this.loadCardDetails();
 
-      this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}${repoParam}`).subscribe(
+      this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}`).subscribe(
         (response: any) => {
 
           this.isPullRequestLoading = false;
@@ -804,20 +904,39 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
           if(response) {
             this.pullRequest = response;
+            // Defaults do modal "Abrir PR": vêm do PR do GitHub mais recente do card.
             this.branchName = response.branchName;
             this.branchPrefix = response.branchPrefix;
+            if (response.repositoryId) {
+              this.selectedRepositoryObj = this.repositoryOptions.find(r => r.value === response.repositoryId)
+                ?? { label: response.repositoryId, value: response.repositoryId };
+            }
 
             this.loadPrAuthorInfo(response);
-            this.syncEditorsFromModel();
+            this.prState.loadRegister(this.cardNumber?.toString() ?? null, response);
             this.cdr.detectChanges();
+            // A lista veio com o status persistido; atualiza no GitHub em segundo plano.
+            if (response.githubPullRequests?.length) this.refreshGithubPrs();
 
             this.generateFullDescriptionHandler();
+          } else {
+            // Card ainda não salvo: mostra o card de infos vazio para liberar popovers e "Abrir PR".
+            this.prInfo = { openedAt: null, updatedAt: null, userName: '', userPhoto: null };
+            this.cdr.detectChanges();
           }
 
         },
         error => {
           this.isPullRequestLoading = false;
           this.loadingBar.stop();
+          // A barra (com Descrição/Root Cause/Abrir PR) aparece mesmo assim; o aviso deixa claro
+          // que o conteúdo salvo não foi carregado. Salvar envia null no que não foi editado,
+          // o que mantém o valor salvo no backend.
+          this.prLoadError = true;
+          this.prInfo = { openedAt: null, updatedAt: null, userName: '', userPhoto: null };
+          const detail = error?.error?.error ?? error?.status ?? '';
+          this._snackBar.open(`Não foi possível carregar os dados salvos do card${detail ? ` (${detail})` : ''}`, 'Ok',
+            {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
           this.cdr.detectChanges();
         });
     }
@@ -827,36 +946,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
   openDialogTemplate() {
     const dialogRef = this.dialog.open(DialogTemplateComponent, {
       data: this.template,
-      width: '1200px',
-      height: '80vh',
-      maxWidth: '90vw',
-      maxHeight: '90vh',
-      panelClass: 'custom-dialog-container'
-    });
-  }
-
-  openDialogFullDescription() {
-    const dialogRef = this.dialog.open(DialogTemplateComponent, {
-      data: {
-        id: 1,
-        description: this.fullDescription,
-        environmentName: this.environmentName.toUpperCase(),
-      },
-      width: '1200px',
-      height: '80vh',
-      maxWidth: '90vw',
-      maxHeight: '90vh',
-      panelClass: 'custom-dialog-container'
-    });
-  }
-
-  openDialogRCA() {
-    const dialogRef = this.dialog.open(DialogTemplateComponent, {
-      data: {
-        id: 1,
-        description: this.pullRequest.rootCause,
-        environmentName: this.environmentName.toUpperCase(),
-      },
       width: '1200px',
       height: '80vh',
       maxWidth: '90vw',
@@ -960,41 +1049,12 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
     this.fullDescription = this.pullRequest.description;
 
-    this.makeUrlLink();
-
     this.cdr.detectChanges();
   }
 
-  makeUrlLink() {
-    if(this.cardNumber == null) return;
-    const repo =
-      typeof this.selectedRepositoryObj === 'string'
-        ? this.selectedRepositoryObj
-        : this.selectedRepositoryObj?.value ?? 'edv-solvace';
-    this.link = `https://github.com/electradv/${repo}/compare/my-environment...${this.branchPrefix}${this.branchName}`;
-    this.link = this.link.replace("my-environment", this.environmentName.toLowerCase());
-
-    this.cdr.detectChanges();
-  }
-
-  openGithubPullRequestPage() {
-    this.generateFullDescriptionHandler();
-    this.makeUrlLink();
-    let url = new URL(this.link);
-    url.searchParams.set('expand', '1');
-    url.searchParams.set('title', `AB#${this.cardNumber} ${this.getBranchLabelByBranch(this.environmentName).toUpperCase()}`);
-    url.searchParams.set('body', this.fullDescription!);
-
-    window.open(url, '_blank');
-  }
   onBranchChange() {
     this.template = null;
     this.getTemplateByEnvironment();
-  }
-
-  getBranchLabelByBranch(branch: string) {
-    const branchLabel = this.justifyOptions.find(option => option.value === branch);
-    return branchLabel ? branchLabel.label : branch;
   }
 
   protected readonly Number = Number;

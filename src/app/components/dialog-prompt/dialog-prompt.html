@@ -7,7 +7,7 @@
         <h2 mat-dialog-title>Gerar com IA</h2>
         <span class="ai-subtitle">
           Card #{{ data.cardNumber }}
-          @if (data.repository) { · {{ data.repository }} }
+          @if (repos().length) { · {{ repos().length }} repositório(s) }
         </span>
       </div>
     </div>
@@ -20,94 +20,89 @@
     @if (data.isAiGenerate) {
       <mat-stepper linear #stepper (selectionChange)="onStepChange($event)" class="ai-stepper">
 
-        <!-- Etapa 1: selecionar commit -->
-        <mat-step [completed]="!!githubCommitDiff">
+        <!-- Os steps concluídos mostram o número (e não o lápis) enquanto são o atual -->
+        <ng-template matStepperIcon="edit" let-index="index">{{ index + 1 }}</ng-template>
+
+        <!-- Etapa 1: um commit (com diff) por repositório — stepper vertical (spec 4.2) -->
+        <mat-step [completed]="hasAnyDiff()">
           <ng-template matStepLabel>Commit</ng-template>
           <ng-template matStepContent>
-            @if (isCommitsLoading()) {
-              <div class="ai-loading">
-                <mat-spinner diameter="22"></mat-spinner>
-                <span>Carregando commits da branch...</span>
+            <div class="repo-add">
+              <app-repo-autocomplete class="repo-add__field"
+                                     label="Adicionar repositório"
+                                     [options]="state.repositories()"
+                                     [exclude]="repoIds()"
+                                     [loading]="state.repositoriesLoading()"
+                                     [(value)]="repoToAdd"></app-repo-autocomplete>
+              <button mat-mini-fab color="primary" (click)="addRepository()" [disabled]="!canAddRepo()"
+                      matTooltip="Adicionar ao stepper (repositório em que você também fez commit)"
+                      matTooltipPosition="above" aria-label="Adicionar repositório">
+                <mat-icon>add</mat-icon>
+              </button>
+            </div>
+
+            @if (repos().length === 0) {
+              <div class="ai-empty">
+                <mat-icon>source</mat-icon>
+                <span>Nenhum PR aberto para este card. Adicione os repositórios em que você fez commit.</span>
               </div>
-            }
-
-            @if (!isCommitsLoading()) {
-              <mat-form-field appearance="outline" class="ai-field">
-                <mat-label>Buscar commit</mat-label>
-                <input matInput
-                       [formControl]="commitSearchControl"
-                       [matAutocomplete]="auto"
-                       placeholder="Digite para filtrar por mensagem..." />
-                <mat-icon matSuffix>search</mat-icon>
-                <mat-autocomplete #auto="matAutocomplete"
-                                  [displayWith]="displayCommit.bind(this)"
-                                  (optionSelected)="selectCommit($event.option.value)">
-                  @for (commit of filteredCommits; track getCommitSha(commit)) {
-                    <mat-option [value]="commit">
-                      <div class="commit-option">
-                        <span class="commit-sha">{{ getCommitSha(commit).substring(0, 7) }}</span>
-                        <span class="commit-msg">
-                          {{ getCommitTitle(commit) }}
-                          @if (getCommitDescription(commit)) {
-                            <span class="commit-desc"> — {{ getCommitDescription(commit).split('\n')[0] }}</span>
-                          }
-                        </span>
-                      </div>
-                    </mat-option>
-                  }
-                </mat-autocomplete>
-              </mat-form-field>
-
-              <div class="ai-scroll commits">
-                @if (selectedCommit) {
-                  <div class="ai-panel commit-card">
-                    <div class="commit-detail-row">
-                      <mat-icon class="commit-detail-icon">person</mat-icon>
-                      <span class="commit-detail-label">Autor:</span>
-                      <span class="commit-detail-value">{{ getCommitAuthor(selectedCommit) }}</span>
-                    </div>
-                    <div class="commit-detail-row">
-                      <mat-icon class="commit-detail-icon">schedule</mat-icon>
-                      <span class="commit-detail-label">Data:</span>
-                      <span class="commit-detail-value">{{ getCommitDate(selectedCommit) }}</span>
-                    </div>
-                    <div class="commit-detail-row">
-                      <mat-icon class="commit-detail-icon">tag</mat-icon>
-                      <span class="commit-detail-label">SHA:</span>
-                      <span class="commit-detail-value commit-sha-full">{{ getCommitSha(selectedCommit).substring(0, 12) }}</span>
-                    </div>
-                    <div class="commit-message-text">{{ getCommitTitle(selectedCommit) }}</div>
-                    @if (getCommitDescription(selectedCommit)) {
-                      <div class="commit-body-text">{{ getCommitDescription(selectedCommit) }}</div>
-                    }
-                  </div>
+            } @else {
+              <p class="repo-hint">Busque o diff de pelo menos um repositório — pode buscar de todos.</p>
+              <mat-stepper orientation="vertical" [linear]="false" class="repo-stepper">
+                <ng-template matStepperIcon="edit" let-index="index">{{ index + 1 }}</ng-template>
+                @for (r of repos(); track r.repository) {
+                  <mat-step [completed]="isRepoDone(r.repository)" [state]="isRepoDone(r.repository) ? 'done' : 'number'">
+                    <ng-template matStepLabel>
+                      <span class="repo-step-title">{{ r.repository }}</span>
+                      <span class="repo-step-branch">{{ r.branch }}</span>
+                    </ng-template>
+                    <ng-template matStepContent>
+                      <app-repo-commit-picker [repository]="r.repository"
+                                              [branch]="r.branch"
+                                              (branchChange)="onRepoBranchChange(r.repository, $event)"
+                                              [initialSelection]="selectionFor(r.repository)"
+                                              (selectionChange)="onRepoSelection(r.repository, $event)"></app-repo-commit-picker>
+                      @if (r.manual) {
+                        <button mat-button class="repo-remove" (click)="removeRepository(r.repository)">
+                          <mat-icon>remove_circle_outline</mat-icon> Remover repositório
+                        </button>
+                      }
+                    </ng-template>
+                  </mat-step>
                 }
-
-                @if (isGitHubLoading()) {
-                  <div class="ai-loading">
-                    <mat-spinner diameter="20"></mat-spinner>
-                    <span>Carregando o diff do commit...</span>
-                  </div>
-                }
-
-                @if (githubCommitDiff) {
-                  <div class="diff-viewer-container">
-                    <app-git-diff-viewer [commitData]="githubCommitDiff"></app-git-diff-viewer>
-                  </div>
-                }
-
-                @if (!selectedCommit && !isGitHubLoading()) {
-                  <div class="ai-empty">
-                    <mat-icon>commit</mat-icon>
-                    <span>Selecione um commit para carregar o diff das alterações.</span>
-                  </div>
-                }
-              </div>
+              </mat-stepper>
             }
           </ng-template>
         </mat-step>
 
-        <!-- Etapa 2: resultado -->
+        <!-- Etapa 2: resumo dos commits escolhidos em cada repositório (spec 4.3) -->
+        <mat-step [completed]="hasAnyDiff()">
+          <ng-template matStepLabel>Resumo</ng-template>
+          <ng-template matStepContent>
+            <p class="repo-hint">
+              Estes commits serão enviados como contexto para gerar a descrição do PR e o root cause
+              (um root cause para todos os repositórios).
+            </p>
+            <div class="summary-list">
+              @for (s of selectedDiffs(); track s.repository) {
+                <div class="summary-item">
+                  <div class="summary-item__title">
+                    <mat-icon>folder</mat-icon>
+                    <span class="repo-step-title">{{ s.repository }}</span>
+                    <span class="repo-step-branch">{{ s.branch }}</span>
+                    <span class="summary-item__files">{{ s.diff?.files?.length ?? 0 }} arquivo(s)</span>
+                  </div>
+                  <app-commit-details [commit]="s.commit"></app-commit-details>
+                </div>
+              }
+            </div>
+            @if (skippedRepos().length) {
+              <p class="repo-hint">Sem commit escolhido (não entram no contexto): {{ skippedRepos().join(', ') }}</p>
+            }
+          </ng-template>
+        </mat-step>
+
+        <!-- Etapa 3: resultado -->
         <mat-step [editable]="false">
           <ng-template matStepLabel>Resultado</ng-template>
           <ng-template matStepContent>
@@ -115,7 +110,7 @@
               <div class="ai-generating">
                 <mat-spinner diameter="40"></mat-spinner>
                 <h3>Gerando conteúdo com IA...</h3>
-                <p>Analisando o card e o diff do commit para montar a descrição e o RCA.</p>
+                <p>Analisando o card e os diffs de {{ selectedDiffs().length }} repositório(s) para montar a descrição e o RCA.</p>
               </div>
             }
 
@@ -141,11 +136,20 @@
 
     @if (currentStep() === 0) {
       <button mat-flat-button color="primary"
-              [disabled]="!githubCommitDiff || isGitHubLoading() || !showCardDetails()"
+              [disabled]="!hasAnyDiff()"
+              (click)="next()">
+        Resumo <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+      </button>
+    } @else if (currentStep() === 1) {
+      <button mat-button (click)="back()">
+        <mat-icon>arrow_back</mat-icon> Commits
+      </button>
+      <button mat-flat-button color="primary"
+              [disabled]="!hasAnyDiff() || !showCardDetails()"
               (click)="goToGenerateWithAI()">
         <mat-icon>auto_awesome</mat-icon> Gerar com IA
       </button>
-    } @else if (currentStep() === 1 && generatedText && !isAiLoading()) {
+    } @else if (currentStep() === 2 && generatedText && !isAiLoading()) {
       <button mat-stroked-button (click)="copyPromptToClipboard()">
         <mat-icon>content_copy</mat-icon> Copiar
       </button>
