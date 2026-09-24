@@ -216,42 +216,6 @@
   padding: 0;
 }
 
-/* ── Lista simples dos PRs do GitHub do card (a F4 troca por p-orderList com status) ── */
-.pr-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pr-list__item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-  background: var(--surface-input, #1f1f1f);
-  color: inherit;
-  cursor: pointer;
-}
-
-.pr-list__item:hover { border-color: color-mix(in srgb, var(--mat-sys-primary) 55%, transparent); }
-.pr-list__branch { font-weight: 600; color: var(--mat-sys-primary); }
-.pr-list__repo { font-size: 12px; opacity: .8; }
-.pr-list__status { margin-left: auto; font-size: 12px; font-weight: 600; }
-
-.pr-list__empty {
-  margin: auto;
-  font-size: 13px;
-  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
-}
-
 /* Empilha a toolbar em telas estreitas */
 @media (max-width: 900px) {
   .pr-top-row { flex-direction: column; }

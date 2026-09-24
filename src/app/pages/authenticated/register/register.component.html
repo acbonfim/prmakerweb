@@ -57,25 +57,20 @@
 
         <div class="pr-content-row">
           <div class="pr-fields">
-            <!-- PRs abertos no GitHub para o card (spec 1.4/3 — lista completa na fase F4) -->
+            <!-- PRs abertos no GitHub para o card, com status atual (spec 1.4/3); clique abre o modal (3.1) -->
             <app-card-panel class="pr-panel" title="Pull Requests" icon="merge">
-              <div class="pr-list">
-                @for (pr of prState.githubPrs(); track pr.id) {
-                  <button type="button" class="pr-list__item" (click)="openPrDialog(pr)">
-                    <span class="pr-list__branch">{{ pr.branchPrefix }}{{ pr.branchName }}</span>
-                    <span class="pr-list__repo">{{ pr.repositoryId }} → {{ pr.targetBranch }}</span>
-                    <span class="pr-list__status">#{{ pr.number }} · {{ pr.status }}</span>
-                  </button>
-                } @empty {
-                  <div class="pr-list__empty">
-                    @if (prInfo) {
-                      Nenhum PR aberto para este card. Use <strong>Abrir PR</strong>.
-                    } @else {
-                      Busque um card para ver os PRs abertos.
-                    }
-                  </div>
-                }
-              </div>
+              @if (prInfo) {
+                <button panel-actions mat-icon-button class="panel-action"
+                        (click)="refreshGithubPrs()"
+                        [disabled]="prState.githubPrsLoading()"
+                        matTooltip="Atualizar status no GitHub" matTooltipPosition="above">
+                  <mat-icon>refresh</mat-icon>
+                </button>
+              }
+              <app-github-pr-list [prs]="prState.githubPrs()"
+                                  [loading]="prState.githubPrsLoading() || isPullRequestLoading"
+                                  [emptyMessage]="prInfo ? 'Nenhum PR aberto para este card. Use Abrir PR.' : 'Busque um card para ver os PRs abertos.'"
+                                  (select)="openPrDialog($event)"></app-github-pr-list>
             </app-card-panel>
           </div>
 

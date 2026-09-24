@@ -45,6 +45,7 @@ import {marked} from 'marked';
 import {CardPanelComponent} from '../../../components/card-panel/card-panel.component';
 import {PrInfoCardComponent} from '../../../components/pr-info-card/pr-info-card.component';
 import {PanelPopoverButtonComponent} from '../../../components/panel-popover-button/panel-popover-button.component';
+import {GithubPrListComponent} from '../../../components/github-pr-list/github-pr-list.component';
 import {OpenPrDialogComponent, OpenPrDialogData} from '../../../components/open-pr-dialog/open-pr-dialog.component';
 import {GithubPullRequest, PullRequestService} from '../../../services/pull-request.service';
 import {CardPrStateService} from '../../../services/card-pr-state.service';
@@ -85,7 +86,8 @@ const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
     CardAlertBarComponent,
     CardPanelComponent,
     PrInfoCardComponent,
-    PanelPopoverButtonComponent
+    PanelPopoverButtonComponent,
+    GithubPrListComponent
   ]
 })
 export class RegisterComponent implements OnInit, OnDestroy {
@@ -496,6 +498,25 @@ export class RegisterComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Atualiza a lista de PRs do card com o status atual no GitHub (uma chamada; o backend
+   * só consulta os PRs abertos, em paralelo, e devolve o persistido para MERGED/CLOSED).
+   */
+  refreshGithubPrs() {
+    const cardNumber = this.cardNumber?.toString();
+    if (!cardNumber) return;
+
+    this.prState.githubPrsLoading.set(true);
+    this.prService.listGithubPrs(cardNumber, true).subscribe({
+      next: (prs) => {
+        // Descarta a resposta se o usuário já trocou de card.
+        if (this.prState.cardNumber() === cardNumber) this.prState.setGithubPrs(prs ?? []);
+        this.prState.githubPrsLoading.set(false);
+      },
+      error: () => this.prState.githubPrsLoading.set(false),
+    });
+  }
+
   /** "Abrir PR" disponível depois que o card foi buscado. */
   get canOpenPr(): boolean {
     return !!this.cardNumber && !!this.prInfo && !this.isPullRequestLoading;
@@ -778,6 +799,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
             this.loadPrAuthorInfo(response);
             this.prState.loadRegister(this.cardNumber?.toString() ?? null, response);
             this.cdr.detectChanges();
+            // A lista veio com o status persistido; atualiza no GitHub em segundo plano.
+            if (response.githubPullRequests?.length) this.refreshGithubPrs();
 
             this.generateFullDescriptionHandler();
           } else {
