@@ -46,6 +46,8 @@ import {CardPanelComponent} from '../../../components/card-panel/card-panel.comp
 import {PrInfoCardComponent} from '../../../components/pr-info-card/pr-info-card.component';
 import {PanelPopoverButtonComponent} from '../../../components/panel-popover-button/panel-popover-button.component';
 import {GithubPrListComponent} from '../../../components/github-pr-list/github-pr-list.component';
+import {UserIntegrationService} from '../../../services/user-integration.service';
+import {MyIntegrationsDialogComponent} from '../../../components/my-integrations-dialog/my-integrations-dialog.component';
 import {OpenPrDialogComponent, OpenPrDialogData} from '../../../components/open-pr-dialog/open-pr-dialog.component';
 import {GithubPullRequest, PullRequestService} from '../../../services/pull-request.service';
 import {CardPrStateService} from '../../../services/card-pr-state.service';
@@ -103,6 +105,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   /** Descrição/root cause compartilhados com modal, popovers e IA (fonte da verdade dos editores). */
   readonly prState = inject(CardPrStateService);
+  /** Integrações de uso pessoal (feature 0002): com pendência, a tela fica bloqueada. */
+  readonly integrations = inject(UserIntegrationService);
   private prService = inject(PullRequestService);
 
   cardFull: CardFull | null = null;
@@ -134,6 +138,23 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   // Metadados do PR encontrado (quem abriu, quando abriu, última atualização).
   // null quando não há registro salvo — nesse caso o card de infos não aparece.
+  /**
+   * Bloqueia a tela enquanto houver integração pessoal pendente (GitHub/Azure com o token do
+   * usuário). Status desconhecido (falha ao consultar) não bloqueia: o backend também barra (403).
+   */
+  get integrationsBlocked(): boolean {
+    return this.integrations.status()?.ready === false;
+  }
+
+  openMyIntegrations() {
+    this.dialog.open(MyIntegrationsDialogComponent, {
+      width: '640px',
+      maxWidth: '94vw',
+      maxHeight: '90vh',
+      panelClass: 'custom-dialog-container'
+    });
+  }
+
   /** A busca do registro do card falhou (a barra aparece mesmo assim, com o aviso). */
   prLoadError = false;
 
@@ -323,9 +344,13 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.initializeBranchConfigurations();
       this.initRealtimeConfig();
 
+      // Status das integrações pessoais antes de buscar: com pendência a tela fica bloqueada
+      // e não adianta disparar a busca (as chamadas ao GitHub/Azure dariam 403).
+      if (!this.integrations.status()) await this.integrations.loadStatus();
+
       // Card vindo por querystring (ex.: atalho "últimos cards" da home): já preenche
       // o número e dispara a busca, o mesmo comportamento do botão "Buscar".
-      this.autoSearchFromQueryParams();
+      if (!this.integrationsBlocked) this.autoSearchFromQueryParams();
 
     } catch (error) {
       console.error('Falha ao inicializar configurações', error);
