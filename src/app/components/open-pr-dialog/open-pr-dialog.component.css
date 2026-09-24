@@ -1,0 +1,104 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 6px 24px;
+}
+
+.dialog-header__icon { color: var(--mat-sys-primary); }
+.dialog-header__title { font-weight: 600; font-size: 16px; }
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pr-fields-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  padding-top: 6px;
+}
+
+.field--branch { width: 230px; }
+.field--repo { width: 240px; }
+.field--target { flex: 1 1 auto; }
+.field--title { width: 100%; }
+
+.hint,
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.hint {
+  background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
+}
+
+.error {
+  background: color-mix(in srgb, #e5484d 18%, transparent);
+  color: #ff8a8e;
+}
+
+.description-preview {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: var(--surface-1, #2a2a2a);
+  overflow: hidden;
+}
+
+.description-preview__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  background: var(--surface-2, #323232);
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
+}
+
+.description-preview__content,
+.description-preview__empty {
+  padding: 10px 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.description-preview__empty {
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
+}
+
+.description-preview__empty mat-icon {
+  vertical-align: middle;
+}
+
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px 16px;
+}
+
+.dialog-actions .spacer { flex: 1 1 auto; }
+
+.dialog-actions mat-spinner { display: inline-block; margin-right: 6px; }
+
+@media (max-width: 700px) {
+  .field--branch,
+  .field--repo { width: 100%; }
+}
