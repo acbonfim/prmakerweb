@@ -1,4 +1,4 @@
-import {ChangeDetectorRef, Component, ElementRef, HostListener, inject, OnDestroy, OnInit, ViewChild} from '@angular/core';
+import {ChangeDetectorRef, Component, effect, HostListener, inject, OnDestroy, OnInit, untracked, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -10,10 +10,8 @@ import {HttpClient} from '@angular/common/http';
 import {ActivatedRoute} from '@angular/router';
 import {MatDialog} from '@angular/material/dialog';
 import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
-import {MatAutocompleteModule} from '@angular/material/autocomplete';
 import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
 import {LoadingBarModule, LoadingBarService} from '@ngx-loading-bar/core';
-import {EditorModule} from 'primeng/editor';
 import {SelectButtonModule} from 'primeng/selectbutton';
 import {InputGroupModule} from 'primeng/inputgroup';
 import {InputGroupAddonModule} from 'primeng/inputgroupaddon';
@@ -24,7 +22,6 @@ import {LMarkdownEditorModule} from 'ngx-markdown-editor';
 import {SplitButton} from 'primeng/splitbutton';
 import {AutoCompleteModule} from 'primeng/autocomplete';
 import {MenuItem, MenuItemCommandEvent} from 'primeng/api';
-import {MatButtonToggleModule} from '@angular/material/button-toggle';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {UserService} from '../../../services/UserService.service';
 import {CliipboardService} from '../../../services/cliipboard.service';
@@ -41,13 +38,18 @@ import {JsonPipe, DatePipe} from '@angular/common';
 import {UserAvatarComponent} from '../../../components/user-avatar/user-avatar.component';
 import {AuthService} from '../../../services/auth.service';
 import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
-import {CardPanelComponent} from '../../../components/card-panel/card-panel.component';
 import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
 import {CardDetailsDialogComponent} from '../../../components/card-details-dialog/card-details-dialog.component';
 import {HandoverDialogComponent} from '../../../components/handover-dialog/handover-dialog.component';
 import {CardFull} from '../../../components/card-details-dialog/card-full.model';
 import {marked} from 'marked';
-import TurndownService from 'turndown';
+import {BranchInputComponent} from '../../../components/branch-input/branch-input.component';
+import {RepoAutocompleteComponent} from '../../../components/repo-autocomplete/repo-autocomplete.component';
+import {TargetBranchToggleComponent} from '../../../components/target-branch-toggle/target-branch-toggle.component';
+import {PrDescriptionPanelComponent} from '../../../components/pr-description-panel/pr-description-panel.component';
+import {RootCausePanelComponent} from '../../../components/root-cause-panel/root-cause-panel.component';
+import {CardPrStateService} from '../../../services/card-pr-state.service';
+import {RepoOption} from '../../../interfaces/RepoOption';
 
 /** Evento e grupo do tempo real da configuração de PR (em sincronia com o backend). */
 const PULLREQUEST_CONFIG_GROUP = 'pullrequest-config';
@@ -68,10 +70,8 @@ const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
     FormsModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatAutocompleteModule,
     MatSnackBarModule,
     LoadingBarModule,
-    EditorModule,
     SelectButtonModule,
     InputGroupModule,
     InputGroupAddonModule,
@@ -81,31 +81,27 @@ const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
     SplitButton,
     JsonPipe,
     AutoCompleteModule,
-    MatButtonToggleModule,
     MatFormFieldModule,
     DatePipe,
     UserAvatarComponent,
     CardTimelineComponent,
-    CardPanelComponent,
-    CardAlertBarComponent
+    CardAlertBarComponent,
+    BranchInputComponent,
+    RepoAutocompleteComponent,
+    TargetBranchToggleComponent,
+    PrDescriptionPanelComponent,
+    RootCausePanelComponent
   ]
 })
 export class RegisterComponent implements OnInit, OnDestroy {
 
   @ViewChild(CardTimelineComponent) timeline?: CardTimelineComponent;
-  @ViewChild('prefixInput') prefixInputRef?: ElementRef<HTMLInputElement>;
+
+  /** Descrição/root cause compartilhados com modal, popovers e IA (fonte da verdade dos editores). */
+  private prState = inject(CardPrStateService);
 
   cardFull: CardFull | null = null;
   isCardDetailsLoading = false;
-
-  // Conteúdo HTML dos editores WYSIWYG (a fonte da verdade continua em markdown).
-  descriptionHtml = '';
-  rootCauseHtml = '';
-  private turndown = new TurndownService({
-    headingStyle: 'atx',
-    codeBlockStyle: 'fenced',
-    bulletListMarker: '-'
-  });
 
   environmentName = 'development';
   template:any = null;
@@ -128,7 +124,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
   isAzureLoading: boolean = false;
 
   branchPrefix: string = 'hotfix/';
-  isEditingPrefix: boolean = false;
   branchName: string = '';
 
   // Metadados do PR encontrado (quem abriu, quando abriu, última atualização).
@@ -140,9 +135,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
     userPhoto: string | null;
   } | null = null;
 
-  repositoryOptions: { label: string; value: string; id?: number }[] = [];
-  selectedRepositoryObj: { label: string; value: string; id?: number } | null = null;
-  filteredRepositories: { label: string; value: string; id?: number }[] = [];
+  repositoryOptions: RepoOption[] = [];
+  // Objeto selecionado, ou o texto digitado enquanto nenhuma opção foi escolhida.
+  selectedRepositoryObj: RepoOption | string | null = null;
 
   justifyOptions = [
     {
@@ -178,8 +173,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
       hasText(this.branchName) ||
       hasText(this.pullRequest?.description) ||
       hasText(this.pullRequest?.rootCause) ||
-      hasText(this.descriptionHtml) ||
-      hasText(this.rootCauseHtml) ||
       this.fullDescription ||
       this.cardFull
     );
@@ -201,28 +194,12 @@ export class RegisterComponent implements OnInit, OnDestroy {
     );
   }
 
-  onPrefixDoubleClick() {
-    this.isEditingPrefix = true;
-    // Zoneless: força o render do input antes de focar; o setTimeout garante que o
-    // elemento já exista no DOM quando chamamos focus().
-    this.cdr.detectChanges();
-    setTimeout(() => this.prefixInputRef?.nativeElement.focus());
-  }
-
-  onPrefixBlur() {
-    this.isEditingPrefix = false;
-    if (!this.branchPrefix || this.branchPrefix.trim() === '') {
-      this.branchPrefix = 'hotfix/';
-    } else if (!this.branchPrefix.endsWith('/')) {
-      this.branchPrefix = this.branchPrefix + '/';
-    }
+  /** Prefixo editado no campo de branch (já normalizado ao sair da edição). */
+  onBranchPrefixChange(prefix: string) {
+    this.branchPrefix = prefix;
     this.makeUrlLink();
-    // makeUrlLink pode sair cedo (sem cardNumber) sem disparar CD; garante o volta ao texto.
+    // makeUrlLink pode sair cedo (sem cardNumber) sem disparar CD.
     this.cdr.detectChanges();
-  }
-
-  onPrefixChange() {
-    this.makeUrlLink();
   }
 
   @HostListener('window:resize')
@@ -296,12 +273,23 @@ export class RegisterComponent implements OnInit, OnDestroy {
     private ws: WsService,
     private authService: AuthService,
   ) {
-    // Tachado (~~texto~~) não é tratado pelo turndown por padrão — mapeamos manualmente
-    // para manter o markdown limpo ao converter o HTML do editor de volta.
-    this.turndown.addRule('strikethrough', {
-      filter: ['del', 's', 'strike'] as any,
-      replacement: (content: string) => `~~${content}~~`,
+    // Edições feitas nos painéis (aqui, no modal ou nos popovers) chegam pelo estado
+    // compartilhado; espelha no modelo local usado por salvar/copiar/abrir PR.
+    effect(() => {
+      const description = this.prState.description();
+      const rootCause = this.prState.rootCause();
+      untracked(() => this.onSharedContentChange(description, rootCause));
     });
+  }
+
+  private onSharedContentChange(description: string | null, rootCause: string | null) {
+    const current = this.pullRequest ?? {};
+    if ((current.description ?? null) === description && (current.rootCause ?? null) === rootCause) return;
+
+    this.pullRequest.description = description ?? undefined;
+    this.pullRequest.rootCause = rootCause ?? undefined;
+    this.generateFullDescriptionHandler();
+    this.cdr.detectChanges();
   }
 
   async ngOnInit() {
@@ -382,7 +370,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   /** Re-aplica repositórios/branches preservando a seleção atual do usuário quando possível. */
   private reapplyPullRequestConfigurations(): void {
-    const prevRepoValue = this.selectedRepositoryObj?.value ?? null;
+    const prevRepoValue = typeof this.selectedRepositoryObj === 'string'
+      ? this.selectedRepositoryObj
+      : this.selectedRepositoryObj?.value ?? null;
     const prevEnv = this.environmentName;
 
     const activeBranchsStr = this.configurations.PullRequest?.ActiveBranchs;
@@ -406,7 +396,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
     if (activeRepositoriesStr) {
       try {
         this.repositoryOptions = JSON.parse(activeRepositoriesStr);
-        this.filteredRepositories = [...this.repositoryOptions];
         const stillThere = prevRepoValue
           ? this.repositoryOptions.find(r => r.value === prevRepoValue)
           : undefined;
@@ -439,7 +428,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
     if (activeRepositoriesStr) {
       try {
         this.repositoryOptions = JSON.parse(activeRepositoriesStr);
-        this.filteredRepositories = [...this.repositoryOptions];
         if (this.repositoryOptions.length > 0) {
           this.selectedRepositoryObj = this.repositoryOptions[0];
         }
@@ -448,26 +436,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
         console.error('Erro ao processar ActiveRepositories:', error);
       }
     }
-  }
-
-  filterRepositories(event: { query: string }) {
-    const q = event.query.toLowerCase();
-    this.filteredRepositories = this.repositoryOptions.filter(r =>
-      r.label.toLowerCase().includes(q)
-    );
-  }
-
-  /** Exibe o label do repositório no input do mat-autocomplete (o valor é o objeto). */
-  repoDisplay = (repo: any): string =>
-    repo && typeof repo === 'object' ? repo.label : (repo ?? '');
-
-  /** Filtra os repositórios conforme o usuário digita (recebe string enquanto digita
-   *  e o objeto quando algo é selecionado). */
-  filterRepoInput(value: any) {
-    const q = (typeof value === 'string' ? value : value?.label ?? '').toLowerCase();
-    this.filteredRepositories = this.repositoryOptions.filter(r =>
-      r.label.toLowerCase().includes(q)
-    );
   }
 
   onRepositorySelect() {
@@ -487,54 +455,18 @@ export class RegisterComponent implements OnInit, OnDestroy {
       if(data) {
         this.pullRequest.description = data.pullRequestDescriptionAiGenerated;
         this.pullRequest.rootCause = data.rootCauseAnalysisAiGenerated;
-        this.syncEditorsFromModel();
+        this.prState.setContent(this.pullRequest.description ?? null, this.pullRequest.rootCause ?? null);
         this.generateFullDescriptionHandler();
         this.cdr.detectChanges();
       }
     })
   }
 
-  /**
-   * Converte markdown (a fonte da verdade — salvo no banco / enviado ao GitHub) em HTML
-   * para exibir formatado nos editores WYSIWYG.
-   */
-  private mdToHtml(markdown: string | null | undefined): string {
-    if (!markdown) return '';
-    marked.setOptions({ gfm: true, breaks: true });
-    return (marked.parse(markdown) as string) ?? '';
-  }
-
-  /**
-   * Popula os editores a partir do markdown do modelo. Chamar apenas em cargas externas
-   * (geração por IA, busca do card, limpar) — nunca durante a digitação, para não
-   * reposicionar o cursor do editor.
-   */
-  private syncEditorsFromModel() {
-    this.descriptionHtml = this.mdToHtml(this.pullRequest?.description);
-    this.rootCauseHtml = this.mdToHtml(this.pullRequest?.rootCause);
-    this.cdr.detectChanges();
-  }
-
-  /** Edição no editor de Descrição: converte o HTML de volta para markdown antes de salvar/enviar. */
-  onDescriptionEditorChange(event: any) {
-    const html = event?.htmlValue ?? '';
-    this.pullRequest.description = html ? this.turndown.turndown(html) : '';
-    this.generateFullDescriptionHandler();
-  }
-
-  /** Edição no editor de Root Cause: converte o HTML de volta para markdown antes de salvar/enviar. */
-  onRootCauseEditorChange(event: any) {
-    const html = event?.htmlValue ?? '';
-    this.pullRequest.rootCause = html ? this.turndown.turndown(html) : '';
-    this.generateFullDescriptionHandler();
-  }
-
   clearAll() {
     this.environmentName = 'development';
     this.template = null;
     this.pullRequest = {};
-    this.descriptionHtml = '';
-    this.rootCauseHtml = '';
+    this.prState.reset();
     this.cardNumber = null;
     this.fullDescription = null;
     // Zera os detalhes do DevOps para também apagar as não conformidades (para o pisca do cabeçalho).
@@ -780,8 +712,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
       // Descrição/Root Cause não podem manter os dados do card antigo.
       this.prInfo = null;
       this.pullRequest = {};
-      this.descriptionHtml = '';
-      this.rootCauseHtml = '';
+      this.prState.setContent(null, null);
       this.fullDescription = null;
 
       const repositoryId =
@@ -808,7 +739,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
             this.branchPrefix = response.branchPrefix;
 
             this.loadPrAuthorInfo(response);
-            this.syncEditorsFromModel();
+            this.prState.loadRegister(this.cardNumber?.toString() ?? null, response);
             this.cdr.detectChanges();
 
             this.generateFullDescriptionHandler();
