@@ -35,6 +35,9 @@ export interface PullRequestRegister {
 export type GithubPullRequestStatus = 'OPEN' | 'MERGED' | 'CLOSED' | 'LEGACY';
 
 /** PR aberto no GitHub pelo CIME para um card. */
+/** Status que o usuário pode escolher ao trocar o status de um PR (0007). */
+export type GithubPrStatusTarget = 'OPEN' | 'DRAFT' | 'CLOSED';
+
 export interface GithubPullRequest {
   id: number;
   pullRequestRegisterId: number;
@@ -129,6 +132,13 @@ export class PullRequestService {
   }
 
   /** Atualiza título/descrição de um PR já aberto (GitHub + registro). */
+  /** Troca o status do PR no GitHub (0007): OPEN (reabre / pronto para revisão), DRAFT ou CLOSED. */
+  setGithubPrStatus(cardNumber: string, id: number, status: GithubPrStatusTarget) {
+    return this.http.put<GithubPullRequest>(
+      `${this.baseUrl}PullRequest/${encodeURIComponent(cardNumber)}/github/${id}/status`, { status }
+    );
+  }
+
   updateGithubPr(cardNumber: string, id: number, request: UpdateGithubPullRequestRequest) {
     return this.http.put<GithubPullRequest>(
       `${this.baseUrl}PullRequest/${encodeURIComponent(cardNumber)}/github/${id}`, request

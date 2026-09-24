@@ -22,10 +22,32 @@
           <strong class="integration__name">{{ draft.integration.description }}</strong>
           @if (draft.integration.configured) {
             <span class="chip chip--ok"><mat-icon>check_circle</mat-icon>Configurado</span>
+          } @else if (draft.integration.optional) {
+            <span class="chip chip--optional"><mat-icon>radio_button_unchecked</mat-icon>Opcional</span>
           } @else {
             <span class="chip chip--pending"><mat-icon>warning</mat-icon>Pendente</span>
           }
         </header>
+
+        @if (isTeams(draft)) {
+          <!-- 0007: a URL do Workflow do grupo é a credencial pessoal do Teams -->
+          <div class="integration__help">
+            <mat-icon>info</mat-icon>
+            <div>
+              Para pedir aprovação de PR no Teams{{ teamsGroup(draft) ? ' (' + teamsGroup(draft) + ')' : '' }}:
+              <ol>
+                <li>No grupo do Teams, abra <strong>⋯ &gt; Workflows</strong> e escolha <strong>"Enviar alertas de webhook para um chat"</strong>.</li>
+                <li>Conclua o assistente com o grupo de destino e copie a <strong>URL</strong> gerada.</li>
+                <li>Cole em <strong>WebhookUrl</strong> abaixo e salve.</li>
+              </ol>
+            </div>
+          </div>
+        } @else if (draft.integration.optional && !draft.integration.configured) {
+          <div class="integration__help">
+            <mat-icon>info</mat-icon>
+            <div>Opcional: sem ela, só o recurso que depende desta integração fica indisponível.</div>
+          </div>
+        }
 
         <div class="integration__fields">
           @for (field of draft.fields; track field.key) {

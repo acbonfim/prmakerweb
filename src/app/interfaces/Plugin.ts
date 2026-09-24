@@ -38,4 +38,6 @@ export interface PluginData {
   isPersonal?: boolean;
   /** Plugin pessoal: campos que cada usuário preenche (null = todos; os demais usam o valor global). */
   personalFields?: string[] | null;
+  /** Plugin pessoal opcional (0007): sem configuração, só o recurso dele fica indisponível — não bloqueia a tela de PR. */
+  isOptional?: boolean;
 }

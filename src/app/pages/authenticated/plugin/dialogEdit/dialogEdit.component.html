@@ -21,6 +21,16 @@
               style="font-size: 18px; height: 18px; width: 18px; opacity: 0.7; cursor: help;">info</mat-icon>
   </div>
 
+  @if (data.isPersonal) {
+    <div class="mb-1 d-flex align-items-center" style="gap: 10px;">
+      <mat-slide-toggle color="primary" [(ngModel)]="data.isOptional" [ngModelOptions]="{standalone: true}">
+        Opcional para o usuário
+      </mat-slide-toggle>
+      <mat-icon matTooltip="Opcional: aparece em Minhas integrações, mas não bloqueia a tela de PR para quem não configurou — só o recurso que depende dela fica indisponível (ex.: pedir aprovação no Teams)."
+                style="font-size: 18px; height: 18px; width: 18px; opacity: 0.7; cursor: help;">info</mat-icon>
+    </div>
+  }
+
   @if (data.isPersonal && data.key == 'settings') {
     <div class="personal-hint">
       <mat-icon>info</mat-icon>

@@ -18,6 +18,8 @@ export interface UserIntegration {
   pluginId: number;
   description: string;
   configured: boolean;
+  /** Opcional (0007): sem configuração, só o recurso dele fica indisponível (não bloqueia a tela). */
+  optional?: boolean;
   fields: UserIntegrationField[];
   updatedAt: string | null;
 }
