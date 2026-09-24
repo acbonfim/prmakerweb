@@ -11,7 +11,6 @@ import { FilterBarComponent } from '../filter-bar/filter-bar.component';
 import { PrQuickActionsComponent } from '../pr-quick-actions/pr-quick-actions.component';
 import { TargetBranchOption } from '../target-branch-toggle/target-branch-toggle.component';
 import { MatButtonModule } from '@angular/material/button';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FilterOption, FilterProvider, FilterValues } from '../filter-bar/filter-bar.models';
 import { of } from 'rxjs';
 
@@ -60,7 +59,7 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
   selector: 'app-github-pr-list',
   standalone: true,
   imports: [DatePipe, FormsModule, MatIconModule, MatTooltipModule, OrderListModule, UserAvatarComponent, FilterBarComponent,
-    MatButtonModule, MatProgressSpinnerModule, PrQuickActionsComponent],
+    MatButtonModule, PrQuickActionsComponent],
   template: `
     <!-- Filtros (0005): recriados a cada card (resetKey) para começar sem seleção -->
     @if (prs().length > 0) {
@@ -124,8 +123,9 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
                         (mousedown)="$event.stopPropagation()"
                         (click)="$event.stopPropagation(); actions.requestApproval(pr)"
                         aria-label="Pedir aprovação no Teams">
+                  <!-- Enviando: ícone girando no próprio centro, igual ao ⟳ do painel -->
                   @if (actions.isSendingApproval(pr)) {
-                    <mat-spinner diameter="14"></mat-spinner>
+                    <mat-icon class="pr-tool__spin">sync</mat-icon>
                   } @else {
                     <mat-icon>forum</mat-icon>
                   }
@@ -140,6 +140,10 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
               </button>
             </div>
             <div class="pr-item__status">
+              @if (actions.isChangingStatus(pr)) {
+                <!-- Trocando o status no GitHub: skeleton só aqui (0007) -->
+                <div class="cime-skeleton pr-skeleton__chip" aria-label="Alterando status"></div>
+              } @else {
               @if (pr.statusStale) {
                 <mat-icon class="pr-item__stale" matTooltip="Não foi possível consultar o GitHub agora — status da última atualização"
                           matTooltipPosition="above">sync_problem</mat-icon>
@@ -153,6 +157,7 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
                       matTooltipPosition="above">LEGADO</span>
               } @else {
                 <span [class]="'pr-chip pr-chip--' + pr.status.toLowerCase()">{{ pr.status }}</span>
+              }
               }
             </div>
             </div>
@@ -270,7 +275,16 @@ export function filterPrs(prs: GithubPullRequest[], values: FilterValues): Githu
     .pr-tool--bolt.mat-mdc-icon-button { color: color-mix(in srgb, #d29922 80%, transparent); }
     .pr-tool--bolt.mat-mdc-icon-button:hover { color: #d29922; }
     .pr-tool .mat-icon { font-size: 17px; width: 17px; height: 17px; }
-    .pr-tool mat-spinner { margin: auto; }
+    /* Mesma técnica do ⟳ do painel: gira o ícone no próprio centro */
+    .pr-tool .mat-icon.pr-tool__spin {
+      transform-origin: 50% 50%;
+      animation: pr-tool-spin 0.9s linear infinite;
+      color: var(--mat-sys-primary);
+    }
+    @keyframes pr-tool-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .pr-tool .mat-icon.pr-tool__spin { animation-duration: 2.5s; }
+    }
     .pr-item__status { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
     .pr-item__stale { color: #d29922; font-size: 18px; width: 18px; height: 18px; }
 
