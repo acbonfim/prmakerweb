@@ -29,7 +29,17 @@
 
         <div class="integration__fields">
           @for (field of draft.fields; track field.key) {
-            @if (field.sensitive) {
+            @if (!field.editable) {
+              <!-- Fixo: definido pelo administrador na configuração geral (somente leitura) -->
+              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field field--fixed">
+                <mat-label>{{ field.key }}</mat-label>
+                <input matInput readonly tabindex="-1"
+                       [value]="field.sensitive ? (field.hasSavedValue ? '••••••••' : '') : field.value"
+                       [placeholder]="field.hasSavedValue ? '' : 'Não definido pelo administrador'"/>
+                <mat-icon matSuffix matTooltip="Definido pelo administrador">lock</mat-icon>
+                <mat-hint>Definido pelo administrador</mat-hint>
+              </mat-form-field>
+            } @else if (field.sensitive) {
               <div class="field-row">
                 <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field">
                   <mat-label>{{ field.key }}</mat-label>

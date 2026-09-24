@@ -21,16 +21,35 @@
               style="font-size: 18px; height: 18px; width: 18px; opacity: 0.7; cursor: help;">info</mat-icon>
   </div>
 
+  @if (data.isPersonal && data.key == 'settings') {
+    <div class="personal-hint">
+      <mat-icon>info</mat-icon>
+      Marque <strong>Usuário preenche</strong> nos campos que cada pessoa configura em Minhas integrações.
+      Os desmarcados são fixos: valem para todos com o valor definido aqui.
+    </div>
+  }
+
   <form  class="mb-2 mt-2" style="max-height: 300px; overflow-y: auto;">
     @for (property of getObjectKeys(urlApiModel); track property)
     {
-      <mat-form-field class="example-full-width w-100">
-        <mat-label>{{property}}</mat-label>
-        <input matInput [value]="urlApiModel[property]" #val  (change)="objChanged(property,val.value)">
-        <button matSuffix mat-icon-button matTooltip="Excluir atributo" color="primary" (click)="removeProperty(property)">
-          <mat-icon>close</mat-icon>
-        </button>
-      </mat-form-field>
+      <div class="field-row">
+        <mat-form-field class="example-full-width w-100">
+          <mat-label>{{property}}</mat-label>
+          <input matInput [value]="urlApiModel[property]" #val  (change)="objChanged(property,val.value)"
+                 [placeholder]="data.isPersonal && isUserField(property) ? 'Opcional: sugestão para os usuários' : ''">
+          <button matSuffix mat-icon-button matTooltip="Excluir atributo" color="primary" (click)="removeProperty(property)">
+            <mat-icon>close</mat-icon>
+          </button>
+        </mat-form-field>
+        @if (data.isPersonal && data.key == 'settings') {
+          <mat-checkbox class="user-fills" color="primary"
+                        [checked]="isUserField(property)"
+                        (change)="toggleUserField(property, $event.checked)"
+                        [matTooltip]="isUserField(property) ? 'Cada usuário preenche o próprio valor' : 'Fixo: todos usam o valor definido aqui'">
+            Usuário preenche
+          </mat-checkbox>
+        }
+      </div>
     }
 
   </form>

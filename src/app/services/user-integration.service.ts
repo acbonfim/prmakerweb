@@ -10,6 +10,8 @@ export interface UserIntegrationField {
   hasValue: boolean;
   sensitive: boolean;
   suggested: boolean;
+  /** false = fixo, definido pelo administrador (somente leitura). */
+  editable: boolean;
 }
 
 export interface UserIntegration {

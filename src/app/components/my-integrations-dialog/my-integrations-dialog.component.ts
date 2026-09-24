@@ -21,6 +21,8 @@ interface FieldDraft {
   /** Sensível marcado para limpar (envia ""). */
   clear: boolean;
   reveal: boolean;
+  /** false = fixo, definido pelo administrador: somente leitura e nunca enviado. */
+  editable: boolean;
 }
 
 interface PluginDraft {
@@ -84,6 +86,7 @@ export class MyIntegrationsDialogComponent implements OnInit {
 
     const values: Record<string, string | null> = {};
     for (const f of draft.fields) {
+      if (!f.editable) continue; // fixo: definido pelo administrador
       if (f.sensitive) {
         if (f.clear) values[f.key] = '';
         else if (f.value.trim()) values[f.key] = f.value.trim();
@@ -125,6 +128,7 @@ export class MyIntegrationsDialogComponent implements OnInit {
         suggested: f.suggested,
         clear: false,
         reveal: false,
+        editable: f.editable !== false,
       })),
     };
   }

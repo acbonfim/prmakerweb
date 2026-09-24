@@ -36,4 +36,6 @@ export interface PluginData {
   adminOnly?: boolean;
   /** Uso pessoal: cada usuário preenche os próprios valores em "Minhas integrações". */
   isPersonal?: boolean;
+  /** Plugin pessoal: campos que cada usuário preenche (null = todos; os demais usam o valor global). */
+  personalFields?: string[] | null;
 }

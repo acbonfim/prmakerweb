@@ -66,3 +66,7 @@
 
 .dialog-actions { display: flex; align-items: center; padding: 8px 24px 16px; }
 .dialog-actions .spacer { flex: 1 1 auto; }
+
+/* Campo fixo (definido pelo administrador): somente leitura, visual atenuado */
+.field--fixed { opacity: 0.75; }
+.field--fixed mat-icon[matSuffix] { color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); margin-right: 8px; }
