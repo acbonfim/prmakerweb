@@ -143,6 +143,7 @@ export class CardTimelineComponent implements OnDestroy {
   @ViewChild('body') private bodyRef?: ElementRef<HTMLDivElement>;
 
   private sub?: Subscription;
+  private resyncSub?: Subscription;
   private currentGroup: string | null = null;
 
   readonly photos = signal<Record<string, string>>({});
@@ -161,6 +162,10 @@ export class CardTimelineComponent implements OnDestroy {
     // Atualização em tempo real: recarrega quando a timeline deste card muda em outro cliente.
     this.ws.startConnection();
     this.ws.on(TIMELINE_EVENT, this.onTimelineUpdated);
+    // Conexão voltou após cair: os eventos da queda se perderam, recarrega em silêncio.
+    this.resyncSub = this.ws._resynced.subscribe(() => {
+      if (this._cardNumber) this.load(undefined, { silent: true });
+    });
   }
 
   /** Recebe o sinal do servidor e refaz o fetch autenticado (padrão sinal + refetch). */
@@ -608,6 +613,7 @@ export class CardTimelineComponent implements OnDestroy {
     this.sub?.unsubscribe();
     if (this.currentGroup) this.ws.removeFromGroup(this.currentGroup);
     this.ws.off(TIMELINE_EVENT, this.onTimelineUpdated);
+    this.resyncSub?.unsubscribe();
   }
 
   /** Links dentro de um registro em markdown abrem em nova aba (sem sair da tela do card). */
