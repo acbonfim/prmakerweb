@@ -1,7 +1,18 @@
-import { Injectable, EventEmitter } from '@angular/core';
+import { Injectable, EventEmitter, inject } from '@angular/core';
+import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import * as signalR from '@microsoft/signalr';
-import { BehaviorSubject, Observable, map, switchMap, takeWhile, timer } from 'rxjs';
+import { BehaviorSubject, Observable, firstValueFrom, map, switchMap, takeWhile, timer } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { StorageService } from './storage.service';
+
+/** Resposta de `GET RealTime/connection` (feature 0013). */
+interface RealTimeConnectionInfo {
+  /** URL do hub (relay); nula => usar `environment.urlWs`. */
+  url: string | null;
+  /** Token de curta duração; nulo => a API não emite token (usa a chave legada). */
+  accessToken: string | null;
+  expiresAt: string | null;
+}
 
 /**
  * Serviço genérico de tempo real (SignalR).
@@ -9,17 +20,36 @@ import { environment } from '../../environments/environment';
  * Espelha o hub RealTimeHub do backend: `AddToGroup`/`RemoveFromGroup` para inscrição em
  * canais e handlers arbitrários via `on()`/`off()`. Para adicionar um novo ponto de tempo
  * real, basta entrar em um grupo e registrar um handler — nenhuma mudança aqui é necessária.
+ *
+ * Conexão (feature 0013): a URL do hub e um token de curta duração vêm de `GET RealTime/connection`
+ * (o hub roda num relay fora da API). O token é renovado a cada (re)conexão. Se a API não tiver o
+ * endpoint (versão antiga) ou não emitir token, cai no modo legado: `environment.urlWs` + `apiKeyWS`.
  */
 @Injectable({
   providedIn: 'root',
 })
 export class WsService {
+  private http = inject(HttpClient);
+  private storage = inject(StorageService);
+
   private hubConnection?: signalR.HubConnection;
+  private accessToken: string | null = null;
+  private accessTokenExpiresAt = 0;
+  /** Já houve conexão nesta sessão: a próxima que abrir é uma volta (dispara `_resynced`). */
+  private wasConnected = false;
+  /** Uma tentativa de conexão (com retentativas) em curso: evita cadeias paralelas. */
+  private starting = false;
+  private hubConnectionPromise?: Promise<signalR.HubConnection>;
 
   /** Status online/offline da conexão. */
   _wsOn = new EventEmitter<boolean>();
   /** Emitido quando a conexão é (re)estabelecida — grupos são reinscritos automaticamente. */
   _reconnected = new EventEmitter<void>();
+  /**
+   * Emitido só quando a conexão VOLTA depois de ter caído (não na primeira conexão). Os eventos
+   * enviados durante a queda se perderam: quem escuta deve recarregar os dados em tela.
+   */
+  _resynced = new EventEmitter<void>();
 
   _maxRetries = 10;
   _retryCount = 0;
@@ -46,60 +76,32 @@ export class WsService {
   );
 
   public startConnection = (maxRetries: number = this._maxRetries, retryDelay: number = 10000) => {
-    // Idempotente: evita múltiplas conexões quando chamado de mais de um ponto.
+    // Idempotente: evita múltiplas conexões quando chamado de mais de um ponto (a criação da
+    // conexão é assíncrona, então o estado sozinho não basta — daí o `starting`).
     if (
-      this.hubConnection &&
-      (this.hubConnection.state === signalR.HubConnectionState.Connected ||
-        this.hubConnection.state === signalR.HubConnectionState.Connecting)
+      this.starting ||
+      (this.hubConnection &&
+        this.hubConnection.state !== signalR.HubConnectionState.Disconnected)
     ) {
       return;
     }
-
-    if (!this.hubConnection) {
-      const headers = {
-        'x-api-key': environment.apiKeyWS,
-      };
-
-      this.hubConnection = new signalR.HubConnectionBuilder()
-        // withCredentials: false — a autenticação é via api-key na query string (não cookies),
-        // então não enviamos credenciais. Isso evita o erro de CORS "credentials include + '*'"
-        // e permite que qualquer policy de CORS (inclusive AllowAnyOrigin) atenda o hub.
-        .withUrl(this.buildUrl(), { headers, withCredentials: false })
-        .withAutomaticReconnect()
-        .build();
-
-      // Handlers registrados antes da conexão existir são aplicados agora.
-      this.applyHandlers();
-
-      this.hubConnection.onreconnecting(() => {
-        this.updateWsStatus(false);
-      });
-
-      this.hubConnection.onreconnected((connectionId: any) => {
-        console.log('Reconnected with connectionId: ' + connectionId);
-        this.updateWsStatus(true);
-        this.rejoinGroups();
-        this._reconnected.emit();
-      });
-
-      this.hubConnection.onclose((error: any) => {
-        console.log('Connection closed with error: ' + error);
-        this.updateWsStatus(false);
-      });
-    }
+    this.starting = true;
 
     const tryStartConnection = (retryCount: number) => {
       if (retryCount > 0) retryDelay = retryDelay + (retryDelay * 70) / 100;
 
       this._newRetrySubject.next(new Date(new Date().getTime() + retryDelay));
 
-      this.hubConnection!.start()
+      this.ensureHubConnection()
+        .then((connection) => connection.start())
         .then(() => {
           console.log('O WS está funcionando online neste momento');
+          this.starting = false;
           this._newRetrySubject.next(null);
           this.updateWsStatus(true);
           this.rejoinGroups();
           this._reconnected.emit();
+          this.emitResyncedIfReturning();
         })
         .catch((err) => {
           console.log('Error while starting connection: ' + err);
@@ -110,6 +112,7 @@ export class WsService {
             setTimeout(() => tryStartConnection(retryCount + 1), retryDelay);
           } else {
             console.log('Número máximo de tentativas alcançado.');
+            this.starting = false;
             this._retryCount = retryCount;
             this._newRetrySubject.next(null);
           }
@@ -126,6 +129,10 @@ export class WsService {
         .then(() => {
           console.log('Conexão SignalR encerrada com sucesso.');
           this.updateWsStatus(false);
+          // Logout: a próxima conexão é uma sessão nova, não uma volta; e o token não vale mais.
+          this.wasConnected = false;
+          this.accessToken = null;
+          this.accessTokenExpiresAt = 0;
         })
         .catch((err) => {
           console.log('Error while stopping connection: ' + err);
@@ -172,12 +179,104 @@ export class WsService {
     else this.hubConnection.off(event);
   }
 
-  private buildUrl(): string {
+  /**
+   * Cria a conexão na primeira vez. A URL (e o modo token/legado) é decidida aqui e mantida; o token
+   * em si é pedido pelo `accessTokenFactory` a cada (re)conexão. Falha ao buscar os dados de conexão
+   * (fora 404) propaga para o fluxo de retentativa.
+   */
+  private ensureHubConnection(): Promise<signalR.HubConnection> {
+    this.hubConnectionPromise ??= this.createHubConnection().catch((err) => {
+      this.hubConnectionPromise = undefined; // permite nova tentativa
+      throw err;
+    });
+    return this.hubConnectionPromise;
+  }
+
+  private async createHubConnection(): Promise<signalR.HubConnection> {
+
+    let info: RealTimeConnectionInfo | null = null;
+    try {
+      info = await this.fetchConnectionInfo();
+    } catch (err) {
+      // API sem o endpoint (antes da 0013): modo legado. Outros erros: tentar de novo depois.
+      if (!(err instanceof HttpErrorResponse && err.status === 404)) throw err;
+    }
+
+    const url = info?.url || environment.urlWs;
+    const useToken = !!info?.accessToken;
+    if (useToken) this.cacheToken(info!);
+
+    this.hubConnection = new signalR.HubConnectionBuilder()
+      // withCredentials: false — a autenticação é por token/api-key (não cookies), então não
+      // enviamos credenciais. Isso evita o erro de CORS "credentials include + '*'".
+      .withUrl(
+        useToken ? url : this.buildLegacyUrl(url),
+        useToken
+          ? { accessTokenFactory: () => this.getAccessToken(), withCredentials: false }
+          : { headers: { 'x-api-key': environment.apiKeyWS }, withCredentials: false }
+      )
+      // Sem desistir: o relay pode ser reciclado pela hospedagem e a conexão não custa nada parada.
+      .withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: (ctx) => [0, 2000, 10000, 30000][ctx.previousRetryCount] ?? 60000,
+      })
+      .build();
+
+    // Handlers registrados antes da conexão existir são aplicados agora.
+    this.applyHandlers();
+
+    this.hubConnection.onreconnecting(() => {
+      this.updateWsStatus(false);
+    });
+
+    this.hubConnection.onreconnected((connectionId: any) => {
+      console.log('Reconnected with connectionId: ' + connectionId);
+      this.updateWsStatus(true);
+      this.rejoinGroups();
+      this._reconnected.emit();
+      this.emitResyncedIfReturning();
+    });
+
+    this.hubConnection.onclose((error: any) => {
+      console.log('Connection closed with error: ' + error);
+      this.updateWsStatus(false);
+    });
+
+    return this.hubConnection;
+  }
+
+  private fetchConnectionInfo(): Promise<RealTimeConnectionInfo> {
+    // A api-key vai explícita: logo após o login a rota ainda não é auth/* e o interceptor não a põe.
+    const apiKey = this.storage.getItem('apiKey');
+    const headers = apiKey ? new HttpHeaders({ 'x-api-key': `${apiKey}` }) : undefined;
+    return firstValueFrom(
+      this.http.get<RealTimeConnectionInfo>(`${environment.apiUrl}RealTime/connection`, { headers })
+    );
+  }
+
+  /** Token em cache até 1 min antes de expirar; senão pede outro à API. */
+  private async getAccessToken(): Promise<string> {
+    if (this.accessToken && Date.now() < this.accessTokenExpiresAt - 60_000) return this.accessToken;
+    const info = await this.fetchConnectionInfo();
+    this.cacheToken(info);
+    return this.accessToken ?? '';
+  }
+
+  private cacheToken(info: RealTimeConnectionInfo): void {
+    this.accessToken = info.accessToken;
+    this.accessTokenExpiresAt = info.expiresAt ? new Date(info.expiresAt).getTime() : 0;
+  }
+
+  private emitResyncedIfReturning(): void {
+    if (this.wasConnected) this._resynced.emit();
+    this.wasConnected = true;
+  }
+
+  private buildLegacyUrl(base: string): string {
     // Remove barras finais e injeta a api-key na query string — necessária no upgrade
     // WebSocket, onde o browser não envia headers customizados.
-    const base = (environment.urlWs || '').replace(/\/+$/, '');
-    const sep = base.includes('?') ? '&' : '?';
-    return `${base}${sep}x-api-key=${encodeURIComponent(environment.apiKeyWS)}`;
+    const url = (base || '').replace(/\/+$/, '');
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}x-api-key=${encodeURIComponent(environment.apiKeyWS)}`;
   }
 
   private applyHandlers(): void {
