@@ -446,12 +446,19 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.prService.getByCardNumber(card).subscribe({
       next: (response: any) => {
         if (!response || this.cardNumber?.toString() !== card) return;
-        this.pullRequest.summary = response.summary ?? null;
-        this.pullRequest.summaryCommentId = response.summaryCommentId ?? null;
-        this.cdr.detectChanges();
+        this.applySummary(response);
       },
       error: (e) => console.error('Falha ao recarregar o resumo do card', e),
     });
+  }
+
+  private applySummary(register: any): void {
+    this.pullRequest.id = register.id ?? this.pullRequest.id;
+    this.pullRequest.summary = register.summary ?? null;
+    this.pullRequest.summaryCommentId = register.summaryCommentId ?? null;
+    this.pullRequest.summaryUpdatedAt = register.summaryUpdatedAt ?? null;
+    this.pullRequest.summaryPublishedAt = register.summaryPublishedAt ?? null;
+    this.cdr.detectChanges();
   }
 
   private applyServerRegister(): void {
@@ -641,6 +648,16 @@ export class RegisterComponent implements OnInit, OnDestroy {
         this.prLoadError = false;
         this.loadPrAuthorInfo(saved);
         this.prState.register.set({ ...saved, githubPullRequests: this.prState.githubPrs() });
+        // Card recém-criado passa a ter id (libera o resumo não técnico sem buscar de novo — 0011).
+        const s: any = saved;
+        this.pullRequest = {
+          ...this.pullRequest,
+          id: s.id,
+          summary: s.summary ?? this.pullRequest.summary ?? null,
+          summaryCommentId: s.summaryCommentId ?? this.pullRequest.summaryCommentId ?? null,
+          summaryUpdatedAt: s.summaryUpdatedAt ?? this.pullRequest.summaryUpdatedAt ?? null,
+          summaryPublishedAt: s.summaryPublishedAt ?? this.pullRequest.summaryPublishedAt ?? null,
+        };
         this.isPullRequestLoading = false;
         this.loadingBar.stop();
         this.cdr.detectChanges();
@@ -836,37 +853,37 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.loadCardDetails();
     }
 
-    /** Resumo não técnico (0011): abre o editor com o resumo salvo ou gera um novo com a IA. */
+    /**
+     * Resumo não técnico (0011): abre com o resumo salvo (ver/editar/salvar/publicar) ou no contexto
+     * que vai para a IA (card, discussion, timeline, PRs, diffs), para gerar um novo.
+     */
     openSummaryDialog(prompt: string) {
       if (!this.cardNumber || !this.cardFull) return;
 
-      const fields = this.cardFull.fields ?? {};
-      const reproField = this.configurations?.Azure?.RetroStepsFieldName || 'Microsoft.VSTS.TCM.ReproSteps';
-      const toText = (html: any) => (html ?? '').toString().replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
-
       const data: SummaryDialogData = {
         cardNumber: this.cardNumber.toString(),
-        title: fields['System.Title'] ?? '',
-        reproSteps: toText(fields[reproField] ?? fields['System.Description']),
-        description: this.pullRequest?.description ?? '',
-        rootCause: this.pullRequest?.rootCause ?? '',
+        card: this.cardFull,
+        reproField: this.configurations?.Azure?.RetroStepsFieldName || 'Microsoft.VSTS.TCM.ReproSteps',
+        description: this.prState.description() ?? this.pullRequest?.description ?? '',
+        rootCause: this.prState.rootCause() ?? this.pullRequest?.rootCause ?? '',
         summary: this.pullRequest?.summary ?? null,
+        summaryUpdatedAt: this.pullRequest?.summaryUpdatedAt ?? null,
+        summaryPublishedAt: this.pullRequest?.summaryPublishedAt ?? null,
         published: !!this.pullRequest?.summaryCommentId,
+        timeline: this.timeline?.entries() ?? [],
+        githubPrs: this.prState.githubPrs(),
         prompt,
       };
 
       this.dialog.open(SummaryDialogComponent, {
         data,
-        width: '900px',
-        height: '80vh',
+        width: '1000px',
+        height: '86vh',
         maxWidth: '94vw',
-        maxHeight: '90vh',
+        maxHeight: '92vh',
         panelClass: 'custom-dialog-container'
       }).afterClosed().subscribe((saved: any) => {
-        if (!saved) return;
-        this.pullRequest.summary = saved.summary ?? null;
-        this.pullRequest.summaryCommentId = saved.summaryCommentId ?? null;
-        this.cdr.detectChanges();
+        if (saved) this.applySummary(saved);
       });
     }
 

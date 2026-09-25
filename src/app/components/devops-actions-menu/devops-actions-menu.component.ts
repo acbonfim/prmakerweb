@@ -193,9 +193,10 @@ export class DevOpsActionsMenuComponent {
         id: 'summary', icon: 'translate', confirm: false,
         label: this.hasSummary() ? 'Resumo não técnico (ver/editar)' : 'Gerar resumo não técnico',
         details: [
-          'Gera com IA um resumo não técnico (PT-BR + EN-US) do problema e da solução, para a discussion do card.',
-          '• Abre no editor: dá para editar, gerar de novo e salvar.',
-          '• Salvar publica na discussion (ou atualiza o comentário já publicado) e guarda no PRMake.',
+          'Resumo não técnico (PT-BR + EN-US) do problema e da solução, para a discussion do card.',
+          '• Ver o resumo salvo, editar ou gerar (de novo) com IA.',
+          '• Salvar guarda no PRMake; Publicar cria (ou atualiza) o comentário na discussion.',
+          '• A aba "Contexto enviado à IA" mostra tudo o que vai no prompt (card, discussion, timeline, PRs e diffs).',
         ].join('\n'),
         blockReason: loading ?? (!this.registerSaved() ? 'Salve o card no PRMake antes (botão Salvar)'
           : !bug?.summaryPrompt ? 'Prompt do resumo não configurado pelo administrador (AI Configurations)' : null),
