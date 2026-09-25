@@ -31,7 +31,7 @@ import {DialogTemplateComponent} from '../../../components/dialog-template/dialo
 import {DialogPrompt, DialogPromptData} from '../../../components/dialog-prompt/dialog-prompt';
 import {StorageService} from '../../../services/storage.service';
 import {GlobalService} from '../../../services/global.service';
-import {firstValueFrom} from 'rxjs';
+import {Subscription, firstValueFrom} from 'rxjs';
 import {tap} from 'rxjs/internal/operators/tap';
 import {GdsService} from '../../../services/gds.service';
 import {WsService} from '../../../services/ws.service';
@@ -166,6 +166,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   /** Grupo de tempo real do card em tela (null quando nenhum card foi buscado). */
   private currentCardGroup: string | null = null;
+  private resyncSub?: Subscription;
 
   /** Rótulo do autor na barra do card conforme o estado da busca. */
   get infoAuthorLabel(): string {
@@ -376,6 +377,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.ws.off(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
     this.switchCardGroup(null);
     this.ws.off(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
+    this.resyncSub?.unsubscribe();
   }
 
   /** Troca a inscrição de tempo real para o card em tela. */
@@ -509,7 +511,20 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.ws.addToGroup(PULLREQUEST_CONFIG_GROUP);
     this.ws.on(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
     this.ws.on(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
+    this.resyncSub = this.ws._resynced.subscribe(this.onRealtimeResynced);
   }
+
+  /**
+   * A conexão de tempo real voltou depois de cair: os eventos da queda se perderam, então recarrega
+   * o que eles atualizariam (configurações, registro — respeitando edição não salva — e PRs).
+   */
+  private onRealtimeResynced = (): void => {
+    this.onPullRequestConfigUpdated();
+    if (this.cardNumber) {
+      this.reloadRegisterFromServer();
+      this.reloadGithubPrs();
+    }
+  };
 
   private onPullRequestConfigUpdated = (): void => {
     firstValueFrom(this.getPullRequestConfigurations())
