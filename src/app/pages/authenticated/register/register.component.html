@@ -150,7 +150,7 @@
               [cardFull]="cardFull"
               [cardLoading]="isCardDetailsLoading"
               [hasRootCause]="!!pullRequest?.rootCause"
-              [registerSaved]="!!pullRequest?.id"
+              [registerSaved]="!!pullRequest?.id || !!prState.register()?.id"
               [hasSummary]="!!pullRequest?.summary"
               [rootCauseSaving]="isAzureLoading"
               (saveRootCause)="saveRootCauseToDevOps()"

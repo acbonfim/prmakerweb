@@ -46,10 +46,24 @@ export class DevOpsActionsService {
       `${this.baseUrl}Azure/card/${encodeURIComponent(cardNumber)}/actions/${action}`, {}));
   }
 
-  /** Publica o resumo na discussion (cria ou atualiza o mesmo comentário) e grava no card. */
-  saveSummary(cardNumber: string, summary: string, html: string): Promise<any> {
+  /**
+   * Grava o resumo no card; com `publish`, publica também na discussion (cria ou atualiza o mesmo
+   * comentário — exige o `html`).
+   */
+  saveSummary(cardNumber: string, summary: string, publish: boolean, html?: string): Promise<any> {
     return firstValueFrom(this.http.post<any>(
-      `${this.baseUrl}PullRequest/${encodeURIComponent(cardNumber)}/summary`, { summary, html }));
+      `${this.baseUrl}PullRequest/${encodeURIComponent(cardNumber)}/summary`, { summary, html: html ?? null, publish }));
+  }
+
+  /** Commits de uma branch (mesma rota do seletor de commits da geração com IA). */
+  getCommits(repository: string, branch: string): Promise<any[]> {
+    return firstValueFrom(this.http.get<any[]>(
+      `${this.baseUrl}GitHub/commits?repository=${encodeURIComponent(repository)}&branch=${encodeURIComponent(branch)}`));
+  }
+
+  getCommitDiff(repository: string, sha: string): Promise<any> {
+    return firstValueFrom(this.http.get<any>(
+      `${this.baseUrl}GitHub/commit/${sha}/diff?repository=${encodeURIComponent(repository)}`));
   }
 
   /** Gera texto com a IA configurada (mesmo endpoint da descrição/handover). */
