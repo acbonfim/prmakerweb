@@ -11,9 +11,25 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { UserIntegration, UserIntegrationService } from '../../services/user-integration.service';
 import { TEAMS_PLUGIN_NAME, TeamsService } from '../../services/teams.service';
 
+/** Placeholder de um campo não sensível editável (0011: opcionais com padrão ou sugestão). */
+export function fieldPlaceholder(field: { optional: boolean; defaultValue: string | null; hint: string | null }): string {
+  if (!field.optional) return 'Obrigatório';
+  if (field.defaultValue) return `Padrão: ${field.defaultValue}`;
+  if (field.hint) return `Opcional — sugestão: ${field.hint}`;
+  return 'Opcional';
+}
+
 /** Estado de edição de um campo no modal. */
 interface FieldDraft {
   key: string;
+  /** Nome amigável (0011) ou a própria chave. */
+  label: string;
+  /** Não obrigatório (0011). */
+  optional: boolean;
+  /** Valor global que vale enquanto o usuário não salvar (0011); null = sem padrão. */
+  defaultValue: string | null;
+  /** Sugestão do admin para campo opcional sem padrão (0011): mostrada, não preenchida. */
+  hint: string | null;
   sensitive: boolean;
   /** Texto digitado (para sensível: vazio = manter o salvo). */
   value: string;
@@ -115,6 +131,8 @@ export class MyIntegrationsDialogComponent implements OnInit {
     }
   }
 
+  readonly placeholder = fieldPlaceholder;
+
   close(): void {
     this.dialogRef.close();
   }
@@ -134,16 +152,26 @@ export class MyIntegrationsDialogComponent implements OnInit {
       integration,
       saving: false,
       error: null,
-      fields: integration.fields.map(f => ({
-        key: f.key,
-        sensitive: f.sensitive,
-        value: f.sensitive ? '' : (f.value ?? ''),
-        hasSavedValue: f.hasValue,
-        suggested: f.suggested,
-        clear: false,
-        reveal: false,
-        editable: f.editable !== false,
-      })),
+      // Campos fixos ocultos (0011, ex.: prompts longos) não aparecem para o usuário.
+      fields: integration.fields.filter(f => !f.hidden).map(f => {
+        // Opcionais (0011) não vêm preenchidos com a sugestão: com padrão, vale o global enquanto
+        // o campo estiver vazio; sem padrão (ex.: estimativa inicial), só vale o que o usuário salvar.
+        const optionalUnsaved = !!f.optional && !f.hasValue && !f.sensitive;
+        return {
+          key: f.key,
+          label: f.label?.trim() || f.key,
+          optional: !!f.optional,
+          defaultValue: optionalUnsaved && f.usesGlobalDefault ? (f.value ?? null) : null,
+          hint: optionalUnsaved && !f.usesGlobalDefault ? (f.value ?? null) : null,
+          sensitive: f.sensitive,
+          value: f.sensitive || optionalUnsaved ? '' : (f.value ?? ''),
+          hasSavedValue: f.hasValue,
+          suggested: f.suggested,
+          clear: false,
+          reveal: false,
+          editable: f.editable !== false,
+        };
+      }),
     };
   }
 }

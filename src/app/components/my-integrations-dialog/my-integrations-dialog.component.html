@@ -54,7 +54,7 @@
             @if (!field.editable) {
               <!-- Fixo: definido pelo administrador na configuração geral (somente leitura) -->
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field field--fixed">
-                <mat-label>{{ field.key }}</mat-label>
+                <mat-label>{{ field.label }}</mat-label>
                 <input matInput readonly tabindex="-1"
                        [value]="field.sensitive ? (field.hasSavedValue ? '••••••••' : '') : field.value"
                        [placeholder]="field.hasSavedValue ? '' : 'Não definido pelo administrador'"/>
@@ -64,11 +64,11 @@
             } @else if (field.sensitive) {
               <div class="field-row">
                 <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field">
-                  <mat-label>{{ field.key }}</mat-label>
+                  <mat-label>{{ field.label }}</mat-label>
                   <input matInput autocomplete="new-password"
                          [type]="field.reveal ? 'text' : 'password'"
                          [disabled]="field.clear || draft.saving"
-                         [placeholder]="field.hasSavedValue ? '•••••••• salvo — digite para trocar' : 'Obrigatório'"
+                         [placeholder]="field.hasSavedValue ? '•••••••• salvo — digite para trocar' : (field.optional ? 'Opcional' : 'Obrigatório')"
                          [(ngModel)]="field.value" (ngModelChange)="touch()"/>
                   <button matSuffix mat-icon-button type="button" (click)="field.reveal = !field.reveal; touch()"
                           [matTooltip]="field.reveal ? 'Ocultar' : 'Mostrar o que você digitou'">
@@ -85,10 +85,16 @@
               </div>
             } @else {
               <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field">
-                <mat-label>{{ field.key }}</mat-label>
-                <input matInput [disabled]="draft.saving" [(ngModel)]="field.value" (ngModelChange)="touch()" placeholder="Obrigatório"/>
-                @if (field.suggested && !field.hasSavedValue) {
+                <mat-label>{{ field.label }}</mat-label>
+                <input matInput [disabled]="draft.saving" [(ngModel)]="field.value" (ngModelChange)="touch()" [placeholder]="placeholder(field)"/>
+                @if (field.defaultValue && !field.value) {
+                  <mat-hint>Opcional — vazio usa o padrão da configuração geral</mat-hint>
+                } @else if (field.hint && !field.value) {
+                  <mat-hint>Opcional — preencha para habilitar o recurso</mat-hint>
+                } @else if (field.suggested && !field.hasSavedValue && !field.optional) {
                   <mat-hint>Sugestão da configuração geral — confira e salve</mat-hint>
+                } @else if (field.optional) {
+                  <mat-hint>Opcional</mat-hint>
                 }
               </mat-form-field>
             }

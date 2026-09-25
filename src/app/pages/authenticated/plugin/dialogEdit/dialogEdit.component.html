@@ -44,7 +44,10 @@
     {
       <div class="field-row">
         <mat-form-field class="example-full-width w-100">
-          <mat-label>{{property}}</mat-label>
+          <mat-label>{{labelOf(property)}}</mat-label>
+          @if (labelOf(property) !== property) {
+            <mat-hint>{{property}}</mat-hint>
+          }
           <input matInput [value]="urlApiModel[property]" #val  (change)="objChanged(property,val.value)"
                  [placeholder]="data.isPersonal && isUserField(property) ? 'Opcional: sugestão para os usuários' : ''">
           <button matSuffix mat-icon-button matTooltip="Excluir atributo" color="primary" (click)="removeProperty(property)">
