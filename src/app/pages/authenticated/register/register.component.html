@@ -144,13 +144,18 @@
           </button>
           Button to save root cause to DevOps (currently disabled) -->
 
-      <button mat-raised-button
-              (click)="saveRootCauseToDevOps()"
-              [disabled]="isAzureLoading || !cardNumber || !pullRequest?.rootCause || cardType === 'us'"
-              style="margin-left: 10px">
-        Salvar RC no DevOps
-        <mat-icon>beenhere</mat-icon>
-      </button>
+      <!-- 0011: "Salvar RC no DevOps" passou para o menu de Ações DevOps -->
+      <app-devops-actions-menu
+              [cardNumber]="cardNumber?.toString() ?? null"
+              [cardFull]="cardFull"
+              [cardLoading]="isCardDetailsLoading"
+              [hasRootCause]="!!pullRequest?.rootCause"
+              [registerSaved]="!!pullRequest?.id"
+              [hasSummary]="!!pullRequest?.summary"
+              [rootCauseSaving]="isAzureLoading"
+              (saveRootCause)="saveRootCauseToDevOps()"
+              (openSummary)="openSummaryDialog($event)"
+              (changed)="onDevOpsActionDone()"></app-devops-actions-menu>
       <button mat-raised-button style="margin-left: 10px"
               [disabled]="!cardNumber"
               (click)="generatePullRequestWithAi()"

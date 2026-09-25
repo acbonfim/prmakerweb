@@ -119,6 +119,13 @@ export class DialogEditComponent implements OnInit {
     if (this.data.personalFields) this.data.personalFields = this.data.personalFields.filter(k => k !== name);
   }
 
+  /** Nome amigável do campo (0011); sem nome, a própria chave. */
+  labelOf(key: string): string {
+    const settings = this.data.fieldSettings ?? {};
+    const match = Object.keys(settings).find(k => k.toLowerCase() === key.toLowerCase());
+    return (match && settings[match]?.label?.trim()) || key;
+  }
+
   /** Plugin pessoal: o campo é preenchido por cada usuário (true) ou fixo com o valor daqui (false). */
   isUserField(key: string): boolean {
     const keys = this.data.personalFields;

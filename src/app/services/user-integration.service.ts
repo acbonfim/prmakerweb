@@ -12,6 +12,14 @@ export interface UserIntegrationField {
   suggested: boolean;
   /** false = fixo, definido pelo administrador (somente leitura). */
   editable: boolean;
+  /** Nome amigável do campo (0011); null = exibir a chave. */
+  label?: string | null;
+  /** Campo do usuário que não é obrigatório (0011). */
+  optional?: boolean;
+  /** Sem valor do usuário, vale o valor global (em value, com suggested = true) (0011). */
+  usesGlobalDefault?: boolean;
+  /** Campo fixo que não aparece em "Minhas integrações" (0011). */
+  hidden?: boolean;
 }
 
 export interface UserIntegration {
