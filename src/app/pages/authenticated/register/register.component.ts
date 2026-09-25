@@ -53,6 +53,8 @@ import {OpenPrDialogComponent, OpenPrDialogData} from '../../../components/open-
 import {GithubPullRequest, PullRequestService} from '../../../services/pull-request.service';
 import {CardPrStateService} from '../../../services/card-pr-state.service';
 import {RepoOption} from '../../../interfaces/RepoOption';
+import {DevOpsActionsMenuComponent} from '../../../components/devops-actions-menu/devops-actions-menu.component';
+import {SummaryDialogComponent, SummaryDialogData} from '../../../components/summary-dialog/summary-dialog.component';
 
 /** Evento e grupo do tempo real da configuração de PR (em sincronia com o backend). */
 const PULLREQUEST_CONFIG_GROUP = 'pullrequest-config';
@@ -97,7 +99,8 @@ const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
     CardPanelComponent,
     PrInfoCardComponent,
     PanelPopoverButtonComponent,
-    GithubPrListComponent
+    GithubPrListComponent,
+    DevOpsActionsMenuComponent
   ]
 })
 export class RegisterComponent implements OnInit, OnDestroy {
@@ -270,7 +273,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
         }
       },
       {
-        label: 'Salvar RC no DevOps',
+        label: 'Ações DevOps',
         disabled: true,
         icon: 'pi pi-cloud-upload',
       },
@@ -394,6 +397,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
     if (payload.action === 'register-saved') {
       this.reloadRegisterFromServer();
+    } else if (payload.action === 'summary-saved') {
+      this.applyServerSummary();
     } else {
       this.reloadGithubPrs();
     }
@@ -432,6 +437,21 @@ export class RegisterComponent implements OnInit, OnDestroy {
     const ref = this._snackBar.open('Este card foi atualizado em outro lugar. Suas alterações não salvas serão perdidas se recarregar.',
       'Recarregar', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top", duration: 15000});
     ref.onAction().subscribe(() => this.applyServerRegister());
+  }
+
+  /** Resumo não técnico salvo (0011): atualiza só o resumo, sem mexer em descrição/RC em edição. */
+  private applyServerSummary(): void {
+    const card = this.cardNumber?.toString();
+    if (!card) return;
+    this.prService.getByCardNumber(card).subscribe({
+      next: (response: any) => {
+        if (!response || this.cardNumber?.toString() !== card) return;
+        this.pullRequest.summary = response.summary ?? null;
+        this.pullRequest.summaryCommentId = response.summaryCommentId ?? null;
+        this.cdr.detectChanges();
+      },
+      error: (e) => console.error('Falha ao recarregar o resumo do card', e),
+    });
   }
 
   private applyServerRegister(): void {
@@ -810,6 +830,45 @@ export class RegisterComponent implements OnInit, OnDestroy {
     });
   }
 
+
+    /** Uma ação do menu "Ações DevOps" alterou o card: recarrega os detalhes e as pendências (0011). */
+    onDevOpsActionDone() {
+      this.loadCardDetails();
+    }
+
+    /** Resumo não técnico (0011): abre o editor com o resumo salvo ou gera um novo com a IA. */
+    openSummaryDialog(prompt: string) {
+      if (!this.cardNumber || !this.cardFull) return;
+
+      const fields = this.cardFull.fields ?? {};
+      const reproField = this.configurations?.Azure?.RetroStepsFieldName || 'Microsoft.VSTS.TCM.ReproSteps';
+      const toText = (html: any) => (html ?? '').toString().replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+
+      const data: SummaryDialogData = {
+        cardNumber: this.cardNumber.toString(),
+        title: fields['System.Title'] ?? '',
+        reproSteps: toText(fields[reproField] ?? fields['System.Description']),
+        description: this.pullRequest?.description ?? '',
+        rootCause: this.pullRequest?.rootCause ?? '',
+        summary: this.pullRequest?.summary ?? null,
+        published: !!this.pullRequest?.summaryCommentId,
+        prompt,
+      };
+
+      this.dialog.open(SummaryDialogComponent, {
+        data,
+        width: '900px',
+        height: '80vh',
+        maxWidth: '94vw',
+        maxHeight: '90vh',
+        panelClass: 'custom-dialog-container'
+      }).afterClosed().subscribe((saved: any) => {
+        if (!saved) return;
+        this.pullRequest.summary = saved.summary ?? null;
+        this.pullRequest.summaryCommentId = saved.summaryCommentId ?? null;
+        this.cdr.detectChanges();
+      });
+    }
 
     loadCardDetails()
     {

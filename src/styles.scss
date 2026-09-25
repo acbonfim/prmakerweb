@@ -342,3 +342,11 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   color: #1f1f1f;
   background: #d29922;
 }
+
+/* Tooltip formatado (várias linhas) das opções do menu "Ações DevOps" (feature 0011) */
+.mat-mdc-tooltip.devops-tooltip .mdc-tooltip__surface {
+  white-space: pre-line;
+  max-width: 360px;
+  text-align: left;
+  line-height: 1.45;
+}
