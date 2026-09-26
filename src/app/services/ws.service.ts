@@ -1,5 +1,5 @@
 import { Injectable, EventEmitter, inject } from '@angular/core';
-import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import * as signalR from '@microsoft/signalr';
 import { BehaviorSubject, Observable, firstValueFrom, map, switchMap, takeWhile, timer } from 'rxjs';
 import { environment } from '../../environments/environment';
@@ -21,9 +21,9 @@ interface RealTimeConnectionInfo {
  * canais e handlers arbitrários via `on()`/`off()`. Para adicionar um novo ponto de tempo
  * real, basta entrar em um grupo e registrar um handler — nenhuma mudança aqui é necessária.
  *
- * Conexão (feature 0013): a URL do hub e um token de curta duração vêm de `GET RealTime/connection`
- * (o hub roda num relay fora da API). O token é renovado a cada (re)conexão. Se a API não tiver o
- * endpoint (versão antiga) ou não emitir token, cai no modo legado: `environment.urlWs` + `apiKeyWS`.
+ * Conexão (features 0013/0016): a URL do hub e um token de curta duração vêm de
+ * `GET RealTime/connection` (em produção o hub roda num relay fora da API). O token é renovado a cada
+ * (re)conexão. Sem token (dev com o hub em processo aberto) conecta sem autenticação.
  */
 @Injectable({
   providedIn: 'root',
@@ -194,27 +194,16 @@ export class WsService {
 
   private async createHubConnection(): Promise<signalR.HubConnection> {
 
-    let info: RealTimeConnectionInfo | null = null;
-    try {
-      info = await this.fetchConnectionInfo();
-    } catch (err) {
-      // API sem o endpoint (antes da 0013): modo legado. Outros erros: tentar de novo depois.
-      if (!(err instanceof HttpErrorResponse && err.status === 404)) throw err;
-    }
-
-    const url = info?.url || environment.urlWs;
-    const useToken = !!info?.accessToken;
-    if (useToken) this.cacheToken(info!);
+    // Falha ao buscar os dados de conexão propaga para o fluxo de retentativa.
+    const info = await this.fetchConnectionInfo();
+    const url = info.url || environment.urlWs;
+    this.cacheToken(info);
 
     this.hubConnection = new signalR.HubConnectionBuilder()
-      // withCredentials: false — a autenticação é por token/api-key (não cookies), então não
+      // withCredentials: false — a autenticação é pelo token de conexão (não cookies), então não
       // enviamos credenciais. Isso evita o erro de CORS "credentials include + '*'".
-      .withUrl(
-        useToken ? url : this.buildLegacyUrl(url),
-        useToken
-          ? { accessTokenFactory: () => this.getAccessToken(), withCredentials: false }
-          : { headers: { 'x-api-key': environment.apiKeyWS }, withCredentials: false }
-      )
+      // Sem token (dev), o factory devolve vazio e o SignalR não envia autenticação.
+      .withUrl(url, { accessTokenFactory: () => this.getAccessToken(), withCredentials: false })
       // Sem desistir: o relay pode ser reciclado pela hospedagem e a conexão não custa nada parada.
       .withAutomaticReconnect({
         nextRetryDelayInMilliseconds: (ctx) => [0, 2000, 10000, 30000][ctx.previousRetryCount] ?? 60000,
@@ -271,13 +260,6 @@ export class WsService {
     this.wasConnected = true;
   }
 
-  private buildLegacyUrl(base: string): string {
-    // Remove barras finais e injeta a api-key na query string — necessária no upgrade
-    // WebSocket, onde o browser não envia headers customizados.
-    const url = (base || '').replace(/\/+$/, '');
-    const sep = url.includes('?') ? '&' : '?';
-    return `${url}${sep}x-api-key=${encodeURIComponent(environment.apiKeyWS)}`;
-  }
 
   private applyHandlers(): void {
     if (!this.hubConnection) return;
