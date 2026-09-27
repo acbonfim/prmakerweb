@@ -22,6 +22,24 @@ resource "google_artifact_registry_repository" "repo" {
   description   = "Imagem Docker do frontend CIME"
   format        = "DOCKER"
 
+  # Limpeza automática (0018): mantém as 5 versões mais recentes de cada imagem e apaga o resto.
+  # O rollback do Cloud Run alcança os 5 últimos deploys (revisões mais antigas perdem a imagem).
+  cleanup_policy_dry_run = false
+  cleanup_policies {
+    id     = "manter-5-mais-recentes"
+    action = "KEEP"
+    most_recent_versions {
+      keep_count = 5
+    }
+  }
+  cleanup_policies {
+    id     = "apagar-o-resto"
+    action = "DELETE"
+    condition {
+      tag_state = "ANY"
+    }
+  }
+
   depends_on = [google_project_service.apis]
 }
 
