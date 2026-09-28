@@ -39,7 +39,6 @@
 }
 
 .timeline__count {
-  margin-left: auto;
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
@@ -53,9 +52,49 @@
   font-weight: 600;
 }
 
-/* ── Importar do Teams ── */
+/* Empurra contador e ações para a direita. */
+.timeline__spacer {
+  flex: 1 1 auto;
+}
+
+.timeline__card {
+  font-size: 13px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
+}
+
+/* ── Tela cheia (feature 0020) ── */
+.timeline__expand.mat-mdc-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin-right: -6px;
+  --mdc-icon-button-state-layer-size: 32px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 70%, transparent);
+}
+
+.timeline__expand .mat-icon {
+  font-size: 19px;
+  width: 19px;
+  height: 19px;
+}
+
+/* Enquanto aberta, o elemento vive no <body>; top/left/width/height vêm do componente
+   (e são animados por ele). z-index e ordem no DOM: ver expand(). */
+.timeline--expanded {
+  position: fixed;
+  z-index: 1000;
+  min-height: 0;
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+.timeline--expanded .timeline__input {
+  max-height: 240px;
+}
+
+/* ── Importar do Teams (escondido por ora — feature 0020) ── */
 .timeline__import-toggle {
-  margin-left: auto;
   font-size: 12px;
 }
 
