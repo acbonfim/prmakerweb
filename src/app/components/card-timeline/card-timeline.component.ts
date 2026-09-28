@@ -28,6 +28,10 @@ import { TimelineMarkdownPipe } from '../../pipes/timeline-markdown.pipe';
 const TIMELINE_EVENT = 'timelineUpdated';
 const timelineGroup = (card: string) => `timeline:${card}`;
 
+/** Animação da tela cheia (feature 0020): o chat cresce do lugar até o modal e encolhe de volta. */
+const EXPAND_ANIMATION: KeyframeAnimationOptions = { duration: 320, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
+type Rect = { top: number; left: number; width: number; height: number };
+
 /**
  * Componente compartilhado de linha do tempo de um card.
  * Exibe os registros no estilo de comentários de rede social e permite
@@ -86,7 +90,9 @@ export class CardTimelineComponent implements OnDestroy {
   readonly confirmDeleteId = signal<number | null>(null);
   readonly deletingId = signal<number | null>(null);
 
-  // Importação de mensagens do Teams (login do próprio usuário via MSAL)
+  // Importação de mensagens do Teams (login do próprio usuário via MSAL).
+  /** Escondido por ora (feature 0020); o código fica para uso futuro — basta ligar a flag. */
+  readonly teamsImportEnabled = false;
   readonly showImport = signal(false);
   readonly teamsConnected = signal(false);
   readonly teamsAccount = signal<string | null>(null);
@@ -141,6 +147,20 @@ export class CardTimelineComponent implements OnDestroy {
   @Output() entryAdded = new EventEmitter<TimelineEntry>();
 
   @ViewChild('body') private bodyRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('timeline') private timelineRef?: ElementRef<HTMLDivElement>;
+
+  /**
+   * Tela cheia (feature 0020). É o MESMO elemento (rascunho, edição, tempo real e rolagem
+   * continuam): enquanto aberta, o `.timeline` vai para o <body> — nenhum transform/overflow de
+   * ancestral atrapalha o position: fixed — e volta para o host ao fechar.
+   */
+  readonly expanded = signal(false);
+  private animating = false;
+  /** Abrir/fechar em fila: um clique durante a animação vale quando ela termina (não se perde). */
+  private transition: Promise<void> = Promise.resolve();
+  private destroyed = false;
+  private backdrop?: HTMLDivElement;
+  private previousHtmlOverflow = '';
 
   private sub?: Subscription;
   private resyncSub?: Subscription;
@@ -154,7 +174,8 @@ export class CardTimelineComponent implements OnDestroy {
     private teamsGraph: TeamsGraphService,
     private ws: WsService,
     private authService: AuthService,
-    private snackBar: MatSnackBar
+    private snackBar: MatSnackBar,
+    private hostRef: ElementRef<HTMLElement>
   ) {
     const access = this.storageService.getAccess();
     this.currentUserId = access && access.user ? (access.user.externalId ?? null) : null;
@@ -609,7 +630,188 @@ export class CardTimelineComponent implements OnDestroy {
     });
   }
 
+  toggleExpanded(): void {
+    this.enqueue(() => (this.expanded() ? this.collapse() : this.expand()));
+  }
+
+  private enqueue(step: () => Promise<void>): void {
+    const run = () => (this.destroyed ? undefined : step());
+    this.transition = this.transition.then(run, run);
+  }
+
+  /** Abre em tela cheia: a timeline sai do lugar e cresce até o modal. */
+  private async expand(): Promise<void> {
+    const el = this.timelineRef?.nativeElement;
+    if (!el || this.expanded()) return;
+
+    const host = this.hostRef.nativeElement;
+    const from = this.rectOf(el);
+    const scroll = this.saveScroll();
+    const focused = this.focusedInside(el);
+
+    // Reserva o lugar na página (nada "pula" atrás do modal).
+    host.style.height = `${from.height}px`;
+
+    this.backdrop = document.createElement('div');
+    this.backdrop.className = 'timeline-backdrop';
+    Object.assign(this.backdrop.style, {
+      position: 'fixed', inset: '0', zIndex: '1000',
+      background: 'rgba(0, 0, 0, 0.55)', backdropFilter: 'blur(2px)'
+    });
+    this.backdrop.addEventListener('click', this.onBackdropClick);
+    // Mesmo z-index da barra do topo (1000) e depois dela no DOM → cobre a página; inserido ANTES do
+    // overlay do CDK (também 1000) → tooltips, menus e snackbars continuam por cima do modal.
+    const overlay = document.body.querySelector(':scope > .cdk-overlay-container');
+    document.body.insertBefore(this.backdrop, overlay);
+    document.body.insertBefore(el, overlay);
+
+    this.previousHtmlOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+
+    el.classList.add('timeline--expanded');
+    const to = this.expandedRect();
+    this.applyRect(el, to);
+    this.expanded.set(true);
+    this.restoreScroll(scroll);
+    focused?.focus({ preventScroll: true });
+
+    document.addEventListener('keydown', this.onKeydownWhileExpanded);
+    window.addEventListener('resize', this.onResizeWhileExpanded);
+
+    if (this.reducedMotion()) return;
+    this.animating = true;
+    this.backdrop.animate([{ opacity: 0 }, { opacity: 1 }], EXPAND_ANIMATION);
+    const anim = el.animate(
+      [this.keyframe(from, 10), this.keyframe(to, 14)],
+      EXPAND_ANIMATION
+    );
+    await anim.finished.catch(() => {});
+    this.animating = false;
+    if (scroll.atBottom) this.scrollToBottom();
+  }
+
+  /** Fecha a tela cheia: encolhe até o lugar original e volta para dentro do host. */
+  private async collapse(): Promise<void> {
+    const el = this.timelineRef?.nativeElement;
+    if (!el || !this.expanded()) return;
+
+    const host = this.hostRef.nativeElement;
+    const scroll = this.saveScroll();
+    const focused = this.focusedInside(el);
+
+    document.removeEventListener('keydown', this.onKeydownWhileExpanded);
+    window.removeEventListener('resize', this.onResizeWhileExpanded);
+
+    if (!this.reducedMotion()) {
+      this.animating = true;
+      // Destino: onde o host está AGORA (a página pode ter mudado de tamanho enquanto aberta).
+      const to = this.rectOf(host);
+      const anim = el.animate(
+        [this.keyframe(this.rectOf(el), 14), this.keyframe(to, 10)],
+        { ...EXPAND_ANIMATION, fill: 'forwards' }
+      );
+      this.backdrop?.animate([{ opacity: 1 }, { opacity: 0 }], { ...EXPAND_ANIMATION, fill: 'forwards' });
+      await anim.finished.catch(() => {});
+      this.animating = false;
+      this.restoreInPlace(el, host);
+      anim.cancel();
+    } else {
+      this.restoreInPlace(el, host);
+    }
+
+    this.restoreScroll(scroll);
+    focused?.focus({ preventScroll: true });
+  }
+
+  /** Devolve o elemento ao host e desfaz tudo o que a tela cheia mudou. */
+  private restoreInPlace(el: HTMLElement, host: HTMLElement): void {
+    host.insertBefore(el, host.firstChild);
+    el.classList.remove('timeline--expanded');
+    for (const prop of ['top', 'left', 'width', 'height'] as const) el.style[prop] = '';
+    host.style.height = '';
+    this.backdrop?.remove();
+    this.backdrop = undefined;
+    document.documentElement.style.overflow = this.previousHtmlOverflow;
+    this.expanded.set(false);
+  }
+
+  private onBackdropClick = (): void => {
+    this.enqueue(() => this.collapse());
+  };
+
+  private onKeydownWhileExpanded = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && !event.defaultPrevented) {
+      event.preventDefault();
+      this.enqueue(() => this.collapse());
+    }
+  };
+
+  private onResizeWhileExpanded = (): void => {
+    const el = this.timelineRef?.nativeElement;
+    if (el && !this.animating) this.applyRect(el, this.expandedRect());
+  };
+
+  /** Retângulo do modal: centralizado, ~92% da tela, no máximo 1200 px de largura. */
+  private expandedRect(): Rect {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const width = Math.min(1200, vw - 2 * Math.max(16, vw * 0.04));
+    const height = vh - 2 * Math.max(16, vh * 0.04);
+    return { top: (vh - height) / 2, left: (vw - width) / 2, width, height };
+  }
+
+  private rectOf(el: HTMLElement): Rect {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  }
+
+  private applyRect(el: HTMLElement, r: Rect): void {
+    el.style.top = `${r.top}px`;
+    el.style.left = `${r.left}px`;
+    el.style.width = `${r.width}px`;
+    el.style.height = `${r.height}px`;
+  }
+
+  /** Anima a geometria (e não scale): o texto não distorce enquanto o chat cresce/encolhe. */
+  private keyframe(r: Rect, radius: number): Keyframe {
+    return {
+      top: `${r.top}px`, left: `${r.left}px`, width: `${r.width}px`, height: `${r.height}px`,
+      borderRadius: `${radius}px`
+    };
+  }
+
+  private reducedMotion(): boolean {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  }
+
+  private focusedInside(el: HTMLElement): HTMLElement | null {
+    const active = document.activeElement as HTMLElement | null;
+    return active && active !== document.body && el.contains(active) ? active : null;
+  }
+
+  /** Mover o nó no DOM zera a rolagem da lista: guarda e restaura (quem lia o fim continua no fim). */
+  private saveScroll(): { top: number; atBottom: boolean } {
+    const b = this.bodyRef?.nativeElement;
+    if (!b) return { top: 0, atBottom: true };
+    return { top: b.scrollTop, atBottom: b.scrollHeight - b.scrollTop - b.clientHeight < 8 };
+  }
+
+  private restoreScroll(scroll: { top: number; atBottom: boolean }): void {
+    const b = this.bodyRef?.nativeElement;
+    if (!b) return;
+    b.scrollTop = scroll.atBottom ? b.scrollHeight : scroll.top;
+  }
+
   ngOnDestroy(): void {
+    this.destroyed = true;
+    // Destruída aberta (ex.: troca de rota): tira o modal e o fundo do <body>.
+    if (this.expanded()) {
+      document.removeEventListener('keydown', this.onKeydownWhileExpanded);
+      window.removeEventListener('resize', this.onResizeWhileExpanded);
+      this.timelineRef?.nativeElement.remove();
+      this.backdrop?.remove();
+      document.documentElement.style.overflow = this.previousHtmlOverflow;
+    }
     this.sub?.unsubscribe();
     if (this.currentGroup) this.ws.removeFromGroup(this.currentGroup);
     this.ws.off(TIMELINE_EVENT, this.onTimelineUpdated);
