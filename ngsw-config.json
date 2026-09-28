@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/@angular/service-worker/config/schema.json",
+  "index": "/index.html",
+  "assetGroups": [
+    {
+      "name": "app",
+      "installMode": "prefetch",
+      "resources": {
+        "files": ["/favicon.ico", "/index.html", "/manifest.webmanifest", "/*.css", "/main-*.js", "/polyfills-*.js"]
+      }
+    },
+    {
+      "name": "chunks",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "resources": {
+        "files": ["/chunk-*.js"]
+      }
+    },
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "resources": {
+        "files": ["/icons/**", "/assets/**", "/media/**", "/**/*.(svg|png|jpg|jpeg|webp|gif|woff|woff2|ttf|eot)"]
+      }
+    },
+    {
+      "name": "fonts",
+      "installMode": "lazy",
+      "updateMode": "lazy",
+      "resources": {
+        "urls": ["https://fonts.googleapis.com/**", "https://fonts.gstatic.com/**"]
+      }
+    }
+  ]
+}
