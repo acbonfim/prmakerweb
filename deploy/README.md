@@ -62,3 +62,12 @@ Push na `master`/`main` (ou rode manualmente em Actions). O pipeline builda a im
   cliente (inerente a SPA). Não coloque segredo real que não possa ser público aí.
 - **CORS/SignalR**: o backend precisa permitir a origem `https://app.softhouse.app.br`
   (config `RealTime:AllowedOrigins` no serviço `cime-pullrequest`).
+- **PWA / service worker (0019)**: o app é instalável e o `@angular/service-worker` guarda só o shell
+  (nada da API). A cada deploy, abas abertas mostram "Nova versão do PRMake disponível — Atualizar"
+  (ao voltar para a aba ou em até 30 min); nunca recarrega sozinho. `ngsw.json` e `ngsw-worker.js`
+  precisam ficar **sem cache** (regras no `docker/nginx.conf`), senão a versão nova não chega.
+  - **Rollback de revisão não remove o SW** dos navegadores: ele continua servindo o shell em cache
+    até achar versão nova (o rollback também é uma "versão nova", então o aviso aparece).
+  - **Desligar o SW em produção** (emergência): no `Dockerfile`, depois do `COPY` do build, sobrescrever
+    o worker pelo de segurança, que desregistra e limpa o cache no próximo acesso de cada cliente:
+    `RUN cp /usr/share/nginx/html/safety-worker.js /usr/share/nginx/html/ngsw-worker.js`, e fazer deploy.
