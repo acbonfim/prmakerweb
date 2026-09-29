@@ -386,3 +386,11 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   border-radius: 14px;
   overflow: hidden;
 }
+
+/* Tooltip das etiquetas do resumo do card (feature 0026): rótulo + detalhes em linhas */
+.mat-mdc-tooltip.pr-fact-tooltip .mdc-tooltip__surface {
+  white-space: pre-line;
+  max-width: 360px;
+  text-align: left;
+  line-height: 1.45;
+}

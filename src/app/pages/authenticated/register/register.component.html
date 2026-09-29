@@ -55,11 +55,10 @@
                         [userPhoto]="prInfo?.userPhoto ?? null"
                         [openedAt]="prInfo?.openedAt ?? null"
                         [updatedAt]="prInfo?.updatedAt ?? null"
-                        [authorLabel]="infoAuthorLabel">
+                        [authorLabel]="infoAuthorLabel"
+                        [facts]="infoFacts()">
+        <!-- 0026: sem o botão Descrição — a descrição fica no "Abrir PR" e em cada PR. -->
         <ng-container ngProjectAs="[info-actions]">
-          <app-panel-popover-button kind="description" label="Descrição"
-                                    [disabled]="!prInfo || isPullRequestLoading"
-                                    tooltip="Escrever/editar a descrição do PR"></app-panel-popover-button>
           @if (cardType !== 'us') {
             <app-panel-popover-button kind="rootCause" label="Root Cause"
                                       [disabled]="!prInfo || isPullRequestLoading"
@@ -103,7 +102,7 @@
 
           <!-- Plano de execução da skill analisar-bug, ao vivo (feature 0023) -->
           <div class="pr-plan">
-            <app-execution-plan [cardNumber]="cardNumber"></app-execution-plan>
+            <app-execution-plan [cardNumber]="cardNumber" (headline)="planHeadline = $event"></app-execution-plan>
           </div>
 
           <div class="pr-timeline">
