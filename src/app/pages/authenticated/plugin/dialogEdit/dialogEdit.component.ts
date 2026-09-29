@@ -21,12 +21,14 @@ import {MatPaginatorModule} from '@angular/material/paginator';
 import {ShowLoadComponent} from '../../../../components/showLoad/showLoad.component';
 import {MatButtonModule} from '@angular/material/button';
 import {MatCheckboxModule} from '@angular/material/checkbox';
+import {TextFieldModule} from '@angular/cdk/text-field';
 
 @Component({
   selector: 'app-dialogEdit',
   templateUrl: './dialogEdit.component.html',
   styleUrls: ['./dialogEdit.component.css'],
   imports: [
+    TextFieldModule,
     MatCheckboxModule,
     MatFormFieldModule,
     MatCardModule,
@@ -139,6 +141,33 @@ export class DialogEditComponent implements OnInit {
     this.data.personalFields = userFills ? [...without, key] : without;
   }
 
+  /** Valor longo, com quebra de linha ou JSON (ex.: regras das skills — 0030) é editado em área de texto. */
+  isMultiline(key: string): boolean {
+    const value = `${this.urlApiModel[key] ?? ''}`;
+    return value.length > 80 || value.includes('\n') || this.looksLikeJson(value);
+  }
+
+  /** Mensagem de erro quando o valor parece JSON (começa com { ou [) e não é válido; null = ok. */
+  jsonError(key: string): string | null {
+    const value = `${this.urlApiModel[key] ?? ''}`;
+    if (!this.looksLikeJson(value)) return null;
+    try {
+      JSON.parse(value);
+      return null;
+    } catch (e: any) {
+      return e?.message ?? 'formato inválido';
+    }
+  }
+
+  hasJsonErrors(): boolean {
+    return this.getObjectKeys(this.urlApiModel).some(k => this.jsonError(k) !== null);
+  }
+
+  private looksLikeJson(value: string): boolean {
+    const trimmed = value.trim();
+    return trimmed.startsWith('{') || trimmed.startsWith('[');
+  }
+
   validProperty(name: string) {
 
     const validFormat = /^[a-zA-Z][a-zA-Z0-9]*$/.test(name);
@@ -148,7 +177,6 @@ export class DialogEditComponent implements OnInit {
 
   objChanged(property: string, value: string) {
     this.urlApiModel[property] = value;
-    console.log(this.urlApiModel)
   }
 
   saveChanges()

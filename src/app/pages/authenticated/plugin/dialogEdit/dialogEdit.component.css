@@ -69,3 +69,13 @@
 
 .field-row { display: flex; align-items: center; gap: 8px; }
 .user-fills { white-space: nowrap; flex-shrink: 0; margin-bottom: 18px; }
+
+/* Valores longos/JSON (0030): área de texto monoespaçada */
+.json-value {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre;
+  overflow-x: auto;
+}
+.json-error { color: var(--mat-sys-error, #f2b8b5); }
