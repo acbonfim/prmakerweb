@@ -169,12 +169,13 @@ const SQL_KEYWORDS = new Set((
   styles: [`
     :host { display: block; height: 100%; }
     .pf { display: flex; flex-direction: column; height: 100%; color: var(--mat-sys-on-surface); }
-    .pf__header { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 18px; background: var(--surface-2, #323232);
+    .pf__header { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 18px; background: var(--surface-2, #323232);
       border-bottom: 1px solid rgba(255,255,255,.06); }
     .pf__lead { color: var(--mat-sys-primary); }
     .pf__title { font-weight: 600; font-size: 15px; }
     .pf__spacer { flex: 1 1 auto; }
-    .pf__tabs { display: flex; gap: 4px; padding: 8px 12px 0; border-bottom: 1px solid rgba(255,255,255,.06); overflow-x: auto; }
+    /* flex: none — com overflow-x o item podia encolher na vertical e as abas ficavam cortadas (prévia alta). */
+    .pf__tabs { flex: none; display: flex; gap: 4px; padding: 8px 12px 0; border-bottom: 1px solid rgba(255,255,255,.06); overflow-x: auto; }
     .pf__tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: none; background: transparent;
       color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent); font: inherit; font-size: 13px; cursor: pointer;
       border-bottom: 2px solid transparent; white-space: nowrap; }
@@ -193,8 +194,8 @@ const SQL_KEYWORDS = new Set((
     .pf__item-name { font-size: 13px; font-weight: 500; word-break: break-all; }
     .pf__item-meta { font-size: 11px; color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent); }
     .pf__empty { padding: 16px; font-size: 13px; color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent); }
-    .pf__preview { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-    .pf__bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.06); flex-wrap: wrap; }
+    .pf__preview { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+    .pf__bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.06); flex-wrap: wrap; }
     .pf__bar-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
     .pf__bar-desc { font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
