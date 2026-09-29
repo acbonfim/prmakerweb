@@ -25,6 +25,7 @@ import {RouterModule} from '@angular/router';
 import {UserIntegrationService} from '../../services/user-integration.service';
 import {MyIntegrationsDialogComponent} from '../my-integrations-dialog/my-integrations-dialog.component';
 import {MyApiKeyDialogComponent} from '../my-api-key-dialog/my-api-key-dialog.component';
+import {SkillsDialogComponent} from '../skills-dialog/skills-dialog.component';
 
 interface AutoCompleteCompleteEvent {
   originalEvent: Event;
@@ -142,6 +143,17 @@ export class TopMenuComponent implements OnInit {
       maxWidth: '94vw',
       maxHeight: '90vh',
       panelClass: 'custom-dialog-container'
+    });
+  }
+
+  /** Skills do Claude Code instaladas/atualizadas pelo PRMake (feature 0024). */
+  openSkills() {
+    this.dialog.open(SkillsDialogComponent, {
+      width: '680px',
+      maxWidth: '94vw',
+      maxHeight: '92vh',
+      panelClass: 'custom-dialog-container',
+      autoFocus: false
     });
   }
 

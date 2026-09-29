@@ -33,10 +33,12 @@ import {
   ArtifactGroup,
   EXECUTION_PLAN_EVENT,
   ExecutionArtifact,
+  ExecutionLink,
   ExecutionLog,
   ExecutionPlan,
   ExecutionPlanRealtimePayload,
   ExecutionPlanSummary,
+  ExecutionQuestion,
   ExecutionStep,
   PLAN_STATUS_LABEL,
   PlanStatus,
@@ -53,7 +55,19 @@ const REFRESH_DEBOUNCE_MS = 250;
 const MAX_LOGS_IN_MEMORY = 3000;
 
 /** Status visual da etapa: a etapa em andamento de um plano pausado aparece pausada. */
-export type StepView = ExecutionStep & { view: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled' };
+export type StepView = ExecutionStep & {
+  view: 'pending' | 'running' | 'paused' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+  /** Títulos das dependências que ainda não terminaram (0024). */
+  blockedBy: string[];
+};
+
+/** Formulário "anexar link" aberto numa etapa (0024). */
+interface LinkDraft {
+  key: string;
+  url: string;
+  title: string;
+  blocks: boolean;
+}
 
 /**
  * Plano de execução da skill (analisar-bug) no card — feature 0023. Fica entre os PRs e a linha do
@@ -117,14 +131,43 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly steps = computed<StepView[]>(() => {
     const plan = this.plan();
     if (!plan) return [];
+    const byKey = new Map(plan.steps.map((s) => [s.key, s]));
     return plan.steps
       .slice()
       .sort((a, b) => a.order - b.order)
       .map((s) => ({
         ...s,
-        view: s.status === 'running' && plan.status === 'paused' ? 'paused' : s.status
+        executor: s.executor ?? 'claude',
+        kind: s.kind ?? 'task',
+        dependsOn: s.dependsOn ?? [],
+        view: s.status === 'running' && plan.status === 'paused' ? 'paused' : s.status,
+        blockedBy: s.status === 'pending'
+          ? (s.dependsOn ?? []).map((d) => byKey.get(d)).filter((d) => !!d && d.status !== 'completed' && d.status !== 'cancelled').map((d) => d!.title)
+          : []
       }));
   });
+
+  // ── 0024: abas Análise / Correção ─────────────────────────────────────────────────────────────
+
+  /** Par análise ↔ correção do plano em tela (a correção nasce da análise). */
+  readonly pair = computed(() => {
+    const plan = this.plan();
+    if (!plan) return null;
+    const history = this.history();
+    if ((plan.phase ?? 'analysis') === 'correction') {
+      return { analysisId: plan.parentPlanId ?? null, correctionId: plan.id };
+    }
+    const correction = history.find((h) => h.phase === 'correction' && h.parentPlanId === plan.id);
+    return { analysisId: plan.id, correctionId: correction?.id ?? null };
+  });
+
+  readonly phase = computed(() => this.plan()?.phase ?? 'analysis');
+
+  // ── 0024: perguntas e links ───────────────────────────────────────────────────────────────────
+
+  readonly openQuestions = computed(() => (this.plan()?.questions ?? []).filter((q) => q.status === 'open'));
+  readonly answerDrafts = signal<Record<string, string>>({});
+  readonly linkDraft = signal<LinkDraft | null>(null);
 
   readonly counts = computed(() => {
     const steps = this.plan()?.steps ?? [];
@@ -136,6 +179,14 @@ export class ExecutionPlanComponent implements OnDestroy {
   });
 
   readonly currentStep = computed(() => this.steps().find((s) => s.view === 'running' || s.view === 'paused') ?? null);
+
+  questionsFor(key: string): ExecutionQuestion[] {
+    return (this.plan()?.questions ?? []).filter((q) => q.stepKey === key);
+  }
+
+  linksFor(key: string): ExecutionLink[] {
+    return (this.plan()?.links ?? []).filter((l) => l.stepKey === key);
+  }
   readonly selectedStep = computed(() => {
     const key = this.selectedKey();
     return (key && this.steps().find((s) => s.key === key)) || null;
@@ -288,7 +339,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     if (!plan) return;
     // Primeira carga: abre a etapa em andamento (o usuário vê o que está acontecendo sem clicar).
     if (!previous || previous.id !== plan.id) {
-      const current = plan.steps.find((s) => s.status === 'running');
+      const current = plan.steps.find((s) => s.status === 'running') ?? plan.steps.find((s) => s.status === 'waiting');
       this.selectedKey.set(current?.key ?? null);
       this.scrollToStep(current?.key ?? null);
     } else if (this.selectedKey() && !plan.steps.some((s) => s.key === this.selectedKey())) {
@@ -381,9 +432,21 @@ export class ExecutionPlanComponent implements OnDestroy {
       return `Cancelada${step.statusReason ? ': ' + step.statusReason : ''}`;
     }
     if (step.view === 'failed') return `Falhou${step.statusReason ? ': ' + step.statusReason : ''}`;
+    if (step.view === 'waiting') return step.statusReason?.startsWith('Aguardando') ? step.statusReason : `Aguardando${step.statusReason ? ': ' + step.statusReason : ''}`;
     const desc = (step.description ?? '').replace(/[#*_`>]/g, '').trim();
     const head = { pending: 'Pendente', running: 'Em andamento', paused: 'Pausada', completed: 'Concluída' }[step.view];
-    return desc ? `${head} — ${desc.length > 280 ? desc.slice(0, 280) + '…' : desc}` : head;
+    const who = step.executor === 'user' ? ' · executada por você' : '';
+    const deps = step.blockedBy.length ? `\nDepende de: ${step.blockedBy.join(', ')}` : '';
+    const body = desc ? ` — ${desc.length > 280 ? desc.slice(0, 280) + '…' : desc}` : '';
+    return `${head}${who}${body}${deps}`;
+  }
+
+  kindIcon(step: StepView): string | null {
+    return ({ code: 'code', pr: 'merge', ticket: 'confirmation_number', question: 'help', validation: 'fact_check', task: null } as Record<string, string | null>)[step.kind] ?? null;
+  }
+
+  kindLabel(step: StepView): string {
+    return ({ code: 'Código', pr: 'Pull requests', ticket: 'Chamado', question: 'Perguntas', validation: 'Validação', task: 'Tarefa' } as Record<string, string>)[step.kind] ?? 'Tarefa';
   }
 
   stepIcon(step: StepView): string {
@@ -392,13 +455,138 @@ export class ExecutionPlanComponent implements OnDestroy {
       case 'cancelled': return 'block';
       case 'failed': return 'priority_high';
       case 'paused': return 'pause';
+      case 'waiting': return 'hourglass_top';
       default: return '';
     }
   }
 
   canSkip(step: StepView): boolean {
     const plan = this.plan();
-    return !!plan && isPlanActive(plan.status) && (step.status === 'pending' || step.status === 'running');
+    return !!plan && isPlanActive(plan.status) && (step.status === 'pending' || step.status === 'running' || step.status === 'waiting');
+  }
+
+  /** Etapa do usuário: ele inicia/conclui pela tela (0024). */
+  canStart(step: StepView): boolean {
+    return this.isActive() && step.executor === 'user' && step.status === 'pending';
+  }
+
+  canComplete(step: StepView): boolean {
+    return this.isActive() && step.executor === 'user' && (step.status === 'running' || step.status === 'waiting' || step.status === 'pending');
+  }
+
+  /** Anexar link: etapas não canceladas de planos ativos (chamado resolvido/fechado → pode abrir outro). */
+  canAddLink(step: StepView): boolean {
+    return this.isActive() && step.status !== 'cancelled';
+  }
+
+  startStep(step: StepView): void {
+    const plan = this.plan();
+    if (!plan || this.busy()) return;
+    this.busy.set('step');
+    this.api.startStep(plan.id, step.key).subscribe({
+      next: () => { this.busy.set(null); this.refresh(); },
+      error: (err) => { this.busy.set(null); this.snackBar.open(planApiError(err, 'Não foi possível iniciar a etapa.'), 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  completeStep(step: StepView): void {
+    const plan = this.plan();
+    if (!plan || this.busy()) return;
+    this.busy.set('step');
+    this.api.completeStep(plan.id, step.key).subscribe({
+      next: () => { this.busy.set(null); this.snackBar.open('Etapa concluída.', 'Ok', { duration: 3000 }); this.refresh(); },
+      error: (err) => { this.busy.set(null); this.snackBar.open(planApiError(err, 'Não foi possível concluir a etapa.'), 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  // ── Perguntas ───────────────────────────────────────────────────────────────────────────────
+
+  setAnswerDraft(questionId: string, text: string): void {
+    this.answerDrafts.update((d) => ({ ...d, [questionId]: text }));
+  }
+
+  answer(question: ExecutionQuestion, text: string): void {
+    const plan = this.plan();
+    const value = (text ?? '').trim();
+    if (!plan || !value || this.busy()) return;
+    this.busy.set('answer:' + question.id);
+    this.api.answer(plan.id, question.id, value).subscribe({
+      next: () => {
+        this.busy.set(null);
+        this.answerDrafts.update((d) => { const { [question.id]: _, ...rest } = d; return rest; });
+        this.snackBar.open('Resposta enviada — a skill segue com ela.', 'Ok', { duration: 4000 });
+        this.refresh();
+      },
+      error: (err) => {
+        this.busy.set(null);
+        this.snackBar.open(planApiError(err, 'Não foi possível enviar a resposta.'), 'Fechar', { duration: 8000 });
+      }
+    });
+  }
+
+  // ── Links (chamados, PRs, documentos) ─────────────────────────────────────────────────────
+
+  openLinkForm(step: StepView): void {
+    this.linkDraft.set({ key: step.key, url: '', title: '', blocks: step.kind === 'ticket' });
+  }
+
+  updateLinkDraft(changes: Partial<LinkDraft>): void {
+    this.linkDraft.update((d) => (d ? { ...d, ...changes } : d));
+  }
+
+  saveLink(): void {
+    const plan = this.plan();
+    const draft = this.linkDraft();
+    if (!plan || !draft || !draft.url.trim() || this.busy()) return;
+    this.busy.set('link');
+    this.api.addLink(plan.id, draft.key, { url: draft.url.trim(), title: draft.title.trim() || null, blocksStep: draft.blocks }).subscribe({
+      next: () => { this.busy.set(null); this.linkDraft.set(null); this.refresh(); },
+      error: (err) => { this.busy.set(null); this.snackBar.open(planApiError(err, 'Não foi possível anexar o link.'), 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  setLinkStatus(link: ExecutionLink, status: 'open' | 'resolved' | 'closed'): void {
+    const plan = this.plan();
+    if (!plan || this.busy()) return;
+    this.busy.set('link');
+    this.api.updateLink(plan.id, link.id, { status }).subscribe({
+      next: () => { this.busy.set(null); this.refresh(); },
+      error: (err) => { this.busy.set(null); this.snackBar.open(planApiError(err, 'Não foi possível atualizar o chamado.'), 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  removeLink(link: ExecutionLink): void {
+    const plan = this.plan();
+    if (!plan || this.busy()) return;
+    this.busy.set('link');
+    this.api.deleteLink(plan.id, link.id).subscribe({
+      next: () => { this.busy.set(null); this.refresh(); },
+      error: (err) => { this.busy.set(null); this.snackBar.open(planApiError(err, 'Não foi possível remover o link.'), 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  linkIcon(link: ExecutionLink): string {
+    return { ticket: 'confirmation_number', pr: 'merge', doc: 'description', other: 'link' }[link.kind] ?? 'link';
+  }
+
+  linkStatusLabel(link: ExecutionLink): string {
+    const labels: Record<string, string> = link.kind === 'pr'
+      ? { open: 'Aberto', merged: 'Mesclado', closed: 'Fechado' }
+      : link.kind === 'ticket' ? { open: 'Aberto', resolved: 'Resolvido', closed: 'Fechado' } : {};
+    return labels[link.status ?? 'open'] ?? '';
+  }
+
+  /** Abre o plano de análise ou o de correção do par (abas). */
+  selectPhase(target: 'analysis' | 'correction'): void {
+    const pair = this.pair();
+    const id = target === 'analysis' ? pair?.analysisId : pair?.correctionId;
+    if (!id || id === this.plan()?.id) return;
+    const latest = this.history()[0];
+    this.pinnedPlanId.set(latest && latest.id === id ? null : id);
+    this.selectedKey.set(null);
+    this.plan.set(null);
+    this.logs.set([]);
+    this.fetch({ silent: false });
   }
 
   startSkip(step: StepView): void {

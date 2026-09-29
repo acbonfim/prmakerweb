@@ -67,6 +67,21 @@
     </div>
   }
 
+  @if (pair(); as pr) {
+    @if (pr.analysisId && pr.correctionId) {
+      <div class="plan__tabs" role="tablist" aria-label="Planos do card">
+        <button type="button" role="tab" class="plan__tab" [class.plan__tab--on]="phase() === 'analysis'"
+                [attr.aria-selected]="phase() === 'analysis'" (click)="selectPhase('analysis')">
+          <mat-icon>troubleshoot</mat-icon> Análise
+        </button>
+        <button type="button" role="tab" class="plan__tab" [class.plan__tab--on]="phase() === 'correction'"
+                [attr.aria-selected]="phase() === 'correction'" (click)="selectPhase('correction')">
+          <mat-icon>build</mat-icon> Correção
+        </button>
+      </div>
+    }
+  }
+
   @if (confirmCancelPlan()) {
     <div class="plan__bar plan__bar--danger">
       <mat-icon>stop_circle</mat-icon>
@@ -121,7 +136,20 @@
         </div>
       } @else {
         @let p = plan()!;
+        @if (openQuestions().length) {
+          <div class="plan-questions" role="region" aria-label="Perguntas aguardando você">
+            <div class="plan-questions__head">
+              <mat-icon>help</mat-icon>
+              {{ openQuestions().length === 1 ? '1 pergunta aguardando você' : openQuestions().length + ' perguntas aguardando você' }}
+              <span class="plan-questions__hint">— responda aqui ou no Claude</span>
+            </div>
+            @for (q of openQuestions(); track q.id) {
+              <ng-container *ngTemplateOutlet="questionTpl; context: { $implicit: q }"></ng-container>
+            }
+          </div>
+        }
         <div class="plan__meta">
+          <span class="plan__meta-kicker">{{ p.phase === 'correction' ? 'Plano de correção' : 'Plano de análise' }}</span>
           <span class="plan__meta-title" [matTooltip]="p.title">{{ p.title }}</span>
           <span class="plan__meta-sub">
             {{ counts().done }}/{{ counts().total }} etapas · por {{ p.createdBy }} ·
@@ -157,11 +185,25 @@
                   }
                 </span>
                 <span class="step__main">
-                  <span class="step__title">{{ step.title }}</span>
+                  <span class="step__title">
+                    {{ step.title }}
+                    @if (kindIcon(step); as ki) {
+                      <mat-icon class="step__kind" [matTooltip]="kindLabel(step) + (step.repository ? ' · ' + step.repository : '')">{{ ki }}</mat-icon>
+                    }
+                    @if (step.executor === 'user') {
+                      <span class="step__who" matTooltip="Etapa feita por você (conclua aqui na tela)">
+                        <mat-icon>person</mat-icon>Você
+                      </span>
+                    }
+                  </span>
                   @if (step.view === 'running' && step.activity) {
                     <span class="step__activity">{{ step.activity }}<span class="step__typing"><i></i><i></i><i></i></span></span>
                   } @else if (step.view === 'running') {
                     <span class="step__activity">Em andamento<span class="step__typing"><i></i><i></i><i></i></span></span>
+                  } @else if (step.view === 'waiting') {
+                    <span class="step__sub step__sub--waiting">{{ step.statusReason || 'Aguardando' }}</span>
+                  } @else if (step.blockedBy.length) {
+                    <span class="step__sub step__sub--blocked"><mat-icon>lock</mat-icon>Depende de: {{ step.blockedBy.join(', ') }}</span>
                   } @else if (step.view === 'paused') {
                     <span class="step__sub">Pausada{{ step.activity ? ' — ' + step.activity : '' }}</span>
                   } @else if ((step.view === 'cancelled' || step.view === 'failed') && step.statusReason) {
@@ -172,7 +214,10 @@
                   @if (stepArtifacts(step.key).length; as n) {
                     <span class="step__files" [matTooltip]="n + ' arquivo(s)'"><mat-icon>attach_file</mat-icon>{{ n }}</span>
                   }
-                  @if (step.view === 'completed' || step.view === 'running' || step.view === 'paused' || step.view === 'failed') {
+                  @if (linksFor(step.key).length; as nl) {
+                    <span class="step__files" [matTooltip]="nl + ' link(s)'"><mat-icon>link</mat-icon>{{ nl }}</span>
+                  }
+                  @if (step.view === 'completed' || step.view === 'running' || step.view === 'paused' || step.view === 'failed' || step.view === 'waiting') {
                     <span class="step__time">{{ duration(step) }}</span>
                   }
                   @if (!expanded()) {
@@ -257,6 +302,91 @@
     </div>
   }
 
+  @if (questionsFor(step.key); as qs) {
+    @if (qs.length) {
+      <div class="plan__section-title">Perguntas</div>
+      @for (q of qs; track q.id) {
+        <ng-container *ngTemplateOutlet="questionTpl; context: { $implicit: q }"></ng-container>
+      }
+    }
+  }
+
+  @if (linksFor(step.key).length || canAddLink(step)) {
+    <div class="plan__section-title">
+      Links
+      @if (canAddLink(step) && linkDraft()?.key !== step.key) {
+        <button mat-button class="plan__mini-action" (click)="openLinkForm(step)">
+          <mat-icon>add_link</mat-icon>{{ step.kind === 'ticket' ? 'Anexar chamado' : 'Anexar link' }}
+        </button>
+      }
+    </div>
+    @if (linkDraft(); as d) {
+      @if (d.key === step.key) {
+        <div class="plan-linkform">
+          <input class="plan__bar-input" [ngModel]="d.url" (ngModelChange)="updateLinkDraft({ url: $event })"
+                 placeholder="Link (ex.: chamado no Freshservice, documento, PR)" (keydown.enter)="saveLink()" />
+          <input class="plan__bar-input" [ngModel]="d.title" (ngModelChange)="updateLinkDraft({ title: $event })"
+                 placeholder="Título (ex.: #1234 — script de correção)" (keydown.enter)="saveLink()" />
+          <label class="plan-linkform__check">
+            <input type="checkbox" [ngModel]="d.blocks" (ngModelChange)="updateLinkDraft({ blocks: $event })" />
+            A etapa aguarda este chamado ser resolvido
+          </label>
+          <div class="plan-linkform__actions">
+            <button mat-button (click)="linkDraft.set(null)" [disabled]="busy() === 'link'">Cancelar</button>
+            <button mat-flat-button color="primary" (click)="saveLink()" [disabled]="!d.url.trim() || busy() === 'link'">Anexar</button>
+          </div>
+        </div>
+      }
+    }
+    @for (l of linksFor(step.key); track l.id) {
+      <div class="plan-link plan-link--{{ l.kind }} plan-link--{{ l.status || 'none' }}">
+        <mat-icon class="plan-link__icon">{{ linkIcon(l) }}</mat-icon>
+        <div class="plan-link__body">
+          <a class="plan-link__title" [href]="l.url" target="_blank" rel="noopener noreferrer" [matTooltip]="l.url">{{ l.title || l.url }}</a>
+          <span class="plan-link__meta">
+            {{ l.createdBy }} · {{ formatDateTime(l.createdAt) }}
+            @if (l.statusChangedAt) { · {{ linkStatusLabel(l) | lowercase }} por {{ l.statusChangedBy }} em {{ formatDateTime(l.statusChangedAt) }} }
+            @if (l.blocksStep) { · <span matTooltip="A etapa aguarda este chamado">bloqueia a etapa</span> }
+          </span>
+        </div>
+        @if (linkStatusLabel(l); as st) {
+          <span class="plan-link__status">{{ st }}</span>
+        }
+        @if (l.kind === 'ticket' && isActive()) {
+          <button mat-icon-button class="plan-link__menu" [matMenuTriggerFor]="ticketMenu" aria-label="Status do chamado"
+                  matTooltip="Marcar o status do chamado">
+            <mat-icon>more_vert</mat-icon>
+          </button>
+          <mat-menu #ticketMenu="matMenu">
+            @if (l.status !== 'resolved') {
+              <button mat-menu-item (click)="setLinkStatus(l, 'resolved')"><mat-icon>task_alt</mat-icon>Marcar como resolvido</button>
+            }
+            @if (l.status !== 'closed') {
+              <button mat-menu-item (click)="setLinkStatus(l, 'closed')"><mat-icon>do_not_disturb_on</mat-icon>Marcar como fechado</button>
+            }
+            @if (l.status !== 'open') {
+              <button mat-menu-item (click)="setLinkStatus(l, 'open')"><mat-icon>replay</mat-icon>Reabrir</button>
+            }
+            <button mat-menu-item (click)="removeLink(l)"><mat-icon>delete</mat-icon>Remover o link</button>
+          </mat-menu>
+        }
+      </div>
+    }
+  }
+
+  @if (canStart(step) || canComplete(step)) {
+    <div class="plan-useractions">
+      <mat-icon>person</mat-icon>
+      <span>Esta etapa é sua.</span>
+      @if (canStart(step)) {
+        <button mat-stroked-button (click)="startStep(step)" [disabled]="!!busy()"><mat-icon>play_arrow</mat-icon>Iniciar</button>
+      }
+      @if (canComplete(step)) {
+        <button mat-flat-button color="primary" (click)="completeStep(step)" [disabled]="!!busy()"><mat-icon>check</mat-icon>Concluir</button>
+      }
+    </div>
+  }
+
   <div class="plan__section-title">
     Andamento
     @if (step.view === 'running') { <span class="plan__live">ao vivo</span> }
@@ -311,6 +441,45 @@
         <div class="plan-log__body plan-md" [innerHTML]="log.message | planMarkdown"></div>
         <span class="plan-log__time" [matTooltip]="formatDateTime(log.createdAt)">{{ formatTime(log.createdAt) }}</span>
       </div>
+    }
+  </div>
+</ng-template>
+
+<!-- Pergunta da skill (0024): aberta = responder aqui (opções ou texto livre); respondida = resposta e por onde. -->
+<ng-template #questionTpl let-q>
+  <div class="plan-q" [class.plan-q--open]="q.status === 'open'">
+    <div class="plan-q__text plan-md" [innerHTML]="q.text | planMarkdown"></div>
+    @if (q.status === 'open') {
+      @if (q.options.length) {
+        <div class="plan-q__options">
+          @for (o of q.options; track o.label) {
+            <button mat-stroked-button class="plan-q__option" [class.plan-q__option--rec]="o.recommended"
+                    [matTooltip]="o.description || ''" [disabled]="busy() === 'answer:' + q.id"
+                    (click)="answer(q, o.label)">
+              @if (o.recommended) { <mat-icon>star</mat-icon> }
+              {{ o.label }}
+            </button>
+          }
+        </div>
+      }
+      @if (q.allowFreeText) {
+        <div class="plan-q__free">
+          <input class="plan__bar-input" [ngModel]="answerDrafts()[q.id] || ''" (ngModelChange)="setAnswerDraft(q.id, $event)"
+                 [placeholder]="q.options.length ? 'Ou escreva outra resposta…' : 'Sua resposta…'"
+                 (keydown.enter)="answer(q, answerDrafts()[q.id] || '')" />
+          <button mat-flat-button color="primary" [disabled]="!(answerDrafts()[q.id] || '').trim() || busy() === 'answer:' + q.id"
+                  (click)="answer(q, answerDrafts()[q.id] || '')">Responder</button>
+        </div>
+      }
+    } @else if (q.status === 'answered') {
+      <div class="plan-q__answer">
+        <mat-icon>{{ q.answeredVia === 'claude' ? 'smart_toy' : 'person' }}</mat-icon>
+        <span><strong>{{ q.answer }}</strong>
+          <span class="plan-q__who"> — {{ q.answeredBy }}, {{ q.answeredVia === 'claude' ? 'pelo Claude' : 'pelo PRMake' }}, {{ formatDateTime(q.answeredAt) }}</span>
+        </span>
+      </div>
+    } @else {
+      <div class="plan-q__answer plan-q__answer--cancelled">Pergunta cancelada.</div>
     }
   </div>
 </ng-template>
