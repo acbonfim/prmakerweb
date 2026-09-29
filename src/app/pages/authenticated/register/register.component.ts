@@ -35,6 +35,7 @@ import {WsService} from '../../../services/ws.service';
 import {JsonPipe} from '@angular/common';
 import {AuthService} from '../../../services/auth.service';
 import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
+import {ExecutionPlanComponent} from '../../../components/execution-plan/execution-plan.component';
 import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
 import {CardDetailsDialogComponent} from '../../../components/card-details-dialog/card-details-dialog.component';
 import {HandoverDialogComponent} from '../../../components/handover-dialog/handover-dialog.component';
@@ -93,6 +94,7 @@ const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
     AutoCompleteModule,
     MatFormFieldModule,
     CardTimelineComponent,
+    ExecutionPlanComponent,
     CardAlertBarComponent,
     CardPanelComponent,
     PrInfoCardComponent,
@@ -107,6 +109,8 @@ const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
 export class RegisterComponent implements OnInit, OnDestroy {
 
   @ViewChild(CardTimelineComponent) timeline?: CardTimelineComponent;
+  /** Plano de execução da skill analisar-bug (feature 0023). */
+  @ViewChild(ExecutionPlanComponent) executionPlan?: ExecutionPlanComponent;
 
   /** Descrição/root cause compartilhados com modal, popovers e IA (fonte da verdade dos editores). */
   readonly prState = inject(CardPrStateService);
@@ -973,8 +977,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.switchCardGroup(this.cardNumber?.toString() ?? null);
       this.syncCardInUrl(this.cardNumber?.toString() ?? null);
 
-      // Carrega a linha do tempo e os detalhes do card (DevOps) em paralelo à busca do PR.
+      // Carrega a linha do tempo, o plano de execução e os detalhes do card (DevOps) em paralelo à busca do PR.
       this.timeline?.load(this.cardNumber ?? undefined);
+      this.executionPlan?.load(this.cardNumber ?? undefined);
       this.loadCardDetails();
 
       this.http.get(`${this.urlBase}PullRequest/GetByCardNumber?cardNumber=${this.cardNumber}`).subscribe(

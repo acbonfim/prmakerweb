@@ -1,0 +1,316 @@
+<div class="plan" #panel
+     [attr.role]="expanded() ? 'dialog' : null" [attr.aria-modal]="expanded() ? 'true' : null"
+     [attr.aria-label]="expanded() ? 'Plano de execução em tela cheia' : null">
+  <div class="plan__header">
+    <mat-icon class="plan__header-icon">account_tree</mat-icon>
+    <span class="plan__title">Plano de execução</span>
+    @if (expanded() && loadedCard()) {
+      <span class="plan__card">#{{ loadedCard() }}</span>
+    }
+    <span class="plan__spacer"></span>
+
+    @if (plan(); as p) {
+      <span class="plan-status plan-status--{{ p.status }}"
+            [matTooltip]="p.statusChangedBy ? statusLabel[p.status] + ' por ' + p.statusChangedBy + (p.statusReason ? ': ' + p.statusReason : '') : ''"
+            matTooltipPosition="above" role="status" aria-live="polite">
+        <span class="plan-status__dot" aria-hidden="true"></span>
+        {{ statusLabel[p.status] }}
+      </span>
+
+      @if (p.status === 'running' || p.status === 'pending') {
+        <button mat-icon-button class="plan__action" (click)="pause()" [disabled]="!!busy()"
+                matTooltip="Pausar — a skill para na próxima checagem e espera" aria-label="Pausar o plano">
+          <mat-icon>pause</mat-icon>
+        </button>
+      }
+      @if (p.status === 'paused' || p.status === 'failed') {
+        <button mat-icon-button class="plan__action plan__action--go" (click)="resume()" [disabled]="!!busy()"
+                matTooltip="Continuar de onde parou" aria-label="Continuar o plano">
+          <mat-icon>play_arrow</mat-icon>
+        </button>
+      }
+      @if (isActive() || p.status === 'failed') {
+        <button mat-icon-button class="plan__action" (click)="askCancelPlan()" [disabled]="!!busy()"
+                matTooltip="Cancelar o plano" aria-label="Cancelar o plano">
+          <mat-icon>stop_circle</mat-icon>
+        </button>
+      }
+    }
+    @if (history().length > 1) {
+      <button mat-icon-button class="plan__action" [matMenuTriggerFor]="historyMenu"
+              [matTooltip]="'Histórico (' + history().length + ' planos)'" aria-label="Histórico de planos">
+        <mat-icon>history</mat-icon>
+      </button>
+      <mat-menu #historyMenu="matMenu" class="plan-history-menu">
+        @for (h of history(); track h.id; let first = $first) {
+          <button mat-menu-item (click)="selectHistory(h)" [class.plan-history--current]="plan()?.id === h.id">
+            <span class="plan-history__dot plan-status--{{ h.status }}"></span>
+            <span class="plan-history__text">
+              <span class="plan-history__title">{{ h.title }}@if (first) { · mais recente }</span>
+              <span class="plan-history__meta">{{ statusLabel[h.status] }} · {{ h.stepsCompleted }}/{{ h.stepsTotal }} · {{ formatDateTime(h.createdAt) }}</span>
+            </span>
+          </button>
+        }
+      </mat-menu>
+    }
+    <button mat-icon-button class="plan__expand" (click)="fullscreen.toggle()"
+            [matTooltip]="expanded() ? 'Sair da tela cheia (Esc)' : 'Abrir em tela cheia'"
+            [attr.aria-label]="expanded() ? 'Sair da tela cheia' : 'Abrir em tela cheia'">
+      <mat-icon>{{ expanded() ? 'close_fullscreen' : 'open_in_full' }}</mat-icon>
+    </button>
+  </div>
+
+  @if (plan(); as p) {
+    <div class="plan__progress" [class.plan__progress--live]="p.status === 'running'"
+         role="progressbar" [attr.aria-valuenow]="counts().pct" aria-valuemin="0" aria-valuemax="100">
+      <div class="plan__progress-fill plan-status--{{ p.status }}" [style.width.%]="counts().pct"></div>
+    </div>
+  }
+
+  @if (confirmCancelPlan()) {
+    <div class="plan__bar plan__bar--danger">
+      <mat-icon>stop_circle</mat-icon>
+      <input class="plan__bar-input" [(ngModel)]="cancelPlanReason" placeholder="Motivo (opcional)"
+             (keydown.enter)="confirmCancel()" (keydown.escape)="confirmCancelPlan.set(false)" />
+      <button mat-button (click)="confirmCancelPlan.set(false)" [disabled]="!!busy()">Voltar</button>
+      <button mat-flat-button color="warn" (click)="confirmCancel()" [disabled]="!!busy()">Cancelar plano</button>
+    </div>
+  }
+
+  @if (staleMinutes(); as minutes) {
+    <div class="plan__bar plan__bar--warn">
+      <mat-icon>wifi_off</mat-icon>
+      <span class="plan__bar-text">
+        Sem sinal da skill há {{ minutes }} min. Se a sessão caiu, retome de onde parou:
+        <code>{{ resumeCommand() }}</code>
+      </span>
+      <button mat-icon-button (click)="copyResumeCommand()" matTooltip="Copiar o comando" aria-label="Copiar o comando">
+        <mat-icon>content_copy</mat-icon>
+      </button>
+    </div>
+  }
+
+  <div class="plan__body">
+    <div class="plan__steps" #stepsBody data-keep-scroll>
+      @if (isLoading()) {
+        @for (w of ['70%', '55%', '80%', '45%', '65%']; track $index) {
+          <div class="step step--skeleton" aria-hidden="true">
+            <div class="step__rail"><span class="step__node skeleton"></span></div>
+            <div class="step__main"><div class="skeleton skeleton--line" [style.width]="w"></div></div>
+          </div>
+        }
+      } @else if (loadError()) {
+        <div class="plan__state plan__state--error">
+          <mat-icon>error_outline</mat-icon>
+          <span>Não foi possível carregar o plano de execução.</span>
+          <button mat-button color="primary" (click)="load()">Tentar novamente</button>
+        </div>
+      } @else if (!loadedCard()) {
+        <div class="plan__state">
+          <mat-icon>account_tree</mat-icon>
+          <span>Busque um card para ver o plano de execução.</span>
+        </div>
+      } @else if (!plan()) {
+        <div class="plan__state">
+          <mat-icon>smart_toy</mat-icon>
+          <span>Nenhum plano de execução para este card.<br />
+            Rode a análise no Claude Code e acompanhe aqui, ao vivo:</span>
+          <button mat-stroked-button class="plan__command" (click)="copyResumeCommand()" matTooltip="Copiar">
+            <code>{{ resumeCommand() }}</code><mat-icon>content_copy</mat-icon>
+          </button>
+        </div>
+      } @else {
+        @let p = plan()!;
+        <div class="plan__meta">
+          <span class="plan__meta-title" [matTooltip]="p.title">{{ p.title }}</span>
+          <span class="plan__meta-sub">
+            {{ counts().done }}/{{ counts().total }} etapas · por {{ p.createdBy }} ·
+            <span [matTooltip]="formatDateTime(p.createdAt)">{{ relativeTime(p.createdAt) }}</span>
+            @if (p.lastActivityAt && isActive()) {
+              · último sinal <span [matTooltip]="formatDateTime(p.lastActivityAt)">{{ relativeTime(p.lastActivityAt) }}</span>
+            }
+          </span>
+        </div>
+
+        <ol class="steps" aria-label="Etapas do plano">
+          @for (step of steps(); track trackStep($index, step); let i = $index; let last = $last) {
+            <li class="step step--{{ step.view }}"
+                [class.step--open]="selectedKey() === step.key"
+                [class.step--flash]="flashKeys().has(step.key)"
+                [attr.data-step-key]="step.key">
+              <button type="button" class="step__row" (click)="toggleStep(step)"
+                      [matTooltip]="stepTooltip(step)" matTooltipPosition="left" matTooltipClass="plan-tooltip"
+                      [matTooltipShowDelay]="350"
+                      [attr.aria-expanded]="selectedKey() === step.key">
+                <span class="step__rail" aria-hidden="true">
+                  <span class="step__node">
+                    @if (stepIcon(step); as icon) {
+                      <mat-icon>{{ icon }}</mat-icon>
+                    } @else if (step.view === 'running') {
+                      <span class="step__pulse"></span>
+                    } @else {
+                      {{ i + 1 }}
+                    }
+                  </span>
+                  @if (!last) {
+                    <span class="step__line"><span class="step__line-fill"></span></span>
+                  }
+                </span>
+                <span class="step__main">
+                  <span class="step__title">{{ step.title }}</span>
+                  @if (step.view === 'running' && step.activity) {
+                    <span class="step__activity">{{ step.activity }}<span class="step__typing"><i></i><i></i><i></i></span></span>
+                  } @else if (step.view === 'running') {
+                    <span class="step__activity">Em andamento<span class="step__typing"><i></i><i></i><i></i></span></span>
+                  } @else if (step.view === 'paused') {
+                    <span class="step__sub">Pausada{{ step.activity ? ' — ' + step.activity : '' }}</span>
+                  } @else if ((step.view === 'cancelled' || step.view === 'failed') && step.statusReason) {
+                    <span class="step__sub">{{ step.statusReason }}</span>
+                  }
+                </span>
+                <span class="step__aside">
+                  @if (stepArtifacts(step.key).length; as n) {
+                    <span class="step__files" [matTooltip]="n + ' arquivo(s)'"><mat-icon>attach_file</mat-icon>{{ n }}</span>
+                  }
+                  @if (step.view === 'completed' || step.view === 'running' || step.view === 'paused' || step.view === 'failed') {
+                    <span class="step__time">{{ duration(step) }}</span>
+                  }
+                  @if (!expanded()) {
+                    <mat-icon class="step__chevron">expand_more</mat-icon>
+                  }
+                </span>
+              </button>
+
+              @if (!expanded() && selectedKey() === step.key) {
+                <div class="step__details">
+                  <ng-container *ngTemplateOutlet="details; context: { $implicit: step }"></ng-container>
+                </div>
+              }
+            </li>
+          }
+        </ol>
+      }
+    </div>
+
+    @if (expanded() && plan()) {
+      <div class="plan__detail">
+        @if (selectedStep(); as step) {
+          <div class="plan__detail-head step--{{ step.view }}">
+            <span class="plan__detail-kicker">Etapa</span>
+            <span class="plan__detail-title">{{ step.title }}</span>
+          </div>
+          <ng-container *ngTemplateOutlet="details; context: { $implicit: step }"></ng-container>
+        } @else {
+          <div class="plan__detail-head">
+            <span class="plan__detail-kicker">Plano</span>
+            <span class="plan__detail-title">{{ plan()!.title }}</span>
+          </div>
+          @if (plan()!.summary) {
+            <div class="plan-md" [innerHTML]="plan()!.summary | planMarkdown"></div>
+          } @else {
+            <p class="plan__hint">Escolha uma etapa à esquerda para ver o que ela vai fazer e acompanhar ao vivo.</p>
+          }
+          @if (generalLogs().length) {
+            <div class="plan__section-title">Andamento geral</div>
+            <ng-container *ngTemplateOutlet="logList; context: { $implicit: generalLogs() }"></ng-container>
+          }
+        }
+      </div>
+    }
+  </div>
+
+  <div class="plan__footer">
+    @for (g of groups; track g.id) {
+      <button mat-stroked-button class="plan__file-btn" (click)="openFiles(g)"
+              [disabled]="!plan() || !artifactCounts()[g.id]"
+              [matTooltip]="g.label + (artifactCounts()[g.id] ? ' (' + artifactCounts()[g.id] + ')' : ' — nenhum ainda')">
+        <mat-icon>{{ g.icon }}</mat-icon>
+        <span class="plan__file-label">{{ g.label }}</span>
+        @if (artifactCounts()[g.id]) {
+          <span class="plan__file-count">{{ artifactCounts()[g.id] }}</span>
+        }
+      </button>
+    }
+    <span class="plan__spacer"></span>
+    <button mat-icon-button class="plan__zip" (click)="downloadZip()"
+            [disabled]="!plan()?.artifacts?.length || busy() === 'zip'"
+            matTooltip="Baixar todos os arquivos (.zip)" aria-label="Baixar todos os arquivos">
+      <mat-icon [class.plan__spin]="busy() === 'zip'">{{ busy() === 'zip' ? 'progress_activity' : 'folder_zip' }}</mat-icon>
+    </button>
+  </div>
+</div>
+
+<!-- Detalhes de uma etapa: inline (clique) ou no painel da direita (tela cheia). -->
+<ng-template #details let-step>
+  @if (step.description) {
+    <div class="plan__section-title">O que vai ser feito</div>
+    <div class="plan-md" [innerHTML]="step.description | planMarkdown"></div>
+  }
+  @if (step.checkpoint) {
+    <div class="plan__section-title">Onde parou</div>
+    <div class="plan__checkpoint plan-md" [innerHTML]="step.checkpoint | planMarkdown"></div>
+  }
+  @if (step.view === 'cancelled' || step.view === 'failed') {
+    <div class="plan__reason plan__reason--{{ step.view }}">
+      <mat-icon>{{ step.view === 'cancelled' ? 'block' : 'error' }}</mat-icon>
+      <span>{{ step.view === 'cancelled' ? 'Cancelada' : 'Falhou' }}{{ step.statusReason ? ': ' + step.statusReason : '' }}</span>
+    </div>
+  }
+
+  <div class="plan__section-title">
+    Andamento
+    @if (step.view === 'running') { <span class="plan__live">ao vivo</span> }
+  </div>
+  @if (logsFor(step.key).length) {
+    <ng-container *ngTemplateOutlet="logList; context: { $implicit: logsFor(step.key) }"></ng-container>
+  } @else {
+    <p class="plan__hint">
+      @switch (step.view) {
+        @case ('pending') { Ainda não começou. }
+        @case ('running') { Aguardando o primeiro registro da skill… }
+        @default { Nenhum registro nesta etapa. }
+      }
+    </p>
+  }
+
+  @if (stepArtifacts(step.key); as files) {
+    @if (files.length) {
+      <div class="plan__section-title">Arquivos</div>
+      <div class="plan__chips">
+        @for (a of files; track a.id) {
+          <button mat-stroked-button class="plan__chip" (click)="openFiles(undefined, a)">
+            <mat-icon>{{ a.kind === 'script' ? 'code' : a.kind === 'analysis' ? 'description' : a.kind === 'image' ? 'image' : a.kind === 'data' ? 'dataset' : 'attach_file' }}</mat-icon>
+            {{ a.name }}
+          </button>
+        }
+      </div>
+    }
+  }
+
+  @if (canSkip(step)) {
+    @if (skipKey() === step.key) {
+      <div class="plan__bar plan__bar--inline">
+        <input class="plan__bar-input" [(ngModel)]="skipReason" placeholder="Por que pular esta etapa?"
+               (keydown.enter)="confirmSkip(step)" (keydown.escape)="skipKey.set(null)" />
+        <button mat-button (click)="skipKey.set(null)" [disabled]="!!busy()">Voltar</button>
+        <button mat-flat-button color="warn" (click)="confirmSkip(step)" [disabled]="!!busy()">Cancelar etapa</button>
+      </div>
+    } @else {
+      <button mat-button class="plan__skip" (click)="startSkip(step)">
+        <mat-icon>skip_next</mat-icon> Cancelar esta etapa
+      </button>
+    }
+  }
+</ng-template>
+
+<ng-template #logList let-items>
+  <div class="plan-logs" data-follow data-keep-scroll>
+    @for (log of items; track trackLog($index, log)) {
+      <div class="plan-log plan-log--{{ log.kind }}">
+        <mat-icon class="plan-log__icon">{{ logIcon(log) }}</mat-icon>
+        <div class="plan-log__body plan-md" [innerHTML]="log.message | planMarkdown"></div>
+        <span class="plan-log__time" [matTooltip]="formatDateTime(log.createdAt)">{{ formatTime(log.createdAt) }}</span>
+      </div>
+    }
+  </div>
+</ng-template>
