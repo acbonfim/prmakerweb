@@ -8,7 +8,7 @@ import {MatTooltipModule} from '@angular/material/tooltip';
 import {FormsModule} from '@angular/forms';
 import {MatIconModule} from '@angular/material/icon';
 import {HttpClient} from '@angular/common/http';
-import {ActivatedRoute} from '@angular/router';
+import {ActivatedRoute, Router} from '@angular/router';
 import {MatDialog} from '@angular/material/dialog';
 import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {MatSnackBar, MatSnackBarModule} from '@angular/material/snack-bar';
@@ -305,6 +305,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
   private _clipboardService = inject(CliipboardService);
   private _globalService = inject(GlobalService);
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
 
   constructor(
     private http: HttpClient,
@@ -314,6 +315,11 @@ export class RegisterComponent implements OnInit, OnDestroy {
     private ws: WsService,
     private authService: AuthService,
   ) {
+    // O estado do card é global (root): sem isto, ao sair e voltar para a tela, descrição, root
+    // cause e PRs do último card reapareciam sem nenhum card buscado (feature 0022). Um card na URL
+    // (?card=) é buscado de novo pelo autoSearchFromQueryParams.
+    this.prState.reset();
+
     // Edições feitas nos painéis (aqui, no modal ou nos popovers) chegam pelo estado
     // compartilhado; espelha no modelo local usado por salvar/copiar/abrir PR.
     effect(() => {
@@ -378,6 +384,21 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.switchCardGroup(null);
     this.ws.off(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
     this.resyncSub?.unsubscribe();
+  }
+
+  /**
+   * Leva o card buscado para a URL (?card=), para o F5 voltar ao mesmo card (feature 0022).
+   * replaceUrl: não empilha histórico a cada busca — a tela não reage a mudanças da query, então
+   * voltar/avançar entre cards deixaria URL e tela diferentes.
+   */
+  private syncCardInUrl(card: string | null): void {
+    const current = this.route.snapshot.queryParamMap.get('card');
+    if ((card || null) === current && !this.route.snapshot.queryParamMap.has('repositoryId')) return;
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: card ? { card } : {},
+      replaceUrl: true,
+    });
   }
 
   /** Troca a inscrição de tempo real para o card em tela. */
@@ -634,6 +655,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.prInfo = null;
     this.prLoadError = false;
     this.switchCardGroup(null);
+    this.syncCardInUrl(null);
     this.branchPrefix = 'hotfix/';
     this.branchName = '';
     this.selectedRepositoryObj = this.repositoryOptions.length > 0 ? this.repositoryOptions[0] : null;
@@ -1010,6 +1032,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
       // Tempo real do card: atualizações feitas em outro lugar (outro usuário, skill gerar-prmake).
       this.switchCardGroup(this.cardNumber?.toString() ?? null);
+      this.syncCardInUrl(this.cardNumber?.toString() ?? null);
 
       // Carrega a linha do tempo e os detalhes do card (DevOps) em paralelo à busca do PR.
       this.timeline?.load(this.cardNumber ?? undefined);

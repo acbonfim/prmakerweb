@@ -1,8 +1,8 @@
 import { StorageService } from './storage.service';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { JwtHelperService } from '@auth0/angular-jwt';
-import { map } from 'rxjs';
+import { firstValueFrom, map, timeout } from 'rxjs';
 import { GlobalService } from './global.service';
 import {environment} from '../../environments/environment';
 import {AuthenticatedResponse} from '../interfaces/AuthenticatedResponse';
@@ -18,6 +18,12 @@ export class AuthService {
   jwtHelper = new JwtHelperService();
   decodedToken: any;
   private refreshTimeout: any;
+
+  /** Refresh em andamento (0022): chamadas simultâneas (guard, login, timer) reaproveitam o mesmo. */
+  private refreshInFlight: Promise<boolean> | null = null;
+  /** true enquanto o token está sendo renovado — a troca de tela mostra "Renovando sessão…". */
+  readonly refreshing = signal(false);
+  private static readonly REFRESH_TIMEOUT_MS = 15000;
 
   constructor(
     private http: HttpClient
@@ -144,35 +150,55 @@ export class AuthService {
     return new HttpHeaders({ Authorization: `Bearer ${token}` });
   }
 
-  public async tryRefreshingTokens(): Promise<boolean> {
+  /**
+   * Renova os tokens. Sempre termina com true/false (0022): antes, com erro no refresh a promise
+   * nunca resolvia e o AuthGuard deixava a navegação presa, sem aviso. Com false, o guard limpa a
+   * sessão e manda para o login.
+   */
+  public tryRefreshingTokens(): Promise<boolean> {
+    if (!this.refreshInFlight) {
+      this.refreshing.set(true);
+      this.refreshInFlight = this.refreshTokens().finally(() => {
+        this.refreshInFlight = null;
+        this.refreshing.set(false);
+      });
+    }
+    return this.refreshInFlight;
+  }
+
+  private async refreshTokens(): Promise<boolean> {
     const access: any = this._storageService.getAccess();
-    if (access === null) {
+    if (!access?.accessToken || !access?.refreshToken) {
       return false;
     }
 
     const credentials = JSON.stringify({ accessToken: access.accessToken, refreshToken: access.refreshToken });
-    let isRefreshSuccess: boolean;
-    const refreshRes = await new Promise<any>((resolve, reject) => {
-      this.http.post<AuthenticatedResponse>(`${this.baseUrl}user/RefreshToken`, credentials, {
-        headers: new HttpHeaders({
-          "Content-Type": "application/json"
-        })
-      }).subscribe({
-        next: (res: AuthenticatedResponse) => resolve(res),
-        error: (_) => { reject; isRefreshSuccess = false;}
-      });
-    });
+    try {
+      const refreshRes: any = await firstValueFrom(
+        this.http.post<AuthenticatedResponse>(`${this.baseUrl}user/RefreshToken`, credentials, {
+          headers: new HttpHeaders({
+            "Content-Type": "application/json"
+          })
+        }).pipe(timeout(AuthService.REFRESH_TIMEOUT_MS))
+      );
 
-    this._globalService.log(refreshRes,"REFRESH TOKEN_")
+      this._globalService.log(refreshRes,"REFRESH TOKEN_")
 
-    access.accessToken = refreshRes.object.accessToken;
-    access.refreshToken = refreshRes.object.refreshToken;
+      const tokens = refreshRes?.object;
+      if (!tokens?.accessToken || !tokens?.refreshToken) {
+        return false;
+      }
 
-    this._storageService.cleanAccess();
-    this._storageService.setAccess(access);
+      access.accessToken = tokens.accessToken;
+      access.refreshToken = tokens.refreshToken;
 
-    isRefreshSuccess = true;
-    return isRefreshSuccess;
+      this._storageService.cleanAccess();
+      this._storageService.setAccess(access);
+      return true;
+    } catch (error) {
+      console.warn('Falha ao renovar o token', error);
+      return false;
+    }
   }
 
   public getAllowPagesByUser(userExternalI: string) : any[] {
