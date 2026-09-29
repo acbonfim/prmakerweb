@@ -1,5 +1,5 @@
 import { TeamsService } from '../../../services/teams.service';
-import {ChangeDetectorRef, Component, effect, HostListener, inject, OnDestroy, OnInit, untracked, ViewChild} from '@angular/core';
+import {ChangeDetectorRef, Component, effect, inject, OnDestroy, OnInit, untracked, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -20,12 +20,9 @@ import {ButtonModule} from 'primeng/button';
 import {MenuModule} from 'primeng/menu';
 import {InputNumberModule} from 'primeng/inputnumber';
 import {LMarkdownEditorModule} from 'ngx-markdown-editor';
-import {SplitButton} from 'primeng/splitbutton';
 import {AutoCompleteModule} from 'primeng/autocomplete';
-import {MenuItem, MenuItemCommandEvent} from 'primeng/api';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {UserService} from '../../../services/UserService.service';
-import {CliipboardService} from '../../../services/cliipboard.service';
 import {environment} from '../../../../environments/environment';
 import {DialogTemplateComponent} from '../../../components/dialog-template/dialog-template.component';
 import {DialogPrompt, DialogPromptData} from '../../../components/dialog-prompt/dialog-prompt';
@@ -54,6 +51,8 @@ import {GithubPullRequest, PullRequestService} from '../../../services/pull-requ
 import {CardPrStateService} from '../../../services/card-pr-state.service';
 import {RepoOption} from '../../../interfaces/RepoOption';
 import {DevOpsActionsMenuComponent} from '../../../components/devops-actions-menu/devops-actions-menu.component';
+import {SmartActionsMenuComponent} from '../../../components/smart-actions-menu/smart-actions-menu.component';
+import {ActionToolbarComponent, ToolbarItemDirective} from '../../../components/action-toolbar/action-toolbar.component';
 import {SummaryDialogComponent, SummaryDialogData} from '../../../components/summary-dialog/summary-dialog.component';
 
 /** Evento e grupo do tempo real da configuração de PR (em sincronia com o backend). */
@@ -90,7 +89,6 @@ const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
     ButtonModule,
     MenuModule,
     InputNumberModule,
-    SplitButton,
     JsonPipe,
     AutoCompleteModule,
     MatFormFieldModule,
@@ -100,7 +98,10 @@ const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
     PrInfoCardComponent,
     PanelPopoverButtonComponent,
     GithubPrListComponent,
-    DevOpsActionsMenuComponent
+    DevOpsActionsMenuComponent,
+    SmartActionsMenuComponent,
+    ActionToolbarComponent,
+    ToolbarItemDirective
   ]
 })
 export class RegisterComponent implements OnInit, OnDestroy {
@@ -132,9 +133,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
   userSelected: any = null;
   cardNumber: null | string = null;
   fullDescription = null;
-  mobileButtons: MenuItem[] = [];
-  copyCustomButtons: MenuItem[] = [];
-  isMobile = false;
   isAzureLoading: boolean = false;
 
   // Defaults do modal "Abrir PR" (branch/repositório/destino não ficam mais na tela — spec 2).
@@ -241,68 +239,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     );
   }
 
-  @HostListener('window:resize')
-  onResize() {
-    this.checkIfMobile();
-  }
-
-  private checkIfMobile() {
-    this.isMobile = window.innerWidth <= 768;
-  }
-
-  private initializeMobileButtons() {
-    this.mobileButtons = [
-      {
-        label: 'Copiar',
-        icon: 'pi pi-copy',
-        command: (event: MenuItemCommandEvent) => {
-          this.copyFullDescriptionToClipboard();
-        }
-      },
-      {
-        label: 'Abrir PR',
-        icon: 'pi pi-github',
-        command: (event: MenuItemCommandEvent) => {
-          this.openPrDialog();
-        }
-      },
-      {
-        label: 'Limpar',
-        icon: 'pi pi-times',
-        command: (event: MenuItemCommandEvent) => {
-          this.clearAll();
-        }
-      },
-      {
-        label: 'Ações DevOps',
-        disabled: true,
-        icon: 'pi pi-cloud-upload',
-      },
-      {
-        label: 'Gerar com IA',
-        icon: 'pi pi-bullseye',
-        disabled: true,
-      },
-    ];
-  }
-
-  updateMobileButtonsState() {
-    this.mobileButtons.forEach(button => {
-      if (button.label === 'Copiar') {
-        button.disabled = this.isPullRequestLoading || this.fullDescription === null;
-      } else if (button.label === 'Abrir PR') {
-        button.disabled = !this.canOpenPr;
-      } else if (button.label === 'Limpar') {
-        button.disabled = this.isPullRequestLoading || !this.hasAnythingToClear;
-      }
-    });
-  }
-
-
-
-
   private _snackBar = inject(MatSnackBar);
-  private _clipboardService = inject(CliipboardService);
   private _globalService = inject(GlobalService);
   private route = inject(ActivatedRoute);
 
@@ -341,9 +278,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
       // Agora que as configs chegaram, prossegue
       //this.getTemplateByEnvironment();
-      this.checkIfMobile();
-      this.initializeMobileButtons();
-      this.initializeCustomCopyButtons();
 
       this.userSelected = this.storageService.getAccess().user;
       console.log(this.userSelected);
@@ -401,7 +335,12 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.reloadRegisterFromServer();
     } else if (payload.action === 'summary-saved') {
       this.applyServerSummary();
+    } else if (payload.action === 'handover-saved') {
+      // Só o modal de handover (se aberto) muda — ele escuta o mesmo evento (0021).
     } else {
+      // Abrir PR num card ainda não salvo cria o registro no backend (ex.: skill gerar-prmake):
+      // carrega o registro também, para sair do "Card ainda não salvo" (0021).
+      if (payload.action === 'github-pr-opened' && !this.prState.register()?.id) this.reloadRegisterFromServer();
       this.reloadGithubPrs();
     }
   };
@@ -1090,60 +1029,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
   }
 
 
-  copyFullDescriptionToClipboard(itemToCopy: string = "full") {
-
-    if (!this.fullDescription) {
-      this._snackBar.open('Nenhuma descrição completa para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"})
-      return;
-    }
-
-    let contentToCopy: string = '';
-
-    switch (itemToCopy) {
-      case 'full':
-        contentToCopy = this.fullDescription;
-        this._snackBar.open('Descrição completa copiada!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
-        break;
-
-      case 'description':
-        if (!this.pullRequest.description) {
-          this._snackBar.open('Nenhuma descrição para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
-          return;
-        }
-        contentToCopy = `${this.pullRequest.description.toString().trim()}`;
-        this._snackBar.open('Descrição copiada!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
-        break;
-
-      case 'rootCause':
-        if (!this.pullRequest.rootCause) {
-          this._snackBar.open('Nenhum Root Cause para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
-          return;
-        }
-        contentToCopy = this.pullRequest.rootCause;
-        this._snackBar.open('Root Cause copiado!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
-        break;
-
-      case 'template':
-        if (!this.template || !this.template.description) {
-          this._snackBar.open('Nenhum template para copiar', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
-          return;
-        }
-        contentToCopy = this.template.description;
-        this._snackBar.open('Template copiado!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
-        break;
-
-      default:
-        contentToCopy = this.fullDescription;
-        this._snackBar.open('Descrição completa copiada!', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
-        break;
-    }
-
-    this._clipboardService.copyFullDescriptionToClipboard(contentToCopy);
-
-  }
-
-
-
   generateFullDescriptionHandler() {
     if(this.pullRequest.description && this.pullRequest.description.length == 0) {
       this.pullRequest.description = null;
@@ -1181,32 +1066,6 @@ export class RegisterComponent implements OnInit, OnDestroy {
   protected readonly Number = Number;
   cardType: any = 'bug';
 
-
-  private initializeCustomCopyButtons() {
-    this.copyCustomButtons = [
-      {
-        label: 'Apenas descrição',
-        icon: 'pi pi-copy',
-        command: (event: MenuItemCommandEvent) => {
-          this.copyFullDescriptionToClipboard("description");
-        }
-      },
-      {
-        label: 'Root Cause',
-        icon: 'pi pi-copy',
-        command: (event: MenuItemCommandEvent) => {
-          this.copyFullDescriptionToClipboard("rootCause");
-        }
-      },
-      {
-        label: 'Template',
-        icon: 'pi pi-copy',
-        command: (event: MenuItemCommandEvent) => {
-          this.copyFullDescriptionToClipboard("template");
-        }
-      }
-    ];
-  }
 
   onCardNumberChange() {
     this.branchName = this.cardNumber!.toString();

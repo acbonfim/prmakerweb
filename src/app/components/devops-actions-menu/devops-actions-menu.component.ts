@@ -1,5 +1,5 @@
-import { Component, computed, inject, input, output, signal } from '@angular/core';
-import { OverlayModule } from '@angular/cdk/overlay';
+import { Component, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { CdkOverlayOrigin, OverlayModule } from '@angular/cdk/overlay';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -11,7 +11,7 @@ import {
   DevOpsActionsConfig, DevOpsActionsService, DevOpsCardAction, apiErrorMessage, isUserStoryCard,
 } from '../../services/devops-actions.service';
 
-type OptionId = 'root-cause' | 'summary' | DevOpsCardAction;
+type OptionId = 'card-details' | 'root-cause' | 'summary' | DevOpsCardAction;
 
 interface MenuOption {
   id: OptionId;
@@ -36,6 +36,8 @@ const SNACK = { direction: 'ltr', horizontalPosition: 'right', verticalPosition:
  * menu (cc-popover) com as automações do DevOps para cards do tipo Bug. Cada opção explica no
  * tooltip o que faz (com os valores efetivos do usuário, do plugin AI Configurations) e, quando
  * bloqueada, mostra o cadeado e o motivo. As regras são revalidadas no backend.
+ * Feature 0021: "Detalhes do card" (só leitura) também fica aqui, e o popover pode abrir a partir
+ * do botão "⋯" do rodapé (`openAt`) quando o próprio botão não cabe na tela.
  */
 @Component({
   selector: 'app-devops-actions-menu',
@@ -93,7 +95,7 @@ const SNACK = { direction: 'ltr', horizontalPosition: 'right', verticalPosition:
   `,
   styles: [`
     :host { display: contents; }
-    .da-trigger-wrap { display: inline-block; margin-left: 10px; }
+    .da-trigger-wrap { display: inline-block; }
     .da-trigger-spinner { display: inline-block; margin-left: 6px; }
 
     .da-list { display: flex; flex-direction: column; gap: 1px; width: 290px; max-width: calc(100vw - 60px); margin: -6px -8px; }
@@ -144,10 +146,14 @@ export class DevOpsActionsMenuComponent {
   /** "Salvar RC" em andamento (feito pela tela). */
   readonly rootCauseSaving = input(false);
 
+  readonly openDetails = output<void>();
   readonly saveRootCause = output<void>();
   readonly openSummary = output<string>();
   /** Uma ação alterou o card no DevOps: a tela recarrega os detalhes e as pendências. */
   readonly changed = output<void>();
+
+  private readonly pop = viewChild.required(CcPopoverComponent);
+  private readonly trigger = viewChild.required<CdkOverlayOrigin>('origin');
 
   readonly config = signal<DevOpsActionsConfig | null>(null);
   readonly configLoading = signal(false);
@@ -165,13 +171,18 @@ export class DevOpsActionsMenuComponent {
   readonly options = computed<MenuOption[]>(() => {
     const card = this.cardFull();
     const cfg = this.config();
+    const details: MenuOption = {
+      id: 'card-details', icon: 'fact_check', label: 'Detalhes do card', confirm: false,
+      details: 'Campos, discussion, histórico e pendências do card no DevOps (só leitura).',
+      blockReason: !card ? 'Card não encontrado no DevOps' : null,
+    };
     const saveRc: MenuOption = {
       id: 'root-cause', icon: 'beenhere', label: 'Salvar RC no DevOps', confirm: false,
       details: 'Grava o Root Cause escrito aqui (convertido para HTML) no campo de Root Cause do card no DevOps.',
       blockReason: this.isUs() ? 'User Story não tem Root Cause'
         : !this.hasRootCause() ? 'Escreva o Root Cause antes de salvar no DevOps' : null,
     };
-    if (!card || this.isUs()) return [saveRc];
+    if (!card || this.isUs()) return [details, saveRc];
 
     const loading = !cfg ? (this.configLoading() ? 'Carregando as configurações…' : 'Configurações do AI Configurations indisponíveis') : null;
     const pendencies = this.pendencies(card);
@@ -188,6 +199,7 @@ export class DevOpsActionsMenuComponent {
     const remaining = this.number(card, FIELD_REMAINING);
 
     return [
+      details,
       saveRc,
       {
         id: 'summary', icon: 'translate', confirm: false,
@@ -242,6 +254,12 @@ export class DevOpsActionsMenuComponent {
     return opt.blockReason ? `🔒 Bloqueado: ${opt.blockReason}\n\n${opt.label}\n${opt.details}` : `${opt.label}\n${opt.details}`;
   }
 
+  /** Abre o menu ancorado em outro elemento (ex.: botão "⋯" do rodapé quando este não cabe). */
+  openAt(origin?: CdkOverlayOrigin): void {
+    if (!this.cardFull() || this.cardLoading()) return;
+    this.pop().open(origin ?? this.trigger());
+  }
+
   /** Relê a configuração a cada abertura (o usuário pode ter mudado em "Minhas integrações"). */
   async onOpened(): Promise<void> {
     if (this.configLoading() || !this.cardFull() || this.isUs()) return;
@@ -267,13 +285,14 @@ export class DevOpsActionsMenuComponent {
       return;
     }
     pop.close();
-    if (opt.id === 'root-cause') this.saveRootCause.emit();
+    if (opt.id === 'card-details') this.openDetails.emit();
+    else if (opt.id === 'root-cause') this.saveRootCause.emit();
     else if (opt.id === 'summary') this.openSummary.emit(this.config()?.bug.summaryPrompt ?? '');
   }
 
   async execute(opt: MenuOption): Promise<void> {
     const card = this.cardNumber();
-    if (!card || opt.id === 'root-cause' || opt.id === 'summary') return;
+    if (!card || opt.id === 'card-details' || opt.id === 'root-cause' || opt.id === 'summary') return;
 
     this.confirming.set(null);
     this.actionRunning.set(true);

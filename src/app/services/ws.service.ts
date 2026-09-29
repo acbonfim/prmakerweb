@@ -57,8 +57,10 @@ export class WsService {
   public wsStatusOn = false;
   wsIsOn = false;
 
-  // Grupos e handlers guardados para reaplicar após (re)conexão.
-  private joinedGroups = new Set<string>();
+  // Grupos (com quantos componentes estão inscritos em cada um) e handlers guardados para reaplicar
+  // após (re)conexão. A contagem permite dois componentes no mesmo grupo (ex.: listas da home — 0021):
+  // um sair não tira o outro.
+  private joinedGroups = new Map<string, number>();
   private handlers: { event: string; handler: (...args: any[]) => void }[] = [];
 
   public newRetry$: Observable<string> = this._newRetrySubject.asObservable().pipe(
@@ -148,17 +150,23 @@ export class WsService {
   /** Inscreve a conexão em um grupo (canal). Reingressa automaticamente após reconexão. */
   public addToGroup(group: string): void {
     if (!group) return;
-    this.joinedGroups.add(group);
-    if (this.isConnected()) {
+    const count = this.joinedGroups.get(group) ?? 0;
+    this.joinedGroups.set(group, count + 1);
+    if (count === 0 && this.isConnected()) {
       this.hubConnection!.invoke('AddToGroup', group).catch((err) => console.error(err));
     }
   }
 
-  /** Remove a conexão de um grupo. */
+  /** Remove a conexão de um grupo (quando o último inscrito sai). */
   public removeFromGroup(group: string): void {
     if (!group) return;
+    const count = this.joinedGroups.get(group) ?? 0;
+    if (count > 1) {
+      this.joinedGroups.set(group, count - 1);
+      return;
+    }
     this.joinedGroups.delete(group);
-    if (this.isConnected()) {
+    if (count === 1 && this.isConnected()) {
       this.hubConnection!.invoke('RemoveFromGroup', group).catch((err) => console.error(err));
     }
   }
@@ -270,7 +278,7 @@ export class WsService {
 
   private rejoinGroups(): void {
     if (!this.isConnected()) return;
-    for (const group of this.joinedGroups) {
+    for (const group of this.joinedGroups.keys()) {
       this.hubConnection!.invoke('AddToGroup', group).catch((err) => console.error(err));
     }
   }

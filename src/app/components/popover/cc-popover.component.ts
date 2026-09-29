@@ -1,5 +1,7 @@
-import { Component, output, signal } from '@angular/core';
-import { CdkOverlayOrigin, ConnectedPosition, ConnectionPositionPair, OverlayModule } from '@angular/cdk/overlay';
+import { Component, DestroyRef, inject, output, signal, viewChild } from '@angular/core';
+import {
+  CdkConnectedOverlay, CdkOverlayOrigin, ConnectedPosition, ConnectionPositionPair, OverlayModule,
+} from '@angular/cdk/overlay';
 
 /**
  * Popover ancorado ao gatilho (UI Kit §11.5 / §6 "menos modal") — painel flutuante com caret
@@ -15,6 +17,10 @@ import { CdkOverlayOrigin, ConnectedPosition, ConnectionPositionPair, OverlayMod
  *
  * Copiado do ComandaCerta (`ComandaCerta.App/src/app/shared/popover`) — feature 0005 do CIME.
  * Consumidor: cc-filter-bar.
+ *
+ * Feature 0021: nunca sai da tela — margem de 8 px da janela, altura limitada à janela (rola por
+ * dentro) e reposiciona quando o conteúdo muda de tamanho depois de aberto (ex.: "Alterar status",
+ * "Abrir PR rápido", confirmação das Ações DevOps), o que o CDK sozinho não faz.
  */
 @Component({
   selector: 'cc-popover',
@@ -27,8 +33,9 @@ import { CdkOverlayOrigin, ConnectedPosition, ConnectionPositionPair, OverlayMod
       [cdkConnectedOverlayPositions]="positions"
       [cdkConnectedOverlayHasBackdrop]="true"
       [cdkConnectedOverlayPush]="true"
+      [cdkConnectedOverlayViewportMargin]="8"
       cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
-      (attach)="opened.emit()"
+      (attach)="onAttach()"
       (backdropClick)="close()"
       (detach)="close()"
       (overlayKeydown)="onKeydown($event)"
@@ -50,7 +57,8 @@ import { CdkOverlayOrigin, ConnectedPosition, ConnectionPositionPair, OverlayMod
       transform-origin: top center; animation: cc-pop-in .12s ease-out;
     }
     .cc-popover-panel.above { transform-origin: bottom center; }
-    .cc-popover-content { padding: 14px 16px; }
+    /* Altura máxima = janela menos as margens: o conteúdo rola por dentro (o caret fica fora). */
+    .cc-popover-content { padding: 14px 16px; max-height: calc(100dvh - 64px); overflow-y: auto; overscroll-behavior: contain; }
     /* Caret apontando pro gatilho — em cima quando o painel abre embaixo (padrão), embaixo quando
        o CDK vira o painel pra cima por falta de espaço. */
     .cc-popover-caret {
@@ -77,6 +85,13 @@ export class CcPopoverComponent {
   protected readonly above = signal(false);
   protected readonly alignX = signal<'center' | 'start' | 'end'>('center');
 
+  private readonly overlay = viewChild(CdkConnectedOverlay);
+  private resizeObserver?: ResizeObserver;
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.resizeObserver?.disconnect());
+  }
+
   /** Posições: preferir abaixo-centralizado; sem espaço, cai pra acima e, se o gatilho estiver
    *  perto de uma borda lateral, alinha pela borda (end/start) pra NÃO vazar da tela (§6). */
   protected readonly positions: ConnectedPosition[] = [
@@ -101,7 +116,18 @@ export class CcPopoverComponent {
   close(): void {
     if (!this.isOpen()) return;
     this.isOpen.set(false);
+    this.resizeObserver?.disconnect();
     this.closed.emit();
+  }
+
+  /** Painel anexado: observa o tamanho do conteúdo para reposicionar dentro da tela. */
+  protected onAttach(): void {
+    this.opened.emit();
+    const ref = this.overlay()?.overlayRef;
+    if (!ref) return;
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new ResizeObserver(() => ref.updatePosition());
+    this.resizeObserver.observe(ref.overlayElement);
   }
 
   protected onKeydown(event: KeyboardEvent): void {
