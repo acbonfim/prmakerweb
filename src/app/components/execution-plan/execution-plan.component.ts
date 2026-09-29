@@ -312,7 +312,14 @@ export class ExecutionPlanComponent implements OnDestroy {
   private clockTimer?: ReturnType<typeof setInterval>;
   private flashTimer?: ReturnType<typeof setTimeout>;
   private filesDialogOpen = false;
-  private readonly artifactsSignal = computed(() => this.plan()?.artifacts ?? []);
+  /** Arquivos do plano + anexos de comentários feitos no outro plano do card (0031) — tudo abre no visualizador do app. */
+  private readonly artifactsSignal = computed(() => {
+    const plan = this.plan();
+    const own = plan?.artifacts ?? [];
+    const ids = new Set(own.map((a) => a.id));
+    const fromNotes = (plan?.notes ?? []).flatMap((n) => n.attachments).filter((a) => !ids.has(a.id));
+    return [...own, ...fromNotes];
+  });
 
   constructor() {
     this.ws.startConnection();

@@ -875,7 +875,8 @@
 }
 
 /* ── 0031: soltar arquivos no painel ── */
-.plan { position: relative; }
+/* Só fora da tela cheia: a tela cheia é position: fixed (que também posiciona a sobreposição). */
+.plan:not(.plan--expanded) { position: relative; }
 .plan__drop {
   position: absolute;
   inset: 0;

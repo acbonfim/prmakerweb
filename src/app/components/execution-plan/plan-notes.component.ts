@@ -16,7 +16,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CliipboardService } from '../../services/cliipboard.service';
-import { ExecutionPlanService, planApiError, saveBlob } from '../../services/execution-plan.service';
+import { ExecutionPlanService, planApiError } from '../../services/execution-plan.service';
 import { PlanMarkdownPipe } from './plan-markdown.pipe';
 import { ExecutionArtifact, ExecutionNote, PlanPhase } from './execution-plan.model';
 
@@ -439,19 +439,9 @@ export class PlanNotesComponent implements OnDestroy {
 
   // ── Anexos ─────────────────────────────────────────────────────────────────────────────────────
 
-  /** Arquivo do plano em tela → visualizador; do outro plano do card → abre a imagem / baixa o arquivo. */
+  /** Sempre no visualizador de arquivos do app (inclusive anexos do outro plano) — nada de guia com blob (PWA). */
   open(a: ExecutionArtifact): void {
-    if (a.planId === this.planId()) {
-      this.openArtifact.emit(a);
-      return;
-    }
-    this.api.content(a.planId, a.id).subscribe({
-      next: (blob) => {
-        if (a.kind === 'image') window.open(URL.createObjectURL(blob), '_blank', 'noopener');
-        else saveBlob(blob, a.name);
-      },
-      error: () => this.snackBar.open('Não foi possível abrir o anexo.', 'Fechar', { duration: 5000 })
-    });
+    this.openArtifact.emit(a);
   }
 
   private loadThumb(a: ExecutionArtifact): void {

@@ -1,4 +1,4 @@
-import { Component, OnDestroy, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, ElementRef, OnDestroy, Signal, ViewChild, computed, effect, inject, signal, untracked } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -119,7 +119,7 @@ const SQL_KEYWORDS = new Set((
                   {{ fit() ? 'Ajustar' : (zoom() * 100).toFixed(0) + '%' }}
                 </button>
                 <button mat-icon-button (click)="zoomIn()" matTooltip="Aumentar" aria-label="Aumentar"><mat-icon>zoom_in</mat-icon></button>
-                <button mat-icon-button (click)="openImage()" matTooltip="Abrir em nova aba" aria-label="Abrir em nova aba"><mat-icon>open_in_new</mat-icon></button>
+                <button mat-icon-button (click)="openImage()" matTooltip="Tela cheia" aria-label="Ver em tela cheia"><mat-icon>fullscreen</mat-icon></button>
               }
               @if (p.text !== undefined || p.kind === 'image') {
                 <button mat-icon-button (click)="copy()" [matTooltip]="p.kind === 'image' ? 'Copiar imagem' : 'Copiar conteúdo'" aria-label="Copiar">
@@ -129,7 +129,7 @@ const SQL_KEYWORDS = new Set((
               <button mat-flat-button color="primary" (click)="download()"><mat-icon>download</mat-icon> Baixar</button>
             </div>
 
-            <div class="pf__content">
+            <div class="pf__content" #content>
               @switch (p.kind) {
                 @case ('image') {
                   <div class="pf__image" [class.pf__image--fit]="fit()">
@@ -201,6 +201,8 @@ const SQL_KEYWORDS = new Set((
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
     .pf__zoom.mat-mdc-button { min-width: 64px; font-variant-numeric: tabular-nums; }
     .pf__content { flex: 1 1 auto; min-height: 0; overflow: auto; }
+    .pf__content:fullscreen { background: #111; display: flex; align-items: center; justify-content: center; }
+    .pf__content:fullscreen img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
     .pf__code { margin: 0; padding: 12px 0; font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 12.5px; line-height: 1.55;
       counter-reset: line; white-space: pre; tab-size: 4; }
     .pf__line { display: block; padding: 0 16px 0 0; counter-increment: line; }
@@ -304,7 +306,8 @@ export class PlanFilesDialogComponent implements OnDestroy {
     this.fit.set(true);
     this.zoom.set(1);
     this.sub?.unsubscribe();
-    this.sub = this.api.content(this.data.planId, a.id).subscribe({
+    // Anexo de comentário pode ser do outro plano do card (0031).
+    this.sub = this.api.content(a.planId || this.data.planId, a.id).subscribe({
       next: async (blob) => {
         const preview = await this.buildPreview(a, blob);
         if (this.selectedId() !== a.id) return;
@@ -349,9 +352,14 @@ export class PlanFilesDialogComponent implements OnDestroy {
   zoomIn(): void { this.fit.set(false); this.zoom.update((z) => Math.min(8, +(z * 1.25).toFixed(2))); }
   zoomOut(): void { this.fit.set(false); this.zoom.update((z) => Math.max(0.1, +(z / 1.25).toFixed(2))); }
 
+  @ViewChild('content') private contentRef?: ElementRef<HTMLElement>;
+
+  /** Tela cheia dentro do app (no PWA uma nova aba com blob sai do app); Esc volta. */
   openImage(): void {
-    const url = this.preview()?.imageUrl;
-    if (url) window.open(url, '_blank', 'noopener');
+    const el = this.contentRef?.nativeElement;
+    if (el?.requestFullscreen) {
+      el.requestFullscreen().catch(() => this.snackBar.open('Não foi possível abrir em tela cheia.', 'Fechar', { duration: 4000 }));
+    }
   }
 
   async copy(): Promise<void> {
