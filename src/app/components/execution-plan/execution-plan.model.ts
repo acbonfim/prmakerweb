@@ -92,6 +92,12 @@ export interface ExecutionLink {
 
 export interface ExecutionArtifact {
   id: string;
+  /** Plano dono do arquivo (0031: anexos de comentário podem ser do outro plano do card). */
+  planId: string;
+  /** Número por card — "anexo #n" (0031). */
+  number: number;
+  /** Comentário a que pertence (0031); null = arquivo da skill. */
+  noteId?: string | null;
   stepKey?: string | null;
   name: string;
   kind: ArtifactKind;
@@ -104,12 +110,30 @@ export interface ExecutionArtifact {
   updatedAt?: string | null;
 }
 
+/** Comentário no plano (0031): texto + anexos, numerado por card ("comentário #n"). */
+export interface ExecutionNote {
+  id: string;
+  planId: string;
+  planPhase: PlanPhase;
+  number: number;
+  stepKey?: string | null;
+  text: string;
+  authorUserId?: string | null;
+  authorName: string;
+  fromExecutor: boolean;
+  createdAt: string;
+  updatedAt?: string | null;
+  attachments: ExecutionArtifact[];
+}
+
 export interface ExecutionPlan extends ExecutionPlanSummary {
   summary?: string | null;
   steps: ExecutionStep[];
   artifacts: ExecutionArtifact[];
   questions: ExecutionQuestion[];
   links: ExecutionLink[];
+  /** Comentários do card inteiro (análise e correção) — 0031. */
+  notes?: ExecutionNote[];
   lastLogId: number;
   serverTime: string;
 }
@@ -126,7 +150,7 @@ export interface ExecutionLog {
 export interface ExecutionPlanRealtimePayload {
   cardNumber: string;
   planId: string;
-  action: 'created' | 'steps' | 'step' | 'log' | 'status' | 'artifact' | 'question' | 'link';
+  action: 'created' | 'steps' | 'step' | 'log' | 'status' | 'artifact' | 'question' | 'link' | 'note';
   stepKey?: string | null;
   status?: PlanStatus;
 }

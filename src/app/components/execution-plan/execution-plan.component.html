@@ -1,6 +1,15 @@
 <div class="plan" #panel
      [attr.role]="expanded() ? 'dialog' : null" [attr.aria-modal]="expanded() ? 'true' : null"
-     [attr.aria-label]="expanded() ? 'Plano de execução em tela cheia' : null">
+     [attr.aria-label]="expanded() ? 'Plano de execução em tela cheia' : null"
+     [class.plan--dropping]="panelDropping()"
+     (dragover)="onPanelDragOver($event)" (dragleave)="onPanelDragLeave($event)" (drop)="onPanelDrop($event)"
+     (paste)="onPanelPaste($event)">
+  @if (panelDropping()) {
+    <div class="plan__drop" aria-hidden="true">
+      <mat-icon>upload_file</mat-icon>
+      <span>Solte para anexar a um comentário do plano</span>
+    </div>
+  }
   <div class="plan__header">
     <mat-icon class="plan__header-icon">account_tree</mat-icon>
     <span class="plan__title">Plano de execução</span>
@@ -234,6 +243,11 @@
             </li>
           }
         </ol>
+
+        <app-plan-notes #notes
+          [planId]="p.id" [planPhase]="p.phase" [notes]="p.notes ?? []" [steps]="noteSteps()"
+          [selectedStepKey]="selectedKey()" [currentUserId]="currentUserId"
+          (changed)="refresh()" (openArtifact)="openFiles(undefined, $event)"></app-plan-notes>
       }
     </div>
 
@@ -277,6 +291,12 @@
       </button>
     }
     <span class="plan__spacer"></span>
+    <button mat-icon-button class="plan__zip plan__notes-btn" (click)="focusNotes()" [disabled]="!plan()"
+            [matTooltip]="'Comentários e anexos' + (noteCount() ? ' (' + noteCount() + ')' : '') + ' — arraste ou cole imagens no painel'"
+            aria-label="Comentários e anexos">
+      <mat-icon>forum</mat-icon>
+      @if (noteCount()) { <span class="plan__notes-count">{{ noteCount() }}</span> }
+    </button>
     <button mat-icon-button class="plan__zip" (click)="downloadZip()"
             [disabled]="!plan()?.artifacts?.length || busy() === 'zip'"
             matTooltip="Baixar todos os arquivos (.zip)" aria-label="Baixar todos os arquivos">

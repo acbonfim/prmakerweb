@@ -30,6 +30,8 @@ import {
 import { FullscreenPanel } from '../../helpers/fullscreen-panel';
 import { PlanMarkdownPipe } from './plan-markdown.pipe';
 import { PlanFilesDialogComponent, PlanFilesDialogData } from './plan-files-dialog.component';
+import { PlanNotesComponent } from './plan-notes.component';
+import { StorageService } from '../../services/storage.service';
 import {
   ARTIFACT_GROUPS,
   ArtifactGroup,
@@ -95,7 +97,7 @@ interface LinkDraft {
 @Component({
   selector: 'app-execution-plan',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent],
   templateUrl: './execution-plan.component.html',
   styleUrls: ['./execution-plan.component.css']
 })
@@ -145,6 +147,52 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly expanded = this.fullscreen.expanded;
 
   @ViewChild('panel') private panelRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('notes') private notesRef?: PlanNotesComponent;
+
+  // ── 0031: comentários e anexos do usuário ─────────────────────────────────────────────────────
+
+  /** Quem está logado (edita/remove só os próprios comentários). */
+  readonly currentUserId: string | null = inject(StorageService).getAccess()?.user?.externalId ?? null;
+  readonly panelDropping = signal(false);
+  readonly noteCount = computed(() => this.plan()?.notes?.length ?? 0);
+  readonly noteSteps = computed(() => this.steps().map((s) => ({ key: s.key, title: s.title })));
+  private dropLeaveTimer?: ReturnType<typeof setTimeout>;
+
+  /** Arrastar arquivos para qualquer parte do painel anexa ao comentário em edição. */
+  onPanelDragOver(event: DragEvent): void {
+    if (!this.plan() || !PlanNotesComponent.hasFiles(event)) return;
+    event.preventDefault();
+    clearTimeout(this.dropLeaveTimer);
+    this.panelDropping.set(true);
+  }
+
+  onPanelDragLeave(event: DragEvent): void {
+    // dragleave dispara ao passar entre filhos: só some se não voltar logo.
+    clearTimeout(this.dropLeaveTimer);
+    this.dropLeaveTimer = setTimeout(() => this.panelDropping.set(false), 80);
+  }
+
+  onPanelDrop(event: DragEvent): void {
+    if (!PlanNotesComponent.hasFiles(event)) return;
+    event.preventDefault();
+    this.panelDropping.set(false);
+    if (!this.plan()) return;
+    this.notesRef?.addFiles(event.dataTransfer?.files);
+  }
+
+  /** Ctrl+V com imagem em qualquer lugar do painel (fora de outro campo) vai para o comentário. */
+  onPanelPaste(event: ClipboardEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('app-plan-notes') || target?.matches('input, textarea, [contenteditable="true"]')) return;
+    const files = PlanNotesComponent.clipboardFiles(event);
+    if (!files.length || !this.plan()) return;
+    event.preventDefault();
+    this.notesRef?.addFiles(files, true);
+  }
+
+  focusNotes(): void {
+    this.notesRef?.focus();
+  }
   @ViewChild('stepsBody') private stepsBodyRef?: ElementRef<HTMLDivElement>;
 
   readonly steps = computed<StepView[]>(() => {
