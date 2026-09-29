@@ -318,9 +318,30 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 
 .cime-panel-popover__body {
   width: min(900px, 92vw);
-  height: min(60vh, 560px);
+  /* 0021: em janela baixa não passa da tela (o gatilho fica no topo; sobra ~120 px acima). */
+  height: min(60vh, 560px, calc(100dvh - 140px));
+  min-height: 260px;
   display: flex;
   flex-direction: column;
+}
+
+/* Celular (0021): o popover vira uma folha fixa ocupando a largura, sem a seta — o PrimeNG só
+   posiciona pela âncora e, com 92vw, a caixa ficava cortada nas bordas. */
+@media (max-width: 768px) {
+  .p-popover.cime-panel-popover {
+    position: fixed !important;
+    top: 8px !important;
+    left: 8px !important;
+    right: 8px !important;
+    margin: 0 !important;
+    transform-origin: top center !important;
+  }
+  .p-popover.cime-panel-popover::before,
+  .p-popover.cime-panel-popover::after { display: none; }
+  .cime-panel-popover__body {
+    width: 100%;
+    height: min(70dvh, calc(100dvh - 16px));
+  }
 }
 
 .cime-panel-popover__body > * {

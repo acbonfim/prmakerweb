@@ -50,16 +50,23 @@
 }
 
 .header-icon { color: var(--mat-sys-primary); }
-.header-title { font-size: 20px; font-weight: 500; }
+.header-title { font-size: 20px; font-weight: 500; min-width: 0; }
+
+/* Celular: título menor e alertas quebrando linha abaixo do título (0021) */
+@media (max-width: 600px) {
+  .page-header { flex-wrap: wrap; row-gap: 6px; padding: 10px 12px; }
+  .header-title { font-size: 16px; }
+  .page-footer { padding: 8px 10px; }
+}
 .ms-auto { margin-left: auto; }
 
-/* ── Rodapé de ações — card contido, no mesmo padrão dos demais componentes ── */
+/* ── Rodapé de ações — card contido, no mesmo padrão dos demais componentes.
+   Os botões ficam numa app-action-toolbar: o que não cabe vai para o "⋯" (0021). ── */
 .page-footer {
   flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  row-gap: 10px;
+  min-width: 0;
   background-color: var(--surface-3, #252525);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
@@ -171,39 +178,20 @@
   }
 
   .pr-plan {
+    flex: none;
     height: 420px;
   }
 
+  /* flex: none — com flex-basis 0 numa coluna de altura automática o painel encolhia a 0 e a
+     lista de PRs sumia no celular (0021). */
   .pr-panel {
-    height: 220px;
+    flex: none;
+    height: 260px;
   }
 
   .pr-timeline {
     height: 360px;
   }
-}
-
-::ng-deep .custom-buttom .p-button {
-  height: 40px !important;
-  color: var(--mat-sys-primary);
-  font-family: Roboto,
-  "Helvetica Neue",
-  sans-serif;
-  border: none;
-}
-
-::ng-deep .custom-buttom .p-button:hover {
-  background-color: var(--mat-button-protected-container-color, var(--mat-sys-surface));
-  color: var(--mat-sys-primary);
-  border: none;
-}
-
-
-
-::ng-deep .custom-buttom .p-button:disabled {
-  border: none;
-  color: var(--mat-button-protected-disabled-label-text-color, color-mix(in srgb, var(--mat-sys-on-surface) 80%, transparent));
-  background-color: var(--mat-button-protected-disabled-container-color, color-mix(in srgb, var(--mat-sys-on-surface) 25%, transparent))
 }
 
 /* ── Toolbar de configuração do PR (Angular Material) ────────────────────────

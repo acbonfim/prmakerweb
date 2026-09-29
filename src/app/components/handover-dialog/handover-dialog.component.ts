@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectorRef, Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -15,6 +15,10 @@ import { environment } from '../../../environments/environment';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { GdsService } from '../../services/gds.service';
 import { StorageService } from '../../services/storage.service';
+import { WsService } from '../../services/ws.service';
+
+/** Evento de tempo real do card (PullRequestRealTimeEvents no backend); a tela do card já está no grupo. */
+const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
 
 /**
  * Modal de Passagem de Conhecimento (handover) de um card.
@@ -25,6 +29,9 @@ import { StorageService } from '../../services/storage.service';
  * A geração cruza os dados que já temos em memória (card do DevOps + histórico + comentários,
  * Pull Request salvo e linha do tempo), busca o layout mais atual no plugin (TemplatePassagemConhecimento)
  * e envia para o provider de IA configurado (endpoint AI/generate).
+ *
+ * Tempo real (0021): se o handover do card for salvo em outro lugar (skill gerar-handover, outro
+ * usuário) com o modal aberto, recarrega o conteúdo.
  */
 @Component({
   selector: 'app-handover-dialog',
@@ -44,7 +51,7 @@ import { StorageService } from '../../services/storage.service';
     SafeHtmlPipe,
   ],
 })
-export class HandoverDialogComponent implements OnInit {
+export class HandoverDialogComponent implements OnInit, OnDestroy {
   readonly data = inject<any>(MAT_DIALOG_DATA);
   readonly dialogRef = inject(MatDialogRef<HandoverDialogComponent>);
   private http = inject(HttpClient);
@@ -53,6 +60,7 @@ export class HandoverDialogComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
   private storage = inject(StorageService);
+  private ws = inject(WsService);
 
   private urlBase = environment.apiUrl;
 
@@ -79,10 +87,22 @@ export class HandoverDialogComponent implements OnInit {
   ngOnInit() {
     marked.setOptions({ gfm: true, breaks: true });
     this.loadExisting();
+    this.ws.on(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
   }
 
-  private loadExisting() {
-    this.loading.set(true);
+  ngOnDestroy() {
+    this.ws.off(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
+  }
+
+  /** Handover do card salvo em outro lugar: recarrega sem o "Carregando…" (ignora o eco da própria geração). */
+  private onCardUpdated = (payload: any): void => {
+    if (payload?.action !== 'handover-saved' || `${payload?.cardNumber ?? ''}`.trim() !== this.cardNumber.trim()) return;
+    if (this.generating() || this.loading()) return;
+    this.loadExisting(true);
+  };
+
+  private loadExisting(silent = false) {
+    if (!silent) this.loading.set(true);
     this.http
       .get<any>(`${this.urlBase}Handover/GetByCardNumber?cardNumber=${encodeURIComponent(this.cardNumber)}`)
       .subscribe({

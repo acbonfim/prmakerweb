@@ -1,4 +1,5 @@
-import { ChangeDetectorRef, Component, EventEmitter, OnInit, Output, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, OnDestroy, OnInit, Output, inject } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -6,6 +7,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../services/auth.service';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
+import { WsService } from '../../services/ws.service';
+
+/** Tempo real das listas de recentes da home (PullRequestRealTimeEvents no backend, 0021). */
+const RECENT_GROUP = 'pullrequest-recent';
+const RECENT_EVENT = 'pullRequestRecentUpdated';
+
 
 interface RecentHandover {
   id: number;
@@ -17,7 +24,8 @@ interface RecentHandover {
 
 /**
  * Atalho da home: últimos handovers criados pelo time. Cada card mostra quem
- * criou (foto + nome, resolvidos pelo externalId), o número do card e a data.
+ * criou (foto + nome, resolvidos pelo externalId), o número do card e a data. Atualiza em tempo
+ * real quando um handover é salvo (tela, outro usuário ou skill gerar-handover).
  */
 @Component({
   selector: 'app-recent-handovers',
@@ -26,12 +34,15 @@ interface RecentHandover {
   templateUrl: './recent-handovers.component.html',
   styleUrls: ['./recent-handovers.component.css'],
 })
-export class RecentHandoversComponent implements OnInit {
+export class RecentHandoversComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private authService = inject(AuthService);
   private cdr = inject(ChangeDetectorRef);
   private router = inject(Router);
   private urlBase = environment.apiUrl;
+  private ws = inject(WsService);
+  private reloadTimer?: ReturnType<typeof setTimeout>;
+  private resyncSub?: Subscription;
 
   /** Emite se a seção tem conteúdo (carregando ou com itens). O pai usa para
    *  colapsar o layout e dar 100% da largura ao outro bloco quando este fica vazio. */
@@ -48,7 +59,29 @@ export class RecentHandoversComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.isLoading = true;
+    this.load();
+    this.ws.startConnection();
+    this.ws.addToGroup(RECENT_GROUP);
+    this.ws.on(RECENT_EVENT, this.onRecentUpdated);
+    this.resyncSub = this.ws._resynced.subscribe(() => this.load(true));
+  }
+
+  ngOnDestroy() {
+    clearTimeout(this.reloadTimer);
+    this.ws.off(RECENT_EVENT, this.onRecentUpdated);
+    this.ws.removeFromGroup(RECENT_GROUP);
+    this.resyncSub?.unsubscribe();
+  }
+
+  /** Só handovers mudam esta lista; vários eventos seguidos viram uma recarga só, sem skeleton. */
+  private onRecentUpdated = (payload: any): void => {
+    if (payload?.action && payload.action !== 'handover-saved') return;
+    clearTimeout(this.reloadTimer);
+    this.reloadTimer = setTimeout(() => this.load(true), 600);
+  };
+
+  private load(silent = false) {
+    if (!silent) this.isLoading = true;
     this.http.get<RecentHandover[]>(`${this.urlBase}Handover/GetRecent?take=10`).subscribe({
       next: (list) => {
         this.items = list ?? [];

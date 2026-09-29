@@ -111,73 +111,58 @@
           </div>
         </div>
 
+      <!-- Rodapé (0021): o que não cabe na largura vai para o "⋯". Copiar saiu (fica nos painéis de
+           Descrição/Root Cause), Detalhes do card foi para Ações DevOps e Gerar com IA/Handover para
+           Ações inteligentes. -->
       <div class="page-footer">
-        @if(!isMobile){
-          <p-splitbutton class="custom-buttom"
-                         label="Copiar"
-                         icon="pi pi-copy"
-                         [disabled]="isPullRequestLoading || fullDescription === null"
-                         [model]="copyCustomButtons" (onClick)="copyFullDescriptionToClipboard('full')" rounded severity="secondary"/>
-          <button mat-raised-button style="margin-left: 10px"
-                  (click)="openPrDialog()"
-                  [disabled]="!canOpenPr">Abrir PR<mat-icon>merge</mat-icon></button>
+        <app-action-toolbar>
+          <span appToolbarItem="open-pr" toolbarLabel="Abrir PR" toolbarIcon="merge"
+                [toolbarDisabled]="!canOpenPr" (toolbarActivate)="openPrDialog()">
+            <button mat-raised-button (click)="openPrDialog()"
+                    [disabled]="!canOpenPr">Abrir PR<mat-icon>merge</mat-icon></button>
+          </span>
 
-          <button mat-raised-button style="margin-left: 10px"
-                  [disabled]="isPullRequestLoading || !prInfo"
-                  (click)="savePullRequest()">Salvar<mat-icon>save</mat-icon></button>
-          <button mat-raised-button style="margin-left: 10px"
-                  [disabled]="isPullRequestLoading || !hasAnythingToClear"
-                  (click)="clearAll()">Limpar<mat-icon>clear</mat-icon></button>
+          <span appToolbarItem="save" toolbarLabel="Salvar" toolbarIcon="save"
+                [toolbarDisabled]="isPullRequestLoading || !prInfo" (toolbarActivate)="savePullRequest()">
+            <button mat-raised-button
+                    [disabled]="isPullRequestLoading || !prInfo"
+                    (click)="savePullRequest()">Salvar<mat-icon>save</mat-icon></button>
+          </span>
 
-          <button mat-raised-button style="margin-left: 10px"
-                  [disabled]="!cardFull || isCardDetailsLoading"
-                  (click)="openCardDetails()">
-            Detalhes do Card<mat-icon>fact_check</mat-icon>
-          </button>
+          <span appToolbarItem="clear" toolbarLabel="Limpar" toolbarIcon="clear"
+                [toolbarDisabled]="isPullRequestLoading || !hasAnythingToClear" (toolbarActivate)="clearAll()">
+            <button mat-raised-button
+                    [disabled]="isPullRequestLoading || !hasAnythingToClear"
+                    (click)="clearAll()">Limpar<mat-icon>clear</mat-icon></button>
+          </span>
 
-          <button mat-raised-button style="margin-left: 10px"
-                  [disabled]="!cardFull || isCardDetailsLoading"
-                  (click)="openHandover()">
-            Handover<mat-icon>swap_horiz</mat-icon>
-          </button>
+          <!-- 0011: "Salvar RC no DevOps" passou para o menu de Ações DevOps; 0021: "Detalhes do card" também -->
+          <span appToolbarItem="devops" toolbarLabel="Ações DevOps" toolbarIcon="settings_suggest" [toolbarSubmenu]="true"
+                [toolbarDisabled]="!cardFull || isCardDetailsLoading" (toolbarActivate)="devopsMenu.openAt($event)">
+            <app-devops-actions-menu #devopsMenu
+                    [cardNumber]="cardNumber?.toString() ?? null"
+                    [cardFull]="cardFull"
+                    [cardLoading]="isCardDetailsLoading"
+                    [hasRootCause]="!!pullRequest?.rootCause"
+                    [registerSaved]="!!pullRequest?.id || !!prState.register()?.id"
+                    [hasSummary]="!!pullRequest?.summary"
+                    [rootCauseSaving]="isAzureLoading"
+                    (openDetails)="openCardDetails()"
+                    (saveRootCause)="saveRootCauseToDevOps()"
+                    (openSummary)="openSummaryDialog($event)"
+                    (changed)="onDevOpsActionDone()"></app-devops-actions-menu>
+          </span>
 
-          <!-- Button to generate prompt for AI processing
-          <button mat-raised-button style="margin-left: 10px"
-                  [disabled]="!cardNumber"
-                  (click)="openDialogPrompt()">Gerar Prompt
-            <mat-icon>model_training</mat-icon>
-          </button>
-          Button to save root cause to DevOps (currently disabled) -->
-
-      <!-- 0011: "Salvar RC no DevOps" passou para o menu de Ações DevOps -->
-      <app-devops-actions-menu
-              [cardNumber]="cardNumber?.toString() ?? null"
-              [cardFull]="cardFull"
-              [cardLoading]="isCardDetailsLoading"
-              [hasRootCause]="!!pullRequest?.rootCause"
-              [registerSaved]="!!pullRequest?.id || !!prState.register()?.id"
-              [hasSummary]="!!pullRequest?.summary"
-              [rootCauseSaving]="isAzureLoading"
-              (saveRootCause)="saveRootCauseToDevOps()"
-              (openSummary)="openSummaryDialog($event)"
-              (changed)="onDevOpsActionDone()"></app-devops-actions-menu>
-      <button mat-raised-button style="margin-left: 10px"
-              [disabled]="!cardNumber"
-              (click)="generatePullRequestWithAi()"
-      >Gerar com IA<mat-icon>model_training</mat-icon></button>
-
-
-    } @else {
-      <p-splitbutton style="width: 100% !important"
-        label="Salvar"
-                     icon="pi pi-save"
-                     [disabled]="isPullRequestLoading || !prInfo"
-                     [model]="mobileButtons" (onClick)="savePullRequest()" rounded severity="secondary" />
-    }
-
-
-
-
+          <span appToolbarItem="smart" toolbarLabel="Ações inteligentes" toolbarIcon="auto_awesome" [toolbarSubmenu]="true"
+                [toolbarDisabled]="!cardNumber" (toolbarActivate)="smartMenu.openAt($event)">
+            <app-smart-actions-menu #smartMenu
+                    [cardNumber]="cardNumber?.toString() ?? null"
+                    [cardFound]="!!cardFull"
+                    [cardLoading]="isCardDetailsLoading"
+                    (generateAi)="generatePullRequestWithAi()"
+                    (handover)="openHandover()"></app-smart-actions-menu>
+          </span>
+        </app-action-toolbar>
       </div>
 }
 <ngx-loading-bar></ngx-loading-bar>
