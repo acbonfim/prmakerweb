@@ -1,0 +1,697 @@
+:host {
+  display: block;
+  height: 100%;
+  /* Cores de status (tema escuro do app). */
+  --plan-run: var(--mat-sys-primary);
+  --plan-ok: #3fb950;
+  --plan-warn: #d29922;
+  --plan-err: #f0716a;
+  --plan-muted: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+  --plan-line: rgba(255, 255, 255, 0.1);
+}
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 200px;
+  background-color: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+  container-type: inline-size;
+  --plan-run: var(--mat-sys-primary);
+  --plan-ok: #3fb950;
+  --plan-warn: #d29922;
+  --plan-err: #f0716a;
+  --plan-muted: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+  --plan-line: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Cabeçalho (mesma altura da linha do tempo) ── */
+.plan__header {
+  flex: none;
+  box-sizing: border-box;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 16px;
+  background-color: var(--surface-2, #323232);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.plan__header-icon { color: var(--mat-sys-primary); margin-right: 2px; }
+.plan__title { font-weight: 600; font-size: 14px; white-space: nowrap; }
+.plan__card { font-size: 13px; color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent); }
+.plan__spacer { flex: 1 1 auto; }
+
+.plan__action.mat-mdc-icon-button,
+.plan__expand.mat-mdc-icon-button,
+.plan__zip.mat-mdc-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  --mdc-icon-button-state-layer-size: 32px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 70%, transparent);
+}
+.plan__action .mat-icon,
+.plan__expand .mat-icon,
+.plan__zip .mat-icon { font-size: 19px; width: 19px; height: 19px; }
+.plan__action--go.mat-mdc-icon-button { color: var(--plan-ok); }
+
+/* ── Chip de status (animado) ── */
+.plan-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--plan-c);
+  background: color-mix(in srgb, var(--plan-c) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--plan-c) 35%, transparent);
+  transition: color 0.3s, background 0.3s, border-color 0.3s;
+  animation: plan-pop 0.35s ease-out;
+}
+
+.plan-status--pending { --plan-c: var(--plan-muted); }
+.plan-status--running { --plan-c: var(--plan-run); }
+.plan-status--paused { --plan-c: var(--plan-warn); }
+.plan-status--completed { --plan-c: var(--plan-ok); }
+.plan-status--failed { --plan-c: var(--plan-err); }
+.plan-status--cancelled { --plan-c: var(--plan-muted); }
+
+.plan-status__dot {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--plan-c);
+}
+
+/* Em andamento: anel que se expande a partir do ponto. */
+.plan-status--running .plan-status__dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--plan-c);
+  animation: plan-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+/* Pausado: respira devagar. */
+.plan-status--paused .plan-status__dot { animation: plan-breathe 1.8s ease-in-out infinite; border-radius: 2px; }
+/* Pendente: ampulheta "girando" (ponto oco). */
+.plan-status--pending .plan-status__dot { background: transparent; border: 2px solid var(--plan-c); width: 6px; height: 6px; }
+/* Cancelado: riscado. */
+.plan-status--cancelled { text-decoration: line-through; text-decoration-thickness: 1px; }
+.plan-status--cancelled .plan-status__dot { background: transparent; border: 1px solid var(--plan-c); }
+
+@keyframes plan-ping {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  80%, 100% { transform: scale(1.8); opacity: 0; }
+}
+@keyframes plan-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+@keyframes plan-pop {
+  0% { transform: scale(0.85); opacity: 0.4; }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ── Progresso (barra fina sob o cabeçalho) ── */
+.plan__progress {
+  flex: none;
+  position: relative;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+.plan__progress-fill {
+  height: 100%;
+  background: var(--plan-c);
+  transition: width 0.6s cubic-bezier(0.2, 0, 0, 1), background 0.3s;
+}
+.plan__progress--live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: translateX(-100%);
+  animation: plan-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes plan-shimmer { 100% { transform: translateX(100%); } }
+
+/* ── Barras (confirmar cancelamento, sem sinal) ── */
+.plan__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  animation: plan-slide 0.25s ease-out;
+}
+.plan__bar > .mat-icon { font-size: 18px; width: 18px; height: 18px; flex: none; }
+.plan__bar--warn { background: color-mix(in srgb, var(--plan-warn) 14%, transparent); color: color-mix(in srgb, var(--plan-warn) 80%, white); }
+.plan__bar--danger { background: color-mix(in srgb, var(--plan-err) 12%, transparent); color: var(--plan-err); }
+.plan__bar--inline { padding: 8px 0 0; border: none; flex-wrap: wrap; }
+.plan__bar-text { flex: 1 1 auto; min-width: 0; line-height: 1.4; }
+.plan__bar-text code, .plan__command code {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--mat-sys-on-surface);
+}
+.plan__bar-input {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background-color: var(--surface-input, #1f1f1f);
+  color: var(--mat-sys-on-surface);
+  font-size: 13px;
+  outline: none;
+}
+.plan__bar-input:focus { border-color: var(--mat-sys-primary); }
+@keyframes plan-slide { from { opacity: 0; transform: translateY(-4px); } }
+
+/* ── Corpo ── */
+.plan__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+.plan__steps {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 10px 10px 12px;
+}
+
+.plan__state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
+}
+.plan__state > .mat-icon { font-size: 34px; width: 34px; height: 34px; }
+.plan__state--error { color: var(--mat-sys-error, #f2b8b5); }
+.plan__command { display: inline-flex; align-items: center; gap: 6px; }
+.plan__command .mat-icon { font-size: 16px; width: 16px; height: 16px; margin: 0 0 0 6px; }
+
+.plan__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 4px 10px;
+}
+.plan__meta-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan__meta-sub { font-size: 11px; color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); }
+
+/* ── Etapas (trilha vertical) ── */
+.steps { list-style: none; margin: 0; padding: 0; }
+
+.step { position: relative; border-radius: 10px; transition: background 0.2s; }
+.step--open { background: color-mix(in srgb, var(--mat-sys-on-surface) 4%, transparent); }
+
+.step__row {
+  width: 100%;
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 0 8px 0 4px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.step__row:hover { background: color-mix(in srgb, var(--mat-sys-on-surface) 5%, transparent); }
+.step__row:focus-visible { outline: 2px solid var(--mat-sys-primary); outline-offset: -2px; }
+
+.step__rail {
+  flex: none;
+  width: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.step__node {
+  --node-c: var(--plan-muted);
+  flex: none;
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--node-c);
+  border: 2px solid var(--node-c);
+  background: var(--surface-1, #2a2a2a);
+  box-sizing: border-box;
+  transition: color 0.3s, border-color 0.3s, background 0.3s, transform 0.3s;
+}
+.step__node .mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+.step__line {
+  flex: 1 1 auto;
+  width: 2px;
+  min-height: 12px;
+  margin: 3px 0 -8px;
+  background: var(--plan-line);
+  border-radius: 1px;
+  overflow: hidden;
+}
+/* Conector "enche" de cima para baixo quando a etapa termina. */
+.step__line-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--plan-ok);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 0.6s cubic-bezier(0.2, 0, 0, 1);
+}
+.step--completed .step__line-fill { transform: scaleY(1); }
+.step--running .step__line-fill,
+.step--paused .step__line-fill {
+  transform: scaleY(1);
+  background: linear-gradient(var(--plan-run), transparent);
+  animation: plan-flow 1.6s ease-in-out infinite;
+}
+@keyframes plan-flow {
+  0% { transform: scaleY(0); opacity: 1; }
+  70% { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(1); opacity: 0; }
+}
+
+.step__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 0;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.step__title { font-size: 13px; font-weight: 500; line-height: 1.3; }
+.step__sub,
+.step__activity {
+  font-size: 12px;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.step__activity { color: color-mix(in srgb, var(--plan-run) 85%, white); }
+
+/* "digitando…" da atividade ao vivo */
+.step__typing { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
+.step__typing i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: plan-typing 1.2s infinite ease-in-out;
+}
+.step__typing i:nth-child(2) { animation-delay: 0.15s; }
+.step__typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes plan-typing {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+.step__aside {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent);
+}
+.step__files { display: inline-flex; align-items: center; gap: 1px; }
+.step__files .mat-icon { font-size: 14px; width: 14px; height: 14px; }
+.step__time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.step__chevron { font-size: 18px; width: 18px; height: 18px; transition: transform 0.2s; }
+.step--open .step__chevron { transform: rotate(180deg); }
+
+/* Estados da etapa */
+.step--completed .step__node {
+  --node-c: var(--plan-ok);
+  background: var(--plan-ok);
+  color: #0d1117;
+  animation: plan-pop 0.4s ease-out;
+}
+.step--running .step__node {
+  --node-c: var(--plan-run);
+  border-color: color-mix(in srgb, var(--plan-run) 25%, transparent);
+}
+/* Anel girando em volta do nó em andamento. */
+.step--running .step__node::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--plan-run);
+  border-right-color: var(--plan-run);
+  animation: plan-spin 0.9s linear infinite;
+}
+.step__pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--plan-run);
+  animation: plan-breathe 1.2s ease-in-out infinite;
+}
+.step--running .step__title { font-weight: 600; }
+.step--running { background: linear-gradient(90deg, color-mix(in srgb, var(--plan-run) 10%, transparent), transparent 70%); }
+
+.step--paused .step__node { --node-c: var(--plan-warn); animation: plan-breathe 1.8s ease-in-out infinite; }
+.step--paused .step__sub { color: color-mix(in srgb, var(--plan-warn) 85%, white); }
+
+.step--failed .step__node { --node-c: var(--plan-err); background: var(--plan-err); color: #0d1117; }
+.step--failed .step__sub { color: var(--plan-err); }
+
+.step--cancelled { opacity: 0.45; }
+.step--cancelled:hover, .step--cancelled.step--open { opacity: 0.8; }
+.step--cancelled .step__title { text-decoration: line-through; text-decoration-thickness: 1px; }
+.step--cancelled .step__node { border-style: dashed; }
+
+.step--pending .step__title { color: color-mix(in srgb, var(--mat-sys-on-surface) 75%, transparent); }
+
+/* Mudou agora (tempo real): brilho rápido */
+.step--flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mat-sys-primary) 70%, transparent);
+  animation: plan-flash 1.6s ease-out forwards;
+}
+@keyframes plan-flash {
+  0% { opacity: 1; background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent); }
+  100% { opacity: 0; }
+}
+
+@keyframes plan-spin { to { transform: rotate(360deg); } }
+
+/* Skeleton da carga */
+.step--skeleton { display: flex; gap: 10px; padding: 6px 4px; }
+.step--skeleton .step__rail { padding-top: 4px; }
+.step--skeleton .step__node { border: none; }
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09), transparent);
+  animation: plan-shimmer 1.2s ease-in-out infinite;
+}
+.step__node.skeleton { border-radius: 50%; }
+.skeleton--line { height: 10px; margin: 7px 0; }
+
+/* ── Detalhes da etapa ── */
+.step__details {
+  padding: 0 12px 12px 44px;
+  animation: plan-slide 0.2s ease-out;
+}
+
+.plan__section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent);
+}
+.plan__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--plan-run);
+}
+.plan__live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: plan-breathe 1.2s ease-in-out infinite;
+}
+.plan__hint { margin: 2px 0; font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent); }
+
+.plan__checkpoint {
+  padding: 6px 10px;
+  border-left: 3px solid color-mix(in srgb, var(--plan-warn) 70%, transparent);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--plan-warn) 7%, transparent);
+}
+
+.plan__reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--plan-muted);
+}
+.plan__reason .mat-icon { font-size: 16px; width: 16px; height: 16px; flex: none; }
+.plan__reason--failed { color: var(--plan-err); }
+
+.plan__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.plan__chip.mat-mdc-outlined-button {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 14px;
+}
+.plan__chip .mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
+.plan__skip.mat-mdc-button { margin-top: 8px; font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent); }
+.plan__skip .mat-icon { font-size: 17px; width: 17px; height: 17px; }
+
+/* Andamento (pedaços da skill) */
+.plan-logs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.plan-log {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  animation: plan-slide 0.25s ease-out;
+}
+.plan-log:hover { background: rgba(255, 255, 255, 0.03); }
+.plan-log__icon {
+  flex: none;
+  font-size: 15px;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+}
+.plan-log__body { flex: 1 1 auto; min-width: 0; word-break: break-word; }
+.plan-log__time {
+  flex: none;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 40%, transparent);
+}
+.plan-log--progress .plan-log__icon { color: var(--plan-run); }
+.plan-log--finding .plan-log__icon { color: #a371f7; }
+.plan-log--finding { background: color-mix(in srgb, #a371f7 7%, transparent); }
+.plan-log--decision .plan-log__icon { color: var(--plan-ok); }
+.plan-log--warning .plan-log__icon { color: var(--plan-warn); }
+.plan-log--error .plan-log__icon, .plan-log--error { color: var(--plan-err); }
+
+/* Markdown (descrição, checkpoint, andamento) — conteúdo via [innerHTML], daí o ::ng-deep. Sem :host:
+   na tela cheia o painel vive no <body>, fora do host. */
+.plan-md { font-size: 12.5px; line-height: 1.5; word-break: break-word; }
+.plan-md ::ng-deep > :first-child { margin-top: 0; }
+.plan-md ::ng-deep > :last-child { margin-bottom: 0; }
+.plan-md ::ng-deep p { margin: 0 0 6px; }
+.plan-md ::ng-deep ul, .plan-md ::ng-deep ol { margin: 0 0 6px; padding-left: 1.3em; }
+.plan-md ::ng-deep h1, .plan-md ::ng-deep h2, .plan-md ::ng-deep h3,
+.plan-md ::ng-deep h4 { margin: 8px 0 4px; font-size: 13px; font-weight: 600; }
+.plan-md ::ng-deep code {
+  color: inherit;
+  font-family: 'Courier New', monospace;
+  font-size: 11.5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.plan-md ::ng-deep pre {
+  margin: 4px 0 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  overflow-x: auto;
+}
+.plan-md ::ng-deep pre code { padding: 0; background: transparent; }
+.plan-md ::ng-deep a { color: var(--mat-sys-primary); }
+.plan-md ::ng-deep table { border-collapse: collapse; font-size: 11.5px; display: block; overflow-x: auto; }
+.plan-md ::ng-deep th, .plan-md ::ng-deep td { padding: 3px 6px; border: 1px solid rgba(255, 255, 255, 0.12); }
+
+/* ── Rodapé (mesma altura do rodapé da linha do tempo) ── */
+.plan__footer {
+  flex: none;
+  box-sizing: border-box;
+  min-height: 63px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px 10px 12px;
+  background-color: var(--surface-2, #323232);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.plan__file-btn.mat-mdc-outlined-button {
+  flex: none;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  min-width: 0;
+}
+.plan__file-btn .mat-icon { font-size: 17px; width: 17px; height: 17px; margin-right: 4px; }
+.plan__file-count {
+  margin-left: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  animation: plan-pop 0.35s ease-out;
+}
+.plan__spin { animation: plan-spin 0.9s linear infinite; }
+
+/* Coluna estreita: rodapé só com ícones + contador. */
+@container (max-width: 470px) {
+  .plan__file-label { display: none; }
+  .plan__file-btn .mat-icon { margin-right: 0; }
+  .plan__title { font-size: 13px; }
+}
+@container (max-width: 360px) {
+  .plan__title { display: none; }
+}
+
+/* ── Tela cheia: etapas à esquerda, detalhes da etapa à direita ── */
+.plan--expanded {
+  position: fixed;
+  z-index: 1000;
+  min-height: 0;
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+.plan--expanded .plan__steps {
+  flex: 0 0 min(440px, 42%);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+.plan--expanded .step__chevron { display: none; }
+.plan--expanded .step--open {
+  background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
+  box-shadow: inset 3px 0 0 var(--mat-sys-primary);
+}
+.plan__detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 20px 16px;
+  overflow-y: auto;
+  animation: plan-slide 0.25s ease-out;
+}
+.plan__detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.plan__detail-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--mat-sys-primary);
+}
+.plan__detail-title { font-size: 17px; font-weight: 600; }
+.plan__detail .plan-md { font-size: 13.5px; }
+.plan__detail .plan-logs { max-height: none; flex: 1 1 auto; min-height: 120px; }
+.plan__detail .plan-log { font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-status, .plan-status__dot, .plan-status__dot::after, .plan__progress--live::after,
+  .step__node, .step__node::before, .step__line-fill, .step__pulse, .step__typing i,
+  .step--flash::after, .plan-log, .plan__bar, .step__details, .plan__detail, .skeleton::after,
+  .plan__file-count, .plan__live::before {
+    animation: none !important;
+    transition: none !important;
+  }
+  .step--running .step__node::before { border-color: var(--plan-run); }
+}

@@ -67,23 +67,42 @@
   margin-top: 12px;
 }
 
-/* ── Layout: campos (60%) + linha do tempo (40%), mesma altura ── */
+/* ── Layout: PRs · Plano de execução (0023) · Linha do tempo, mesma altura ── */
 .pr-content-row {
   flex: 1 1 auto;
   min-height: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr);
+  grid-template-areas: "prs plan timeline";
   align-items: stretch;
   gap: 15px;
   margin-top: 5px;
 }
 
 .pr-fields {
-  flex: 1 1 60%;
+  grid-area: prs;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 15px;
+}
+
+.pr-plan {
+  grid-area: plan;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Telas médias: PRs e plano empilhados à esquerda, linha do tempo inteira à direita. */
+@media (max-width: 1280px) and (min-width: 901px) {
+  .pr-content-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr);
+    grid-template-areas:
+      "prs timeline"
+      "plan timeline";
+  }
 }
 
 /* Cada painel (Descrição / Root Cause) divide a largura da linha */
@@ -94,7 +113,7 @@
 }
 
 .pr-timeline {
-  flex: 1 1 40%;
+  grid-area: timeline;
   min-width: 0;
   min-height: 0;
 }
@@ -140,13 +159,19 @@
   }
 
   .pr-content-row {
+    display: flex;
     flex-direction: column;
   }
 
   .pr-fields,
+  .pr-plan,
   .pr-timeline {
     flex: 1 1 auto;
     max-width: 100%;
+  }
+
+  .pr-plan {
+    height: 420px;
   }
 
   .pr-panel {
