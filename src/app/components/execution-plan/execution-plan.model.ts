@@ -1,6 +1,10 @@
 /** Plano de execução de uma skill sobre um card (feature 0023) — espelha `ExecutionPlanResponse` da API. */
 export type PlanStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
-export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type StepStatus = 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+export type PlanPhase = 'analysis' | 'correction';
+export type StepExecutor = 'claude' | 'user';
+export type StepKind = 'task' | 'code' | 'pr' | 'ticket' | 'question' | 'validation';
+export type LinkKind = 'ticket' | 'pr' | 'doc' | 'other';
 export type LogKind = 'info' | 'progress' | 'finding' | 'decision' | 'warning' | 'error';
 export type ArtifactKind = 'script' | 'analysis' | 'data' | 'image' | 'attachment';
 
@@ -20,6 +24,9 @@ export interface ExecutionPlanSummary {
   lastActivityAt?: string | null;
   stepsTotal: number;
   stepsCompleted: number;
+  /** Análise ou correção (0024). */
+  phase: PlanPhase;
+  parentPlanId?: string | null;
 }
 
 export interface ExecutionStep {
@@ -36,6 +43,51 @@ export interface ExecutionStep {
   startedAt?: string | null;
   finishedAt?: string | null;
   updatedAt: string;
+  executor: StepExecutor;
+  kind: StepKind;
+  repository?: string | null;
+  dependsOn: string[];
+}
+
+export interface ExecutionQuestionOption {
+  label: string;
+  description?: string | null;
+  recommended: boolean;
+}
+
+/** Pergunta da skill ao usuário (0024) — responde aqui ou no Claude. */
+export interface ExecutionQuestion {
+  id: string;
+  stepKey?: string | null;
+  order: number;
+  text: string;
+  options: ExecutionQuestionOption[];
+  allowFreeText: boolean;
+  status: 'open' | 'answered' | 'cancelled';
+  answer?: string | null;
+  answeredBy?: string | null;
+  answeredVia?: 'prmake' | 'claude' | null;
+  answeredAt?: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** Link anexado a uma etapa (0024): chamado (status manual), PR (status do GitHub), documento. */
+export interface ExecutionLink {
+  id: string;
+  stepKey: string;
+  kind: LinkKind;
+  url: string;
+  title?: string | null;
+  status?: 'open' | 'resolved' | 'closed' | 'merged' | null;
+  blocksStep: boolean;
+  pullRequestNumber?: number | null;
+  repository?: string | null;
+  targetBranch?: string | null;
+  createdBy: string;
+  createdAt: string;
+  statusChangedBy?: string | null;
+  statusChangedAt?: string | null;
 }
 
 export interface ExecutionArtifact {
@@ -56,6 +108,8 @@ export interface ExecutionPlan extends ExecutionPlanSummary {
   summary?: string | null;
   steps: ExecutionStep[];
   artifacts: ExecutionArtifact[];
+  questions: ExecutionQuestion[];
+  links: ExecutionLink[];
   lastLogId: number;
   serverTime: string;
 }
@@ -72,7 +126,7 @@ export interface ExecutionLog {
 export interface ExecutionPlanRealtimePayload {
   cardNumber: string;
   planId: string;
-  action: 'created' | 'steps' | 'step' | 'log' | 'status' | 'artifact';
+  action: 'created' | 'steps' | 'step' | 'log' | 'status' | 'artifact' | 'question' | 'link';
   stepKey?: string | null;
   status?: PlanStatus;
 }

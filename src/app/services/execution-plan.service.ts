@@ -3,8 +3,10 @@ import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
+  ExecutionLink,
   ExecutionLog,
   ExecutionPlan,
+  ExecutionQuestion,
   ExecutionPlanSummary,
   ExecutionStep,
   PlanStatus
@@ -43,6 +45,32 @@ export class ExecutionPlanService {
 
   cancelStep(planId: string, stepKey: string, reason: string): Observable<ExecutionStep> {
     return this.http.post<ExecutionStep>(`${this.apiUrl}/${planId}/steps/${encodeURIComponent(stepKey)}/cancel`, { reason });
+  }
+
+  // ── 0024 ──────────────────────────────────────────────────────────────────────────────────────
+
+  startStep(planId: string, stepKey: string): Observable<ExecutionStep> {
+    return this.http.post<ExecutionStep>(`${this.apiUrl}/${planId}/steps/${encodeURIComponent(stepKey)}/start`, {});
+  }
+
+  completeStep(planId: string, stepKey: string, reason?: string | null): Observable<ExecutionStep> {
+    return this.http.post<ExecutionStep>(`${this.apiUrl}/${planId}/steps/${encodeURIComponent(stepKey)}/complete`, { reason: reason || null });
+  }
+
+  answer(planId: string, questionId: string, answer: string): Observable<ExecutionQuestion> {
+    return this.http.post<ExecutionQuestion>(`${this.apiUrl}/${planId}/questions/${questionId}/answer`, { answer });
+  }
+
+  addLink(planId: string, stepKey: string, link: { url: string; title?: string | null; kind?: string | null; blocksStep: boolean }): Observable<ExecutionLink> {
+    return this.http.post<ExecutionLink>(`${this.apiUrl}/${planId}/steps/${encodeURIComponent(stepKey)}/links`, link);
+  }
+
+  updateLink(planId: string, linkId: string, changes: { status?: string; title?: string }): Observable<ExecutionLink> {
+    return this.http.patch<ExecutionLink>(`${this.apiUrl}/${planId}/links/${linkId}`, changes);
+  }
+
+  deleteLink(planId: string, linkId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${planId}/links/${linkId}`);
   }
 
   /** Conteúdo de um arquivo (a api-key vai pelo interceptor; por isso blob, não <img src>). */
