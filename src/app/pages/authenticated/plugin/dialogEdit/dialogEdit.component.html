@@ -39,17 +39,25 @@
     </div>
   }
 
-  <form  class="mb-2 mt-2" style="max-height: 300px; overflow-y: auto;">
+  <form  class="mb-2 mt-2" style="max-height: 60vh; overflow-y: auto;">
     @for (property of getObjectKeys(urlApiModel); track property)
     {
       <div class="field-row">
         <mat-form-field class="example-full-width w-100">
           <mat-label>{{labelOf(property)}}</mat-label>
-          @if (labelOf(property) !== property) {
+          @if (labelOf(property) !== property && !jsonError(property)) {
             <mat-hint>{{property}}</mat-hint>
           }
-          <input matInput [value]="urlApiModel[property]" #val  (change)="objChanged(property,val.value)"
-                 [placeholder]="data.isPersonal && isUserField(property) ? 'Opcional: sugestão para os usuários' : ''">
+          @if (isMultiline(property)) {
+            <textarea matInput class="json-value" cdkTextareaAutosize cdkAutosizeMinRows="3" cdkAutosizeMaxRows="18"
+                      [value]="urlApiModel[property]" #area (input)="objChanged(property, area.value)"></textarea>
+          } @else {
+            <input matInput [value]="urlApiModel[property]" #val  (change)="objChanged(property,val.value)"
+                   [placeholder]="data.isPersonal && isUserField(property) ? 'Opcional: sugestão para os usuários' : ''">
+          }
+          @if (jsonError(property); as err) {
+            <mat-hint class="json-error">JSON inválido: {{ err }}</mat-hint>
+          }
           <button matSuffix mat-icon-button matTooltip="Excluir atributo" color="primary" (click)="removeProperty(property)">
             <mat-icon>close</mat-icon>
           </button>
@@ -82,7 +90,8 @@
   </div>
   <button class="ms-auto" mat-raised-button color="primary"
   (click)="saveChanges()"
-  [disabled]="load"
+  [disabled]="load || hasJsonErrors()"
+  [matTooltip]="hasJsonErrors() ? 'Corrija os campos com JSON inválido' : ''"
   >Salvar <mat-icon>save</mat-icon></button>
 </mat-dialog-actions>
 @if(load){
