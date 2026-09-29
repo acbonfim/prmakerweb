@@ -2,7 +2,9 @@ import { CommonModule } from '@angular/common';
 import {
   Component,
   ElementRef,
+  EventEmitter,
   Input,
+  Output,
   OnDestroy,
   ViewChild,
   computed,
@@ -56,6 +58,17 @@ const SAFETY_POLL_MS = 30_000;
 /** Junta rajadas de eventos (a skill manda vários pedaços seguidos). */
 const REFRESH_DEBOUNCE_MS = 250;
 const MAX_LOGS_IN_MEMORY = 3000;
+
+/** Resumo do plano para o cartão do topo da tela do card (0026). */
+export interface PlanHeadline {
+  phase: 'analysis' | 'correction';
+  status: string;
+  done: number;
+  total: number;
+  /** Etapas aguardando algo externo (merge, chamado, resposta). */
+  waiting: number;
+  openQuestions: number;
+}
 
 /** Status visual da etapa: a etapa em andamento de um plano pausado aparece pausada. */
 export type StepView = ExecutionStep & {
@@ -119,6 +132,9 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   readonly groups = ARTIFACT_GROUPS;
   readonly statusLabel = PLAN_STATUS_LABEL;
+
+  /** Resumo do plano em tela (ou null sem plano) — para o cartão do topo (0026). */
+  @Output() headline = new EventEmitter<PlanHeadline | null>();
 
   readonly fullscreen = new FullscreenPanel({
     host: () => this.hostRef.nativeElement,
@@ -287,7 +303,22 @@ export class ExecutionPlanComponent implements OnDestroy {
     if (this.loadedCard()) this.fetch({ silent: true });
   }
 
+  private emitHeadline(plan: ExecutionPlan | null): void {
+    if (!plan) { this.headline.emit(null); return; }
+    const steps = plan.steps ?? [];
+    const cancelled = steps.filter((s) => s.status === 'cancelled').length;
+    this.headline.emit({
+      phase: plan.phase ?? 'analysis',
+      status: plan.status,
+      done: steps.filter((s) => s.status === 'completed').length,
+      total: steps.length - cancelled,
+      waiting: steps.filter((s) => s.status === 'waiting').length,
+      openQuestions: (plan.questions ?? []).filter((q) => q.status === 'open').length
+    });
+  }
+
   private clear(): void {
+    this.headline.emit(null);
     this.loadSub?.unsubscribe();
     this.logsSub?.unsubscribe();
     this.switchGroup(null);
@@ -339,6 +370,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     if (plan && previous && previous.id === plan.id) this.flashChanged(previous, plan);
     if (!plan || previous?.id !== plan.id) this.logs.set([]);
     this.plan.set(plan);
+    this.emitHeadline(plan);
 
     if (!plan) return;
     // Primeira carga: abre a etapa em andamento (o usuário vê o que está acontecendo sem clicar).

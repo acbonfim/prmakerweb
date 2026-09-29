@@ -35,7 +35,8 @@ import {WsService} from '../../../services/ws.service';
 import {JsonPipe} from '@angular/common';
 import {AuthService} from '../../../services/auth.service';
 import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
-import {ExecutionPlanComponent} from '../../../components/execution-plan/execution-plan.component';
+import {ExecutionPlanComponent, PlanHeadline} from '../../../components/execution-plan/execution-plan.component';
+import {InfoFact} from '../../../components/pr-info-card/pr-info-card.component';
 import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
 import {CardDetailsDialogComponent} from '../../../components/card-details-dialog/card-details-dialog.component';
 import {HandoverDialogComponent} from '../../../components/handover-dialog/handover-dialog.component';
@@ -173,6 +174,93 @@ export class RegisterComponent implements OnInit, OnDestroy {
   private resyncSub?: Subscription;
   private prWatchTimer?: ReturnType<typeof setInterval>;
   private prWatchBusy = false;
+
+  /** Resumo do plano de execução do card (vem da seção do plano) — 0026. */
+  planHeadline: PlanHeadline | null = null;
+
+  /**
+   * Resumo do card em etiquetas no cartão do topo (0026): o que antes ficava escondido nos modais —
+   * estado/coluna no DevOps, ambiente do cliente, módulo, produção/release, prioridade/severidade,
+   * responsável, horas restantes, PRs, plano e resumo não técnico.
+   */
+  infoFacts(): InfoFact[] {
+    const facts: InfoFact[] = [];
+    const f = this.cardFull?.fields ?? null;
+    const text = (key: string): string => {
+      const v = f?.[key];
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'object') return `${v.displayName ?? v.name ?? ''}`.trim();
+      const str = `${v}`.trim();
+      return str === '-' ? '' : str;
+    };
+
+    if (f) {
+      const state = text('System.State');
+      if (state) {
+        const column = text('System.BoardColumn');
+        const lane = text('System.BoardLane');
+        facts.push({
+          icon: 'flag', label: 'Estado no DevOps', value: state, tone: /closed|done|resolved|removed/i.test(state) ? 'ok' : 'info',
+          tooltip: [column && `Coluna: ${column}`, lane && `Raia: ${lane}`, text('System.Reason')].filter(Boolean).join('\n')
+        });
+      }
+      const env = text('Custom.Environment');
+      if (env) facts.push({ icon: 'dns', label: 'Ambiente do cliente', value: env });
+      const module = text('Custom.Module');
+      if (module) facts.push({ icon: 'widgets', label: 'Módulo', value: module, tooltip: text('Custom.Platform') && `Plataforma: ${text('Custom.Platform')}` });
+      const area = text('System.AreaPath');
+      const origin = text('Custom.BugReleaseorProduction') || (/Release Management/i.test(area) ? 'Release' : /Product Development/i.test(area) ? 'Production' : '');
+      if (origin) facts.push({
+        icon: 'rocket_launch', label: 'Produção ou release', value: /prod/i.test(origin) ? 'Produção' : /release|regress/i.test(origin) ? 'Release' : origin,
+        tooltip: area ? `Área: ${area}` : undefined
+      });
+      const priority = text('Microsoft.VSTS.Common.Priority');
+      const severity = text('Microsoft.VSTS.Common.Severity');
+      if (priority || severity) facts.push({
+        icon: 'priority_high', label: 'Prioridade · severidade',
+        value: [priority && `P${priority}`, severity].filter(Boolean).join(' · '),
+        tone: priority === '1' || /^[12]\b/.test(severity) ? 'warn' : undefined
+      });
+      const assigned = text('System.AssignedTo');
+      if (assigned) facts.push({ icon: 'person', label: 'Responsável no DevOps', value: assigned.replace(/\s*<.*>$/, '') });
+      const remaining = Number(text('Microsoft.VSTS.Scheduling.RemainingWork'));
+      if (Number.isFinite(remaining) && remaining > 0) facts.push({
+        icon: 'timer', label: 'Horas restantes', value: `${remaining}h restantes`,
+        tooltip: text('Microsoft.VSTS.Scheduling.OriginalEstimate') && `Estimativa original: ${text('Microsoft.VSTS.Scheduling.OriginalEstimate')}h`
+      });
+    }
+
+    const prs = this.prState.githubPrs().filter((p) => p.status !== 'LEGACY');
+    if (prs.length) {
+      const merged = prs.filter((p) => p.status === 'MERGED').length;
+      const open = prs.filter((p) => p.status === 'OPEN').length;
+      facts.push({
+        icon: 'merge', label: 'Pull requests', value: `${merged}/${prs.length} mesclados`,
+        tone: merged === prs.length ? 'ok' : open ? 'warn' : undefined,
+        tooltip: prs.map((p) => `#${p.number ?? '?'} ${p.repositoryId} → ${p.targetBranch}: ${p.status === 'MERGED' ? 'mesclado' : p.status === 'OPEN' ? 'aberto' : 'fechado'}`).join('\n')
+      });
+    }
+
+    const plan = this.planHeadline;
+    if (plan) {
+      const phase = plan.phase === 'correction' ? 'Correção' : 'Análise';
+      const extra = plan.openQuestions ? ` · ${plan.openQuestions} pergunta(s)` : plan.waiting ? ' · aguardando' : '';
+      const labels: Record<string, string> = { pending: 'pendente', running: 'em andamento', paused: 'pausado', completed: 'concluído', failed: 'falhou', cancelled: 'cancelado' };
+      facts.push({
+        icon: 'account_tree', label: `Plano de ${phase.toLowerCase()} · ${labels[plan.status] ?? plan.status}`,
+        value: plan.status === 'completed' ? `${phase} concluída` : `${phase} ${plan.done}/${plan.total}${extra}`,
+        tone: plan.status === 'completed' ? 'ok' : plan.openQuestions || plan.status === 'paused' ? 'warn' : plan.status === 'running' ? 'info' : 'muted'
+      });
+    }
+
+    if (this.cardType !== 'us' && this.prInfo) {
+      const publishedAt = this.pullRequest?.summaryPublishedAt as string | null | undefined;
+      facts.push(publishedAt
+        ? { icon: 'translate', label: 'Resumo não técnico', value: 'Resumo publicado', tone: 'ok', tooltip: `Publicado na discussion em ${new Date(publishedAt).toLocaleString('pt-BR')}` }
+        : { icon: 'translate', label: 'Resumo não técnico', value: this.pullRequest?.summary ? 'Resumo não publicado' : 'Sem resumo', tone: 'muted', tooltip: 'Ações DevOps → Resumo não técnico' });
+    }
+    return facts;
+  }
 
   /** Rótulo do autor na barra do card conforme o estado da busca. */
   get infoAuthorLabel(): string {
