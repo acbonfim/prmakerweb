@@ -1,19 +1,30 @@
-<div class="timeline">
+<div class="timeline" #timeline [class.timeline--expanded]="expanded()"
+     [attr.role]="expanded() ? 'dialog' : null" [attr.aria-modal]="expanded() ? 'true' : null"
+     [attr.aria-label]="expanded() ? 'Linha do tempo em tela cheia' : null">
   <div class="timeline__header">
     <mat-icon class="timeline__header-icon">forum</mat-icon>
     <span class="timeline__title">Linha do tempo</span>
+    @if (expanded() && cardNumber) {
+      <span class="timeline__card">#{{ cardNumber }}</span>
+    }
+    <span class="timeline__spacer"></span>
     @if (!isLoading() && entries().length) {
       <span class="timeline__count">{{ entries().length }}</span>
     }
-    @if (cardNumber) {
+    @if (teamsImportEnabled && cardNumber) {
       <button mat-button class="timeline__import-toggle" (click)="toggleImport()"
               matTooltip="Importar mensagens de um grupo do Teams">
         <mat-icon>groups</mat-icon> Importar do Teams
       </button>
     }
+    <button mat-icon-button class="timeline__expand" (click)="toggleExpanded()"
+            [matTooltip]="expanded() ? 'Sair da tela cheia (Esc)' : 'Abrir em tela cheia'"
+            [attr.aria-label]="expanded() ? 'Sair da tela cheia' : 'Abrir em tela cheia'">
+      <mat-icon>{{ expanded() ? 'close_fullscreen' : 'open_in_full' }}</mat-icon>
+    </button>
   </div>
 
-  @if (showImport() && cardNumber) {
+  @if (teamsImportEnabled && showImport() && cardNumber) {
     <div class="timeline__import">
       @if (!teamsConfigured) {
         <span class="timeline__import-error">
