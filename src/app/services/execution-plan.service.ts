@@ -5,6 +5,7 @@ import { environment } from '../../environments/environment';
 import {
   ExecutionLink,
   ExecutionLog,
+  ExecutionNote,
   ExecutionPlan,
   ExecutionQuestion,
   ExecutionPlanSummary,
@@ -71,6 +72,24 @@ export class ExecutionPlanService {
 
   deleteLink(planId: string, linkId: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${planId}/links/${linkId}`);
+  }
+
+  // ── 0031: comentários com anexos ──────────────────────────────────────────────────────────────
+
+  addNote(planId: string, text: string, stepKey: string | null, files: File[]): Observable<ExecutionNote> {
+    const form = new FormData();
+    form.append('text', text);
+    if (stepKey) form.append('stepKey', stepKey);
+    for (const f of files) form.append('files', f, f.name);
+    return this.http.post<ExecutionNote>(`${this.apiUrl}/${planId}/notes`, form);
+  }
+
+  editNote(planId: string, noteId: string, text: string): Observable<ExecutionNote> {
+    return this.http.patch<ExecutionNote>(`${this.apiUrl}/${planId}/notes/${noteId}`, { text });
+  }
+
+  deleteNote(planId: string, noteId: string): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${planId}/notes/${noteId}`);
   }
 
   /** Conteúdo de um arquivo (a api-key vai pelo interceptor; por isso blob, não <img src>). */
