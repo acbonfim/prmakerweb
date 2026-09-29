@@ -65,6 +65,8 @@ const PULLREQUEST_CONFIG_EVENT = 'pullRequestConfigUpdated';
  * GitHub abertos/atualizados/com status novo — pela tela, por outro usuário ou pela skill gerar-prmake.
  */
 const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
+/** Vigia dos PRs abertos (0025): consulta o GitHub por baixo dos panos e só redesenha se o status mudar. */
+const PR_WATCH_INTERVAL_MS = 45_000;
 const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
 
 @Component({
@@ -169,6 +171,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
   /** Grupo de tempo real do card em tela (null quando nenhum card foi buscado). */
   private currentCardGroup: string | null = null;
   private resyncSub?: Subscription;
+  private prWatchTimer?: ReturnType<typeof setInterval>;
+  private prWatchBusy = false;
 
   /** Rótulo do autor na barra do card conforme o estado da busca. */
   get infoAuthorLabel(): string {
@@ -281,6 +285,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit() {
+    // Vigia dos PRs abertos (0025): independe das configurações da tela.
+    this.prWatchTimer = setInterval(() => this.watchOpenPrs(), PR_WATCH_INTERVAL_MS);
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
     try {
       await Promise.all([
         firstValueFrom(this.getPullRequestConfigurations()),
@@ -317,6 +324,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    clearInterval(this.prWatchTimer);
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
     this.ws.removeFromGroup(PULLREQUEST_CONFIG_GROUP);
     this.ws.off(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
     this.switchCardGroup(null);
@@ -476,6 +485,34 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.ws.on(PULLREQUEST_CONFIG_EVENT, this.onPullRequestConfigUpdated);
     this.ws.on(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
     this.resyncSub = this.ws._resynced.subscribe(this.onRealtimeResynced);
+  }
+
+  /** Voltou para a aba: confere os PRs na hora (o merge pode ter acontecido enquanto estava fora). */
+  private onVisibilityChange = (): void => {
+    if (!document.hidden) this.watchOpenPrs();
+  };
+
+  /**
+   * Vigia dos PRs abertos (0025): com a aba visível e algum PR ainda aberto, pergunta ao backend o status
+   * no GitHub (cache de 1 min lá) sem skeleton nem spinner, e só troca a lista se algo mudou. Quando muda, o
+   * backend também avisa as outras telas e o plano de execução do card pelo tempo real.
+   */
+  private watchOpenPrs(): void {
+    const card = this.cardNumber?.toString();
+    if (!card || document.hidden || this.prWatchBusy || this.isPullRequestLoading || this.prState.githubPrsLoading()) return;
+    const current = this.prState.githubPrs();
+    if (!current.some((pr) => pr.status === 'OPEN')) return;
+
+    this.prWatchBusy = true;
+    this.prService.listGithubPrs(card, true, false).subscribe({
+      next: (prs) => {
+        this.prWatchBusy = false;
+        if (this.prState.cardNumber() !== card || !prs) return;
+        const signature = (list: GithubPullRequest[]) => list.map((p) => `${p.id}:${p.status}:${p.isDraft}`).sort().join('|');
+        if (signature(prs) !== signature(this.prState.githubPrs())) this.prState.setGithubPrs(prs);
+      },
+      error: () => { this.prWatchBusy = false; }
+    });
   }
 
   /**

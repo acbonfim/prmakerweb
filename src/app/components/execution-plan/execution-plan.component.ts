@@ -46,6 +46,9 @@ import {
   isPlanActive
 } from './execution-plan.model';
 
+/** Evento do card quando os PRs mudam (status sincronizado com o GitHub, PR aberto) — o plano reage na hora (0025). */
+const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
+
 /** Sem sinal da skill por mais que isso (plano ativo) = a sessão provavelmente caiu. */
 const STALE_AFTER_MS = 5 * 60 * 1000;
 /** Consulta de segurança enquanto o plano está ativo (caso o tempo real esteja fora). */
@@ -250,6 +253,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   constructor() {
     this.ws.startConnection();
     this.ws.on(EXECUTION_PLAN_EVENT, this.onRealtime);
+    this.ws.on(PULLREQUEST_CARD_EVENT, this.onPullRequestsChanged);
     // A conexão voltou depois de cair: os eventos da queda se perderam — recarrega em silêncio.
     this.resyncSub = this.ws._resynced.subscribe(() => this.refresh());
     this.clockTimer = setInterval(() => this.now.set(Date.now()), 15_000);
@@ -394,6 +398,15 @@ export class ExecutionPlanComponent implements OnDestroy {
       this.loadHistory(card);
       return;
     }
+    clearTimeout(this.refreshTimer);
+    this.refreshTimer = setTimeout(() => this.refresh(), REFRESH_DEBOUNCE_MS);
+  };
+
+  /** PR do card mudou (ex.: mesclado): o plano sincroniza as etapas de PR na próxima leitura — lê já. */
+  private onPullRequestsChanged = (payload: any): void => {
+    const card = payload?.cardNumber != null ? `${payload.cardNumber}`.trim() : null;
+    if (!card || card !== this.loadedCard() || !this.plan()) return;
+    if (!`${payload?.action ?? ''}`.startsWith('github-pr')) return;
     clearTimeout(this.refreshTimer);
     this.refreshTimer = setTimeout(() => this.refresh(), REFRESH_DEBOUNCE_MS);
   };
@@ -802,5 +815,6 @@ export class ExecutionPlanComponent implements OnDestroy {
     clearInterval(this.clockTimer);
     if (this.currentGroup) this.ws.removeFromGroup(this.currentGroup);
     this.ws.off(EXECUTION_PLAN_EVENT, this.onRealtime);
+    this.ws.off(PULLREQUEST_CARD_EVENT, this.onPullRequestsChanged);
   }
 }
