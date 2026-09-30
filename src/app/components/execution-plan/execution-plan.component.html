@@ -493,13 +493,22 @@
 <ng-template #questionTpl let-q>
   <div class="plan-q" [class.plan-q--open]="q.status === 'open'">
     <div class="plan-q__text plan-md" [innerHTML]="q.text | planMarkdown"></div>
-    @if (q.status === 'open') {
+    @if (pendingAnswer(q); as sent) {
+      <!-- 0036: feedback imediato enquanto o servidor confirma -->
+      <div class="plan-q__answer plan-q__answer--sending" role="status" aria-live="polite">
+        <mat-icon class="plan__spin">sync</mat-icon>
+        <span><strong>{{ sent }}</strong>
+          @if (optionDescription(q, sent); as desc) { <span class="plan-q__answer-desc"> — {{ desc }}</span> }
+          <span class="plan-q__who"> — enviando…</span>
+        </span>
+      </div>
+    } @else if (q.status === 'open') {
       @if (q.options.length) {
         <div class="plan-q__options">
           <!-- 0032: o texto de cada opção fica visível (antes só no tooltip, e o rótulo podia ser "Opção 1"). -->
           @for (o of q.options; track o.label) {
             <button type="button" class="plan-q__option" [class.plan-q__option--rec]="o.recommended"
-                    [disabled]="busy() === 'answer:' + q.id" (click)="answer(q, o.label)">
+                    (click)="answer(q, o.label)">
               <span class="plan-q__option-head">
                 @if (o.recommended) { <mat-icon>star</mat-icon> }
                 <span class="plan-q__option-label">{{ o.label }}</span>
@@ -517,7 +526,7 @@
           <input class="plan__bar-input" [ngModel]="answerDrafts()[q.id] || ''" (ngModelChange)="setAnswerDraft(q.id, $event)"
                  [placeholder]="q.options.length ? 'Ou escreva outra resposta…' : 'Sua resposta…'"
                  (keydown.enter)="answer(q, answerDrafts()[q.id] || '')" />
-          <button mat-flat-button color="primary" [disabled]="!(answerDrafts()[q.id] || '').trim() || busy() === 'answer:' + q.id"
+          <button mat-flat-button color="primary" [disabled]="!(answerDrafts()[q.id] || '').trim()"
                   (click)="answer(q, answerDrafts()[q.id] || '')">Responder</button>
         </div>
       }
