@@ -283,6 +283,20 @@ export class ExecutionPlanComponent implements OnDestroy {
   });
 
   readonly resumeCommand = computed(() => `/analisar-bug ${this.loadedCard() ?? ''}`.trim());
+  /** Terminal (0033): volta para a sessão do Claude que trabalhou no card (ou abre uma nova). */
+  readonly terminalCommand = computed(() => `bash ~/.claude/skills/analisar-bug/scripts/prmake-card.sh ${this.loadedCard() ?? ''}`.trim());
+
+  /** Custo das sessões do Claude no plano (0033). */
+  readonly usageLabel = computed(() => {
+    const u = this.plan()?.usage;
+    if (!u || !u.turns) return null;
+    const m = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} M` : n >= 1000 ? `${Math.round(n / 1000)} mil` : `${n}`;
+    return {
+      short: `${u.turns} turnos · ${m(u.cacheReadTokens + u.cacheWriteTokens + u.inputTokens)} tokens de entrada`,
+      detail: `Custo do Claude neste plano (${u.sessions} ${u.sessions === 1 ? 'sessão' : 'sessões'}): ${u.turns} respostas · `
+        + `saída ${m(u.outputTokens)} · cache lido ${m(u.cacheReadTokens)} · cache escrito ${m(u.cacheWriteTokens)} · entrada nova ${m(u.inputTokens)}`
+    };
+  });
 
   /**
    * Arquivos do plano sem as cópias de anexos de comentário (0032): versões antigas da skill baixavam os anexos
@@ -739,7 +753,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   resume(): void {
     const stale = this.staleMinutes() !== null;
     this.changeStatus('running', null, stale
-      ? `Plano liberado, mas a skill está sem sinal — retome no Claude Code: ${this.resumeCommand()}`
+      ? `Plano liberado, mas a skill está sem sinal — retome no terminal: ${this.terminalCommand()}`
       : 'Plano retomado.');
   }
 
@@ -783,6 +797,30 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   copyResumeCommand(): void {
     this.clipboard.copyFullDescriptionToClipboard(this.resumeCommand());
+  }
+
+  /** Copia o comando de terminal que retoma a sessão do Claude deste card (0033). */
+  copyTerminalCommand(): void {
+    this.clipboard.copyFullDescriptionToClipboard(this.terminalCommand());
+  }
+
+  /** "Continuar sozinho" (0033): o vigia da máquina da sessão retoma a conversa em segundo plano. */
+  requestResume(): void {
+    const plan = this.plan();
+    if (!plan || this.busy()) return;
+    this.busy.set('resume-request');
+    this.api.requestResume(plan.id).subscribe({
+      next: () => {
+        this.busy.set(null);
+        const host = plan.executor?.host ? ` em ${plan.executor.host}` : '';
+        this.snackBar.open(`Pedido enviado — o vigia${host} retoma a sessão do Claude. Sem vigia ligado, use "Retomar no Claude".`, 'Ok', { duration: 8000 });
+        this.refresh();
+      },
+      error: (err) => {
+        this.busy.set(null);
+        this.snackBar.open(planApiError(err, 'Não foi possível pedir para continuar.'), 'Fechar', { duration: 8000 });
+      }
+    });
   }
 
   // ── Arquivos ────────────────────────────────────────────────────────────────────────────────────

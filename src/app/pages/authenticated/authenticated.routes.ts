@@ -39,6 +39,11 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadComponent: () => import('./plugin/plugin.component').then(m => m.PluginComponent)
       },
       {
+        path: 'architecture',
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./architecture/architecture.component').then(m => m.ArchitectureComponent)
+      },
+      {
         path: 'vacations',
         canActivate: [AuthGuard],
         loadComponent: () => import('./vacations/vacations.component').then(m => m.VacationsComponent)

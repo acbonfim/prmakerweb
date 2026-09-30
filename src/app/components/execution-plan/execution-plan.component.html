@@ -45,6 +45,27 @@
         </button>
       }
     }
+    @if (plan(); as p) {
+      <!-- 0033: volta para a sessão do Claude do card sem copiar /analisar-bug de novo -->
+      <button mat-icon-button class="plan__action" (click)="copyTerminalCommand()"
+              [matTooltip]="'Retomar no Claude — copia o comando do terminal que volta para a sessão deste card' + (p.executor?.host ? ' (máquina ' + p.executor!.host + ')' : '') + ' ou abre uma nova'"
+              aria-label="Copiar o comando para retomar no Claude">
+        <mat-icon>terminal</mat-icon>
+      </button>
+      @if (isActive() && p.executor) {
+        @if (p.resumePending) {
+          <span class="plan__resume-pending" [matTooltip]="'Pedido de ' + (p.resumeRequestedBy || '?') + ' — aguardando o vigia em ' + (p.executor.host || 'a máquina da sessão')">
+            <mat-icon>hourglass_top</mat-icon>
+          </span>
+        } @else {
+          <button mat-icon-button class="plan__action" (click)="requestResume()" [disabled]="!!busy()"
+                  [matTooltip]="'Continuar sozinho — o vigia em ' + (p.executor.host || 'a máquina da sessão') + ' retoma o Claude em segundo plano (precisa do vigia ligado: prmake-card.sh agent install)'"
+                  aria-label="Pedir para o Claude continuar sozinho">
+            <mat-icon>smart_toy</mat-icon>
+          </button>
+        }
+      }
+    }
     @if (history().length > 1) {
       <button mat-icon-button class="plan__action" [matMenuTriggerFor]="historyMenu"
               [matTooltip]="'Histórico (' + history().length + ' planos)'" aria-label="Histórico de planos">
@@ -105,10 +126,10 @@
     <div class="plan__bar plan__bar--warn">
       <mat-icon>wifi_off</mat-icon>
       <span class="plan__bar-text">
-        Sem sinal da skill há {{ minutes }} min. Se a sessão caiu, retome de onde parou:
-        <code>{{ resumeCommand() }}</code>
+        Sem sinal da skill há {{ minutes }} min. Se a sessão caiu, retome de onde parou (no terminal):
+        <code>{{ terminalCommand() }}</code>
       </span>
-      <button mat-icon-button (click)="copyResumeCommand()" matTooltip="Copiar o comando" aria-label="Copiar o comando">
+      <button mat-icon-button (click)="copyTerminalCommand()" matTooltip="Copiar o comando" aria-label="Copiar o comando">
         <mat-icon>content_copy</mat-icon>
       </button>
     </div>
@@ -165,6 +186,9 @@
             <span [matTooltip]="formatDateTime(p.createdAt)">{{ relativeTime(p.createdAt) }}</span>
             @if (p.lastActivityAt && isActive()) {
               · último sinal <span [matTooltip]="formatDateTime(p.lastActivityAt)">{{ relativeTime(p.lastActivityAt) }}</span>
+            }
+            @if (usageLabel(); as u) {
+              · <span class="plan__usage" [matTooltip]="u.detail"><mat-icon>toll</mat-icon>{{ u.short }}</span>
             }
           </span>
         </div>

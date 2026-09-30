@@ -27,6 +27,31 @@ export interface ExecutionPlanSummary {
   /** Análise ou correção (0024). */
   phase: PlanPhase;
   parentPlanId?: string | null;
+  /** Sessão do Claude Code a retomar (0033). */
+  executor?: ExecutionSessionInfo | null;
+  /** Custo somado das sessões (0033). */
+  usage?: ExecutionUsage | null;
+  resumeRequestedAt?: string | null;
+  resumeRequestedBy?: string | null;
+  resumePending?: boolean;
+}
+
+export interface ExecutionSessionInfo {
+  sessionId: string;
+  host?: string | null;
+  cwd?: string | null;
+  startedAt: string;
+  lastSeenAt: string;
+}
+
+export interface ExecutionUsage {
+  sessions: number;
+  turns: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  updatedAt?: string | null;
 }
 
 export interface ExecutionStep {

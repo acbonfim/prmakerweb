@@ -40,6 +40,11 @@ export class ExecutionPlanService {
     return this.http.get<ExecutionLog[]>(`${this.apiUrl}/${planId}/logs`, { params });
   }
 
+  /** "Continuar" (0033): o vigia local da máquina da sessão retoma a conversa do Claude. */
+  requestResume(planId: string): Observable<ExecutionPlanSummary> {
+    return this.http.post<ExecutionPlanSummary>(`${this.apiUrl}/${planId}/resume-request`, {});
+  }
+
   changeStatus(planId: string, status: PlanStatus, reason?: string | null): Observable<ExecutionPlan> {
     return this.http.post<ExecutionPlan>(`${this.apiUrl}/${planId}/status`, { status, reason: reason || null });
   }
