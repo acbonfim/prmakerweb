@@ -20,6 +20,10 @@ export interface UserIntegrationField {
   usesGlobalDefault?: boolean;
   /** Campo fixo que não aparece em "Minhas integrações" (0011). */
   hidden?: boolean;
+  /** Lista de escolha (0032): valor global + sugestões do administrador. */
+  suggestions?: string[];
+  /** Ajuda do campo definida pelo administrador (0032). */
+  help?: string | null;
 }
 
 export interface UserIntegration {

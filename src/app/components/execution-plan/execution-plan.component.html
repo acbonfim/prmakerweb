@@ -472,12 +472,18 @@
     @if (q.status === 'open') {
       @if (q.options.length) {
         <div class="plan-q__options">
+          <!-- 0032: o texto de cada opção fica visível (antes só no tooltip, e o rótulo podia ser "Opção 1"). -->
           @for (o of q.options; track o.label) {
-            <button mat-stroked-button class="plan-q__option" [class.plan-q__option--rec]="o.recommended"
-                    [matTooltip]="o.description || ''" [disabled]="busy() === 'answer:' + q.id"
-                    (click)="answer(q, o.label)">
-              @if (o.recommended) { <mat-icon>star</mat-icon> }
-              {{ o.label }}
+            <button type="button" class="plan-q__option" [class.plan-q__option--rec]="o.recommended"
+                    [disabled]="busy() === 'answer:' + q.id" (click)="answer(q, o.label)">
+              <span class="plan-q__option-head">
+                @if (o.recommended) { <mat-icon>star</mat-icon> }
+                <span class="plan-q__option-label">{{ o.label }}</span>
+                @if (o.recommended) { <span class="plan-q__option-tag">recomendada</span> }
+              </span>
+              @if (o.description) {
+                <span class="plan-q__option-desc">{{ o.description }}</span>
+              }
             </button>
           }
         </div>
@@ -495,6 +501,7 @@
       <div class="plan-q__answer">
         <mat-icon>{{ q.answeredVia === 'claude' ? 'smart_toy' : 'person' }}</mat-icon>
         <span><strong>{{ q.answer }}</strong>
+          @if (answerDescription(q); as desc) { <span class="plan-q__answer-desc"> — {{ desc }}</span> }
           <span class="plan-q__who"> — {{ q.answeredBy }}, {{ q.answeredVia === 'claude' ? 'pelo Claude' : 'pelo PRMake' }}, {{ formatDateTime(q.answeredAt) }}</span>
         </span>
       </div>

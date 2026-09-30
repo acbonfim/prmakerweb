@@ -98,7 +98,9 @@
 
 .plugin-card.processing { opacity: 0.7; }
 
-.plugin-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.plugin-head { display: flex; align-items: center; gap: 12px; min-width: 0; cursor: pointer; border-radius: 8px; }
+.plugin-head:focus-visible { outline: 2px solid var(--mat-sys-primary); outline-offset: 2px; }
+.plugin-configure mat-icon { margin-right: 4px; }
 
 .plugin-icon {
   width: 42px;

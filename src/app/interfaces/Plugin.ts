@@ -40,14 +40,18 @@ export interface PluginData {
   personalFields?: string[] | null;
   /** Plugin pessoal opcional (0007): sem configuração, só o recurso dele fica indisponível — não bloqueia a tela de PR. */
   isOptional?: boolean;
-  /** Configuração por campo (0011): nome amigável, opcional, padrão global, oculto. Editada só por migração. */
+  /** Configuração por campo (0011): nome amigável, opcional, padrão global, oculto, sugestões e ajuda (0032). */
   fieldSettings?: Record<string, PluginFieldSetting> | null;
 }
 
-/** Configuração de um campo do plugin (0011). */
+/** Configuração de um campo do plugin (0011; sugestões e ajuda na 0032). */
 export interface PluginFieldSetting {
   label?: string | null;
   optional?: boolean;
   useGlobalDefault?: boolean;
   hidden?: boolean;
+  /** Valores sugeridos ao usuário numa lista de escolha, além do valor global. */
+  suggestions?: string[] | null;
+  /** Texto de ajuda mostrado ao usuário em Minhas integrações. */
+  help?: string | null;
 }

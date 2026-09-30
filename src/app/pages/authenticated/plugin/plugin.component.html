@@ -46,7 +46,8 @@
   } @else {
     @for (plugin of filtered(); track plugin.id) {
       <div class="plugin-card" [class.processing]="processingId() === plugin.id">
-        <div class="plugin-head">
+        <div class="plugin-head" role="button" tabindex="0" (click)="openEditor(plugin)" (keydown.enter)="openEditor(plugin)"
+             matTooltip="Abrir o editor do plugin" [matTooltipShowDelay]="700">
           <div class="plugin-icon">
             <mat-icon>extension</mat-icon>
           </div>
@@ -58,9 +59,7 @@
                 <mat-icon>person</mat-icon> Uso pessoal
               </span>
             }
-            @if (plugin.plugin?.name || plugin.apiBaseUrl) {
-              <span class="plugin-sub">{{ plugin.plugin?.name || plugin.apiBaseUrl }}</span>
-            }
+            <span class="plugin-sub">{{ summaryOf(plugin) }}</span>
           </div>
         </div>
 
@@ -72,17 +71,9 @@
               <mat-spinner diameter="22"></mat-spinner>
             </div>
           } @else {
-            <button mat-icon-button matTooltip="Editar plugin" (click)="openDialogManager(plugin)">
-              <mat-icon>edit</mat-icon>
-            </button>
-            <button mat-icon-button matTooltip="Editar URLs" (click)="openDialogEdit(plugin, 'url')">
-              <mat-icon>link</mat-icon>
-            </button>
-            <button mat-icon-button matTooltip="Editar autenticação" (click)="openDialogEdit(plugin, 'auth')">
-              <mat-icon>lock</mat-icon>
-            </button>
-            <button mat-icon-button matTooltip="Editar configurações" (click)="openDialogEdit(plugin, 'settings')">
-              <mat-icon>settings</mat-icon>
+            <!-- 0032: um editor só (nome, comportamento e campos) no lugar dos diálogos de URLs/autenticação/configurações -->
+            <button mat-stroked-button class="plugin-configure" (click)="openEditor(plugin)">
+              <mat-icon>tune</mat-icon> Configurar
             </button>
             <button mat-icon-button matTooltip="Duplicar plugin" (click)="copyPlugin(plugin)">
               <mat-icon>dynamic_feed</mat-icon>

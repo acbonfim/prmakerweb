@@ -284,8 +284,19 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   readonly resumeCommand = computed(() => `/analisar-bug ${this.loadedCard() ?? ''}`.trim());
 
+  /**
+   * Arquivos do plano sem as cópias de anexos de comentário (0032): versões antigas da skill baixavam os anexos
+   * e os reenviavam como arquivos dela — mesmo conteúdo (sha256), outro número. Vale o anexo original.
+   */
+  private readonly planArtifacts = computed(() => {
+    const plan = this.plan();
+    const own = plan?.artifacts ?? [];
+    const attached = new Set((plan?.notes ?? []).flatMap((n) => n.attachments).map((a) => a.sha256));
+    return own.filter((a) => a.noteId || !attached.has(a.sha256));
+  });
+
   readonly artifactCounts = computed(() => {
-    const artifacts = this.plan()?.artifacts ?? [];
+    const artifacts = this.planArtifacts();
     const map: Record<string, number> = {};
     for (const g of ARTIFACT_GROUPS) map[g.id] = artifacts.filter((a) => g.kinds.includes(a.kind)).length;
     return map;
@@ -315,7 +326,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   /** Arquivos do plano + anexos de comentários feitos no outro plano do card (0031) — tudo abre no visualizador do app. */
   private readonly artifactsSignal = computed(() => {
     const plan = this.plan();
-    const own = plan?.artifacts ?? [];
+    const own = this.planArtifacts();
     const ids = new Set(own.map((a) => a.id));
     const fromNotes = (plan?.notes ?? []).flatMap((n) => n.attachments).filter((a) => !ids.has(a.id));
     return [...own, ...fromNotes];
@@ -601,6 +612,12 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   // ── Perguntas ───────────────────────────────────────────────────────────────────────────────
 
+  /** Texto da opção escolhida (a resposta guarda só o rótulo). */
+  answerDescription(question: ExecutionQuestion): string | null {
+    const answer = (question.answer ?? '').trim().toLowerCase();
+    return question.options.find((o) => o.label.trim().toLowerCase() === answer)?.description ?? null;
+  }
+
   setAnswerDraft(questionId: string, text: string): void {
     this.answerDrafts.update((d) => ({ ...d, [questionId]: text }));
   }
@@ -800,7 +817,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   }
 
   stepArtifacts(key: string): ExecutionArtifact[] {
-    return (this.plan()?.artifacts ?? []).filter((a) => a.stepKey === key);
+    return this.planArtifacts().filter((a) => a.stepKey === key);
   }
 
   downloadZip(): void {
