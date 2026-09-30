@@ -927,3 +927,10 @@
   background: var(--mat-sys-primary);
   color: var(--mat-sys-on-primary);
 }
+
+/* 0033: retomar a sessão do Claude e custo */
+.plan__resume-pending { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; color: var(--mat-sys-primary); }
+.plan__resume-pending .mat-icon { font-size: 18px; width: 18px; height: 18px; animation: plan-resume-pulse 1.4s ease-in-out infinite; }
+@keyframes plan-resume-pulse { 50% { opacity: .35; } }
+.plan__usage { display: inline-flex; align-items: center; gap: 2px; }
+.plan__usage .mat-icon { font-size: 13px; width: 13px; height: 13px; }

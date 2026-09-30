@@ -37,6 +37,11 @@ export class SideMenuComponent implements OnInit {
       link: 'auth/register'
     },
     {
+      label: 'Base Solvace',
+      icon: 'account_tree',
+      link: 'auth/architecture'
+    },
+    {
       label: 'Gestão de usuários',
       icon: 'manage_accounts',
       link: 'auth/user/manager',

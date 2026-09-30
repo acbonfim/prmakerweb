@@ -1,0 +1,247 @@
+<div class="page-header">
+  <mat-icon class="header-icon">account_tree</mat-icon>
+  <div class="header-titles">
+    <span class="header-title">Base Solvace</span>
+    <span class="header-sub">
+      Engenharia reversa e regras de negócio — o mesmo conteúdo que o Claude consulta nas análises.
+    </span>
+  </div>
+  <span class="header-spacer"></span>
+  @if (!loading()) {
+    <span class="stat" matTooltip="Projetos e seções publicados"><mat-icon>view_module</mat-icon>{{ totals().projects }} projetos · {{ totals().sections }} seções</span>
+    @if (kcState(); as kc) {
+      <span class="stat" [matTooltip]="'Última sincronização: ' + date(kc.lastSyncAt) + (kc.lastSyncBy ? ' por ' + kc.lastSyncBy : '')">
+        <mat-icon>menu_book</mat-icon>Knowledge Center ({{ kc.activeEnvironment }}): {{ kc.articleCount }} artigos
+      </span>
+    }
+  }
+  @if (isAdmin()) {
+    <button mat-stroked-button class="suggest-btn" (click)="showSuggestions.set(!showSuggestions())"
+            matTooltip="Sugestões das análises (aprendizados e divergências) aguardando o admin">
+      <mat-icon>lightbulb</mat-icon>Sugestões
+      @if (suggestions().length) { <span class="suggest-count">{{ suggestions().length }}</span> }
+    </button>
+  }
+  <button mat-icon-button class="tree-toggle" (click)="treeOpen.set(!treeOpen())" aria-label="Mostrar a lista de projetos">
+    <mat-icon>{{ treeOpen() ? 'close' : 'menu' }}</mat-icon>
+  </button>
+</div>
+
+<div class="kb">
+  <!-- ── Árvore ─────────────────────────────────────────────────────────────────── -->
+  <aside class="kb__tree" [class.kb__tree--open]="treeOpen()" aria-label="Projetos e artigos">
+    <div class="kb__search">
+      <mat-icon>search</mat-icon>
+      <input type="search" placeholder="Filtrar projetos, seções, artigos…" [ngModel]="filter()" (ngModelChange)="filter.set($event)" />
+    </div>
+
+    <button type="button" class="kb__node kb__node--root" [class.kb__node--on]="selection().type === 'overview'" (click)="goOverview()">
+      <mat-icon>dashboard</mat-icon>Visão geral
+    </button>
+
+    @if (loading()) {
+      <div class="kb__state"><mat-spinner diameter="22"></mat-spinner></div>
+    }
+
+    @for (g of groups(); track g.kind) {
+      <div class="kb__group">
+        <div class="kb__group-title"><mat-icon>{{ g.icon }}</mat-icon>{{ g.label }}</div>
+        @for (p of g.projects; track p.key) {
+          <div class="kb__project">
+            <button type="button" class="kb__node" [class.kb__node--on]="currentProject()?.key === p.key"
+                    (click)="toggle(p.key); selectProject(p)">
+              <mat-icon class="kb__chevron">{{ isOpen(p.key) ? 'expand_more' : 'chevron_right' }}</mat-icon>
+              <span class="kb__node-text">{{ p.name }}</span>
+              <span class="kb__count">{{ p.sections.length }}</span>
+            </button>
+            @if (isOpen(p.key)) {
+              @for (s of p.sections; track s.key) {
+                <button type="button" class="kb__node kb__node--leaf"
+                        [class.kb__node--on]="currentProject()?.key === p.key && section()?.key === s.key"
+                        (click)="selectProject(p, s.key)">
+                  {{ s.title }}
+                </button>
+              }
+            }
+          </div>
+        }
+      </div>
+    }
+
+    @if (articleGroups().length) {
+      <div class="kb__group">
+        <div class="kb__group-title"><mat-icon>gavel</mat-icon>Regras de negócio — Knowledge Center</div>
+        @for (c of articleGroups(); track c.category) {
+          <button type="button" class="kb__node" (click)="toggle('kc:' + c.category)">
+            <mat-icon class="kb__chevron">{{ isOpen('kc:' + c.category) ? 'expand_more' : 'chevron_right' }}</mat-icon>
+            <span class="kb__node-text">{{ c.category }}</span>
+            <span class="kb__count">{{ c.items.length }}</span>
+          </button>
+          @if (isOpen('kc:' + c.category)) {
+            @for (a of c.items; track a.articleNumber) {
+              <button type="button" class="kb__node kb__node--leaf"
+                      [class.kb__node--on]="selection().type === 'article' && article()?.articleNumber === a.articleNumber"
+                      (click)="selectArticle(a)">
+                <span class="kb__art">ART-{{ a.articleNumber }}</span>{{ a.title }}
+              </button>
+            }
+          }
+        }
+      </div>
+    }
+
+    @if (!loading() && !groups().length && !articleGroups().length && filter()) {
+      <div class="kb__state">Nada encontrado para "{{ filter() }}".</div>
+    }
+  </aside>
+
+  <!-- ── Conteúdo ───────────────────────────────────────────────────────────────── -->
+  <main class="kb__main" #content>
+    @if (showSuggestions() && isAdmin()) {
+      <section class="sg">
+        <div class="sg__head"><mat-icon>lightbulb</mat-icon><strong>Sugestões para a base</strong>
+          <span class="sg__hint">propostas pelas análises — nada entra na seção sem você aplicar</span>
+          <span class="header-spacer"></span>
+          <button mat-icon-button (click)="showSuggestions.set(false)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+        </div>
+        @for (sg of suggestions(); track sg.id) {
+          <div class="sg__item">
+            <div class="sg__meta">
+              <span class="sg__kind sg__kind--{{ sg.kind }}">{{ sg.kind === 'divergence' ? 'divergência' : sg.kind === 'learning' ? 'aprendizado' : 'sugestão' }}</span>
+              <code>{{ sg.projectKey }}{{ sg.sectionKey ? ' / ' + sg.sectionKey : '' }}</code>
+              @if (sg.cardNumber) { <span>card {{ sg.cardNumber }}</span> }
+              <span>{{ sg.createdBy }} · {{ date(sg.createdAt) }}</span>
+            </div>
+            <div class="sg__text kb__md" [innerHTML]="sg.content | planMarkdown"></div>
+            <div class="sg__actions">
+              <button mat-flat-button color="primary" (click)="workOnSuggestion(sg)"><mat-icon>auto_fix_high</mat-icon>Incorporar com a IA</button>
+              <button mat-button (click)="resolveSuggestion(sg, 'applied')" matTooltip="Já incorporei na mão">Marcar como aplicada</button>
+              <button mat-button (click)="resolveSuggestion(sg, 'dismissed')">Descartar</button>
+            </div>
+          </div>
+        } @empty {
+          <div class="kb__empty"><mat-icon>check_circle</mat-icon>Nenhuma sugestão pendente.</div>
+        }
+      </section>
+    }
+    @if (error()) {
+      <div class="kb__empty kb__empty--error">
+        <mat-icon>error_outline</mat-icon>{{ error() }}
+        <button mat-stroked-button (click)="load()">Tentar de novo</button>
+      </div>
+    } @else if (selection().type === 'overview') {
+      <section class="kb__overview">
+        <h2>Como a base é usada</h2>
+        <p>
+          O Claude lê primeiro um índice compacto do parque inteiro e abre só a seção do módulo envolvido no card —
+          depois vai direto aos arquivos que ela aponta. Regra de negócio: consulta o Knowledge Center e cita o
+          <strong>ART-n</strong> na análise. Isso deixa as análises mais rápidas, mais certeiras e mais baratas.
+        </p>
+        <div class="kb__cards">
+          @for (g of groups(); track g.kind) {
+            <div class="kb__card">
+              <div class="kb__card-head"><mat-icon>{{ g.icon }}</mat-icon>{{ g.label }}</div>
+              @for (p of g.projects; track p.key) {
+                <button type="button" class="kb__card-item" (click)="selectProject(p)">
+                  <strong>{{ p.name }}</strong>
+                  @if (p.summary) { <span>{{ p.summary }}</span> }
+                </button>
+              }
+            </div>
+          }
+        </div>
+        @if (!loading() && !projects().length) {
+          <div class="kb__empty">
+            <mat-icon>construction</mat-icon>
+            <div>
+              Nenhum projeto mapeado ainda. Um administrador gera a engenharia reversa no Claude Code com a skill
+              <code>base-solvace</code> ("mapear a arquitetura do &lt;projeto&gt;") — ela publica aqui, seção por seção.
+            </div>
+          </div>
+        }
+      </section>
+    } @else if (sectionLoading()) {
+      <div class="kb__empty"><mat-spinner diameter="28"></mat-spinner></div>
+    } @else if (selection().type === 'article') {
+      @if (article(); as a) {
+        <article class="kb__doc">
+          <div class="kb__doc-kicker">
+            <mat-icon>menu_book</mat-icon>Knowledge Center · {{ a.category }}{{ a.subcategory ? ' / ' + a.subcategory : '' }}
+            <span class="header-spacer"></span>
+            <button mat-icon-button (click)="copyLink()" matTooltip="Copiar o link"><mat-icon>link</mat-icon></button>
+          </div>
+          <h1><span class="kb__art kb__art--big">{{ a.reference }}</span>{{ a.title }}</h1>
+          <div class="kb__meta">
+            @for (t of a.tags; track t) { <span class="kb__tag">{{ t }}</span> }
+            <span>atualizado no KC em {{ date(a.sourceUpdatedAt) }} · ambiente {{ a.environment }}</span>
+          </div>
+          <div class="kb__text">
+            @for (p of paragraphs(a.content); track $index) { <p>{{ p }}</p> }
+          </div>
+        </article>
+      } @else {
+        <div class="kb__empty"><mat-icon>search_off</mat-icon>Artigo não encontrado — não publicado, removido ou filtrado como teste.</div>
+      }
+    } @else if (currentProject(); as p) {
+      <article class="kb__doc">
+        <div class="kb__doc-kicker">
+          <mat-icon>{{ kindIcon(p.kind) }}</mat-icon>{{ kindLabel(p.kind) }}
+          <span class="header-spacer"></span>
+          <button mat-icon-button (click)="copyLink()" matTooltip="Copiar o link"><mat-icon>link</mat-icon></button>
+        </div>
+        <h1>{{ p.name }} <code class="kb__key">{{ p.key }}</code></h1>
+        <div class="kb__meta">
+          @if (p.repository) { <a [href]="p.repository" target="_blank" rel="noopener noreferrer"><mat-icon>code</mat-icon>repositório</a> }
+          @if (p.sourceCommit) {
+            <span matTooltip="Commit do repositório de onde a engenharia reversa foi gerada">
+              <mat-icon>commit</mat-icon>{{ p.sourceCommit.slice(0, 8) }}{{ p.sourceBranch ? ' (' + p.sourceBranch + ')' : '' }} · {{ date(p.sourceMappedAt) }}
+            </span>
+          }
+          <span>atualizado por {{ p.updatedBy }} em {{ date(p.updatedAt) }}</span>
+        </div>
+        @if (p.summary) { <p class="kb__summary">{{ p.summary }}</p> }
+        @if (p.keywords.length) {
+          <div class="kb__keywords">@for (k of p.keywords; track k) { <span class="kb__tag">{{ k }}</span> }</div>
+        }
+
+        @if (isAdmin()) {
+          <div class="kb__admin" role="toolbar" aria-label="Ferramentas do administrador">
+            @if (section()) {
+              <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'edit'" (click)="openAdmin('edit')"><mat-icon>edit</mat-icon>Editar</button>
+              <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'history'" (click)="openAdmin('history')"><mat-icon>history</mat-icon>Histórico</button>
+              <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'chat'" (click)="openAdmin('chat')"
+                      matTooltip="Conversar com o especialista Solvace (plugin de IA) e aplicar a nova versão proposta"><mat-icon>auto_fix_high</mat-icon>Sugerir melhoria</button>
+            }
+            <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'new'" (click)="openAdmin('new')"><mat-icon>note_add</mat-icon>Nova seção</button>
+            <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'project'" (click)="openAdmin('project')"><mat-icon>tune</mat-icon>Dados do projeto</button>
+          </div>
+          @if (adminMode(); as mode) {
+            <app-kb-admin-panel [mode]="mode" [project]="p" [section]="section()" [suggestion]="activeSuggestion()"
+              (closed)="adminMode.set(null); activeSuggestion.set(null)" (sectionSaved)="onSectionSaved($event)"
+              (projectSaved)="onProjectSaved()" (suggestionApplied)="onSuggestionApplied($event)"></app-kb-admin-panel>
+          }
+        }
+
+        @if (p.sections.length) {
+          <nav class="kb__tabs" aria-label="Seções">
+            @for (s of p.sections; track s.key) {
+              <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" (click)="selectProject(p, s.key)"
+                      [matTooltip]="'versão ' + s.version + ' · ' + tokens(s.length)">{{ s.title }}</button>
+            }
+          </nav>
+        }
+
+        @if (section(); as s) {
+          <div class="kb__section-meta">
+            versão {{ s.version }} · {{ sourceLabel(s.source) }} · {{ s.updatedBy }}, {{ date(s.updatedAt) }} · {{ tokens(s.length) }}
+          </div>
+          <div class="kb__md" [innerHTML]="s.content | planMarkdown"></div>
+        } @else {
+          <div class="kb__empty"><mat-icon>article</mat-icon>Este projeto ainda não tem seções.</div>
+        }
+      </article>
+    } @else {
+      <div class="kb__empty"><mat-icon>search_off</mat-icon>Projeto não encontrado.</div>
+    }
+  </main>
+</div>
