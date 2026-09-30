@@ -1,5 +1,6 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -33,6 +34,8 @@ interface FieldDraft {
   sensitive: boolean;
   /** Texto digitado (para sensível: vazio = manter o salvo). */
   value: string;
+  /** Valor ao abrir/salvar — para saber se há alteração não salva (0032). */
+  initial: string;
   hasSavedValue: boolean;
   suggested: boolean;
   /** Sensível marcado para limpar (envia ""). */
@@ -40,25 +43,38 @@ interface FieldDraft {
   reveal: boolean;
   /** false = fixo, definido pelo administrador: somente leitura e nunca enviado. */
   editable: boolean;
+  /** Lista de escolha (0032): valor global + sugestões do administrador. */
+  suggestions: string[];
+  /** Ajuda definida pelo administrador (0032). */
+  help: string | null;
 }
 
 interface PluginDraft {
   integration: UserIntegration;
+  /** Campos que o usuário preenche. */
   fields: FieldDraft[];
+  /** Campos fixos, definidos pelo administrador (somente leitura). */
+  fixed: FieldDraft[];
   saving: boolean;
   error: string | null;
+  expanded: boolean;
+  showFixed: boolean;
 }
 
+type IntegrationState = 'ok' | 'pending' | 'optional';
+
 /**
- * "Minhas integrações" (spec 2): lista os plugins de uso pessoal com os mesmos campos cadastrados
- * pelo admin; o usuário preenche os próprios valores. Segredos nunca voltam do backend: mostram
- * "salvo" e só são enviados quando o usuário digita um novo valor (ou pede para limpar).
+ * "Minhas integrações" (spec 2; reorganizado na 0032): lista os plugins de uso pessoal com os mesmos campos
+ * cadastrados pelo admin; o usuário preenche os próprios valores. Pendentes aparecem primeiro e abertas; os campos
+ * fixos ficam recolhidos; cada campo pode ter ajuda e uma lista de escolha com as sugestões do admin (0032).
+ * Segredos nunca voltam do backend: mostram "salvo" e só são enviados quando o usuário digita um novo valor
+ * (ou pede para limpar).
  */
 @Component({
   selector: 'app-my-integrations-dialog',
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatIconModule, MatInputModule,
-    MatProgressSpinnerModule, MatTooltipModule],
+  imports: [FormsModule, MatAutocompleteModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatIconModule,
+    MatInputModule, MatProgressSpinnerModule, MatTooltipModule],
   templateUrl: './my-integrations-dialog.component.html',
   styleUrls: ['./my-integrations-dialog.component.css'],
 })
@@ -72,16 +88,68 @@ export class MyIntegrationsDialogComponent implements OnInit {
   readonly loading = signal(true);
   readonly loadError = signal<string | null>(null);
 
+  /** Resumo do topo: obrigatórias configuradas / total de obrigatórias, e opcionais configuradas. */
+  readonly summary = computed(() => {
+    const list = this.drafts().map(d => d.integration);
+    const required = list.filter(i => !i.optional);
+    const optional = list.filter(i => i.optional);
+    return {
+      required: required.length,
+      requiredDone: required.filter(i => i.configured).length,
+      optional: optional.length,
+      optionalDone: optional.filter(i => i.configured).length,
+    };
+  });
+
+  readonly progress = computed(() => {
+    const s = this.summary();
+    const total = s.required + s.optional;
+    return total ? Math.round(((s.requiredDone + s.optionalDone) / total) * 100) : 100;
+  });
+
   async ngOnInit(): Promise<void> {
     try {
       const list = await this.service.loadIntegrations();
-      this.drafts.set(list.map(i => this.toDraft(i)));
+      const drafts = list.map(i => this.toDraft(i));
+      // Pendentes (obrigatórias) primeiro, depois opcionais sem configurar, depois as prontas.
+      const rank = (d: PluginDraft) => ({ pending: 0, optional: 1, ok: 2 }[this.state(d)]);
+      drafts.sort((a, b) => rank(a) - rank(b));
+      // Abre as que pedem ação; com uma só integração, abre sempre.
+      drafts.forEach(d => (d.expanded = drafts.length === 1 || this.state(d) === 'pending'));
+      if (!drafts.some(d => d.expanded) && drafts.length) drafts[0].expanded = true;
+      this.drafts.set(drafts);
     } catch (e: any) {
       this.loadError.set(e?.error?.error ?? 'Não foi possível carregar suas integrações.');
     } finally {
       this.loading.set(false);
     }
   }
+
+  state(draft: PluginDraft): IntegrationState {
+    if (draft.integration.configured) return 'ok';
+    return draft.integration.optional ? 'optional' : 'pending';
+  }
+
+  toggle(draft: PluginDraft): void {
+    draft.expanded = !draft.expanded;
+    this.touch();
+  }
+
+  toggleFixed(draft: PluginDraft): void {
+    draft.showFixed = !draft.showFixed;
+    this.touch();
+  }
+
+  /** Campos do usuário ainda vazios e obrigatórios (para o resumo do cabeçalho). */
+  missing(draft: PluginDraft): number {
+    return draft.fields.filter(f => !f.optional && !(f.value.trim() || (f.sensitive && f.hasSavedValue && !f.clear))).length;
+  }
+
+  isDirty(draft: PluginDraft): boolean {
+    return draft.fields.some(f => f.clear || f.value !== f.initial);
+  }
+
+  readonly anyDirty = computed(() => this.drafts().some(d => this.isDirty(d)));
 
   /** Pode salvar parcialmente; o status (Configurado/Pendente) mostra se ainda falta algo. */
   canSave(draft: PluginDraft): boolean {
@@ -94,9 +162,25 @@ export class MyIntegrationsDialogComponent implements OnInit {
     this.touch();
   }
 
+  /** Opções da lista de escolha: todas quando vazio ou igual a uma delas; senão, as que contêm o texto. */
+  options(field: FieldDraft): string[] {
+    const q = field.value.trim().toLowerCase();
+    if (!q || field.suggestions.some(s => s.toLowerCase() === q)) return field.suggestions;
+    return field.suggestions.filter(s => s.toLowerCase().includes(q));
+  }
+
   touch(): void {
     // Zoneless: força a reavaliação do template após editar um campo do rascunho.
     this.drafts.update(d => [...d]);
+  }
+
+  discard(draft: PluginDraft): void {
+    for (const f of draft.fields) {
+      f.value = f.initial;
+      f.clear = false;
+    }
+    draft.error = null;
+    this.touch();
   }
 
   async save(draft: PluginDraft): Promise<void> {
@@ -104,7 +188,6 @@ export class MyIntegrationsDialogComponent implements OnInit {
 
     const values: Record<string, string | null> = {};
     for (const f of draft.fields) {
-      if (!f.editable) continue; // fixo: definido pelo administrador
       if (f.sensitive) {
         if (f.clear) values[f.key] = '';
         else if (f.value.trim()) values[f.key] = f.value.trim();
@@ -119,7 +202,9 @@ export class MyIntegrationsDialogComponent implements OnInit {
     this.touch();
     try {
       const saved = await this.service.save(draft.integration.pluginId, values);
-      this.drafts.update(list => list.map(d => (d === draft ? this.toDraft(saved) : d)));
+      this.drafts.update(list => list.map(d => (d === draft
+        ? { ...this.toDraft(saved), expanded: !saved.configured || draft.expanded, showFixed: draft.showFixed }
+        : d)));
       this.snackBar.open(`${saved.description}: integração salva`, 'Ok',
         { horizontalPosition: 'right', verticalPosition: 'top', duration: 4000 });
       // Habilita/desabilita o "Pedir aprovação" na hora (0007).
@@ -148,30 +233,39 @@ export class MyIntegrationsDialogComponent implements OnInit {
   }
 
   private toDraft(integration: UserIntegration): PluginDraft {
+    // Campos fixos ocultos (0011, ex.: prompts longos) não aparecem para o usuário.
+    const all = integration.fields.filter(f => !f.hidden).map(f => {
+      // Opcionais (0011) não vêm preenchidos com a sugestão: com padrão, vale o global enquanto
+      // o campo estiver vazio; sem padrão (ex.: estimativa inicial), só vale o que o usuário salvar.
+      const optionalUnsaved = !!f.optional && !f.hasValue && !f.sensitive;
+      const value = f.sensitive || optionalUnsaved ? '' : (f.value ?? '');
+      return {
+        key: f.key,
+        label: f.label?.trim() || f.key,
+        optional: !!f.optional,
+        defaultValue: optionalUnsaved && f.usesGlobalDefault ? (f.value ?? null) : null,
+        hint: optionalUnsaved && !f.usesGlobalDefault ? (f.value ?? null) : null,
+        sensitive: f.sensitive,
+        value,
+        // Sugestão pré-preenchida (obrigatório não salvo) conta como alteração: ainda precisa salvar.
+        initial: f.suggested && !f.hasValue ? '' : value,
+        hasSavedValue: f.hasValue,
+        suggested: f.suggested,
+        clear: false,
+        reveal: false,
+        editable: f.editable !== false,
+        suggestions: f.sensitive ? [] : (f.suggestions ?? []),
+        help: f.help?.trim() || null,
+      } satisfies FieldDraft;
+    });
     return {
       integration,
       saving: false,
       error: null,
-      // Campos fixos ocultos (0011, ex.: prompts longos) não aparecem para o usuário.
-      fields: integration.fields.filter(f => !f.hidden).map(f => {
-        // Opcionais (0011) não vêm preenchidos com a sugestão: com padrão, vale o global enquanto
-        // o campo estiver vazio; sem padrão (ex.: estimativa inicial), só vale o que o usuário salvar.
-        const optionalUnsaved = !!f.optional && !f.hasValue && !f.sensitive;
-        return {
-          key: f.key,
-          label: f.label?.trim() || f.key,
-          optional: !!f.optional,
-          defaultValue: optionalUnsaved && f.usesGlobalDefault ? (f.value ?? null) : null,
-          hint: optionalUnsaved && !f.usesGlobalDefault ? (f.value ?? null) : null,
-          sensitive: f.sensitive,
-          value: f.sensitive || optionalUnsaved ? '' : (f.value ?? ''),
-          hasSavedValue: f.hasValue,
-          suggested: f.suggested,
-          clear: false,
-          reveal: false,
-          editable: f.editable !== false,
-        };
-      }),
+      expanded: false,
+      showFixed: false,
+      fields: all.filter(f => f.editable),
+      fixed: all.filter(f => !f.editable),
     };
   }
 }

@@ -111,8 +111,9 @@ export class DialogManagerPluginComponent implements OnInit {
     this._gdsService.postCreatePluginConfiguration(modelRegiste).subscribe(
       (_ret: any) => {
         this.load = false;
-        this._globalService.sendAlert("Salvo com sucesso!", "Ok");
-        this.dialogRef.close(true);
+        this._globalService.sendAlert("Plugin criado — cadastre os campos", "Ok");
+        // Devolve { id } para a tela abrir o editor do plugin novo (0032).
+        this.dialogRef.close(_ret ?? true);
       }, (error: any) => {
         this.load = false;
         console.error(error.message);

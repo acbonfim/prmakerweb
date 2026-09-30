@@ -203,7 +203,11 @@
       (keydown)="onKeydown($event)"
       [disabled]="!canPost || !cardNumber || isPosting()"
       rows="1"
-      placeholder="Escreva um registro... (Enter envia, Shift+Enter quebra linha)"
+      placeholder="Escreva um registro..."
+      aria-label="Escreva um registro (Enter envia, Shift+Enter quebra linha)"
+      matTooltip="Enter envia · Shift+Enter quebra linha"
+      matTooltipPosition="above"
+      [matTooltipShowDelay]="600"
     ></textarea>
     <button
       mat-icon-button

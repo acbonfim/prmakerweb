@@ -776,10 +776,24 @@
 .plan-q { padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, 0.06); }
 .plan-q:first-of-type { border-top: none; }
 .plan-q__text { font-size: 13px; }
-.plan-q__options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.plan-q__option.mat-mdc-outlined-button { height: 30px; font-size: 12.5px; border-radius: 15px; }
-.plan-q__option--rec.mat-mdc-outlined-button { border-color: var(--mat-sys-primary); color: var(--mat-sys-primary); }
+/* 0032: cada opção é um cartão com o rótulo e o texto visível (antes, botão só com o rótulo + tooltip). */
+.plan-q__options { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.plan-q__option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 12px;
+  border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.16); background: transparent; color: inherit; font: inherit;
+  text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
+.plan-q__option:hover:not(:disabled) { border-color: var(--mat-sys-primary);
+  background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent); }
+.plan-q__option:focus-visible { outline: 2px solid var(--mat-sys-primary); outline-offset: 1px; }
+.plan-q__option:disabled { opacity: .55; cursor: progress; }
+.plan-q__option--rec { border-color: color-mix(in srgb, var(--mat-sys-primary) 70%, transparent); }
+.plan-q__option-head { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.plan-q__option--rec .plan-q__option-head { color: var(--mat-sys-primary); }
 .plan-q__option .mat-icon { font-size: 15px; width: 15px; height: 15px; }
+.plan-q__option-tag { font-size: 10.5px; font-weight: 600; padding: 0 6px; border-radius: 9px;
+  background: color-mix(in srgb, var(--mat-sys-primary) 18%, transparent); }
+.plan-q__option-desc { font-size: 12.5px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 78%, transparent); }
+.plan-q__answer-desc { color: color-mix(in srgb, var(--mat-sys-on-surface) 78%, transparent); }
 .plan-q__free { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
 .plan-q__answer { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; font-size: 12.5px; }
 .plan-q__answer .mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--plan-ok); flex: none; }

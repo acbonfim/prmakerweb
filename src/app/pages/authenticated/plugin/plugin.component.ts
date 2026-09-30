@@ -1,6 +1,6 @@
 import { Component, computed, ElementRef, OnInit, signal, ViewChild } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { DialogEditComponent } from './dialogEdit/dialogEdit.component';
+import { PluginEditorDialogComponent } from './plugin-editor/plugin-editor-dialog.component';
 import { DialogManagerPluginComponent } from './dialog-manager-plugin/dialog-manager-plugin.component';
 import { PluginData } from '../../../interfaces/Plugin';
 import { GdsService } from '../../../services/gds.service';
@@ -80,11 +80,27 @@ export class PluginComponent implements OnInit {
   }
 
   // ── Ações ──
-  openDialogEdit(data: PluginData, type: string) {
-    data.key = type;
-    const dialogRef = this.dialog.open(DialogEditComponent, {
+  /** Resumo do card: campos e, em uso pessoal, quantos o usuário preenche. */
+  summaryOf(plugin: PluginData): string {
+    const keys = Object.keys((plugin.configurations ?? {}) as object);
+    const n = keys.length;
+    const fields = n === 1 ? '1 campo' : `${n} campos`;
+    if (!plugin.isPersonal) return plugin.adminOnly ? `${fields} · só administradores` : fields;
+    const user = plugin.personalFields
+      ? keys.filter(k => plugin.personalFields!.some(p => p.toLowerCase() === k.toLowerCase())).length
+      : n;
+    return `${fields} · ${user} do usuário${plugin.isOptional ? ' · opcional' : ''}`;
+  }
+
+  /** Editor único do plugin (0032): nome, comportamento e campos. */
+  openEditor(plugin: PluginData) {
+    const dialogRef = this.dialog.open(PluginEditorDialogComponent, {
       width: '1000px',
-      data: data,
+      maxWidth: '96vw',
+      height: 'min(860px, 92vh)',
+      panelClass: 'custom-dialog-container',
+      autoFocus: false,
+      data: plugin,
     });
 
     dialogRef.afterClosed().subscribe((result) => {
@@ -92,27 +108,30 @@ export class PluginComponent implements OnInit {
     });
   }
 
-  openDialogManager(data?: PluginData) {
+  /** Novo plugin: pede o nome e já abre o editor para cadastrar os campos. */
+  openDialogManager() {
     const dialogRef = this.dialog.open(DialogManagerPluginComponent, {
-      width: '1200px',
-      data: data,
+      width: '600px',
+      maxWidth: '96vw',
     });
 
     dialogRef.afterClosed().subscribe((result) => {
-      if (result) this.getAllPlugin();
+      if (!result) return;
+      const createdId = typeof result === 'object' ? result.id : null;
+      this.getAllPlugin(createdId ?? undefined);
     });
   }
 
+  /** Cópia completa (0032): configurações, campos do usuário e configuração dos campos — antes só o nome. */
   copyPlugin(plugin: PluginData) {
     const newPlugin: any = {
-      apiBaseUrl: plugin.apiBaseUrl,
-      credentialsJsonObject: plugin.credentialsJsonObject,
       description: 'Cópia ' + plugin.description,
-      fromToClass: plugin.fromToClass,
-      paymentServiceId: plugin.paymentServiceId,
-      pluginId: plugin.pluginId,
-      shoppingCartId: plugin.shoppingCartId,
-      storeId: plugin.storeId,
+      adminOnly: !!plugin.adminOnly,
+      isPersonal: !!plugin.isPersonal,
+      isOptional: !!plugin.isOptional,
+      personalFields: plugin.personalFields ?? null,
+      fieldSettings: plugin.fieldSettings ?? null,
+      configurations: { ...((plugin.configurations ?? {}) as object) },
     };
 
     this.processingId.set(plugin.id);
@@ -165,12 +184,15 @@ export class PluginComponent implements OnInit {
     });
   }
 
-  getAllPlugin() {
+  /** Recarrega a lista; com `openId`, abre o editor desse plugin (recém-criado). */
+  getAllPlugin(openId?: number) {
     this.loading.set(true);
     this._gdsService.getAllPluginConfiguration().subscribe(
       (x: any) => {
         this.plugins.set(Array.isArray(x) ? x : (x ? [x] : []));
         this.loading.set(false);
+        const created = openId ? this.plugins().find(p => p.id === openId) : undefined;
+        if (created) this.openEditor(created);
       },
       (error) => {
         this.loading.set(false);

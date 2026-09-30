@@ -1,0 +1,211 @@
+<div class="pe">
+  <div class="pe__header">
+    <mat-icon class="pe__lead">extension</mat-icon>
+    <div class="pe__titles">
+      <span class="pe__kicker">Editar plugin</span>
+      <span class="pe__title">{{ description || 'Sem nome' }}</span>
+    </div>
+    <span class="pe__spacer"></span>
+    @if (isPersonal) {
+      <span class="pe__badge" matTooltip="Cada usuário preenche os campos marcados como Usuário em Minhas integrações">
+        <mat-icon>person</mat-icon>Uso pessoal · {{ userFieldCount() }} campo(s) do usuário
+      </span>
+    }
+    <button mat-icon-button (click)="close()" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+  </div>
+
+  <mat-tab-group class="pe__tabs" animationDuration="0ms" [selectedIndex]="1" mat-stretch-tabs="false">
+    <!-- ── Geral ─────────────────────────────────────────────────────────────── -->
+    <mat-tab label="Geral">
+      <div class="pe__pane">
+        <mat-form-field appearance="outline" class="pe__full" subscriptSizing="dynamic">
+          <mat-label>Nome do plugin</mat-label>
+          <input matInput [(ngModel)]="description" (ngModelChange)="touch()" required />
+          <mat-hint>O código e as skills encontram o plugin por este nome — mude com cuidado.</mat-hint>
+          @if (!description.trim()) { <mat-error>Informe o nome</mat-error> }
+        </mat-form-field>
+
+        <div class="pe__option">
+          <mat-slide-toggle color="primary" [(ngModel)]="adminOnly" (ngModelChange)="touch()">Somente administradores</mat-slide-toggle>
+          <span class="pe__option-help">Só admins podem ler esta configuração. Desligado, qualquer usuário logado pode ler.</span>
+        </div>
+
+        <div class="pe__option">
+          <mat-slide-toggle color="primary" [(ngModel)]="isPersonal" (ngModelChange)="touch()">Uso pessoal</mat-slide-toggle>
+          <span class="pe__option-help">
+            Cada pessoa configura os próprios valores (ex.: o próprio token) em <strong>menu do usuário › Minhas integrações</strong>.
+            Na aba Campos você escolhe o que o usuário preenche e o que fica fixo para todos.
+          </span>
+        </div>
+
+        @if (isPersonal) {
+          <div class="pe__option pe__option--nested">
+            <mat-slide-toggle color="primary" [(ngModel)]="isOptional" (ngModelChange)="touch()">Opcional para o usuário</mat-slide-toggle>
+            <span class="pe__option-help">
+              Aparece em Minhas integrações, mas não bloqueia a tela de PR de quem não configurou — só o recurso que depende
+              dela fica indisponível (ex.: pedir aprovação no Teams).
+            </span>
+          </div>
+        }
+      </div>
+    </mat-tab>
+
+    <!-- ── Campos ────────────────────────────────────────────────────────────── -->
+    <mat-tab label="Campos ({{ fields().length }})">
+      <div class="pe__pane pe__pane--fields">
+        @if (isPersonal) {
+          <div class="pe__hint">
+            <mat-icon>info</mat-icon>
+            <span>
+              <strong>Usuário</strong>: cada pessoa preenche em Minhas integrações (o valor daqui vira sugestão — ou padrão, se marcado).
+              <strong>Fixo</strong>: vale para todos com o valor daqui. Abra um campo para nome amigável, obrigatoriedade, sugestões e ajuda.
+            </span>
+          </div>
+        }
+
+        @if (fields().length > 6) {
+          <mat-form-field appearance="outline" class="pe__full pe__search" subscriptSizing="dynamic">
+            <mat-icon matPrefix>search</mat-icon>
+            <input matInput placeholder="Filtrar campos" [ngModel]="filter()" (ngModelChange)="filter.set($event)" />
+          </mat-form-field>
+        }
+
+        <div class="pe__fields">
+          @for (f of visible(); track f.key) {
+            <div class="fe" [class.fe--open]="f.open" [class.fe--error]="!!jsonError(f)">
+              <div class="fe__row">
+                <button type="button" class="fe__toggle" (click)="f.open = !f.open; touch()"
+                        [attr.aria-expanded]="f.open" [matTooltip]="f.open ? 'Fechar opções' : 'Mais opções do campo'">
+                  <mat-icon>{{ f.open ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </button>
+                <div class="fe__name">
+                  <span class="fe__label">{{ f.label.trim() || f.key }}</span>
+                  <span class="fe__key">
+                    @if (f.label.trim()) { {{ f.key }} }
+                    @if (isSensitive(f)) {
+                      <span class="fe__tag fe__tag--secret" matTooltip="Segredo: gravado criptografado para o usuário e nunca devolvido">
+                        <mat-icon>lock</mat-icon>segredo
+                      </span>
+                    }
+                    @for (b of badges(f); track b) { <span class="fe__tag">{{ b }}</span> }
+                  </span>
+                </div>
+                @if (isPersonal) {
+                  <mat-button-toggle-group class="fe__who" hideSingleSelectionIndicator [value]="f.userFills" (change)="f.userFills = $event.value; touch()"
+                                           aria-label="Quem preenche">
+                    <mat-button-toggle [value]="true" matTooltip="Cada usuário preenche o próprio valor">
+                      <mat-icon>person</mat-icon> Usuário
+                    </mat-button-toggle>
+                    <mat-button-toggle [value]="false" matTooltip="Todos usam o valor definido aqui">
+                      <mat-icon>lock</mat-icon> Fixo
+                    </mat-button-toggle>
+                  </mat-button-toggle-group>
+                }
+                <button mat-icon-button class="fe__remove" (click)="removeField(f)" matTooltip="Excluir o campo" aria-label="Excluir o campo">
+                  <mat-icon>delete_outline</mat-icon>
+                </button>
+              </div>
+
+              <mat-form-field appearance="outline" class="pe__full fe__value" subscriptSizing="dynamic">
+                <mat-label>{{ valueLabel(f) }}</mat-label>
+                @if (f.multiline) {
+                  <textarea matInput class="fe__json" cdkTextareaAutosize cdkAutosizeMinRows="3" cdkAutosizeMaxRows="18"
+                            [(ngModel)]="f.value" (ngModelChange)="touch()"></textarea>
+                } @else {
+                  <input matInput [(ngModel)]="f.value" (ngModelChange)="touch()"
+                         [placeholder]="isPersonal && f.userFills ? 'Opcional' : ''" />
+                }
+                <button matSuffix mat-icon-button type="button" class="fe__mode" (click)="toggleMultiline(f)"
+                        [matTooltip]="f.multiline ? 'Editar em uma linha' : 'Editar em área de texto (JSON, textos longos)'"
+                        [disabled]="f.multiline && f.value.includes('\n')">
+                  <mat-icon>{{ f.multiline ? 'short_text' : 'notes' }}</mat-icon>
+                </button>
+                @if (jsonError(f); as err) {
+                  <mat-hint class="fe__error">JSON inválido: {{ err }}</mat-hint>
+                } @else if (isPersonal && f.userFills && isSensitive(f)) {
+                  <mat-hint>Segredo: cada usuário informa o próprio — este valor nunca é mostrado a ele.</mat-hint>
+                } @else if (isPersonal && f.userFills && !f.required && f.useGlobalDefault) {
+                  <mat-hint>Vale para quem não preencher o campo.</mat-hint>
+                } @else if (isPersonal && f.userFills) {
+                  <mat-hint>Aparece para o usuário como sugestão; só vale o que ele salvar.</mat-hint>
+                }
+              </mat-form-field>
+
+              @if (f.open) {
+                <div class="fe__more">
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                    <mat-label>Nome amigável</mat-label>
+                    <input matInput [(ngModel)]="f.label" (ngModelChange)="touch()" [placeholder]="f.key" />
+                    <mat-hint>Exibido no lugar de "{{ f.key }}".</mat-hint>
+                  </mat-form-field>
+
+                  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                    <mat-label>Ajuda para o usuário</mat-label>
+                    <input matInput [(ngModel)]="f.help" (ngModelChange)="touch()" placeholder="Ex.: gere em Configurações › Tokens" />
+                    <mat-hint>Aparece abaixo do campo em Minhas integrações.</mat-hint>
+                  </mat-form-field>
+
+                  @if (isPersonal && f.userFills) {
+                    <div class="fe__switches">
+                      <mat-slide-toggle color="primary" [(ngModel)]="f.required" (ngModelChange)="touch()">Obrigatório</mat-slide-toggle>
+                      <span class="pe__option-help">Sem ele, a integração fica pendente para o usuário.</span>
+                    </div>
+                    @if (!f.required) {
+                      <div class="fe__switches">
+                        <mat-slide-toggle color="primary" [(ngModel)]="f.useGlobalDefault" (ngModelChange)="touch()">Usar o valor daqui como padrão</mat-slide-toggle>
+                        <span class="pe__option-help">Ligado: quem não preencher usa o valor acima. Desligado: é só uma sugestão.</span>
+                      </div>
+                    }
+                    @if (!isSensitive(f)) {
+                      <mat-form-field appearance="outline" class="fe__suggestions" subscriptSizing="dynamic">
+                        <mat-label>Sugestões (uma por linha)</mat-label>
+                        <textarea matInput cdkTextareaAutosize cdkAutosizeMinRows="2" cdkAutosizeMaxRows="10"
+                                  [(ngModel)]="f.suggestions" (ngModelChange)="touch()"
+                                  placeholder="Outros valores que o usuário pode escolher"></textarea>
+                        <mat-hint>O usuário escolhe numa lista (ou digita outro valor).</mat-hint>
+                      </mat-form-field>
+                      @if (preview(f).length) {
+                        <div class="fe__preview">
+                          <span class="fe__preview-title">Lista que o usuário verá:</span>
+                          @for (s of preview(f); track s) { <span class="fe__chip" [title]="s">{{ s }}</span> }
+                        </div>
+                      }
+                    }
+                  } @else if (isPersonal) {
+                    <div class="fe__switches">
+                      <mat-slide-toggle color="primary" [(ngModel)]="f.hidden" (ngModelChange)="touch()">Ocultar em Minhas integrações</mat-slide-toggle>
+                      <span class="pe__option-help">Para valores internos (ex.: prompts longos) que o usuário não precisa ver.</span>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          } @empty {
+            <div class="pe__empty">
+              <mat-icon>tune</mat-icon>
+              {{ filter() ? 'Nenhum campo encontrado.' : 'Nenhum campo ainda — adicione o primeiro abaixo.' }}
+            </div>
+          }
+        </div>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+
+  <div class="pe__footer">
+    <mat-form-field appearance="outline" class="pe__newkey" subscriptSizing="dynamic">
+      <mat-label>Novo campo</mat-label>
+      <input matInput [(ngModel)]="newKey" (keydown.enter)="addField()" placeholder="Ex.: ApiToken" />
+      @if (newKeyError(); as err) { <mat-hint class="fe__error">{{ err }}</mat-hint> }
+    </mat-form-field>
+    <button mat-stroked-button (click)="addField()" [disabled]="!newKey.trim() || !!newKeyError()">
+      <mat-icon>add</mat-icon>Adicionar
+    </button>
+    <span class="pe__spacer"></span>
+    <button mat-button (click)="close()" [disabled]="saving()">Cancelar</button>
+    <button mat-flat-button color="primary" (click)="save()" [disabled]="saving() || hasErrors()"
+            [matTooltip]="hasErrors() ? 'Corrija o nome do plugin e os campos com JSON inválido' : ''">
+      <mat-icon>save</mat-icon>Salvar
+    </button>
+  </div>
+  @if (saving()) { <mat-progress-bar mode="indeterminate"></mat-progress-bar> }
+</div>
