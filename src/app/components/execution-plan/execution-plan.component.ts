@@ -234,6 +234,8 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   readonly openQuestions = computed(() => (this.plan()?.questions ?? []).filter((q) => q.status === 'open'));
   readonly answerDrafts = signal<Record<string, string>>({});
+  /** 0036: resposta enviada e ainda sem confirmação do servidor (id da pergunta → texto) — a tela já mostra a escolha. */
+  readonly pendingAnswers = signal<Record<string, string>>({});
   readonly linkDraft = signal<LinkDraft | null>(null);
 
   readonly counts = computed(() => {
@@ -628,31 +630,57 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   /** Texto da opção escolhida (a resposta guarda só o rótulo). */
   answerDescription(question: ExecutionQuestion): string | null {
-    const answer = (question.answer ?? '').trim().toLowerCase();
-    return question.options.find((o) => o.label.trim().toLowerCase() === answer)?.description ?? null;
+    return this.optionDescription(question, question.answer ?? '');
+  }
+
+  optionDescription(question: ExecutionQuestion, label: string): string | null {
+    const key = label.trim().toLowerCase();
+    return question.options.find((o) => o.label.trim().toLowerCase() === key)?.description ?? null;
   }
 
   setAnswerDraft(questionId: string, text: string): void {
     this.answerDrafts.update((d) => ({ ...d, [questionId]: text }));
   }
 
+  /**
+   * 0036: resposta otimista — a escolha aparece na hora ("Sua resposta: X · enviando…") e as opções somem; a
+   * confirmação do servidor troca pela resposta gravada, sem esperar a recarga do plano. Erro: as opções voltam.
+   * Não depende do `busy` geral (outra ação em andamento não pode engolir o clique).
+   */
   answer(question: ExecutionQuestion, text: string): void {
     const plan = this.plan();
     const value = (text ?? '').trim();
-    if (!plan || !value || this.busy()) return;
-    this.busy.set('answer:' + question.id);
+    if (!plan || !value || question.status !== 'open' || this.pendingAnswers()[question.id]) return;
+    this.pendingAnswers.update((p) => ({ ...p, [question.id]: value }));
     this.api.answer(plan.id, question.id, value).subscribe({
-      next: () => {
-        this.busy.set(null);
+      next: (answered) => {
+        this.patchQuestion(answered ?? { ...question, status: 'answered', answer: value, answeredVia: 'prmake', answeredAt: new Date().toISOString() });
+        this.clearPending(question.id);
         this.answerDrafts.update((d) => { const { [question.id]: _, ...rest } = d; return rest; });
-        this.snackBar.open('Resposta enviada — a skill segue com ela.', 'Ok', { duration: 4000 });
         this.refresh();
       },
       error: (err) => {
-        this.busy.set(null);
-        this.snackBar.open(planApiError(err, 'Não foi possível enviar a resposta.'), 'Fechar', { duration: 8000 });
+        this.clearPending(question.id);
+        this.snackBar.open(planApiError(err, 'Não foi possível enviar a resposta — escolha de novo.'), 'Fechar', { duration: 8000 });
       }
     });
+  }
+
+  pendingAnswer(question: ExecutionQuestion): string | null {
+    return question.status === 'open' ? this.pendingAnswers()[question.id] ?? null : null;
+  }
+
+  private clearPending(questionId: string): void {
+    this.pendingAnswers.update((p) => { const { [questionId]: _, ...rest } = p; return rest; });
+  }
+
+  /** Aplica a pergunta confirmada no plano da tela (a recarga discreta traz o resto: etapa saindo de "aguardando"). */
+  private patchQuestion(answered: ExecutionQuestion): void {
+    const plan = this.plan();
+    if (!plan) return;
+    const updated = { ...plan, questions: (plan.questions ?? []).map((q) => (q.id === answered.id ? { ...q, ...answered } : q)) };
+    this.plan.set(updated);
+    this.emitHeadline(updated);
   }
 
   // ── Links (chamados, PRs, documentos) ─────────────────────────────────────────────────────
