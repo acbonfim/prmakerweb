@@ -20,6 +20,41 @@ export interface ArchitectureSection extends ArchitectureSectionSummary {
   content: string;
 }
 
+/** Interdependência de um projeto (0034): evento SNS, fila SQS, tabela de outro módulo, HTTP, pacote, serviço externo. */
+export interface ArchitectureRelation {
+  target: string;
+  kind: string;
+  detail?: string | null;
+  evidence?: string | null;
+}
+
+export interface ArchitectureIncomingRelation {
+  source: string;
+  kind: string;
+  detail?: string | null;
+  evidence?: string | null;
+}
+
+export interface ArchitectureGraphNode { key: string; name: string; kind: string; mapped: boolean; }
+export interface ArchitectureGraphEdge { source: string; target: string; kind: string; count: number; details: string[]; }
+export interface ArchitectureGraph { nodes: ArchitectureGraphNode[]; edges: ArchitectureGraphEdge[]; }
+
+/** Tipos de relação: rótulo, ícone e cor (a mesma no mapa e nos painéis). */
+export const RELATION_KINDS: { kind: string; label: string; icon: string; color: string }[] = [
+  { kind: 'event', label: 'Evento (SNS → fila)', icon: 'bolt', color: '#f0883e' },
+  { kind: 'queue', label: 'Fila (SQS)', icon: 'move_to_inbox', color: '#58a6ff' },
+  { kind: 'database', label: 'Banco compartilhado', icon: 'storage', color: '#a371f7' },
+  { kind: 'http', label: 'HTTP', icon: 'http', color: '#3fb950' },
+  { kind: 'external', label: 'Serviço externo', icon: 'public', color: '#d29922' },
+  { kind: 'package', label: 'Pacote', icon: 'inventory_2', color: '#8b949e' },
+  { kind: 'frontend', label: 'Front-end', icon: 'web', color: '#39c5cf' },
+  { kind: 'other', label: 'Outro', icon: 'more_horiz', color: '#6e7681' },
+];
+
+export function relationKind(kind: string) {
+  return RELATION_KINDS.find(k => k.kind === kind) ?? RELATION_KINDS[RELATION_KINDS.length - 1];
+}
+
 export interface ArchitectureProject {
   id: string;
   key: string;
@@ -35,6 +70,8 @@ export interface ArchitectureProject {
   updatedAt: string;
   updatedBy: string;
   sections: ArchitectureSectionSummary[];
+  relations?: ArchitectureRelation[];
+  usedBy?: ArchitectureIncomingRelation[];
 }
 
 export interface KnowledgeArticle {
@@ -125,6 +162,11 @@ export class ArchitectureService {
 
   projects(): Observable<ArchitectureProject[]> {
     return this.http.get<ArchitectureProject[]>(`${this.api}/projects`);
+  }
+
+  /** Mapa do ecossistema (0034): nós = projetos + serviços externos; arestas agrupadas por origem/destino/tipo. */
+  graph(): Observable<ArchitectureGraph> {
+    return this.http.get<ArchitectureGraph>(`${this.api}/graph`);
   }
 
   section(projectKey: string, sectionKey: string): Observable<ArchitectureSection> {

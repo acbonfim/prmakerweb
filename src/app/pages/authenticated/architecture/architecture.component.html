@@ -9,9 +9,13 @@
   <span class="header-spacer"></span>
   @if (!loading()) {
     <span class="stat" matTooltip="Projetos e seções publicados"><mat-icon>view_module</mat-icon>{{ totals().projects }} projetos · {{ totals().sections }} seções</span>
+    @if (totalRelations()) {
+      <span class="stat" matTooltip="Interdependências extraídas do código (eventos, filas, banco, HTTP, externos)"><mat-icon>hub</mat-icon>{{ totalRelations() }} ligações</span>
+    }
     @if (kcState(); as kc) {
-      <span class="stat" [matTooltip]="'Última sincronização: ' + date(kc.lastSyncAt) + (kc.lastSyncBy ? ' por ' + kc.lastSyncBy : '')">
-        <mat-icon>menu_book</mat-icon>Knowledge Center ({{ kc.activeEnvironment }}): {{ kc.articleCount }} artigos
+      <span class="stat" [class.stat--warn]="kcStale()"
+            [matTooltip]="(kcStale() ? 'Knowledge Center sem sincronizar há mais de 24 h — as skills sincronizam nas máquinas com a credencial (kb.sh agendar install). ' : '') + 'Última sincronização: ' + date(kc.lastSyncAt) + (kc.lastSyncBy ? ' por ' + kc.lastSyncBy : '')">
+        <mat-icon>{{ kcStale() ? 'sync_problem' : 'menu_book' }}</mat-icon>Knowledge Center ({{ kc.activeEnvironment }}): {{ kc.articleCount }} artigos · {{ sinceLabel(kc.lastSyncAt) }}
       </span>
     }
   }
@@ -37,6 +41,9 @@
 
     <button type="button" class="kb__node kb__node--root" [class.kb__node--on]="selection().type === 'overview'" (click)="goOverview()">
       <mat-icon>dashboard</mat-icon>Visão geral
+    </button>
+    <button type="button" class="kb__node kb__node--root" [class.kb__node--on]="selection().type === 'map'" (click)="openMap()">
+      <mat-icon>hub</mat-icon>Mapa do ecossistema
     </button>
 
     @if (loading()) {
@@ -129,6 +136,8 @@
         <mat-icon>error_outline</mat-icon>{{ error() }}
         <button mat-stroked-button (click)="load()">Tentar de novo</button>
       </div>
+    } @else if (selection().type === 'map') {
+      <app-ecosystem-map [focus]="mapFocus()" (openProject)="openProjectByKey($event)"></app-ecosystem-map>
     } @else if (selection().type === 'overview') {
       <section class="kb__overview">
         <h2>Como a base é usada</h2>
@@ -137,14 +146,36 @@
           depois vai direto aos arquivos que ela aponta. Regra de negócio: consulta o Knowledge Center e cita o
           <strong>ART-n</strong> na análise. Isso deixa as análises mais rápidas, mais certeiras e mais baratas.
         </p>
+        @if (hubs().length) {
+          <div class="kb__hubs">
+            <div class="kb__hubs-head">
+              <mat-icon>hub</mat-icon><strong>Hubs do ecossistema</strong>
+              <span class="kb__hubs-hint">mudança nestes projetos costuma afetar muitos outros</span>
+              <span class="header-spacer"></span>
+              <button mat-stroked-button (click)="openMap()"><mat-icon>account_tree</mat-icon>Abrir o mapa</button>
+            </div>
+            <div class="kb__hubs-list">
+              @for (h of hubs(); track h.project.key) {
+                <button type="button" class="kb__hub" (click)="openMap(h.project.key)" [matTooltip]="h.users + ' projetos dependem dele — ver no mapa'">
+                  <span class="kb__hub-count">{{ h.users }}</span>{{ h.project.name }}
+                </button>
+              }
+            </div>
+          </div>
+        }
         <div class="kb__cards">
           @for (g of groups(); track g.kind) {
             <div class="kb__card">
               <div class="kb__card-head"><mat-icon>{{ g.icon }}</mat-icon>{{ g.label }}</div>
-              @for (p of g.projects; track p.key) {
+              @for (p of cardProjects(g); track p.key) {
                 <button type="button" class="kb__card-item" (click)="selectProject(p)">
                   <strong>{{ p.name }}</strong>
                   @if (p.summary) { <span>{{ p.summary }}</span> }
+                </button>
+              }
+              @if (g.projects.length > cardLimit) {
+                <button type="button" class="kb__card-more" (click)="toggle('card:' + g.kind)">
+                  {{ expanded().has('card:' + g.kind) ? 'mostrar menos' : 'ver mais ' + (g.projects.length - cardLimit) }}
                 </button>
               }
             </div>
@@ -202,6 +233,46 @@
         @if (p.summary) { <p class="kb__summary">{{ p.summary }}</p> }
         @if (p.keywords.length) {
           <div class="kb__keywords">@for (k of p.keywords; track k) { <span class="kb__tag">{{ k }}</span> }</div>
+        }
+
+        @if (dependsOn().length || usedBy().length) {
+          <section class="kb__links" aria-label="Integrações">
+            <button type="button" class="kb__links-head" (click)="linksOpen.set(!linksOpen())" [attr.aria-expanded]="linksOpen()">
+              <mat-icon>{{ linksOpen() ? 'expand_more' : 'chevron_right' }}</mat-icon>
+              <strong>Integrações</strong>
+              <span>depende de {{ dependsOn().length }} · usado por {{ usedBy().length }}</span>
+              <span class="header-spacer"></span>
+              <span class="kb__links-map" role="link" tabindex="0" (click)="$event.stopPropagation(); openMap(p.key)" (keydown.enter)="openMap(p.key)">
+                <mat-icon>hub</mat-icon>ver no mapa
+              </span>
+            </button>
+            @if (linksOpen()) {
+              <div class="kb__links-cols">
+                @for (col of [{ title: 'Depende de', list: dependsOn() }, { title: 'Usado por', list: usedBy() }]; track col.title) {
+                  <div class="kb__links-col">
+                    <h4>{{ col.title }} ({{ col.list.length }})</h4>
+                    @for (g of col.list; track g.key) {
+                      <div class="kb__link">
+                        @if (g.mapped) {
+                          <button type="button" class="kb__link-name" (click)="openProjectByKey(g.key)">{{ g.name }}</button>
+                        } @else {
+                          <span class="kb__link-name kb__link-name--ext">{{ g.name }}</span>
+                        }
+                        @for (it of g.items; track $index) {
+                          <div class="kb__link-item" [matTooltip]="it.evidence ? 'Evidência: ' + it.evidence : ''">
+                            <mat-icon [style.color]="rel(it.kind).color">{{ rel(it.kind).icon }}</mat-icon>
+                            <span>{{ it.detail || rel(it.kind).label }}</span>
+                          </div>
+                        }
+                      </div>
+                    } @empty {
+                      <div class="kb__link-empty">nada encontrado no código</div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </section>
         }
 
         @if (isAdmin()) {

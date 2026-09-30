@@ -10,6 +10,7 @@ import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdo
 import { renderMermaidIn } from '../../../helpers/mermaid-loader';
 import { StorageService } from '../../../services/storage.service';
 import { KbAdminMode, KbAdminPanelComponent } from './kb-admin-panel.component';
+import { EcosystemMapComponent } from './ecosystem-map.component';
 import {
   ARCHITECTURE_KINDS,
   ArchitectureProject,
@@ -17,13 +18,23 @@ import {
   ArchitectureService,
   ArchitectureSuggestion,
   KnowledgeArticle,
-  KnowledgeState
+  KnowledgeState,
+  relationKind
 } from '../../../services/architecture.service';
 
 type Selection =
   | { type: 'overview' }
+  | { type: 'map'; focus?: string }
   | { type: 'project'; key: string; section?: string }
   | { type: 'article'; number: number };
+
+/** Ligações de um projeto agrupadas por outro projeto (painel "Integrações"). */
+interface LinkGroup {
+  key: string;
+  name: string;
+  mapped: boolean;
+  items: { kind: string; detail?: string | null; evidence?: string | null }[];
+}
 
 interface TreeGroup {
   kind: string;
@@ -35,12 +46,12 @@ interface TreeGroup {
 /**
  * Base Solvace (feature 0033): a engenharia reversa de todos os projetos (sessão por sessão) e as regras de negócio
  * do Knowledge Center, como a skill vê. Leitura para todos; edição e chat de melhoria (admin) vêm na fase F2.
- * Links diretos: ?p=<projeto>&s=<seção> e ?art=<n>.
+ * Links diretos: ?p=<projeto>&s=<seção>, ?art=<n> e ?view=mapa[&n=<projeto>] (mapa do ecossistema, 0034).
  */
 @Component({
   selector: 'app-architecture',
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, KbAdminPanelComponent],
+  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, KbAdminPanelComponent, EcosystemMapComponent],
   templateUrl: './architecture.component.html',
   styleUrls: ['./architecture.component.css']
 })
@@ -102,6 +113,30 @@ export class ArchitectureComponent implements OnInit {
     return s.type === 'project' ? this.projects().find(p => p.key === s.key) ?? null : null;
   });
 
+  readonly mapFocus = computed(() => { const s = this.selection(); return s.type === 'map' ? s.focus ?? null : null; });
+
+  /** Integrações do projeto aberto: "depende de" e "usado por", agrupadas pelo outro lado. */
+  readonly dependsOn = computed(() => this.linkGroups((this.currentProject()?.relations ?? []).map(r => ({ other: r.target, ...r }))));
+  readonly usedBy = computed(() => this.linkGroups((this.currentProject()?.usedBy ?? []).map(r => ({ other: r.source, ...r }))));
+  readonly linksOpen = signal(true);
+
+  /** Projetos de que mais gente depende (visão geral). */
+  readonly hubs = computed(() => {
+    const users = new Map<string, Set<string>>();
+    for (const p of this.projects()) for (const r of p.relations ?? []) users.set(r.target, (users.get(r.target) ?? new Set()).add(p.key));
+    return this.projects().map(p => ({ project: p, users: users.get(p.key)?.size ?? 0 }))
+      .filter(h => h.users > 1).sort((a, b) => b.users - a.users).slice(0, 8);
+  });
+
+  readonly totalRelations = computed(() => this.projects().reduce((n, p) => n + (p.relations?.length ?? 0), 0));
+
+  /** KC sem sincronizar há mais de 24 h (o sync roda nas máquinas com a credencial, pelas skills). */
+  readonly kcStale = computed(() => {
+    const last = this.kcState()?.lastSyncAt;
+    if (!last) return true;
+    return Date.now() - new Date(last).getTime() > 24 * 3600 * 1000;
+  });
+
   constructor() {
     // Diagramas: depois que o conteúdo da seção/artigo aparece na tela.
     effect(() => {
@@ -116,6 +151,7 @@ export class ArchitectureComponent implements OnInit {
     this.route.queryParamMap.subscribe(q => {
       const art = Number(q.get('art'));
       if (art) this.openArticle(art);
+      else if (q.get('view') === 'mapa') { this.adminMode.set(null); this.selection.set({ type: 'map', focus: q.get('n') ?? undefined }); }
       else if (q.get('p')) this.openProject(q.get('p')!, q.get('s') ?? undefined);
       else this.selection.set({ type: 'overview' });
     });
@@ -215,6 +251,16 @@ export class ArchitectureComponent implements OnInit {
     this.router.navigate([], { queryParams: {} });
   }
 
+  openMap(focus?: string): void {
+    this.router.navigate([], { queryParams: { view: 'mapa', n: focus ?? null } });
+    this.treeOpen.set(false);
+  }
+
+  openProjectByKey(key: string): void {
+    const p = this.projects().find(x => x.key === key);
+    if (p) this.selectProject(p);
+  }
+
   selectProject(p: ArchitectureProject, sectionKey?: string): void {
     this.router.navigate([], { queryParams: { p: p.key, s: sectionKey ?? p.sections[0]?.key ?? null } });
     this.treeOpen.set(false);
@@ -231,6 +277,12 @@ export class ArchitectureComponent implements OnInit {
       next.has(key) ? next.delete(key) : next.add(key);
       return next;
     });
+  }
+
+  /** Cartões da visão geral: até 8 projetos por tipo (o revamp tem ~50), o resto sob "ver mais". */
+  readonly cardLimit = 8;
+  cardProjects(g: TreeGroup): ArchitectureProject[] {
+    return this.expanded().has('card:' + g.kind) ? g.projects : g.projects.slice(0, this.cardLimit);
   }
 
   isOpen(key: string): boolean {
@@ -270,6 +322,25 @@ export class ArchitectureComponent implements OnInit {
 
   // ── Formatação ────────────────────────────────────────────────────────────────────────────────
 
+  rel(kind: string) { return relationKind(kind); }
+
+  private linkGroups(list: { other: string; kind: string; detail?: string | null; evidence?: string | null }[]): LinkGroup[] {
+    const map = new Map<string, LinkGroup>();
+    for (const r of list) {
+      const project = this.projects().find(p => p.key === r.other);
+      const g = map.get(r.other) ?? { key: r.other, name: project?.name ?? externalName(r.other), mapped: !!project, items: [] };
+      g.items.push({ kind: r.kind, detail: r.detail, evidence: r.evidence });
+      map.set(r.other, g);
+    }
+    return [...map.values()].sort((a, b) => Number(b.mapped) - Number(a.mapped) || a.name.localeCompare(b.name));
+  }
+
+  sinceLabel(value?: string | null): string {
+    if (!value) return 'nunca sincronizado';
+    const h = Math.floor((Date.now() - new Date(value).getTime()) / 3600000);
+    return h < 1 ? 'sincronizado há menos de 1 h' : h < 48 ? `sincronizado há ${h} h` : `sincronizado há ${Math.floor(h / 24)} dias`;
+  }
+
   kindLabel(kind: string): string {
     return ARCHITECTURE_KINDS.find(k => k.kind === kind)?.label ?? kind;
   }
@@ -298,6 +369,18 @@ export class ArchitectureComponent implements OnInit {
   paragraphs(text: string): string[] {
     return text.split(/\n{2,}|(?<=[.!?])\s{2,}/).map(t => t.trim()).filter(Boolean);
   }
+}
+
+/** ext:microsoft-graph → Microsoft Graph (o backend manda o nome no grafo; aqui só para o painel do projeto). */
+function externalName(key: string): string {
+  if (!key.startsWith('ext:')) return key;
+  const names: Record<string, string> = {
+    'ext:microsoft-graph': 'Microsoft Graph / Teams', 'ext:azure-ad': 'Azure AD / Entra ID', 'ext:openai': 'OpenAI', 'ext:anthropic': 'Anthropic',
+    'ext:gemini': 'Google Gemini', 'ext:hubspot': 'HubSpot', 'ext:azure-devops': 'Azure DevOps', 'ext:powerbi': 'Power BI',
+    'ext:snowflake': 'Snowflake', 'ext:databricks': 'Databricks', 'ext:cognito': 'AWS Cognito', 'ext:s3': 'AWS S3', 'ext:sqs': 'AWS SQS',
+    'ext:opensearch': 'OpenSearch', 'ext:onlyoffice': 'OnlyOffice'
+  };
+  return names[key] ?? key.slice(4);
 }
 
 function normalize(value: string): string {
