@@ -1,6 +1,7 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { MatButtonModule } from '@angular/material/button';
+import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -9,6 +10,8 @@ import { environment } from '../../../environments/environment';
 import { AuthService } from '../../services/auth.service';
 import { GlobalService } from '../../services/global.service';
 import { saveBlob } from '../../services/execution-plan.service';
+
+type InstallOs = 'unix' | 'windows';
 
 interface SkillInfo {
   name: string;
@@ -21,12 +24,14 @@ interface SkillInfo {
 /**
  * "Skills do Claude" (feature 0024): as skills do PRMake (analisar-bug, gerar-prmake, …) instaladas com um
  * comando e atualizadas sozinhas a cada sessão do Claude Code. A fonte fica no repositório da API e cada
- * deploy publica a versão nova — sem plugin/marketplace.
+ * deploy publica a versão nova — sem plugin/marketplace. Cada sistema tem o seu comando (0035): macOS/Linux no
+ * terminal (install.sh) e Windows no PowerShell (install.ps1, que usa o Git Bash do Claude Code); os dois instalam
+ * as dependências que faltarem (jq, unzip, Python).
  */
 @Component({
   selector: 'app-skills-dialog',
   standalone: true,
-  imports: [MatButtonModule, MatDialogModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [MatButtonModule, MatButtonToggleModule, MatDialogModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
   template: `
     <div class="sk">
       <div class="sk__header">
@@ -59,7 +64,12 @@ interface SkillInfo {
         <section class="sk__step">
           <span class="sk__num">2</span>
           <div class="sk__step-body">
-            <div class="sk__step-title">Rode no terminal (macOS/Linux)</div>
+            <div class="sk__step-title">Escolha o sistema e rode o comando</div>
+            <mat-button-toggle-group class="sk__os" [value]="os()" (change)="os.set($event.value)" hideSingleSelectionIndicator>
+              <mat-button-toggle value="unix"><mat-icon>laptop_mac</mat-icon> macOS / Linux</mat-button-toggle>
+              <mat-button-toggle value="windows"><mat-icon>desktop_windows</mat-icon> Windows</mat-button-toggle>
+            </mat-button-toggle-group>
+            <p class="sk__where">{{ os() === 'windows' ? 'No PowerShell (não precisa ser administrador):' : 'No terminal:' }}</p>
             <div class="sk__cmd">
               <code>{{ reveal() ? command() : maskedCommand() }}</code>
               <div class="sk__cmd-actions">
@@ -73,11 +83,29 @@ interface SkillInfo {
                 </button>
               </div>
             </div>
-            <p class="sk__note">
-              Instala em <code>~/.claude/skills</code>, salva o token em <code>~/.claude/prmake-token.txt</code> e coloca um
-              hook de início de sessão em <code>~/.claude/settings.json</code> que atualiza as skills automaticamente
-              (sem rede, não faz nada). Precisa de <code>curl</code>, <code>jq</code>, <code>unzip</code>, <code>rsync</code> e <code>python3</code>.
-            </p>
+            @if (os() === 'windows') {
+              <p class="sk__note">
+                Instala pelo <code>winget</code> o que faltar: <strong>Git for Windows</strong> (o Git Bash é o terminal que o
+                Claude Code usa no Windows), <strong>jq</strong> e <strong>Python 3</strong>; <code>unzip</code> e <code>rsync</code>
+                não são necessários. As skills ficam em <code>%USERPROFILE%\\.claude\\skills</code>, o token em
+                <code>%USERPROFILE%\\.claude\\prmake-token.txt</code> e um hook de início de sessão atualiza tudo sozinho.
+                Ao terminar, feche e abra o Claude Code.
+              </p>
+              <p class="sk__note">Prefere instalar antes? <code>winget install -e --id Git.Git</code> ·
+                <code>winget install -e --id jqlang.jq</code> · <code>winget install -e --id Python.Python.3.12</code>.
+                Já está no Git Bash? Use o comando de macOS/Linux. Claude Code dentro do WSL: use o de Linux.</p>
+            } @else {
+              <p class="sk__note">
+                Instala o que faltar — <code>jq</code>, <code>unzip</code>, <code>python3</code> (+ <code>venv</code>) — pelo
+                Homebrew no macOS ou pelo apt/dnf/yum/pacman/zypper/apk no Linux (o <code>sudo</code> pode pedir a senha;
+                sem sudo, o jq é baixado para <code>~/.local/bin</code>). Instala em <code>~/.claude/skills</code>, salva o token
+                em <code>~/.claude/prmake-token.txt</code> e coloca um hook de início de sessão em
+                <code>~/.claude/settings.json</code> que atualiza as skills automaticamente (sem rede, não faz nada).
+              </p>
+              <p class="sk__note">Prefere instalar antes? macOS: <code>brew install jq python</code> · Debian/Ubuntu:
+                <code>sudo apt-get install -y curl jq unzip python3 python3-venv</code> · Fedora:
+                <code>sudo dnf install -y jq unzip python3</code>.</p>
+            }
           </div>
         </section>
 
@@ -85,7 +113,8 @@ interface SkillInfo {
           <span class="sk__num">3</span>
           <div class="sk__step-body">
             <div class="sk__step-title">Pronto — use no Claude Code</div>
-            <p>Ex.: <code>/analisar-bug 74517</code>. Status e atualização manual: <code>bash ~/.claude/skills/.prmake/prmake-skills.sh status</code></p>
+            <p>Ex.: <code>/analisar-bug 74517</code>. Status e atualização manual{{ os() === 'windows' ? ' (no Git Bash)' : '' }}:
+              <code>bash ~/.claude/skills/.prmake/prmake-skills.sh status</code></p>
           </div>
         </section>
 
@@ -134,6 +163,9 @@ interface SkillInfo {
       word-break: break-all; white-space: pre-wrap; color: #c9d1d9; }
     .sk__cmd-actions { display: flex; flex: none; }
     .sk__note { margin-top: 8px !important; font-size: 11.5px !important; }
+    .sk__os { margin: 2px 0 8px; font-size: 12.5px; }
+    .sk__os .mat-icon { font-size: 17px; width: 17px; height: 17px; vertical-align: -3px; margin-right: 4px; }
+    .sk__where { margin: 0 0 6px !important; }
     code { font-family: 'Courier New', monospace; font-size: 11.5px; color: #c9d1d9; background: rgba(255,255,255,.06); padding: 0 4px; border-radius: 4px; }
     .sk__list-title { margin: 8px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
       color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent); }
@@ -166,9 +198,12 @@ export class SkillsDialogComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly reveal = signal(false);
   readonly downloading = signal<string | null>(null);
+  readonly os = signal<InstallOs>(/win/i.test(navigator.userAgent) ? 'windows' : 'unix');
 
   readonly command = computed(() => {
     const key = this.apiKey() ?? '<sua-api-key>';
+    if (this.os() === 'windows')
+      return `$env:PRMAKE_TOKEN='${key}'; irm -Headers @{'x-api-key'=$env:PRMAKE_TOKEN} ${this.apiUrl}/install.ps1 | iex`;
     return `curl -fsSL -H "x-api-key: ${key}" ${this.apiUrl}/install.sh | PRMAKE_TOKEN=${key} bash`;
   });
 
