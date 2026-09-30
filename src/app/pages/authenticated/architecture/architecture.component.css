@@ -94,6 +94,28 @@
   text-align: center; font-size: 13.5px; color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent); max-width: 640px; margin: 0 auto; }
 .kb__empty--error { color: var(--mat-sys-error, #f2b8b5); }
 
+/* Admin (0033 F2) */
+.suggest-btn { position: relative; }
+.suggest-btn mat-icon { margin-right: 4px; }
+.suggest-count { margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; font-size: 11px; font-weight: 700;
+  background: var(--mat-sys-primary); color: var(--mat-sys-on-primary); }
+.kb__admin { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+.kb__admin button { font-size: 12.5px; }
+.kb__admin mat-icon { font-size: 17px; width: 17px; height: 17px; margin-right: 4px; }
+.kb__admin--on { border-color: var(--mat-sys-primary) !important; color: var(--mat-sys-primary) !important; }
+.sg { margin-bottom: 18px; padding: 12px 14px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 35%, transparent); }
+.sg__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.sg__head mat-icon { color: var(--mat-sys-primary); }
+.sg__hint { font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); }
+.sg__item { padding: 10px 0; border-top: 1px solid rgba(255,255,255,.07); }
+.sg__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent); }
+.sg__kind { font-size: 11px; font-weight: 700; padding: 0 8px; border-radius: 9px; background: rgba(255,255,255,.08); }
+.sg__kind--divergence { color: #d29922; background: rgba(210,153,34,.14); }
+.sg__kind--learning { color: #3fb950; background: rgba(63,185,80,.14); }
+.sg__text { margin: 6px 0; font-size: 13.5px; }
+.sg__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sg__actions mat-icon { font-size: 17px; width: 17px; height: 17px; margin-right: 4px; }
+
 @media (max-width: 900px) {
   .kb { grid-template-columns: 1fr; }
   .tree-toggle { display: inline-flex; }

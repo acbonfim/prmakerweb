@@ -15,6 +15,13 @@
       </span>
     }
   }
+  @if (isAdmin()) {
+    <button mat-stroked-button class="suggest-btn" (click)="showSuggestions.set(!showSuggestions())"
+            matTooltip="Sugestões das análises (aprendizados e divergências) aguardando o admin">
+      <mat-icon>lightbulb</mat-icon>Sugestões
+      @if (suggestions().length) { <span class="suggest-count">{{ suggestions().length }}</span> }
+    </button>
+  }
   <button mat-icon-button class="tree-toggle" (click)="treeOpen.set(!treeOpen())" aria-label="Mostrar a lista de projetos">
     <mat-icon>{{ treeOpen() ? 'close' : 'menu' }}</mat-icon>
   </button>
@@ -90,6 +97,33 @@
 
   <!-- ── Conteúdo ───────────────────────────────────────────────────────────────── -->
   <main class="kb__main" #content>
+    @if (showSuggestions() && isAdmin()) {
+      <section class="sg">
+        <div class="sg__head"><mat-icon>lightbulb</mat-icon><strong>Sugestões para a base</strong>
+          <span class="sg__hint">propostas pelas análises — nada entra na seção sem você aplicar</span>
+          <span class="header-spacer"></span>
+          <button mat-icon-button (click)="showSuggestions.set(false)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+        </div>
+        @for (sg of suggestions(); track sg.id) {
+          <div class="sg__item">
+            <div class="sg__meta">
+              <span class="sg__kind sg__kind--{{ sg.kind }}">{{ sg.kind === 'divergence' ? 'divergência' : sg.kind === 'learning' ? 'aprendizado' : 'sugestão' }}</span>
+              <code>{{ sg.projectKey }}{{ sg.sectionKey ? ' / ' + sg.sectionKey : '' }}</code>
+              @if (sg.cardNumber) { <span>card {{ sg.cardNumber }}</span> }
+              <span>{{ sg.createdBy }} · {{ date(sg.createdAt) }}</span>
+            </div>
+            <div class="sg__text kb__md" [innerHTML]="sg.content | planMarkdown"></div>
+            <div class="sg__actions">
+              <button mat-flat-button color="primary" (click)="workOnSuggestion(sg)"><mat-icon>auto_fix_high</mat-icon>Incorporar com a IA</button>
+              <button mat-button (click)="resolveSuggestion(sg, 'applied')" matTooltip="Já incorporei na mão">Marcar como aplicada</button>
+              <button mat-button (click)="resolveSuggestion(sg, 'dismissed')">Descartar</button>
+            </div>
+          </div>
+        } @empty {
+          <div class="kb__empty"><mat-icon>check_circle</mat-icon>Nenhuma sugestão pendente.</div>
+        }
+      </section>
+    }
     @if (error()) {
       <div class="kb__empty kb__empty--error">
         <mat-icon>error_outline</mat-icon>{{ error() }}
@@ -168,6 +202,24 @@
         @if (p.summary) { <p class="kb__summary">{{ p.summary }}</p> }
         @if (p.keywords.length) {
           <div class="kb__keywords">@for (k of p.keywords; track k) { <span class="kb__tag">{{ k }}</span> }</div>
+        }
+
+        @if (isAdmin()) {
+          <div class="kb__admin" role="toolbar" aria-label="Ferramentas do administrador">
+            @if (section()) {
+              <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'edit'" (click)="openAdmin('edit')"><mat-icon>edit</mat-icon>Editar</button>
+              <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'history'" (click)="openAdmin('history')"><mat-icon>history</mat-icon>Histórico</button>
+              <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'chat'" (click)="openAdmin('chat')"
+                      matTooltip="Conversar com o especialista Solvace (plugin de IA) e aplicar a nova versão proposta"><mat-icon>auto_fix_high</mat-icon>Sugerir melhoria</button>
+            }
+            <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'new'" (click)="openAdmin('new')"><mat-icon>note_add</mat-icon>Nova seção</button>
+            <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'project'" (click)="openAdmin('project')"><mat-icon>tune</mat-icon>Dados do projeto</button>
+          </div>
+          @if (adminMode(); as mode) {
+            <app-kb-admin-panel [mode]="mode" [project]="p" [section]="section()" [suggestion]="activeSuggestion()"
+              (closed)="adminMode.set(null); activeSuggestion.set(null)" (sectionSaved)="onSectionSaved($event)"
+              (projectSaved)="onProjectSaved()" (suggestionApplied)="onSuggestionApplied($event)"></app-kb-admin-panel>
+          }
         }
 
         @if (p.sections.length) {

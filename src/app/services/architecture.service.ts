@@ -71,6 +71,38 @@ export interface ArchitectureSectionVersion {
   content?: string | null;
 }
 
+export interface ArchitectureSuggestion {
+  id: string;
+  projectKey: string;
+  sectionKey?: string | null;
+  kind: 'learning' | 'divergence' | 'other' | string;
+  content: string;
+  cardNumber?: string | null;
+  status: 'pending' | 'applied' | 'dismissed' | string;
+  createdBy: string;
+  createdAt: string;
+  resolvedBy?: string | null;
+  resolvedAt?: string | null;
+  resolutionNote?: string | null;
+}
+
+export interface ChatMessage { role: 'user' | 'assistant'; content: string; }
+export interface ChatReply { reply: string; suggestion?: string | null; provider?: string | null; model?: string | null; tokensUsed?: number | null; }
+export interface ChatStatus { available: boolean; provider?: string | null; reason?: string | null; }
+
+/** Seções padrão da engenharia reversa (mesmas do template da skill base-solvace). */
+export const SECTION_TEMPLATE: { key: string; title: string; order: number }[] = [
+  { key: 'visao-geral', title: 'Visão geral', order: 10 },
+  { key: 'modulos', title: 'Módulos e fluxos', order: 20 },
+  { key: 'dados', title: 'Dados', order: 30 },
+  { key: 'integracoes', title: 'Integrações', order: 40 },
+  { key: 'infra', title: 'Infra e AWS', order: 50 },
+  { key: 'autenticacao', title: 'Login e permissões', order: 60 },
+  { key: 'jobs', title: 'Jobs e rotinas', order: 70 },
+  { key: 'regras-de-negocio', title: 'Regras de negócio', order: 80 },
+  { key: 'armadilhas', title: 'Armadilhas e bugs conhecidos', order: 90 },
+];
+
 /** Rótulos e ordem dos tipos de projeto (iguais ao índice do backend). */
 export const ARCHITECTURE_KINDS: { kind: string; label: string; icon: string }[] = [
   { kind: 'ecosystem', label: 'Ecossistema', icon: 'hub' },
@@ -101,6 +133,35 @@ export class ArchitectureService {
 
   versions(projectKey: string, sectionKey: string): Observable<ArchitectureSectionVersion[]> {
     return this.http.get<ArchitectureSectionVersion[]>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}/versions`);
+  }
+
+  version(projectKey: string, sectionKey: string, version: number): Observable<ArchitectureSectionVersion> {
+    return this.http.get<ArchitectureSectionVersion>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}/versions/${version}`);
+  }
+
+  // ── Admin (0033 F2) ──
+  upsertProject(key: string, body: { name: string; kind: string; repository?: string | null; summary?: string | null; keywords?: string[]; order?: number | null }): Observable<ArchitectureProject> {
+    return this.http.put<ArchitectureProject>(`${this.api}/projects/${encodeURIComponent(key)}`, body);
+  }
+
+  writeSection(projectKey: string, sectionKey: string, body: { title?: string | null; content: string; order?: number | null; source: 'admin' | 'ai'; note?: string | null }): Observable<ArchitectureSection> {
+    return this.http.put<ArchitectureSection>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}`, body);
+  }
+
+  chatStatus(): Observable<ChatStatus> {
+    return this.http.get<ChatStatus>(`${this.api}/chat/status`);
+  }
+
+  chat(projectKey: string, sectionKey: string, messages: ChatMessage[]): Observable<ChatReply> {
+    return this.http.post<ChatReply>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}/chat`, { messages });
+  }
+
+  suggestions(status: 'pending' | 'all' = 'pending'): Observable<ArchitectureSuggestion[]> {
+    return this.http.get<ArchitectureSuggestion[]>(`${this.api}/suggestions`, { params: new HttpParams().set('status', status) });
+  }
+
+  resolveSuggestion(id: string, status: 'applied' | 'dismissed', note?: string | null): Observable<ArchitectureSuggestion> {
+    return this.http.post<ArchitectureSuggestion>(`${this.api}/suggestions/${id}/resolve`, { status, note: note || null });
   }
 
   knowledgeState(): Observable<KnowledgeState> {

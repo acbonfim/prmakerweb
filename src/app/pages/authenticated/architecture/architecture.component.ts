@@ -8,11 +8,14 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdown.pipe';
 import { renderMermaidIn } from '../../../helpers/mermaid-loader';
+import { StorageService } from '../../../services/storage.service';
+import { KbAdminMode, KbAdminPanelComponent } from './kb-admin-panel.component';
 import {
   ARCHITECTURE_KINDS,
   ArchitectureProject,
   ArchitectureSection,
   ArchitectureService,
+  ArchitectureSuggestion,
   KnowledgeArticle,
   KnowledgeState
 } from '../../../services/architecture.service';
@@ -37,7 +40,7 @@ interface TreeGroup {
 @Component({
   selector: 'app-architecture',
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe],
+  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, KbAdminPanelComponent],
   templateUrl: './architecture.component.html',
   styleUrls: ['./architecture.component.css']
 })
@@ -46,6 +49,7 @@ export class ArchitectureComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
+  private storage = inject(StorageService);
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -59,6 +63,13 @@ export class ArchitectureComponent implements OnInit {
   readonly article = signal<KnowledgeArticle | null>(null);
   readonly treeOpen = signal(false);
   readonly expanded = signal<Set<string>>(new Set());
+
+  // ── Admin (0033 F2) ──
+  readonly isAdmin = signal(this.readIsAdmin());
+  readonly adminMode = signal<KbAdminMode | null>(null);
+  readonly suggestions = signal<ArchitectureSuggestion[]>([]);
+  readonly showSuggestions = signal(false);
+  readonly activeSuggestion = signal<ArchitectureSuggestion | null>(null);
 
   @ViewChild('content') private contentRef?: ElementRef<HTMLElement>;
 
@@ -110,9 +121,79 @@ export class ArchitectureComponent implements OnInit {
     });
   }
 
+  loadSuggestions(): void {
+    if (!this.isAdmin()) return;
+    this.api.suggestions('pending').subscribe({ next: list => this.suggestions.set(list), error: () => this.suggestions.set([]) });
+  }
+
+  // ── Admin ──
+  openAdmin(mode: KbAdminMode): void {
+    this.activeSuggestion.set(null);
+    this.adminMode.set(this.adminMode() === mode ? null : mode);
+  }
+
+  onSectionSaved(saved: ArchitectureSection): void {
+    this.adminMode.set(null);
+    this.activeSuggestion.set(null);
+    const key = this.currentProject()?.key;
+    this.api.projects().subscribe(list => {
+      this.projects.set(list);
+      if (key) this.router.navigate([], { queryParams: { p: key, s: saved.key } });
+      this.section.set(saved);
+    });
+  }
+
+  onProjectSaved(): void {
+    this.adminMode.set(null);
+    this.api.projects().subscribe(list => this.projects.set(list));
+  }
+
+  /** Abre o chat da seção indicada pela sugestão (ou a primeira seção do projeto). */
+  workOnSuggestion(sg: ArchitectureSuggestion): void {
+    const project = this.projects().find(p => p.key === sg.projectKey);
+    if (!project) {
+      this.snackBar.open(`O projeto "${sg.projectKey}" ainda não existe na base — mapeie com a skill base-solvace ou descarte.`, 'Ok', { duration: 7000 });
+      return;
+    }
+    const sectionKey = project.sections.some(s => s.key === sg.sectionKey) ? sg.sectionKey! : project.sections[0]?.key;
+    if (!sectionKey) {
+      this.snackBar.open('O projeto ainda não tem seções — crie a seção primeiro.', 'Ok', { duration: 6000 });
+      return;
+    }
+    this.showSuggestions.set(false);
+    this.router.navigate([], { queryParams: { p: project.key, s: sectionKey } }).then(() => {
+      this.activeSuggestion.set(sg);
+      this.adminMode.set('chat');
+    });
+  }
+
+  resolveSuggestion(sg: ArchitectureSuggestion, status: 'applied' | 'dismissed'): void {
+    this.api.resolveSuggestion(sg.id, status, status === 'applied' ? 'marcada como aplicada' : 'descartada').subscribe({
+      next: () => this.suggestions.update(list => list.filter(x => x.id !== sg.id)),
+      error: () => this.snackBar.open('Não foi possível atualizar a sugestão.', 'Fechar', { duration: 6000 })
+    });
+  }
+
+  onSuggestionApplied(sg: ArchitectureSuggestion): void {
+    this.suggestions.update(list => list.filter(x => x.id !== sg.id));
+  }
+
+  private readIsAdmin(): boolean {
+    try {
+      const token = this.storage.getItem('apiKey');
+      if (!token) return false;
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const raw = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? payload['role'];
+      return (Array.isArray(raw) ? raw : raw ? [raw] : []).includes('admin');
+    } catch {
+      return false;
+    }
+  }
+
   load(): void {
     this.loading.set(true);
     this.error.set(null);
+    this.loadSuggestions();
     let pending = 3;
     const done = () => { if (--pending === 0) this.loading.set(false); };
     this.api.projects().subscribe({
@@ -157,6 +238,7 @@ export class ArchitectureComponent implements OnInit {
   }
 
   private openProject(key: string, sectionKey?: string): void {
+    if (this.adminMode() !== 'chat' || !this.activeSuggestion()) this.adminMode.set(null);
     this.selection.set({ type: 'project', key, section: sectionKey });
     this.article.set(null);
     this.expanded.update(set => new Set(set).add(key));
