@@ -40,6 +40,18 @@ export interface ExecutionPlanSummary {
   resumePending?: boolean;
   /** Quantas coisas dependem do usuário agora (0037). */
   userPending?: number;
+  /** Até qual comentário do card a skill já leu e quando (0037) — "o Claude leu e está analisando". */
+  notesReadNumber?: number | null;
+  notesReadAt?: string | null;
+}
+
+/** Plano onde um comentário pode ir (0037): o do card em tela e o outro da dupla análise/correção. */
+export interface NoteTargetPlan {
+  planId: string;
+  phase: PlanPhase;
+  title: string;
+  current: boolean;
+  steps: { key: string; title: string; status: StepStatus }[];
 }
 
 /** Uma pendência do usuário (0037) — espelha `ExecutionUserActionResponse`. */
