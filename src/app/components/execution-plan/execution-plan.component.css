@@ -185,6 +185,48 @@
 .plan__bar-input:focus { border-color: var(--mat-sys-primary); }
 @keyframes plan-slide { from { opacity: 0; transform: translateY(-4px); } }
 
+/* ── 0039: pedido do executor (na fila / rodando / falhou) e "Analisar com Claude" ── */
+.plan__bar--ask { background: color-mix(in srgb, var(--plan-run) 10%, transparent); flex-wrap: wrap; }
+.plan__bar-select {
+  flex: 0 1 200px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background-color: var(--surface-input, #1f1f1f);
+  color: var(--mat-sys-on-surface);
+  font-size: 13px;
+}
+.plan-req { flex-wrap: wrap; }
+.plan-req--queued { background: color-mix(in srgb, var(--plan-warn) 12%, transparent); color: color-mix(in srgb, var(--plan-warn) 75%, white); }
+.plan-req--claimed, .plan-req--running { background: color-mix(in srgb, var(--plan-run) 12%, transparent); color: color-mix(in srgb, var(--plan-run) 70%, white); }
+.plan-req__meta { color: var(--plan-muted); }
+.plan-req__spin { animation: plan-req-pulse 1.6s ease-in-out infinite; }
+@keyframes plan-req-pulse { 50% { opacity: 0.35; } }
+.plan-req__link {
+  border: none;
+  background: none;
+  padding: 0 2px;
+  color: var(--mat-sys-primary);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.plan-req__detail {
+  flex: none;
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px 12px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.plan__state-hint { font-size: 12px; }
+.plan__state-hint code { font-family: 'Courier New', monospace; }
+
 /* ── Corpo ── */
 .plan__body {
   flex: 1 1 auto;

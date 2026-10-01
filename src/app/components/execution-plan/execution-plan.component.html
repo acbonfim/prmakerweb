@@ -45,6 +45,13 @@
         </button>
       }
     }
+    @if (loadedCard() && canAskClaude()) {
+      <!-- 0039: o executor da máquina do usuário roda a skill, sem terminal -->
+      <button mat-icon-button class="plan__action plan__action--go" (click)="openAsk()" [disabled]="!!busy()"
+              [matTooltip]="askLabel() + ' — o executor da sua máquina roda a skill, sem abrir o terminal'" [attr.aria-label]="askLabel()">
+        <mat-icon>rocket_launch</mat-icon>
+      </button>
+    }
     @if (plan(); as p) {
       <!-- 0033: volta para a sessão do Claude do card sem copiar /analisar-bug de novo -->
       <button mat-icon-button class="plan__action" (click)="copyTerminalCommand()"
@@ -52,7 +59,7 @@
               aria-label="Copiar o comando para retomar no Claude">
         <mat-icon>terminal</mat-icon>
       </button>
-      @if (isActive() && p.executor) {
+      @if (isActive() && p.executor && !hasWorkers()) {
         @if (p.resumePending) {
           <span class="plan__resume-pending" [matTooltip]="'Pedido de ' + (p.resumeRequestedBy || '?') + ' — aguardando o vigia em ' + (p.executor.host || 'a máquina da sessão')">
             <mat-icon>hourglass_top</mat-icon>
@@ -122,12 +129,75 @@
     </div>
   }
 
-  @if (staleMinutes(); as minutes) {
+  @if (askOpen()) {
+    <div class="plan__bar plan__bar--ask">
+      <mat-icon>rocket_launch</mat-icon>
+      @if (myWorkers().length > 1) {
+        <select class="plan__bar-select" [(ngModel)]="askWorkerId" aria-label="Máquina que roda o Claude">
+          <option [ngValue]="null">Qualquer máquina minha</option>
+          @for (w of myWorkers(); track w.id) {
+            <option [ngValue]="w.id">{{ w.name }}{{ w.online ? '' : ' (offline)' }}{{ w.status === 'paused' ? ' (pausado)' : '' }}</option>
+          }
+        </select>
+      }
+      <input class="plan__bar-input" [(ngModel)]="askNote" placeholder="Observação para o Claude (opcional)"
+             (keydown.enter)="confirmAsk()" (keydown.escape)="askOpen.set(false)" />
+      <button mat-button (click)="askOpen.set(false)" [disabled]="!!busy()">Voltar</button>
+      <button mat-flat-button color="primary" (click)="confirmAsk()" [disabled]="!!busy()">{{ askLabel() }}</button>
+    </div>
+  }
+
+  @if (activeRequest(); as r) {
+    <!-- 0039: o pedido do executor sempre evidente — na fila (e por quê), rodando, ou falhou -->
+    <div class="plan__bar plan-req plan-req--{{ r.status }}" role="status" aria-live="polite">
+      <mat-icon [class.plan-req__spin]="r.status !== 'queued'">{{ r.status === 'queued' ? 'hourglass_top' : 'smart_toy' }}</mat-icon>
+      <span class="plan__bar-text">
+        @if (r.status === 'queued') {
+          <strong>Na fila do Claude</strong> · {{ r.waitReason || 'começa em instantes' }}
+          @if (r.waitCode === 'offline' && requestWorker(r)?.lastSeenAt) {
+            (último sinal {{ relativeTime(requestWorker(r)!.lastSeenAt) }})
+          }
+        } @else {
+          <strong>Claude rodando</strong> em {{ r.workerName || 'sua máquina' }} desde {{ relativeTime(r.startedAt || r.claimedAt) }}
+          @if (r.attempts > 1) { · tentativa {{ r.attempts }}/{{ r.maxAttempts }} }
+        }
+        <span class="plan-req__meta"> · {{ sourceLabel[r.source] || r.source }} — {{ r.requestedBy }}</span>
+      </span>
+      @if (r.waitCode === 'budget') {
+        <button mat-button (click)="forceRequest(r)" [disabled]="!!busy()">Rodar mesmo assim</button>
+      }
+      @if (r.waitCode === 'no-worker' || r.waitCode === 'offline' || r.waitCode === 'paused') {
+        <button mat-button (click)="openExecutors()">Meus executores</button>
+      }
+      <button mat-button (click)="cancelRequest(r)" [disabled]="!!busy()">{{ r.status === 'queued' ? 'Cancelar' : 'Parar' }}</button>
+    </div>
+  } @else if (failedRequest(); as r) {
+    <div class="plan__bar plan__bar--danger plan-req" role="alert">
+      <mat-icon>error_outline</mat-icon>
+      <span class="plan__bar-text">
+        <strong>{{ r.status === 'expired' ? 'O pedido para o Claude expirou' : 'O Claude não conseguiu rodar' }}</strong>:
+        {{ r.lastError || r.finishedReason }}
+        @if (r.stderrTail) {
+          <button type="button" class="plan-req__link" (click)="showRequestDetail.set(!showRequestDetail())">
+            {{ showRequestDetail() ? 'ocultar detalhes' : 'detalhes' }}
+          </button>
+        }
+      </span>
+      <button mat-button (click)="retryRequest(r)" [disabled]="!!busy()">Tentar de novo</button>
+      <button mat-icon-button (click)="openExecutors()" matTooltip="Meus executores" aria-label="Meus executores"><mat-icon>dns</mat-icon></button>
+    </div>
+    @if (showRequestDetail() && r.stderrTail) {
+      <pre class="plan-req__detail">{{ r.stderrTail }}</pre>
+    }
+  }
+
+  @if (!activeRequest() && staleMinutes(); as minutes) {
     <div class="plan__bar plan__bar--warn">
       <mat-icon>wifi_off</mat-icon>
       <span class="plan__bar-text">
-        Sem sinal da skill há {{ minutes }} min. Se a sessão caiu, retome de onde parou (no terminal):
-        <code>{{ terminalCommand() }}</code>
+        Sem sinal da skill há {{ minutes }} min. Se a sessão caiu, retome de onde parou
+        @if (hasWorkers()) { com o botão <strong>{{ askLabel() }}</strong> ou }
+        no terminal: <code>{{ terminalCommand() }}</code>
       </span>
       <button mat-icon-button (click)="copyTerminalCommand()" matTooltip="Copiar o comando" aria-label="Copiar o comando">
         <mat-icon>content_copy</mat-icon>
@@ -158,11 +228,27 @@
       } @else if (!plan()) {
         <div class="plan__state">
           <mat-icon>smart_toy</mat-icon>
-          <span>Nenhum plano de execução para este card.<br />
-            Rode a análise no Claude Code e acompanhe aqui, ao vivo:</span>
-          <button mat-stroked-button class="plan__command" (click)="copyResumeCommand()" matTooltip="Copiar">
-            <code>{{ resumeCommand() }}</code><mat-icon>content_copy</mat-icon>
-          </button>
+          @if (hasWorkers()) {
+            <span>Nenhum plano de execução para este card.<br />
+              O Claude roda a análise na sua máquina, sem abrir o terminal — acompanhe aqui, ao vivo:</span>
+            @if (!activeRequest()) {
+              <button mat-flat-button color="primary" (click)="openAsk()" [disabled]="!!busy()">
+                <mat-icon>rocket_launch</mat-icon> Analisar com Claude
+              </button>
+            }
+            <span class="plan__state-hint">ou no Claude Code:
+              <button type="button" class="plan-req__link" (click)="copyResumeCommand()" matTooltip="Copiar"><code>{{ resumeCommand() }}</code></button>
+            </span>
+          } @else {
+            <span>Nenhum plano de execução para este card.<br />
+              Rode a análise no Claude Code e acompanhe aqui, ao vivo:</span>
+            <button mat-stroked-button class="plan__command" (click)="copyResumeCommand()" matTooltip="Copiar">
+              <code>{{ resumeCommand() }}</code><mat-icon>content_copy</mat-icon>
+            </button>
+            <span class="plan__state-hint">Quer rodar daqui, sem abrir o terminal?
+              <button type="button" class="plan-req__link" (click)="openExecutors()">Instale o executor do PRMake</button>
+            </span>
+          }
         </div>
       } @else {
         @let p = plan()!;

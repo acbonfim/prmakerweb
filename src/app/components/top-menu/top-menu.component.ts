@@ -28,6 +28,7 @@ import {UserIntegrationService} from '../../services/user-integration.service';
 import {MyIntegrationsDialogComponent} from '../my-integrations-dialog/my-integrations-dialog.component';
 import {MyApiKeyDialogComponent} from '../my-api-key-dialog/my-api-key-dialog.component';
 import {SkillsDialogComponent} from '../skills-dialog/skills-dialog.component';
+import {ExecutorsDialogComponent} from '../executors-dialog/executors-dialog.component';
 
 interface AutoCompleteCompleteEvent {
   originalEvent: Event;
@@ -174,6 +175,17 @@ export class TopMenuComponent implements OnInit {
     this.dialog.open(SkillsDialogComponent, {
       width: '680px',
       maxWidth: '94vw',
+      maxHeight: '92vh',
+      panelClass: 'custom-dialog-container',
+      autoFocus: false
+    });
+  }
+
+  /** Máquinas que rodam a análise do Claude pela tela, sem terminal (feature 0039). */
+  openExecutors() {
+    this.dialog.open(ExecutorsDialogComponent, {
+      width: '760px',
+      maxWidth: '96vw',
       maxHeight: '92vh',
       panelClass: 'custom-dialog-container',
       autoFocus: false
