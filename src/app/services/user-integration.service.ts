@@ -92,8 +92,13 @@ export class UserIntegrationService {
     return saved;
   }
 
+  /**
+   * Mesma regra do backend (`UserIntegration/status`): só as integrações obrigatórias contam. Opcional sem configuração
+   * (ex.: a chave pessoal do Claude) só deixa o recurso dela indisponível — antes ela entrava aqui e, depois de abrir
+   * "Minhas integrações", a tela de PR ficava bloqueada.
+   */
   private updateStatusFrom(list: UserIntegration[]): void {
-    const pending = list.filter(i => !i.configured).map(i => ({ pluginId: i.pluginId, description: i.description }));
+    const pending = list.filter(i => !i.configured && !i.optional).map(i => ({ pluginId: i.pluginId, description: i.description }));
     this.status.set({ ready: pending.length === 0, pending });
   }
 }

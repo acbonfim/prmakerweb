@@ -13,7 +13,9 @@ import { KbAdminMode, KbAdminPanelComponent } from './kb-admin-panel.component';
 import { EcosystemMapComponent } from './ecosystem-map.component';
 import {
   ARCHITECTURE_KINDS,
+  ArchitectureAskResponse,
   ArchitectureProject,
+  ArchitectureSearchHit,
   ArchitectureSection,
   ArchitectureService,
   ArchitectureSuggestion,
@@ -26,7 +28,19 @@ type Selection =
   | { type: 'overview' }
   | { type: 'map'; focus?: string }
   | { type: 'project'; key: string; section?: string }
-  | { type: 'article'; number: number };
+  | { type: 'article'; number: number }
+  | { type: 'ask'; question: string };
+
+/** Pergunta à base com IA em andamento/respondida (0037). */
+interface AskState {
+  question: string;
+  loading: boolean;
+  response: ArchitectureAskResponse | null;
+  error?: string | null;
+}
+
+/** Palavras que indicam pergunta ("como saber se…?") — aí vale a busca com IA, não só a palavra exata. */
+const QUESTION_START = /^(como|qual|quais|onde|quando|quem|por ?que|o que|existe|tem como|da pra|dá pra|posso|devo|what|how|where|why|which|is there)\b/i;
 
 /** Ligações de um projeto agrupadas por outro projeto (painel "Integrações"). */
 interface LinkGroup {
@@ -81,6 +95,27 @@ export class ArchitectureComponent implements OnInit {
   readonly suggestions = signal<ArchitectureSuggestion[]>([]);
   readonly showSuggestions = signal(false);
   readonly activeSuggestion = signal<ArchitectureSuggestion | null>(null);
+
+  // ── 0037: busca no conteúdo e pergunta com IA ──
+  readonly contentHits = signal<ArchitectureSearchHit[]>([]);
+  readonly contentLoading = signal(false);
+  readonly ask = signal<AskState | null>(null);
+  askText = '';
+  readonly askExamples = [
+    'Como saber se o usuário fez login com sucesso?',
+    'Onde fica a planta atual do usuário?',
+    'O que acontece quando um plano de ação é concluído?'
+  ];
+  /** Cabeçalho a mostrar quando a seção abrir (vem de um resultado de busca: ?h=). */
+  private readonly pendingHeading = signal<string | null>(null);
+  private searchTimer?: ReturnType<typeof setTimeout>;
+  private searchSeq = 0;
+  private askSeq = 0;
+
+  /** A busca simples (nomes, palavras-chave, títulos) não achou nada. */
+  readonly nothingLocal = computed(() => !!normalize(this.filter()) && !this.groups().length && !this.articleGroups().length);
+  /** O texto parece uma pergunta — vale oferecer (e disparar) a busca com IA. */
+  readonly filterIsQuestion = computed(() => isQuestion(this.filter()));
 
   @ViewChild('content') private contentRef?: ElementRef<HTMLElement>;
 
@@ -142,7 +177,25 @@ export class ArchitectureComponent implements OnInit {
     effect(() => {
       this.section();
       this.article();
-      queueMicrotask(() => setTimeout(() => renderMermaidIn(this.contentRef?.nativeElement), 0));
+      queueMicrotask(() => setTimeout(() => { renderMermaidIn(this.contentRef?.nativeElement); this.revealHeading(); }, 0));
+    });
+    // 0037: filtro com 3+ letras também procura no conteúdo das seções (debounce).
+    effect(() => {
+      const q = this.filter().trim();
+      clearTimeout(this.searchTimer);
+      if (q.length < 3) { this.contentHits.set([]); this.contentLoading.set(false); return; }
+      this.contentLoading.set(true);
+      const seq = ++this.searchSeq;
+      this.searchTimer = setTimeout(() => this.api.search(q, 12).subscribe({
+        next: hits => {
+          if (seq !== this.searchSeq) return;
+          this.contentHits.set(hits);
+          this.contentLoading.set(false);
+          // Nada pela busca simples nem no conteúdo e é uma pergunta: a IA entra sozinha.
+          if (!hits.length && this.nothingLocal() && isQuestion(q)) this.askAi(q);
+        },
+        error: () => { if (seq === this.searchSeq) { this.contentHits.set([]); this.contentLoading.set(false); } }
+      }), 350);
     });
   }
 
@@ -150,7 +203,9 @@ export class ArchitectureComponent implements OnInit {
     this.load();
     this.route.queryParamMap.subscribe(q => {
       const art = Number(q.get('art'));
-      if (art) this.openArticle(art);
+      this.pendingHeading.set(q.get('h'));
+      if (q.get('ask')) this.showAsk(q.get('ask')!);
+      else if (art) this.openArticle(art);
       else if (q.get('view') === 'mapa') { this.adminMode.set(null); this.selection.set({ type: 'map', focus: q.get('n') ?? undefined }); }
       else if (q.get('p')) this.openProject(q.get('p')!, q.get('s') ?? undefined);
       else this.selection.set({ type: 'overview' });
@@ -169,6 +224,10 @@ export class ArchitectureComponent implements OnInit {
   }
 
   onSectionSaved(saved: ArchitectureSection): void {
+    // 0037: a sugestão aplicada sai da lista (e confere com o servidor, que já a marcou como aplicada).
+    const sg = this.activeSuggestion();
+    if (sg) this.suggestions.update(list => list.filter(x => x.id !== sg.id));
+    this.loadSuggestions();
     this.adminMode.set(null);
     this.activeSuggestion.set(null);
     const key = this.currentProject()?.key;
@@ -243,6 +302,67 @@ export class ArchitectureComponent implements OnInit {
     });
     this.api.articles(undefined, 50).subscribe({ next: a => { this.articles.set(a.sort((x, y) => x.articleNumber - y.articleNumber)); done(); }, error: () => done() });
     this.api.knowledgeState().subscribe({ next: s => { this.kcState.set(s); done(); }, error: () => done() });
+  }
+
+  // ── 0037: busca no conteúdo e pergunta com IA ─────────────────────────────────────────────────
+
+  /** Enter no filtro: pergunta (ou nada achado) → IA; senão abre o primeiro trecho achado no conteúdo. */
+  onSearchEnter(): void {
+    const q = this.filter().trim();
+    if (q.length < 3) return;
+    if (this.nothingLocal() && (!this.contentHits().length || isQuestion(q))) { this.askAi(q); return; }
+    if (isQuestion(q)) { this.askAi(q); return; }
+    const first = this.contentHits()[0];
+    if (first && this.nothingLocal()) this.openHit(first);
+  }
+
+  askAi(question?: string): void {
+    const q = (question ?? this.askText).trim();
+    if (q.length < 3) return;
+    this.treeOpen.set(false);
+    this.router.navigate([], { queryParams: { ask: q } });
+  }
+
+  private showAsk(question: string): void {
+    this.adminMode.set(null);
+    this.selection.set({ type: 'ask', question });
+    this.askText = question;
+    const current = this.ask();
+    if (current && current.question === question && (current.loading || current.response)) return;
+    const seq = ++this.askSeq;
+    this.ask.set({ question, loading: true, response: null });
+    this.api.ask(question).subscribe({
+      next: r => { if (seq === this.askSeq) this.ask.set({ question, loading: false, response: r }); },
+      error: err => {
+        if (seq === this.askSeq)
+          this.ask.set({ question, loading: false, response: null, error: err?.error?.error ?? 'Não foi possível consultar a base agora.' });
+      }
+    });
+  }
+
+  /** Abre o trecho: a seção do projeto rolando até o cabeçalho, ou o artigo do KC. */
+  openHit(hit: ArchitectureSearchHit): void {
+    this.treeOpen.set(false);
+    if (hit.type === 'article' && hit.articleNumber) {
+      this.router.navigate([], { queryParams: { art: hit.articleNumber } });
+      return;
+    }
+    if (hit.projectKey) this.router.navigate([], { queryParams: { p: hit.projectKey, s: hit.sectionKey ?? null, h: hit.heading ?? null } });
+  }
+
+  /** Rola até o cabeçalho pedido (?h=) depois que a seção renderiza, com um destaque rápido. */
+  private revealHeading(): void {
+    const wanted = this.pendingHeading();
+    const root = this.contentRef?.nativeElement;
+    if (!wanted || !root || !this.section()) return;
+    const target = normalize(wanted.replace(/[*`]/g, ''));
+    const headings = Array.from(root.querySelectorAll<HTMLElement>('.kb__md h1, .kb__md h2, .kb__md h3, .kb__md h4'));
+    const el = headings.find(h => normalize(h.textContent ?? '') === target) ?? headings.find(h => normalize(h.textContent ?? '').includes(target));
+    if (!el) return;
+    this.pendingHeading.set(null);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('kb-flash');
+    setTimeout(() => el.classList.remove('kb-flash'), 2400);
   }
 
   // ── Navegação ─────────────────────────────────────────────────────────────────────────────────
@@ -381,6 +501,11 @@ function externalName(key: string): string {
     'ext:opensearch': 'OpenSearch', 'ext:onlyoffice': 'OnlyOffice'
   };
   return names[key] ?? key.slice(4);
+}
+
+function isQuestion(value: string): boolean {
+  const q = value.trim();
+  return q.endsWith('?') || QUESTION_START.test(normalize(q)) || q.split(/\s+/).length >= 5;
 }
 
 function normalize(value: string): string {

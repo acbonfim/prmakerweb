@@ -123,6 +123,34 @@ export interface ArchitectureSuggestion {
   resolutionNote?: string | null;
 }
 
+/** Trecho que casou com a busca no conteúdo (0037): seção de projeto ou artigo do KC. */
+export interface ArchitectureSearchHit {
+  type: 'section' | 'article' | string;
+  projectKey?: string | null;
+  projectName?: string | null;
+  sectionKey?: string | null;
+  sectionTitle?: string | null;
+  articleNumber?: number | null;
+  title: string;
+  heading?: string | null;
+  snippet: string;
+  score: number;
+  matched: string[];
+  reason?: string | null;
+}
+
+/** "Pergunte à Base Solvace" (0037). */
+export interface ArchitectureAskResponse {
+  question: string;
+  answer?: string | null;
+  results: ArchitectureSearchHit[];
+  terms: string[];
+  aiUsed: boolean;
+  aiUnavailableReason?: string | null;
+  provider?: string | null;
+  model?: string | null;
+}
+
 export interface ChatMessage { role: 'user' | 'assistant'; content: string; }
 export interface ChatReply { reply: string; suggestion?: string | null; provider?: string | null; model?: string | null; tokensUsed?: number | null; }
 export interface ChatStatus { available: boolean; provider?: string | null; reason?: string | null; }
@@ -204,6 +232,16 @@ export class ArchitectureService {
 
   resolveSuggestion(id: string, status: 'applied' | 'dismissed', note?: string | null): Observable<ArchitectureSuggestion> {
     return this.http.post<ArchitectureSuggestion>(`${this.api}/suggestions/${id}/resolve`, { status, note: note || null });
+  }
+
+  /** Busca no conteúdo das seções e artigos (0037). */
+  search(q: string, limit = 12): Observable<ArchitectureSearchHit[]> {
+    return this.http.get<ArchitectureSearchHit[]>(`${this.api}/search`, { params: new HttpParams().set('q', q).set('limit', limit) });
+  }
+
+  /** Pergunta à base com IA: entende o contexto e leva aos trechos que respondem (0037). */
+  ask(question: string): Observable<ArchitectureAskResponse> {
+    return this.http.post<ArchitectureAskResponse>(`${this.api}/ask`, { question });
   }
 
   knowledgeState(): Observable<KnowledgeState> {

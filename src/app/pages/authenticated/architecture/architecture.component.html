@@ -36,7 +36,9 @@
   <aside class="kb__tree" [class.kb__tree--open]="treeOpen()" aria-label="Projetos e artigos">
     <div class="kb__search">
       <mat-icon>search</mat-icon>
-      <input type="search" placeholder="Filtrar projetos, seções, artigos…" [ngModel]="filter()" (ngModelChange)="filter.set($event)" />
+      <input type="search" placeholder="Filtrar ou perguntar… (Enter)" [ngModel]="filter()" (ngModelChange)="filter.set($event)"
+             (keydown.enter)="onSearchEnter()" aria-label="Filtrar a base ou fazer uma pergunta" />
+      @if (contentLoading()) { <mat-spinner diameter="14"></mat-spinner> }
     </div>
 
     <button type="button" class="kb__node kb__node--root" [class.kb__node--on]="selection().type === 'overview'" (click)="goOverview()">
@@ -97,8 +99,28 @@
       </div>
     }
 
-    @if (!loading() && !groups().length && !articleGroups().length && filter()) {
-      <div class="kb__state">Nada encontrado para "{{ filter() }}".</div>
+    <!-- 0037: o filtro também procura dentro das seções e artigos -->
+    @if (contentHits().length) {
+      <div class="kb__group">
+        <div class="kb__group-title"><mat-icon>manage_search</mat-icon>No conteúdo</div>
+        @for (h of contentHits(); track $index) {
+          <button type="button" class="kb__hit" (click)="openHit(h)" [matTooltip]="h.snippet" matTooltipPosition="right" matTooltipClass="kb-hit-tip">
+            <span class="kb__hit-title">{{ h.type === 'article' ? h.title : h.projectName + ' › ' + h.sectionTitle }}</span>
+            @if (h.heading) { <span class="kb__hit-heading"><mat-icon>subdirectory_arrow_right</mat-icon>{{ h.heading }}</span> }
+          </button>
+        }
+      </div>
+    }
+
+    @if (filter().trim().length >= 3) {
+      <button type="button" class="kb__ask-cta" [class.kb__ask-cta--strong]="nothingLocal() || filterIsQuestion()" (click)="askAi(filter())">
+        <mat-icon>auto_awesome</mat-icon>
+        <span>{{ nothingLocal() && !contentHits().length ? 'Não achei pela palavra — ' : '' }}Perguntar à IA: <strong>“{{ filter().trim() }}”</strong></span>
+      </button>
+    }
+
+    @if (!loading() && !groups().length && !articleGroups().length && !contentHits().length && !contentLoading() && filter()) {
+      <div class="kb__state">Nada encontrado para "{{ filter() }}" pela palavra.</div>
     }
   </aside>
 
@@ -138,8 +160,75 @@
       </div>
     } @else if (selection().type === 'map') {
       <app-ecosystem-map [focus]="mapFocus()" (openProject)="openProjectByKey($event)"></app-ecosystem-map>
+    } @else if (selection().type === 'ask') {
+      <section class="ask" aria-live="polite">
+        <form class="ask__box ask__box--top" (submit)="$event.preventDefault(); askAi()">
+          <mat-icon>auto_awesome</mat-icon>
+          <input [(ngModel)]="askText" name="ask" placeholder="Pergunte à Base Solvace…" aria-label="Pergunta" />
+          <button mat-flat-button color="primary" type="submit" [disabled]="askText.trim().length < 3 || ask()?.loading">Perguntar</button>
+        </form>
+        @if (ask(); as a) {
+          @if (a.loading) {
+            <div class="ask__thinking">
+              <span class="ask__dots"><i></i><i></i><i></i></span>
+              <div>
+                <strong>Procurando na base com IA…</strong>
+                <span>entendendo a pergunta, buscando nas seções e artigos e escolhendo os trechos que respondem</span>
+              </div>
+            </div>
+            @for (i of [1, 2, 3]; track i) { <div class="ask__skeleton"></div> }
+          } @else if (a.error) {
+            <div class="kb__empty kb__empty--error"><mat-icon>error_outline</mat-icon>{{ a.error }}
+              <button mat-stroked-button (click)="ask.set(null); askAi(a.question)">Tentar de novo</button></div>
+          } @else if (a.response; as r) {
+            @if (r.answer) {
+              <div class="ask__answer">
+                <div class="ask__answer-head"><mat-icon>auto_awesome</mat-icon>Resposta da base
+                  @if (r.provider) { <span class="ask__badge">{{ r.provider }}{{ r.model ? ' · ' + r.model : '' }}</span> }
+                </div>
+                <div class="kb__md" [innerHTML]="r.answer | planMarkdown"></div>
+              </div>
+            }
+            @if (!r.aiUsed && r.aiUnavailableReason) {
+              <div class="ask__note"><mat-icon>info</mat-icon>Busca com IA indisponível ({{ r.aiUnavailableReason }}) — mostrando a busca no conteúdo.</div>
+            }
+            @for (h of r.results; track $index; let n = $index) {
+              <button type="button" class="ask__hit" (click)="openHit(h)">
+                <span class="ask__num">{{ n + 1 }}</span>
+                <span class="ask__hit-body">
+                  <span class="ask__hit-title">
+                    @if (h.type === 'article') { <mat-icon>menu_book</mat-icon>{{ h.title }} }
+                    @else { <mat-icon>article</mat-icon>{{ h.projectName }} <span class="ask__sep">›</span> {{ h.sectionTitle }}
+                      @if (h.heading) { <span class="ask__sep">›</span> <em>{{ h.heading }}</em> } }
+                  </span>
+                  @if (h.reason) { <span class="ask__reason">{{ h.reason }}</span> }
+                  <span class="ask__snippet">{{ h.snippet }}</span>
+                </span>
+                <mat-icon class="ask__go">arrow_forward</mat-icon>
+              </button>
+            } @empty {
+              @if (!r.answer) { <div class="kb__empty"><mat-icon>search_off</mat-icon>Não encontrei nada na base sobre isso.</div> }
+            }
+            @if (r.terms.length) {
+              <div class="ask__terms">Procurei também por: @for (t of r.terms; track t) { <span class="kb__tag">{{ t }}</span> }</div>
+            }
+          }
+        }
+      </section>
     } @else if (selection().type === 'overview') {
       <section class="kb__overview">
+        <!-- 0037: pergunte com as suas palavras — a IA leva ao trecho certo -->
+        <div class="ask__hero">
+          <div class="ask__hero-title"><mat-icon>auto_awesome</mat-icon>Pergunte à Base Solvace</div>
+          <p>Escreva o que você precisa saber, com as suas palavras — a IA entende a pergunta e leva ao trecho que responde.</p>
+          <form class="ask__box" (submit)="$event.preventDefault(); askAi()">
+            <input [(ngModel)]="askText" name="askHero" placeholder="Ex.: como saber se o usuário fez login com sucesso?" aria-label="Pergunta" />
+            <button mat-flat-button color="primary" type="submit" [disabled]="askText.trim().length < 3"><mat-icon>send</mat-icon>Perguntar</button>
+          </form>
+          <div class="ask__examples">
+            @for (e of askExamples; track e) { <button type="button" class="ask__example" (click)="askAi(e)">{{ e }}</button> }
+          </div>
+        </div>
         <h2>Como a base é usada</h2>
         <p>
           O Claude lê primeiro um índice compacto do parque inteiro e abre só a seção do módulo envolvido no card —
