@@ -197,7 +197,9 @@
   color: var(--mat-sys-on-surface);
   font-size: 13px;
 }
-.plan-req { flex-wrap: wrap; }
+.plan-req { flex-wrap: wrap; row-gap: 2px; }
+/* Ícone e texto na primeira linha; os botões descem quando o painel é estreito. */
+.plan-req > .plan__bar-text { flex: 1 1 calc(100% - 34px); }
 .plan-req--queued { background: color-mix(in srgb, var(--plan-warn) 12%, transparent); color: color-mix(in srgb, var(--plan-warn) 75%, white); }
 .plan-req--claimed, .plan-req--running { background: color-mix(in srgb, var(--plan-run) 12%, transparent); color: color-mix(in srgb, var(--plan-run) 70%, white); }
 .plan-req__meta { color: var(--plan-muted); }
