@@ -1,3 +1,4 @@
+import { firstValueFrom } from 'rxjs';
 import { Component, ElementRef, OnChanges, SimpleChanges, ViewChild, computed, effect, inject, input, output, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -392,9 +393,17 @@ export class KbAdminPanelComponent implements OnChanges {
     const sg = this.fromSuggestion();
     this.write(s.key, { title: s.title, content: prop, source: 'ai',
       note: (sg ? `sugestão ${sg.kind === 'divergence' ? 'de divergência' : 'de aprendizado'}${sg.cardNumber ? ' (card ' + sg.cardNumber + ')' : ''} aplicada com a IA` : `IA: ${ask.replace(/\s+/g, ' ').slice(0, 160)}`) },
-      () => {
+      async () => {
         this.proposal.set(null);
-        if (sg) this.api.resolveSuggestion(sg.id, 'applied', 'aplicada pelo chat').subscribe(r => { this.fromSuggestion.set(null); this.suggestionApplied.emit(r); });
+        if (!sg) return;
+        // 0037: resolve antes de avisar que salvou — ao salvar, a tela fecha este painel e o aviso se perderia.
+        try {
+          const resolved = await firstValueFrom(this.api.resolveSuggestion(sg.id, 'applied', 'aplicada pelo chat'));
+          this.fromSuggestion.set(null);
+          this.suggestionApplied.emit(resolved);
+        } catch {
+          this.snackBar.open('A seção foi salva, mas não consegui marcar a sugestão como aplicada — marque na lista.', 'Fechar', { duration: 8000 });
+        }
       });
   }
 
@@ -416,14 +425,13 @@ export class KbAdminPanelComponent implements OnChanges {
   }
 
   // ── Comum ──
-  private write(key: string, body: { title?: string | null; content: string; order?: number | null; source: 'admin' | 'ai'; note?: string | null }, after?: () => void): void {
+  private write(key: string, body: { title?: string | null; content: string; order?: number | null; source: 'admin' | 'ai'; note?: string | null }, after?: () => void | Promise<void>): void {
     this.saving.set(true);
     this.api.writeSection(this.project().key, key, body).subscribe({
       next: saved => {
         this.saving.set(false);
         this.snackBar.open(`Seção salva — versão ${saved.version}`, 'Ok', { duration: 3500 });
-        after?.();
-        this.sectionSaved.emit(saved);
+        Promise.resolve(after?.()).finally(() => this.sectionSaved.emit(saved));
       },
       error: err => { this.saving.set(false); this.snackBar.open(err?.error?.error ?? 'Não foi possível salvar.', 'Fechar', { duration: 8000 }); }
     });
