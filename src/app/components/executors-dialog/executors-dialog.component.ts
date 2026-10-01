@@ -17,6 +17,8 @@ import {
   AGENT_INSTALL_COMMAND,
   EXECUTION_WORKERS_EVENT,
   ExecutionRequest,
+  ExecutionUsageReport,
+  ExecutionUsageReportRow,
   ExecutionUserSettings,
   ExecutionWorker,
   REQUEST_SOURCE_LABEL,
@@ -95,6 +97,10 @@ const POLL_MS = 30_000;
                 @if (w.claudeVersion) { <span>Claude Code {{ w.claudeVersion }}</span> }
                 @if (w.skillsVersion) { <span>skills {{ w.skillsVersion }}</span> }
                 <span>rodando {{ w.running }}/{{ w.maxConcurrency }}</span>
+                @if (w.throttledUntil) {
+                  <strong class="ex__warn" matTooltip="A conta do Claude desta máquina bateu o limite de uso; os pedidos esperam o reset sem gastar tentativa">
+                    limite da conta do Claude até {{ time(w.throttledUntil) }}</strong>
+                }
                 @if (w.workspace) { <span [title]="w.workspace">pasta {{ w.workspace }}</span> }
               </div>
               <div class="ex__doctor-row">
@@ -159,6 +165,43 @@ const POLL_MS = 30_000;
             <div class="ex__actions">
               <button mat-flat-button color="primary" (click)="saveSettings()" [disabled]="busy() === 'settings'">Salvar</button>
             </div>
+          }
+        </section>
+
+        <section class="ex__section">
+          <div class="ex__section-title ex__row-title">
+            <span>Consumo por plano — MCP × script</span>
+            <span class="ex__spacer"></span>
+            <select [ngModel]="usageDays()" (ngModelChange)="usageDays.set($event); loadUsage()" aria-label="Período">
+              <option [ngValue]="7">7 dias</option><option [ngValue]="30">30 dias</option><option [ngValue]="90">90 dias</option>
+            </select>
+            @if (isAdmin) {
+              <mat-slide-toggle [ngModel]="usageAll()" (ngModelChange)="usageAll.set($event); loadUsage()">todos</mat-slide-toggle>
+            }
+          </div>
+          @if (usage(); as u) {
+            @if (!usageHasData()) {
+              <div class="ex__state">Sem planos com custo registrado no período. O custo vai quando a skill conclui o plano.</div>
+            } @else {
+              <table class="ex__usage">
+                <thead><tr><th></th><th>Planos</th><th>Turnos</th><th>Tokens de entrada</th><th>Saída</th><th>Chamadas MCP / script</th></tr></thead>
+                <tbody>
+                  @for (r of usageRows(); track r.channel + r.phase) {
+                    <tr [class.ex__usage-sub]="r.phase !== 'all'">
+                      <td>{{ r.phase === 'all' ? (r.channel === 'mcp' ? 'Com MCP' : 'Sem MCP') : (r.phase === 'analysis' ? '· análise' : '· correção') }}</td>
+                      <td>{{ r.plans }}</td>
+                      <td>{{ r.plans ? r.avgTurns : '—' }}</td>
+                      <td>{{ r.plans ? tokens(r.avgInputTokens) : '—' }}</td>
+                      <td>{{ r.plans ? tokens(r.avgOutputTokens) : '—' }}</td>
+                      <td>{{ r.plans ? r.avgMcpCalls + ' / ' + r.avgScriptCalls : '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+              @if (usageDiff(); as d) { <p class="ex__note">{{ d }}</p> }
+              <p class="ex__note">Médias por plano. "Com MCP" = a maioria das chamadas ao PRMake pelas ferramentas MCP. Tokens de entrada
+                incluem o cache (o contexto relido a cada resposta).</p>
+            }
           }
         </section>
 
@@ -236,6 +279,14 @@ const POLL_MS = 30_000;
     .ex__field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
     .ex__actions { display: flex; justify-content: flex-end; margin-top: 8px; }
     .ex__error { color: #f0716a; font-size: 12px; }
+    .ex__row-title { display: flex; align-items: center; gap: 10px; }
+    .ex__row-title select { padding: 3px 6px; border-radius: 6px; border: 1px solid rgba(255,255,255,.14);
+      background: var(--surface-input, #1f1f1f); color: var(--mat-sys-on-surface); font-size: 12px; }
+    .ex__usage { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .ex__usage th { text-align: right; font-weight: 500; padding: 4px 6px; color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent); }
+    .ex__usage td { text-align: right; padding: 4px 6px; border-top: 1px solid rgba(255,255,255,.05); }
+    .ex__usage th:first-child, .ex__usage td:first-child { text-align: left; }
+    .ex__usage-sub td { color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent); }
     .ex__req { display: flex; align-items: baseline; gap: 8px; padding: 5px 0; font-size: 12px; border-bottom: 1px dashed rgba(255,255,255,.05); }
     .ex__req-card { font-weight: 600; }
     .ex__req-text { flex: 1; min-width: 0; }
@@ -266,6 +317,10 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
   readonly busy = signal<string | null>(null);
   readonly openDoctor = signal<string | null>(null);
   readonly now = signal(Date.now());
+  readonly usage = signal<ExecutionUsageReport | null>(null);
+  readonly usageDays = signal(30);
+  readonly usageAll = signal(false);
+  readonly isAdmin = this.readIsAdmin();
 
   budget: number | null = null;
   autoEnabled = false;
@@ -282,6 +337,7 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.load(true);
+    this.loadUsage();
     this.api.agent().subscribe({ next: (a) => this.latestVersion.set(a.version ?? null), error: () => {} });
     this.ws.on(EXECUTION_WORKERS_EVENT, this.onChanged);
     this.poll = setInterval(() => { this.now.set(Date.now()); if (!document.hidden) this.load(false); }, POLL_MS);
@@ -291,6 +347,49 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
     clearInterval(this.poll);
     clearTimeout(this.debounce);
     this.ws.off(EXECUTION_WORKERS_EVENT, this.onChanged);
+  }
+
+  loadUsage(): void {
+    this.api.usageReport(this.usageDays(), this.usageAll()).subscribe({ next: (u) => this.usage.set(u), error: () => this.usage.set(null) });
+  }
+
+  usageRows(): ExecutionUsageReportRow[] {
+    return this.usage()?.rows ?? [];
+  }
+
+  usageHasData(): boolean {
+    return this.usageRows().some((r) => r.phase === 'all' && r.plans > 0);
+  }
+
+  /** "Com MCP, X% menos tokens de entrada por plano" — só com os dois grupos preenchidos. */
+  usageDiff(): string | null {
+    const mcp = this.usageRows().find((r) => r.channel === 'mcp' && r.phase === 'all');
+    const script = this.usageRows().find((r) => r.channel === 'script' && r.phase === 'all');
+    if (!mcp?.plans || !script?.plans || !script.avgInputTokens) return null;
+    const pct = Math.round((1 - mcp.avgInputTokens / script.avgInputTokens) * 100);
+    const base = `Com MCP: ${Math.abs(pct)}% ${pct >= 0 ? 'menos' : 'mais'} tokens de entrada por plano`;
+    return `${base} (${mcp.plans} × ${script.plans} planos — compare casos parecidos antes de concluir).`;
+  }
+
+  tokens(n: number): string {
+    return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} M` : n >= 1000 ? `${Math.round(n / 1000)} mil` : `${Math.round(n)}`;
+  }
+
+  time(value: string): string {
+    const d = new Date(value);
+    const sameDay = d.toDateString() === new Date().toDateString();
+    return d.toLocaleString('pt-BR', sameDay ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  private readIsAdmin(): boolean {
+    try {
+      const token = inject(StorageService).getItem('apiKey');
+      const payload = JSON.parse(atob(`${token}`.split('.')[1]));
+      const raw = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? payload['role'];
+      return (Array.isArray(raw) ? raw : [raw]).includes('admin');
+    } catch {
+      return false;
+    }
   }
 
   private onChanged = (payload: { userId?: string }) => {

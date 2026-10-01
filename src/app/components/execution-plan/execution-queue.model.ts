@@ -2,7 +2,7 @@
 
 export type ExecutionRequestStatus = 'queued' | 'claimed' | 'running' | 'done' | 'failed' | 'cancelled' | 'expired';
 export type ExecutionRequestKind = 'analyze' | 'resume';
-export type ExecutionWaitCode = 'no-worker' | 'offline' | 'paused' | 'busy' | 'budget' | 'retry';
+export type ExecutionWaitCode = 'no-worker' | 'offline' | 'paused' | 'busy' | 'budget' | 'retry' | 'throttled';
 
 export interface ExecutionRequest {
   id: string;
@@ -70,6 +70,8 @@ export interface ExecutionWorker {
   doctorAt?: string | null;
   /** "Rodar diagnóstico agora" pedido e ainda não recebido. */
   doctorPending?: boolean;
+  /** Limite de uso da conta do Claude atingido até este horário (0041). */
+  throttledUntil?: string | null;
   doctorProblems: number;
   running: number;
   latestAgentVersion?: string | null;
@@ -93,6 +95,24 @@ export interface ExecutionUserSettings {
   autoMaxPerDay: number;
   autoLastCheckAt?: string | null;
   autoLastError?: string | null;
+}
+
+/** Consumo médio por plano, com MCP × sem MCP (0041). */
+export interface ExecutionUsageReportRow {
+  channel: 'mcp' | 'script';
+  phase: 'all' | 'analysis' | 'correction';
+  plans: number;
+  avgTurns: number;
+  avgInputTokens: number;
+  avgOutputTokens: number;
+  avgMcpCalls: number;
+  avgScriptCalls: number;
+}
+
+export interface ExecutionUsageReport {
+  days: number;
+  allUsers: boolean;
+  rows: ExecutionUsageReportRow[];
 }
 
 /** Evento (grupo execplan-pending): executores/pedidos de um usuário mudaram. Payload: { userId }. */
