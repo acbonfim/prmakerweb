@@ -16,6 +16,7 @@ import { KbConnectionsComponent } from './kb-connections.component';
 import { KbGuideReviewComponent } from './kb-guide-review.component';
 import { KbLearnCardComponent } from './kb-learn-card.component';
 import { KbAskDeepComponent } from './kb-ask-deep.component';
+import { KbQuestionsComponent } from './kb-questions.component';
 import {
   KbViewMode, TocItem, areaGroups, articleMarkdown, friendlyKind, friendlyName, friendlyTagline, guideSections, headingsOf, projectArea, techSections
 } from './kb-friendly';
@@ -74,7 +75,7 @@ interface TreeGroup {
   selector: 'app-architecture',
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, KbAdminPanelComponent, EcosystemMapComponent,
-    KbFriendlyOverviewComponent, KbConnectionsComponent, KbGuideReviewComponent, KbLearnCardComponent, KbAskDeepComponent],
+    KbFriendlyOverviewComponent, KbConnectionsComponent, KbGuideReviewComponent, KbLearnCardComponent, KbAskDeepComponent, KbQuestionsComponent],
   templateUrl: './architecture.component.html',
   styleUrls: ['./architecture.component.css']
 })
@@ -112,6 +113,9 @@ export class ArchitectureComponent implements OnInit {
   readonly adminMode = signal<KbAdminMode | null>(null);
   readonly suggestions = signal<ArchitectureSuggestion[]>([]);
   readonly showSuggestions = signal(false);
+  // 0040: perguntas sem resposta (fila do admin/skill)
+  readonly showQuestions = signal(false);
+  readonly openQuestions = signal(0);
   readonly activeSuggestion = signal<ArchitectureSuggestion | null>(null);
 
   // ── 0037: busca no conteúdo e pergunta com IA ──
@@ -309,6 +313,18 @@ export class ArchitectureComponent implements OnInit {
   friendlyKindIcon(kind: string): string { return friendlyKind(kind).icon; }
   articleText(content: string): string { return articleMarkdown(content); }
 
+  loadQuestionCount(): void {
+    if (!this.isAdmin()) return;
+    this.api.questions('open', true).subscribe({ next: list => this.openQuestions.set(list.length), error: () => this.openQuestions.set(0) });
+  }
+
+  /** Do painel de perguntas: abre o "Pergunte" com o texto (lá dá para analisar a fundo). */
+  askFromQueue(text: string): void {
+    this.showQuestions.set(false);
+    this.ask.set(null);
+    this.askAi(text);
+  }
+
   loadSuggestions(): void {
     if (!this.isAdmin()) return;
     this.api.suggestions('pending').subscribe({ next: list => this.suggestions.set(list), error: () => this.suggestions.set([]) });
@@ -386,6 +402,7 @@ export class ArchitectureComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     this.loadSuggestions();
+    this.loadQuestionCount();
     let pending = 3;
     const done = () => { if (--pending === 0) this.loading.set(false); };
     this.api.projects().subscribe({

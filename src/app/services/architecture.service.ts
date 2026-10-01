@@ -114,6 +114,27 @@ export interface ArchitectureSectionVersion {
   content?: string | null;
 }
 
+/** Pergunta feita no "Pergunte" (0040) — as sem resposta formam a fila do admin/skill. */
+export interface ArchitectureQuestion {
+  id: string;
+  text: string;
+  kind: string;
+  coverage: ArchitectureCoverage;
+  suggestedProject?: string | null;
+  suggestedSection?: string | null;
+  times: number;
+  firstAskedAt: string;
+  firstAskedBy: string;
+  lastAskedAt: string;
+  lastAskedBy: string;
+  status: 'open' | 'answered' | 'dismissed' | string;
+  answeredProject?: string | null;
+  answeredSection?: string | null;
+  resolvedBy?: string | null;
+  resolvedAt?: string | null;
+  note?: string | null;
+}
+
 export interface ArchitectureSuggestion {
   id: string;
   projectKey: string;
@@ -170,6 +191,8 @@ export interface ArchitectureAskResponse {
   model?: string | null;
   /** 0038 F5: quanto a base cobre a pergunta (unknown = sem IA) e a seção principal para ler. */
   coverage?: ArchitectureCoverage | null;
+  /** 0040: operacao | regra | tecnica | outra (null sem IA). */
+  kind?: string | null;
   suggestedSection?: ArchitectureSuggestedSection | null;
 }
 
@@ -251,6 +274,7 @@ export const SECTION_TEMPLATE: { key: string; title: string; order: number }[] =
   { key: 'autenticacao', title: 'Login e permissões', order: 60 },
   { key: 'jobs', title: 'Jobs e rotinas', order: 70 },
   { key: 'regras-de-negocio', title: 'Regras de negócio', order: 80 },
+  { key: 'operacao', title: 'Configuração e operação', order: 85 },
   { key: 'armadilhas', title: 'Armadilhas e bugs conhecidos', order: 90 },
 ];
 
@@ -260,6 +284,7 @@ export const GUIDE_TEMPLATE: { key: string; title: string; order: number }[] = [
   { key: 'guia-como-funciona', title: 'Como funciona, passo a passo', order: 520 },
   { key: 'guia-regras', title: 'Regras de negócio', order: 530 },
   { key: 'guia-conexoes', title: 'Com quem conversa', order: 540 },
+  { key: 'guia-como-configurar', title: 'Como configurar e dar acesso', order: 545 },
   { key: 'guia-como-testar', title: 'Como testar', order: 550 },
   { key: 'guia-perguntas', title: 'Perguntas frequentes', order: 560 },
 ];
@@ -361,6 +386,15 @@ export class ArchitectureService {
   }
 
   /** Envia uma sugestão para a fila do admin (qualquer logado). */
+  /** 0040: perguntas do "Pergunte" (admin) — padrão: as sem resposta em aberto. */
+  questions(status: 'open' | 'answered' | 'dismissed' | 'all' = 'open', gaps = true): Observable<ArchitectureQuestion[]> {
+    return this.http.get<ArchitectureQuestion[]>(`${this.api}/questions`, { params: new HttpParams().set('status', status).set('gaps', String(gaps)) });
+  }
+
+  resolveQuestion(id: string, body: { status: 'answered' | 'dismissed' | 'open'; projectKey?: string | null; sectionKey?: string | null; note?: string | null }): Observable<ArchitectureQuestion> {
+    return this.http.post<ArchitectureQuestion>(`${this.api}/questions/${id}/resolve`, body);
+  }
+
   suggest(body: { projectKey: string; sectionKey?: string | null; kind: 'learning' | 'divergence' | 'gap' | 'other'; content: string; cardNumber?: string | null }): Observable<ArchitectureSuggestion> {
     return this.http.post<ArchitectureSuggestion>(`${this.api}/suggestions`, body);
   }

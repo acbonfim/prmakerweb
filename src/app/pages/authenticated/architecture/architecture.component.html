@@ -40,6 +40,13 @@
       @if (suggestions().length) { <span class="suggest-count">{{ suggestions().length }}</span> }
     </button>
   }
+  @if (isAdmin()) {
+    <button mat-stroked-button class="suggest-btn" [class.kb__admin--on]="showQuestions()" (click)="showQuestions.set(!showQuestions())"
+            matTooltip="Perguntas feitas no Pergunte que a base ainda não responde — a fila para a base aprender">
+      <mat-icon>help_center</mat-icon>Perguntas
+      @if (openQuestions()) { <span class="suggest-count">{{ openQuestions() }}</span> }
+    </button>
+  }
   <button mat-icon-button class="tree-toggle" (click)="treeOpen.set(!treeOpen())" aria-label="Mostrar a lista de projetos">
     <mat-icon>{{ treeOpen() ? 'close' : 'menu' }}</mat-icon>
   </button>
@@ -193,6 +200,9 @@
         }
       </section>
     }
+    @if (showQuestions() && isAdmin()) {
+      <app-kb-questions [projects]="projects()" (closed)="showQuestions.set(false)" (ask)="askFromQueue($event)" (openCount)="openQuestions.set($event)"></app-kb-questions>
+    }
     @if (showLearn()) {
       <app-kb-learn-card [projects]="projects()" [initialCard]="learnCard()" (closed)="toggleLearn()" (sent)="onLearnSent()"></app-kb-learn-card>
     }
@@ -240,6 +250,9 @@
                   @if (ss.reason) { <span class="ask__reason">{{ ss.reason }}</span> }</span>
                 <mat-icon class="ask__go">arrow_forward</mat-icon>
               </button>
+            }
+            @if (r.aiUsed && (r.coverage === 'partial' || r.coverage === 'not-found')) {
+              <div class="ask__note"><mat-icon>bookmark_added</mat-icon>Registramos a pergunta — ela entrou na fila para a base aprender a responder.</div>
             }
             @if (r.aiUsed && (r.coverage === 'partial' || r.coverage === 'not-found' || !r.results.length)) {
               <app-kb-ask-deep [question]="a.question" [coverage]="r.coverage ?? 'not-found'" [suggested]="r.suggestedSection ?? null" [projects]="projects()"
