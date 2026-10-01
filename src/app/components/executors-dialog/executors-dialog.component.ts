@@ -97,12 +97,25 @@ const POLL_MS = 30_000;
                 <span>rodando {{ w.running }}/{{ w.maxConcurrency }}</span>
                 @if (w.workspace) { <span [title]="w.workspace">pasta {{ w.workspace }}</span> }
               </div>
+              <div class="ex__doctor-row">
               @if (w.doctor?.length) {
                 <button type="button" class="ex__doctor-toggle" [class.ex__doctor-toggle--bad]="w.doctorProblems > 0" (click)="toggleDoctor(w.id)">
                   <mat-icon>{{ w.doctorProblems ? 'report' : 'verified' }}</mat-icon>
                   {{ w.doctorProblems ? w.doctorProblems + (w.doctorProblems === 1 ? ' problema' : ' problemas') + ' no diagnóstico' : 'Diagnóstico ok' }}
                   · {{ ago(w.doctorAt) }}
                 </button>
+              }
+                @if (w.doctorPending) {
+                  <span class="ex__doctor-pending"><mat-spinner diameter="12"></mat-spinner>
+                    diagnóstico pedido — {{ w.online ? 'a máquina roda em até 1 min' : 'roda quando a máquina voltar' }}</span>
+                } @else if (w.status !== 'revoked') {
+                  <button type="button" class="ex__doctor-run" (click)="requestDoctor(w)" [disabled]="busy() === w.id"
+                          matTooltip="A máquina roda o diagnóstico de novo agora (Claude Code, login, MCP, skills, repositórios, bancos)">
+                    <mat-icon>refresh</mat-icon> Rodar diagnóstico
+                  </button>
+                }
+              </div>
+              @if (w.doctor?.length) {
                 @if (openDoctor() === w.id) {
                   <ul class="ex__doctor">
                     @for (c of w.doctor; track c.name) {
@@ -206,6 +219,12 @@ const POLL_MS = 30_000;
     .ex__doctor-toggle { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; border: none; background: none; padding: 0;
       color: #3fb950; font: inherit; font-size: 12px; cursor: pointer; }
     .ex__doctor-toggle .mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .ex__doctor-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .ex__doctor-run { margin-top: 8px; display: inline-flex; align-items: center; gap: 4px; border: none; background: none; padding: 0;
+      color: var(--mat-sys-primary); font: inherit; font-size: 12px; cursor: pointer; }
+    .ex__doctor-run .mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .ex__doctor-pending { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+      color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent); }
     .ex__doctor-toggle--bad { color: #f0716a; }
     .ex__doctor { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; }
     .ex__doctor li { display: flex; gap: 6px; align-items: flex-start; padding: 2px 0; }
@@ -328,6 +347,7 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
   }
 
   pause(w: ExecutionWorker): void { this.mutate(w, this.api.pauseWorker(w.id)); }
+  requestDoctor(w: ExecutionWorker): void { this.mutate(w, this.api.requestDoctor(w.id)); }
   resume(w: ExecutionWorker): void { this.mutate(w, this.api.resumeWorker(w.id)); }
 
   revoke(w: ExecutionWorker): void {

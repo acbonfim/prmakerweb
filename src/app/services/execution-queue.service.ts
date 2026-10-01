@@ -57,6 +57,11 @@ export class ExecutionQueueService {
     return this.http.patch<ExecutionWorker>(`${this.workerUrl}/${id}`, changes);
   }
 
+  /** "Rodar diagnóstico agora": a máquina roda no próximo sinal de vida (até 1 min). */
+  requestDoctor(id: string): Observable<ExecutionWorker> {
+    return this.http.post<ExecutionWorker>(`${this.workerUrl}/${id}/doctor-request`, {});
+  }
+
   pauseWorker(id: string): Observable<ExecutionWorker> {
     return this.http.post<ExecutionWorker>(`${this.workerUrl}/${id}/pause`, {});
   }

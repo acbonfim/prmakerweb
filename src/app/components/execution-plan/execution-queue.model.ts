@@ -68,6 +68,8 @@ export interface ExecutionWorker {
   capabilities?: { repos?: string[]; os?: string } | null;
   doctor?: ExecutionDoctorCheck[] | null;
   doctorAt?: string | null;
+  /** "Rodar diagnóstico agora" pedido e ainda não recebido. */
+  doctorPending?: boolean;
   doctorProblems: number;
   running: number;
   latestAgentVersion?: string | null;
