@@ -11,6 +11,14 @@ import { renderMermaidIn } from '../../../helpers/mermaid-loader';
 import { StorageService } from '../../../services/storage.service';
 import { KbAdminMode, KbAdminPanelComponent } from './kb-admin-panel.component';
 import { EcosystemMapComponent } from './ecosystem-map.component';
+import { KbFriendlyOverviewComponent } from './kb-friendly-overview.component';
+import { KbConnectionsComponent } from './kb-connections.component';
+import { KbGuideReviewComponent } from './kb-guide-review.component';
+import { KbLearnCardComponent } from './kb-learn-card.component';
+import { KbAskDeepComponent } from './kb-ask-deep.component';
+import {
+  KbViewMode, TocItem, areaGroups, articleMarkdown, friendlyKind, friendlyName, friendlyTagline, guideSections, headingsOf, projectArea, techSections
+} from './kb-friendly';
 import {
   ARCHITECTURE_KINDS,
   ArchitectureAskResponse,
@@ -65,7 +73,8 @@ interface TreeGroup {
 @Component({
   selector: 'app-architecture',
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, KbAdminPanelComponent, EcosystemMapComponent],
+  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, KbAdminPanelComponent, EcosystemMapComponent,
+    KbFriendlyOverviewComponent, KbConnectionsComponent, KbGuideReviewComponent, KbLearnCardComponent, KbAskDeepComponent],
   templateUrl: './architecture.component.html',
   styleUrls: ['./architecture.component.css']
 })
@@ -88,6 +97,15 @@ export class ArchitectureComponent implements OnInit {
   readonly article = signal<KnowledgeArticle | null>(null);
   readonly treeOpen = signal(false);
   readonly expanded = signal<Set<string>>(new Set());
+
+  // ── 0038: modo Simples (padrão, para QA/gestores) × Técnico (a tela de sempre) ──
+  readonly mode = signal<KbViewMode>(readMode());
+  readonly simple = computed(() => this.mode() === 'simples');
+  /** Detalhes técnicos abertos no modo Simples. */
+  readonly techOpen = signal(false);
+  readonly showLearn = signal(false);
+  readonly learnCard = signal<string | null>(null);
+  readonly guideOpen = signal(false);
 
   // ── Admin (0033 F2) ──
   readonly isAdmin = signal(this.readIsAdmin());
@@ -143,10 +161,28 @@ export class ArchitectureComponent implements OnInit {
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([category, items]) => ({ category, items }));
   });
 
+  /** 0038: árvore do modo Simples — por área de negócio, com nomes amigáveis. */
+  readonly areaTree = computed(() => {
+    const q = normalize(this.filter());
+    const matches = (p: ArchitectureProject) => !q || normalize([friendlyName(p), p.tagline ?? '', p.businessArea ?? '', p.name, p.key, p.summary ?? '',
+      ...p.keywords, ...p.sections.map(s => s.title)].join(' ')).includes(q);
+    return areaGroups(this.projects().filter(matches));
+  });
+
+  /** Nome amigável por chave (mapa no modo Simples). */
+  readonly friendlyNames = computed(() => Object.fromEntries(this.projects().map(p => [p.key, friendlyName(p)])));
+
   readonly currentProject = computed(() => {
     const s = this.selection();
     return s.type === 'project' ? this.projects().find(p => p.key === s.key) ?? null : null;
   });
+
+  readonly guideTabs = computed(() => guideSections(this.currentProject()));
+  readonly techTabs = computed(() => techSections(this.currentProject()));
+  /** A seção aberta é técnica (no modo Simples, abre o bloco de detalhes técnicos). */
+  readonly sectionIsTech = computed(() => { const s = this.section(); return !!s && !this.guideTabs().some(g => g.key === s.key); });
+  /** Sumário da seção aberta (## e ###) — só quando ajuda (seção longa). */
+  readonly toc = computed<TocItem[]>(() => { const items = headingsOf(this.section()?.content); return items.length >= 3 ? items : []; });
 
   readonly mapFocus = computed(() => { const s = this.selection(); return s.type === 'map' ? s.focus ?? null : null; });
 
@@ -202,6 +238,9 @@ export class ArchitectureComponent implements OnInit {
   ngOnInit(): void {
     this.load();
     this.route.queryParamMap.subscribe(q => {
+      const modo = q.get('modo');
+      if (modo === 'simples' || modo === 'tecnico') this.setMode(modo, false);
+      if (q.get('aprender')) { this.learnCard.set(q.get('aprender')); this.showLearn.set(true); }
       const art = Number(q.get('art'));
       this.pendingHeading.set(q.get('h'));
       if (q.get('ask')) this.showAsk(q.get('ask')!);
@@ -211,6 +250,64 @@ export class ArchitectureComponent implements OnInit {
       else this.selection.set({ type: 'overview' });
     });
   }
+
+  // ── 0038 ──
+  setMode(mode: KbViewMode, remember = true): void {
+    this.mode.set(mode);
+    if (remember) { try { localStorage.setItem(MODE_KEY, mode); } catch { /* sem storage: só nesta visita */ } }
+  }
+
+  toggleLearn(): void {
+    this.showLearn.set(!this.showLearn());
+    if (!this.showLearn()) this.learnCard.set(null);
+  }
+
+  onLearnSent(): void {
+    this.loadSuggestions();
+  }
+
+  onGuideApplied(sectionKey: string | null): void {
+    this.guideOpen.set(false);
+    const key = this.currentProject()?.key;
+    this.api.projects().subscribe(list => {
+      this.projects.set(list);
+      if (key) this.router.navigate([], { queryParams: { p: key, s: sectionKey ?? this.selectionSection() ?? null } });
+    });
+  }
+
+  /** Seção criada pelo "analisar a fundo": recarrega e abre. */
+  onDeepCreated(e: { projectKey: string; sectionKey: string }): void {
+    this.api.projects().subscribe(list => {
+      this.projects.set(list);
+      this.router.navigate([], { queryParams: { p: e.projectKey, s: e.sectionKey } });
+    });
+  }
+
+  /** Abre a seção sugerida pelo "Pergunte" (rolando até o trecho). */
+  openSuggested(s: { projectKey: string; sectionKey: string; heading?: string | null }): void {
+    this.router.navigate([], { queryParams: { p: s.projectKey, s: s.sectionKey, h: s.heading ?? null } });
+  }
+
+  /** Rola até um título do sumário. */
+  scrollToHeading(item: TocItem): void {
+    const root = this.contentRef?.nativeElement;
+    if (!root) return;
+    const target = normalize(item.text);
+    const el = Array.from(root.querySelectorAll<HTMLElement>('.kb__md h2, .kb__md h3')).find(h => normalize(h.textContent ?? '') === target);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  private selectionSection(): string | undefined {
+    const s = this.selection();
+    return s.type === 'project' ? s.section : undefined;
+  }
+
+  friendly(p: ArchitectureProject): string { return friendlyName(p); }
+  tagline(p: ArchitectureProject): string { return friendlyTagline(p); }
+  area(p: ArchitectureProject): string { return projectArea(p); }
+  friendlyKindLabel(kind: string): string { return friendlyKind(kind).label; }
+  friendlyKindIcon(kind: string): string { return friendlyKind(kind).icon; }
+  articleText(content: string): string { return articleMarkdown(content); }
 
   loadSuggestions(): void {
     if (!this.isAdmin()) return;
@@ -382,8 +479,14 @@ export class ArchitectureComponent implements OnInit {
   }
 
   selectProject(p: ArchitectureProject, sectionKey?: string): void {
-    this.router.navigate([], { queryParams: { p: p.key, s: sectionKey ?? p.sections[0]?.key ?? null } });
+    this.router.navigate([], { queryParams: { p: p.key, s: sectionKey ?? this.defaultSection(p) ?? null } });
     this.treeOpen.set(false);
+  }
+
+  /** Seção que abre com o projeto: no Simples o Guia (sem Guia, nenhuma — mostra o resumo amigável); no Técnico a primeira. */
+  private defaultSection(p: ArchitectureProject | undefined): string | undefined {
+    if (!p) return undefined;
+    return this.simple() ? guideSections(p)[0]?.key : p.sections[0]?.key;
   }
 
   selectArticle(a: KnowledgeArticle): void {
@@ -415,7 +518,8 @@ export class ArchitectureComponent implements OnInit {
     this.article.set(null);
     this.expanded.update(set => new Set(set).add(key));
     const project = this.projects().find(p => p.key === key);
-    const target = sectionKey ?? project?.sections[0]?.key;
+    const target = sectionKey ?? this.defaultSection(project);
+    if (target && project && techSections(project).some(t => t.key === target)) this.techOpen.set(true);
     if (!target) { this.section.set(null); return; }
     this.sectionLoading.set(true);
     this.api.section(key, target).subscribe({
@@ -501,6 +605,13 @@ function externalName(key: string): string {
     'ext:opensearch': 'OpenSearch', 'ext:onlyoffice': 'OnlyOffice'
   };
   return names[key] ?? key.slice(4);
+}
+
+const MODE_KEY = 'kb:modo';
+
+/** Modo lembrado no navegador; Simples por padrão (0038). */
+function readMode(): KbViewMode {
+  try { return localStorage.getItem(MODE_KEY) === 'tecnico' ? 'tecnico' : 'simples'; } catch { return 'simples'; }
 }
 
 function isQuestion(value: string): boolean {

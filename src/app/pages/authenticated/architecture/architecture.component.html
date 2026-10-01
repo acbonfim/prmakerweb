@@ -3,11 +3,25 @@
   <div class="header-titles">
     <span class="header-title">Base Solvace</span>
     <span class="header-sub">
-      Engenharia reversa e regras de negócio — o mesmo conteúdo que o Claude consulta nas análises.
+      @if (simple()) { O que cada sistema faz, como funciona, as regras de negócio e com quem ele conversa — em linguagem simples. }
+      @else { Engenharia reversa e regras de negócio — o mesmo conteúdo que o Claude consulta nas análises. }
     </span>
   </div>
   <span class="header-spacer"></span>
-  @if (!loading()) {
+  <div class="mode" role="group" aria-label="Modo de leitura">
+    <button type="button" class="mode__btn" [class.mode__btn--on]="simple()" (click)="setMode('simples')"
+            matTooltip="Para QA, gestores e suporte: guia em linguagem simples, sem detalhes técnicos"><mat-icon>auto_stories</mat-icon>Simples</button>
+    <button type="button" class="mode__btn" [class.mode__btn--on]="!simple()" (click)="setMode('tecnico')"
+            matTooltip="A engenharia reversa completa, como o Claude lê"><mat-icon>code</mat-icon>Técnico</button>
+  </div>
+  <button mat-stroked-button class="suggest-btn" [class.kb__admin--on]="showLearn()" (click)="toggleLearn()"
+          matTooltip="Informe um card: o PRMake lê tudo o que foi feito nele e propõe o que guardar na base">
+    <mat-icon>school</mat-icon>Aprender com um card
+  </button>
+  @if (!loading() && simple()) {
+    <span class="stat"><mat-icon>view_module</mat-icon>{{ totals().projects }} sistemas</span>
+  }
+  @if (!loading() && !simple()) {
     <span class="stat" matTooltip="Projetos e seções publicados"><mat-icon>view_module</mat-icon>{{ totals().projects }} projetos · {{ totals().sections }} seções</span>
     @if (totalRelations()) {
       <span class="stat" matTooltip="Interdependências extraídas do código (eventos, filas, banco, HTTP, externos)"><mat-icon>hub</mat-icon>{{ totalRelations() }} ligações</span>
@@ -45,13 +59,38 @@
       <mat-icon>dashboard</mat-icon>Visão geral
     </button>
     <button type="button" class="kb__node kb__node--root" [class.kb__node--on]="selection().type === 'map'" (click)="openMap()">
-      <mat-icon>hub</mat-icon>Mapa do ecossistema
+      <mat-icon>hub</mat-icon>{{ simple() ? 'Como os sistemas se conectam' : 'Mapa do ecossistema' }}
     </button>
 
     @if (loading()) {
       <div class="kb__state"><mat-spinner diameter="22"></mat-spinner></div>
     }
 
+    @if (simple()) {
+      @for (g of areaTree(); track g.area) {
+        <div class="kb__group">
+          <div class="kb__group-title"><mat-icon>{{ g.icon }}</mat-icon>{{ g.area }}</div>
+          @for (p of g.projects; track p.key) {
+            <div class="kb__project">
+              <button type="button" class="kb__node" [class.kb__node--on]="currentProject()?.key === p.key" [matTooltip]="tagline(p)" matTooltipPosition="right"
+                      (click)="toggle(p.key); selectProject(p)">
+                <mat-icon class="kb__chevron">{{ isOpen(p.key) ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                <span class="kb__node-text">{{ friendly(p) }}</span>
+              </button>
+              @if (isOpen(p.key)) {
+                @for (s of p.sections; track s.key) {
+                  @if (s.audience === 'human' || s.key.startsWith('guia-')) {
+                    <button type="button" class="kb__node kb__node--leaf"
+                            [class.kb__node--on]="currentProject()?.key === p.key && section()?.key === s.key"
+                            (click)="selectProject(p, s.key)">{{ s.title }}</button>
+                  }
+                }
+              }
+            </div>
+          }
+        </div>
+      }
+    } @else {
     @for (g of groups(); track g.kind) {
       <div class="kb__group">
         <div class="kb__group-title"><mat-icon>{{ g.icon }}</mat-icon>{{ g.label }}</div>
@@ -75,6 +114,7 @@
           </div>
         }
       </div>
+    }
     }
 
     @if (articleGroups().length) {
@@ -153,13 +193,16 @@
         }
       </section>
     }
+    @if (showLearn()) {
+      <app-kb-learn-card [projects]="projects()" [initialCard]="learnCard()" (closed)="toggleLearn()" (sent)="onLearnSent()"></app-kb-learn-card>
+    }
     @if (error()) {
       <div class="kb__empty kb__empty--error">
         <mat-icon>error_outline</mat-icon>{{ error() }}
         <button mat-stroked-button (click)="load()">Tentar de novo</button>
       </div>
     } @else if (selection().type === 'map') {
-      <app-ecosystem-map [focus]="mapFocus()" (openProject)="openProjectByKey($event)"></app-ecosystem-map>
+      <app-ecosystem-map [focus]="mapFocus()" [simple]="simple()" [names]="friendlyNames()" (openProject)="openProjectByKey($event)"></app-ecosystem-map>
     } @else if (selection().type === 'ask') {
       <section class="ask" aria-live="polite">
         <form class="ask__box ask__box--top" (submit)="$event.preventDefault(); askAi()">
@@ -188,6 +231,19 @@
                 </div>
                 <div class="kb__md" [innerHTML]="r.answer | planMarkdown"></div>
               </div>
+            }
+            @if (r.suggestedSection; as ss) {
+              <button type="button" class="ask__read" (click)="openSuggested(ss)">
+                <mat-icon>bookmark</mat-icon>
+                <span class="ask__read-body"><span class="ask__read-label">Leia a seção</span><strong>{{ ss.title }}</strong>
+                  @if (ss.heading) { <em>› {{ ss.heading }}</em> }
+                  @if (ss.reason) { <span class="ask__reason">{{ ss.reason }}</span> }</span>
+                <mat-icon class="ask__go">arrow_forward</mat-icon>
+              </button>
+            }
+            @if (r.aiUsed && (r.coverage === 'partial' || r.coverage === 'not-found' || !r.results.length)) {
+              <app-kb-ask-deep [question]="a.question" [coverage]="r.coverage ?? 'not-found'" [suggested]="r.suggestedSection ?? null" [projects]="projects()"
+                               [isAdmin]="isAdmin()" (created)="onDeepCreated($event)" (suggestionSent)="loadSuggestions()"></app-kb-ask-deep>
             }
             @if (!r.aiUsed && r.aiUnavailableReason) {
               <div class="ask__note"><mat-icon>info</mat-icon>Busca com IA indisponível ({{ r.aiUnavailableReason }}) — mostrando a busca no conteúdo.</div>
@@ -229,6 +285,9 @@
             @for (e of askExamples; track e) { <button type="button" class="ask__example" (click)="askAi(e)">{{ e }}</button> }
           </div>
         </div>
+        @if (simple()) {
+          <app-kb-friendly-overview [projects]="projects()" (openProject)="openProjectByKey($event)" (openMap)="openMap()"></app-kb-friendly-overview>
+        } @else {
         <h2>Como a base é usada</h2>
         <p>
           O Claude lê primeiro um índice compacto do parque inteiro e abre só a seção do módulo envolvido no card —
@@ -270,6 +329,7 @@
             </div>
           }
         </div>
+        }
         @if (!loading() && !projects().length) {
           <div class="kb__empty">
             <mat-icon>construction</mat-icon>
@@ -295,15 +355,31 @@
             @for (t of a.tags; track t) { <span class="kb__tag">{{ t }}</span> }
             <span>atualizado no KC em {{ date(a.sourceUpdatedAt) }} · ambiente {{ a.environment }}</span>
           </div>
-          <div class="kb__text">
-            @for (p of paragraphs(a.content); track $index) { <p>{{ p }}</p> }
-          </div>
+          <div class="kb__md kb__text" [innerHTML]="articleText(a.content) | planMarkdown"></div>
         </article>
       } @else {
         <div class="kb__empty"><mat-icon>search_off</mat-icon>Artigo não encontrado — não publicado, removido ou filtrado como teste.</div>
       }
     } @else if (currentProject(); as p) {
       <article class="kb__doc">
+        @if (simple()) {
+        <nav class="kb__crumbs" aria-label="Você está em">
+          <button type="button" (click)="goOverview()">Base Solvace</button><mat-icon>chevron_right</mat-icon>
+          <span>{{ area(p) }}</span><mat-icon>chevron_right</mat-icon>
+          <span>{{ friendly(p) }}</span>
+          @if (section(); as cs) { <mat-icon>chevron_right</mat-icon><span>{{ cs.title }}</span> }
+          <span class="header-spacer"></span>
+          <button mat-icon-button (click)="copyLink()" matTooltip="Copiar o link"><mat-icon>link</mat-icon></button>
+        </nav>
+        <h1>{{ friendly(p) }}</h1>
+        @if (tagline(p)) { <p class="kb__tagline">{{ tagline(p) }}</p> }
+        <div class="kb__facts">
+          @if (p.businessArea) { <span class="kb__fact"><mat-icon>business_center</mat-icon>{{ p.businessArea }}</span> }
+          <span class="kb__fact"><mat-icon>{{ friendlyKindIcon(p.kind) }}</mat-icon>{{ friendlyKindLabel(p.kind) }}</span>
+          @if (guideTabs().length) { <span class="kb__fact kb__fact--ok"><mat-icon>menu_book</mat-icon>guia em linguagem simples</span> }
+        </div>
+        <app-kb-connections [project]="p" [projects]="projects()" (openProject)="openProjectByKey($event)" (openMap)="openMap(p.key)"></app-kb-connections>
+        } @else {
         <div class="kb__doc-kicker">
           <mat-icon>{{ kindIcon(p.kind) }}</mat-icon>{{ kindLabel(p.kind) }}
           <span class="header-spacer"></span>
@@ -363,6 +439,7 @@
             }
           </section>
         }
+        }
 
         @if (isAdmin()) {
           <div class="kb__admin" role="toolbar" aria-label="Ferramentas do administrador">
@@ -374,7 +451,12 @@
             }
             <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'new'" (click)="openAdmin('new')"><mat-icon>note_add</mat-icon>Nova seção</button>
             <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'project'" (click)="openAdmin('project')"><mat-icon>tune</mat-icon>Dados do projeto</button>
+            <button mat-stroked-button [class.kb__admin--on]="guideOpen()" (click)="guideOpen.set(!guideOpen()); adminMode.set(null)"
+                    matTooltip="A IA escreve o Guia em linguagem simples a partir das seções técnicas — você revisa antes de gravar"><mat-icon>auto_stories</mat-icon>Gerar guia com a IA</button>
           </div>
+          @if (guideOpen()) {
+            <app-kb-guide-review [project]="p" [projects]="projects()" (closed)="guideOpen.set(false)" (applied)="onGuideApplied($event)"></app-kb-guide-review>
+          }
           @if (adminMode(); as mode) {
             <app-kb-admin-panel [mode]="mode" [project]="p" [section]="section()" [suggestion]="activeSuggestion()"
               (closed)="adminMode.set(null); activeSuggestion.set(null)" (sectionSaved)="onSectionSaved($event)"
@@ -382,22 +464,69 @@
           }
         }
 
-        @if (p.sections.length) {
+        @if (simple()) {
+          @if (guideTabs().length) {
+            <nav class="kb__tabs" aria-label="Guia">
+              @for (s of guideTabs(); track s.key) {
+                <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" (click)="selectProject(p, s.key)">{{ s.title }}</button>
+              }
+            </nav>
+          }
+          @if (techTabs().length) {
+            <button type="button" class="kb__tech-toggle" (click)="techOpen.set(!techOpen())" [attr.aria-expanded]="techOpen() || sectionIsTech()">
+              <mat-icon>{{ techOpen() || sectionIsTech() ? 'expand_more' : 'chevron_right' }}</mat-icon>
+              Detalhes técnicos <span>({{ techTabs().length }} seções — para quem vai mexer no código)</span>
+            </button>
+            @if (techOpen() || sectionIsTech()) {
+              <nav class="kb__tabs kb__tabs--tech" aria-label="Detalhes técnicos">
+                @for (s of techTabs(); track s.key) {
+                  <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" (click)="selectProject(p, s.key)">{{ s.title }}</button>
+                }
+              </nav>
+            }
+          }
+        } @else if (p.sections.length) {
           <nav class="kb__tabs" aria-label="Seções">
             @for (s of p.sections; track s.key) {
               <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" (click)="selectProject(p, s.key)"
-                      [matTooltip]="'versão ' + s.version + ' · ' + tokens(s.length)">{{ s.title }}</button>
+                      [matTooltip]="'versão ' + s.version + ' · ' + tokens(s.length) + (s.audience === 'human' ? ' · Guia (não vai para as skills)' : '')">
+                @if (s.audience === 'human') { <mat-icon class="kb__tab-icon">menu_book</mat-icon> }{{ s.title }}</button>
             }
           </nav>
         }
 
         @if (section(); as s) {
-          <div class="kb__section-meta">
-            versão {{ s.version }} · {{ sourceLabel(s.source) }} · {{ s.updatedBy }}, {{ date(s.updatedAt) }} · {{ tokens(s.length) }}
-          </div>
+          @if (!simple()) {
+            <div class="kb__section-meta">
+              versão {{ s.version }} · {{ sourceLabel(s.source) }} · {{ s.updatedBy }}, {{ date(s.updatedAt) }} · {{ tokens(s.length) }}
+              @if (s.audience === 'human') { · Guia — só na tela, não vai para as skills }
+            </div>
+          }
+          @if (toc().length) {
+            <nav class="kb__toc" aria-label="Nesta seção">
+              <span class="kb__toc-title">Nesta seção</span>
+              @for (t of toc(); track $index) {
+                <button type="button" class="kb__toc-item" [class.kb__toc-item--sub]="t.level === 3" (click)="scrollToHeading(t)">{{ t.text }}</button>
+              }
+            </nav>
+          }
           <div class="kb__md" [innerHTML]="s.content | planMarkdown"></div>
-        } @else {
-          <div class="kb__empty"><mat-icon>article</mat-icon>Este projeto ainda não tem seções.</div>
+        } @else if (simple() && !guideTabs().length) {
+          <div class="kb__guide-empty">
+            <mat-icon>auto_stories</mat-icon>
+            <div>
+              <strong>O guia em linguagem simples deste sistema ainda não foi escrito.</strong>
+              <p>{{ p.summary ? tagline(p) : 'Ainda não há um resumo deste sistema.' }}
+                @if (techTabs().length) { Os detalhes técnicos estão logo acima, em “Detalhes técnicos”. }</p>
+              @if (isAdmin()) {
+                <button mat-flat-button color="primary" (click)="guideOpen.set(true); adminMode.set(null)"><mat-icon>auto_stories</mat-icon>Gerar guia com a IA</button>
+              } @else {
+                <p class="kb__muted">Um administrador pode gerar o guia com a IA.</p>
+              }
+            </div>
+          </div>
+        } @else if (!simple() || !techOpen()) {
+          <div class="kb__empty"><mat-icon>article</mat-icon>{{ p.sections.length ? 'Escolha uma seção.' : 'Este projeto ainda não tem seções.' }}</div>
         }
       </article>
     } @else {
