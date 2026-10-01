@@ -21,7 +21,9 @@ import {MatFormFieldModule} from '@angular/material/form-field';
 import {GlobalService} from '../../services/global.service';
 import {StorageService} from '../../services/storage.service';
 import {WsService} from '../../services/ws.service';
-import {RouterModule} from '@angular/router';
+import {Router, RouterModule} from '@angular/router';
+import {UserPendingService} from '../../services/user-pending.service';
+import {ExecutionUserAction, ExecutionUserPending} from '../execution-plan/execution-plan.model';
 import {UserIntegrationService} from '../../services/user-integration.service';
 import {MyIntegrationsDialogComponent} from '../my-integrations-dialog/my-integrations-dialog.component';
 import {MyApiKeyDialogComponent} from '../my-api-key-dialog/my-api-key-dialog.component';
@@ -96,6 +98,8 @@ export class TopMenuComponent implements OnInit {
     this.realTimeMethods();
     // Status das integrações pessoais: indicador no menu e bloqueio da tela de PR.
     this.integrations.loadStatus();
+    // Pendências dos planos de execução (0037): sino, título da aba, selo nos recentes.
+    this.pending.start();
   }
 
   // Relê o usuário do storage e recalcula firstName/lastName a partir do fullName.
@@ -122,6 +126,25 @@ export class TopMenuComponent implements OnInit {
   toggle() {
     this.sidebarOpen = !this.sidebarOpen;
     this._globalService._sideNavToggle(null);
+  }
+
+  /** Pendências do usuário nos planos de execução (0037). */
+  readonly pending = inject(UserPendingService);
+  private router = inject(Router);
+
+  openPending(item: ExecutionUserPending) {
+    this.router.navigate(['/auth/register'], { queryParams: { card: item.cardNumber } });
+  }
+
+  pendingIcon(action: ExecutionUserAction): string {
+    return action.type === 'question' ? 'help' : action.type === 'unblock' ? 'front_hand' : 'person';
+  }
+
+  pendingLabel(action: ExecutionUserAction): string {
+    const plain = (t?: string | null) => (t ?? '').replace(/[`*_#>]/g, '').replace(/\s+/g, ' ').trim();
+    if (action.type === 'question') return plain(action.text) || 'Pergunta';
+    if (action.type === 'unblock') return `${action.title}: ${plain(action.text) || 'aguardando você'}`;
+    return `Sua vez: ${action.title}`;
   }
 
   /** Integrações de uso pessoal (feature 0002): status para o indicador de pendência do menu. */

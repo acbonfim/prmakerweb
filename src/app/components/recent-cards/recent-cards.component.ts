@@ -8,6 +8,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { StorageService } from '../../services/storage.service';
 import { PullRequestService, RecentPullRequest } from '../../services/pull-request.service';
 import { WsService } from '../../services/ws.service';
+import { UserPendingService } from '../../services/user-pending.service';
 
 /** Tempo real das listas de recentes da home (PullRequestRealTimeEvents no backend, 0021). */
 const RECENT_GROUP = 'pullrequest-recent';
@@ -33,6 +34,8 @@ export class RecentCardsComponent implements OnInit, OnDestroy {
   private pullRequestService = inject(PullRequestService);
   private cdr = inject(ChangeDetectorRef);
   private ws = inject(WsService);
+  /** Pendências dos planos de execução por card (0037) — selo "aguardando você". */
+  readonly pending = inject(UserPendingService);
 
   /** Emite se a seção tem conteúdo (carregando ou com itens). O pai usa para
    *  colapsar o layout e dar 100% da largura ao outro bloco quando este fica vazio. */

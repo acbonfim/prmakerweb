@@ -32,6 +32,7 @@ import { PlanMarkdownPipe } from './plan-markdown.pipe';
 import { PlanFilesDialogComponent, PlanFilesDialogData } from './plan-files-dialog.component';
 import { PlanNotesComponent } from './plan-notes.component';
 import { StorageService } from '../../services/storage.service';
+import { UserPendingService } from '../../services/user-pending.service';
 import {
   ARTIFACT_GROUPS,
   ArtifactGroup,
@@ -44,6 +45,7 @@ import {
   ExecutionPlanSummary,
   ExecutionQuestion,
   ExecutionStep,
+  ExecutionUserAction,
   PLAN_STATUS_LABEL,
   PlanStatus,
   executionPlanGroup,
@@ -60,6 +62,8 @@ const SAFETY_POLL_MS = 30_000;
 /** Junta rajadas de eventos (a skill manda vários pedaços seguidos). */
 const REFRESH_DEBOUNCE_MS = 250;
 const MAX_LOGS_IN_MEMORY = 3000;
+/** Etapa da skill "em andamento" cujo último registro é um aviso, sem nada novo há este tempo: provável bloqueio (0037). */
+const STALLED_WARNING_MS = 2 * 60 * 1000;
 
 /** Resumo do plano para o cartão do topo da tela do card (0026). */
 export interface PlanHeadline {
@@ -70,6 +74,8 @@ export interface PlanHeadline {
   /** Etapas aguardando algo externo (merge, chamado, resposta). */
   waiting: number;
   openQuestions: number;
+  /** Pendências do usuário: perguntas + etapas dele + etapas travadas esperando ele (0037). */
+  userPending: number;
 }
 
 /** Status visual da etapa: a etapa em andamento de um plano pausado aparece pausada. */
@@ -77,6 +83,8 @@ export type StepView = ExecutionStep & {
   view: 'pending' | 'running' | 'paused' | 'waiting' | 'completed' | 'failed' | 'cancelled';
   /** Títulos das dependências que ainda não terminaram (0024). */
   blockedBy: string[];
+  /** 0037: depende do usuário — `unblock` = travada esperando uma ação dele; `turn` = etapa dele, pronta ou em andamento. */
+  you: 'unblock' | 'turn' | null;
 };
 
 /** Formulário "anexar link" aberto numa etapa (0024). */
@@ -108,6 +116,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   private snackBar = inject(MatSnackBar);
   private clipboard = inject(CliipboardService);
   private hostRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  private userPending = inject(UserPendingService);
 
   readonly plan = signal<ExecutionPlan | null>(null);
   readonly history = signal<ExecutionPlanSummary[]>([]);
@@ -199,6 +208,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     const plan = this.plan();
     if (!plan) return [];
     const byKey = new Map(plan.steps.map((s) => [s.key, s]));
+    const you = this.youByStep();
     return plan.steps
       .slice()
       .sort((a, b) => a.order - b.order)
@@ -210,8 +220,44 @@ export class ExecutionPlanComponent implements OnDestroy {
         view: s.status === 'running' && plan.status === 'paused' ? 'paused' : s.status,
         blockedBy: s.status === 'pending'
           ? (s.dependsOn ?? []).map((d) => byKey.get(d)).filter((d) => !!d && d.status !== 'completed' && d.status !== 'cancelled').map((d) => d!.title)
-          : []
+          : [],
+        you: you.get(s.key) ?? null
       }));
+  });
+
+  /**
+   * Pendências do usuário vindas do servidor (0037). API antiga (sem `userActions`): calcula aqui com a mesma regra —
+   * perguntas abertas, etapas travadas esperando o usuário e etapas dele prontas ou em andamento.
+   */
+  readonly userActions = computed<ExecutionUserAction[]>(() => {
+    const plan = this.plan();
+    if (!plan || !isPlanActive(plan.status)) return [];
+    if (plan.userActions) return plan.userActions;
+    const byKey = new Map(plan.steps.map((s) => [s.key, s]));
+    const ready = (s: ExecutionStep) => s.status === 'pending'
+      && (s.dependsOn ?? []).every((d) => { const dep = byKey.get(d); return !dep || dep.status === 'completed' || dep.status === 'cancelled'; });
+    const actions: ExecutionUserAction[] = (plan.questions ?? []).filter((q) => q.status === 'open')
+      .map((q) => ({ type: 'question', stepKey: q.stepKey, title: byKey.get(q.stepKey ?? '')?.title ?? 'Pergunta', text: q.text, questionId: q.id }));
+    for (const s of plan.steps.slice().sort((a, b) => a.order - b.order)) {
+      if (s.status === 'waiting' && s.waitingOn === 'user') actions.push({ type: 'unblock', stepKey: s.key, title: s.title, text: s.statusReason });
+      else if ((s.executor ?? 'claude') === 'user' && (s.status === 'running' || ready(s))) actions.push({ type: 'step', stepKey: s.key, title: s.title });
+    }
+    return actions;
+  });
+
+  /** Etapas (não perguntas) que dependem do usuário — o aviso do topo as lista com o botão certo. */
+  readonly stepActions = computed(() => this.userActions().filter((a) => a.type !== 'question' && a.stepKey));
+
+  /** Total do aviso "Aguardando você": perguntas abertas (com a resposta otimista já descontada) + etapas. */
+  readonly pendingCount = computed(() => this.openQuestions().filter((q) => !this.pendingAnswers()[q.id]).length + this.stepActions().length);
+
+  private readonly youByStep = computed(() => {
+    const map = new Map<string, 'unblock' | 'turn'>();
+    for (const a of this.userActions()) {
+      if (!a.stepKey || a.type === 'question') continue;
+      map.set(a.stepKey, a.type === 'unblock' ? 'unblock' : 'turn');
+    }
+    return map;
   });
 
   // ── 0024: abas Análise / Correção ─────────────────────────────────────────────────────────────
@@ -395,7 +441,8 @@ export class ExecutionPlanComponent implements OnDestroy {
       done: steps.filter((s) => s.status === 'completed').length,
       total: steps.length - cancelled,
       waiting: steps.filter((s) => s.status === 'waiting').length,
-      openQuestions: (plan.questions ?? []).filter((q) => q.status === 'open').length
+      openQuestions: (plan.questions ?? []).filter((q) => q.status === 'open').length,
+      userPending: isPlanActive(plan.status) ? (plan.userActions?.length ?? plan.userPending ?? 0) : 0
     });
   }
 
@@ -455,11 +502,14 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.emitHeadline(plan);
 
     if (!plan) return;
-    // Primeira carga: abre a etapa em andamento (o usuário vê o que está acontecendo sem clicar).
+    // Primeira carga: abre o que depende do usuário (0037); senão, a etapa em andamento.
     if (!previous || previous.id !== plan.id) {
-      const current = plan.steps.find((s) => s.status === 'running') ?? plan.steps.find((s) => s.status === 'waiting');
+      const yours = isPlanActive(plan.status) ? (plan.userActions ?? []).find((a) => a.type !== 'question' && a.stepKey)?.stepKey : null;
+      const current = (yours ? plan.steps.find((s) => s.key === yours) : null)
+        ?? plan.steps.find((s) => s.status === 'running') ?? plan.steps.find((s) => s.status === 'waiting');
       this.selectedKey.set(current?.key ?? null);
-      this.scrollToStep(current?.key ?? null);
+      // Com pendência do usuário o aviso do topo é o mais importante: não rola para longe dele.
+      if (!yours) this.scrollToStep(current?.key ?? null);
     } else if (this.selectedKey() && !plan.steps.some((s) => s.key === this.selectedKey())) {
       this.selectedKey.set(null);
     } else {
@@ -559,6 +609,8 @@ export class ExecutionPlanComponent implements OnDestroy {
       return `Cancelada${step.statusReason ? ': ' + step.statusReason : ''}`;
     }
     if (step.view === 'failed') return `Falhou${step.statusReason ? ': ' + step.statusReason : ''}`;
+    if (step.you === 'unblock') return `Aguardando você: ${step.statusReason ?? 'faça o que a etapa pede e clique em "Já resolvi"'}`;
+    if (step.you === 'turn') return `Sua vez — ${step.status === 'running' ? 'conclua aqui quando terminar' : 'esta etapa é sua e já pode ser feita'}`;
     if (step.view === 'waiting') return step.statusReason?.startsWith('Aguardando') ? step.statusReason : `Aguardando${step.statusReason ? ': ' + step.statusReason : ''}`;
     const desc = (step.description ?? '').replace(/[#*_`>]/g, '').trim();
     const head = { pending: 'Pendente', running: 'Em andamento', paused: 'Pausada', completed: 'Concluída' }[step.view];
@@ -621,9 +673,56 @@ export class ExecutionPlanComponent implements OnDestroy {
     if (!plan || this.busy()) return;
     this.busy.set('step');
     this.api.completeStep(plan.id, step.key).subscribe({
-      next: () => { this.busy.set(null); this.snackBar.open('Etapa concluída.', 'Ok', { duration: 3000 }); this.refresh(); },
+      next: () => { this.busy.set(null); this.snackBar.open('Etapa concluída.', 'Ok', { duration: 3000 }); this.refresh(); this.userPending.refresh(); },
       error: (err) => { this.busy.set(null); this.snackBar.open(planApiError(err, 'Não foi possível concluir a etapa.'), 'Fechar', { duration: 8000 }); }
     });
+  }
+
+  /** "Já resolvi" (0037): a etapa travada volta a andar e a skill (pelo vigia) tenta de novo. */
+  resolveStep(step: StepView): void {
+    const plan = this.plan();
+    if (!plan || this.busy()) return;
+    this.busy.set('step');
+    this.api.resolveStep(plan.id, step.key).subscribe({
+      next: () => {
+        this.busy.set(null);
+        this.snackBar.open('Avisado — o Claude tenta de novo.', 'Ok', { duration: 4000 });
+        this.refresh();
+        this.userPending.refresh();
+      },
+      error: (err) => { this.busy.set(null); this.snackBar.open(planApiError(err, 'Não foi possível avisar o Claude.'), 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  /** Texto de uma linha (sub-linha da etapa): sem marcação de markdown. */
+  plain(text?: string | null): string {
+    return (text ?? '').replace(/[`*_#>]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  /** Ação da pendência no aviso do topo: a etapa correspondente (ou null se sumiu). */
+  stepOf(action: ExecutionUserAction): StepView | null {
+    return (action.stepKey && this.steps().find((s) => s.key === action.stepKey)) || null;
+  }
+
+  /** Abre a etapa e rola até ela (do aviso do topo). */
+  goToStep(key: string | null | undefined): void {
+    if (!key) return;
+    this.selectedKey.set(key);
+    this.scrollToStep(key);
+  }
+
+  /**
+   * 0037: etapa da skill "em andamento" cujo último registro é um aviso/erro e nada novo chegou há 2 min — quase
+   * sempre está parada esperando algo (ex.: permissão negada no Claude Code). Mostra o aviso na linha da etapa.
+   */
+  stalledWarning(step: StepView): string | null {
+    if (step.view !== 'running' || step.executor === 'user') return null;
+    const logs = this.logsFor(step.key);
+    const last = logs[logs.length - 1];
+    if (!last || (last.kind !== 'warning' && last.kind !== 'error')) return null;
+    if (this.now() + this.serverOffsetMs - Date.parse(last.createdAt) < STALLED_WARNING_MS) return null;
+    const line = last.message.split('\n').map((l) => l.replace(/[#*`>_]/g, '').trim()).find((l) => l.length > 0) ?? '';
+    return line.length > 220 ? line.slice(0, 220) + '…' : line;
   }
 
   // ── Perguntas ───────────────────────────────────────────────────────────────────────────────
@@ -658,6 +757,7 @@ export class ExecutionPlanComponent implements OnDestroy {
         this.clearPending(question.id);
         this.answerDrafts.update((d) => { const { [question.id]: _, ...rest } = d; return rest; });
         this.refresh();
+        this.userPending.refresh();
       },
       error: (err) => {
         this.clearPending(question.id);

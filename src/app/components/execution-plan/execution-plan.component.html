@@ -166,13 +166,41 @@
         </div>
       } @else {
         @let p = plan()!;
-        @if (openQuestions().length) {
-          <div class="plan-questions" role="region" aria-label="Perguntas aguardando você">
+        @if (openQuestions().length || stepActions().length) {
+          <!-- 0037: tudo o que depende do usuário num lugar só, com o botão certo em cada item. -->
+          <div class="plan-questions plan-you" role="region" aria-label="Aguardando você">
             <div class="plan-questions__head">
-              <mat-icon>help</mat-icon>
-              {{ openQuestions().length === 1 ? '1 pergunta aguardando você' : openQuestions().length + ' perguntas aguardando você' }}
-              <span class="plan-questions__hint">— responda aqui ou no Claude</span>
+              <mat-icon>front_hand</mat-icon>
+              @if (pendingCount()) {
+                Aguardando você · {{ pendingCount() === 1 ? '1 ação' : pendingCount() + ' ações' }}
+                <span class="plan-questions__hint">— o plano só segue quando você fizer isso</span>
+              } @else {
+                Respostas enviadas
+              }
             </div>
+            @for (a of stepActions(); track a.stepKey) {
+              @if (stepOf(a); as st) {
+                <div class="plan-you__item plan-you__item--{{ a.type }}">
+                  <mat-icon class="plan-you__icon">{{ a.type === 'unblock' ? 'lock_clock' : 'person' }}</mat-icon>
+                  <div class="plan-you__body">
+                    <button type="button" class="plan-you__title" (click)="goToStep(a.stepKey)" matTooltip="Ver a etapa">{{ a.title }}</button>
+                    @if (a.type === 'unblock') {
+                      <div class="plan-you__text plan-md" [innerHTML]="(a.text || 'Faça o que a etapa pede e avise aqui.') | planMarkdown"></div>
+                    } @else {
+                      <div class="plan-you__text">{{ st.status === 'running' ? 'Você começou esta etapa — conclua quando terminar.' : 'Esta etapa é sua e já pode ser feita.' }}</div>
+                    }
+                  </div>
+                  <div class="plan-you__actions">
+                    @if (a.type === 'unblock') {
+                      <button mat-flat-button color="primary" (click)="resolveStep(st)" [disabled]="!!busy()"
+                              matTooltip="Avisa o Claude para tentar de novo"><mat-icon>task_alt</mat-icon>Já resolvi</button>
+                    } @else if (canComplete(st)) {
+                      <button mat-flat-button color="primary" (click)="completeStep(st)" [disabled]="!!busy()"><mat-icon>check</mat-icon>Concluir</button>
+                    }
+                  </div>
+                </div>
+              }
+            }
             @for (q of openQuestions(); track q.id) {
               <ng-container *ngTemplateOutlet="questionTpl; context: { $implicit: q }"></ng-container>
             }
@@ -198,6 +226,8 @@
             <li class="step step--{{ step.view }}"
                 [class.step--open]="selectedKey() === step.key"
                 [class.step--flash]="flashKeys().has(step.key)"
+                [class.step--you]="!!step.you"
+                [class.step--you-unblock]="step.you === 'unblock'"
                 [attr.data-step-key]="step.key">
               <button type="button" class="step__row" (click)="toggleStep(step)"
                       [matTooltip]="stepTooltip(step)" matTooltipPosition="left" matTooltipClass="plan-tooltip"
@@ -229,7 +259,13 @@
                       </span>
                     }
                   </span>
-                  @if (step.view === 'running' && step.activity) {
+                  @if (step.you === 'unblock') {
+                    <span class="step__sub step__sub--you"><mat-icon>front_hand</mat-icon><span class="step__clamp">Aguardando você: {{ plain(step.statusReason) || 'faça o que a etapa pede' }}</span></span>
+                  } @else if (step.you === 'turn') {
+                    <span class="step__sub step__sub--you"><mat-icon>front_hand</mat-icon>Sua vez — {{ step.status === 'running' ? 'conclua quando terminar' : 'já pode ser feita' }}</span>
+                  } @else if (stalledWarning(step); as w) {
+                    <span class="step__sub step__sub--stalled"><mat-icon>warning</mat-icon>Parada com um aviso: {{ w }}</span>
+                  } @else if (step.view === 'running' && step.activity) {
                     <span class="step__activity">{{ step.activity }}<span class="step__typing"><i></i><i></i><i></i></span></span>
                   } @else if (step.view === 'running') {
                     <span class="step__activity">Em andamento<span class="step__typing"><i></i><i></i><i></i></span></span>
@@ -251,13 +287,31 @@
                     <span class="step__files" [matTooltip]="nl + ' link(s)'"><mat-icon>link</mat-icon>{{ nl }}</span>
                   }
                   @if (step.view === 'completed' || step.view === 'running' || step.view === 'paused' || step.view === 'failed' || step.view === 'waiting') {
-                    <span class="step__time">{{ duration(step) }}</span>
+                    <span class="step__time" [class.step__time--you]="step.you === 'unblock'"
+                          [matTooltip]="step.you === 'unblock' ? 'Tempo desde o início da etapa — ela está parada esperando você' : ''">{{ duration(step) }}</span>
                   }
                   @if (!expanded()) {
                     <mat-icon class="step__chevron">expand_more</mat-icon>
                   }
                 </span>
               </button>
+
+              @if (step.you && isActive() && (expanded() || selectedKey() !== step.key)) {
+                <!-- 0037: a ação do usuário fica na própria linha, sem precisar abrir a etapa. -->
+                <div class="step__cta">
+                  @if (step.you === 'unblock') {
+                    <button mat-flat-button color="primary" (click)="resolveStep(step)" [disabled]="!!busy()"
+                            matTooltip="Fiz o que a etapa pedia — avisar o Claude para tentar de novo"><mat-icon>task_alt</mat-icon>Já resolvi</button>
+                  } @else {
+                    @if (canStart(step)) {
+                      <button mat-stroked-button (click)="startStep(step)" [disabled]="!!busy()"><mat-icon>play_arrow</mat-icon>Iniciar</button>
+                    }
+                    @if (canComplete(step)) {
+                      <button mat-flat-button color="primary" (click)="completeStep(step)" [disabled]="!!busy()"><mat-icon>check</mat-icon>Concluir</button>
+                    }
+                  }
+                </div>
+              }
 
               @if (!expanded() && selectedKey() === step.key) {
                 <div class="step__details">
@@ -418,7 +472,16 @@
     }
   }
 
-  @if (canStart(step) || canComplete(step)) {
+  @if (step.you === 'unblock') {
+    <div class="plan-useractions plan-useractions--unblock">
+      <mat-icon>front_hand</mat-icon>
+      <div class="plan-useractions__text">
+        <strong>Esta etapa está parada esperando você.</strong>
+        <div class="plan-md" [innerHTML]="(step.statusReason || '') | planMarkdown"></div>
+      </div>
+      <button mat-flat-button color="primary" (click)="resolveStep(step)" [disabled]="!!busy()"><mat-icon>task_alt</mat-icon>Já resolvi</button>
+    </div>
+  } @else if (canStart(step) || canComplete(step)) {
     <div class="plan-useractions">
       <mat-icon>person</mat-icon>
       <span>Esta etapa é sua.</span>
@@ -442,6 +505,7 @@
       @switch (step.view) {
         @case ('pending') { Ainda não começou. }
         @case ('running') { Aguardando o primeiro registro da skill… }
+        @case ('waiting') { {{ step.you === 'unblock' ? 'Parada esperando você.' : 'Aguardando.' }} }
         @default { Nenhum registro nesta etapa. }
       }
     </p>

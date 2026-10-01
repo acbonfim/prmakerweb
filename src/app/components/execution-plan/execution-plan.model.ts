@@ -7,6 +7,10 @@ export type StepKind = 'task' | 'code' | 'pr' | 'ticket' | 'question' | 'validat
 export type LinkKind = 'ticket' | 'pr' | 'doc' | 'other';
 export type LogKind = 'info' | 'progress' | 'finding' | 'decision' | 'warning' | 'error';
 export type ArtifactKind = 'script' | 'analysis' | 'data' | 'image' | 'attachment';
+/** Etapa "aguardando": de quem depende (0037). `user` = ação do usuário (o motivo diz qual). */
+export type WaitingOn = 'user' | 'answer' | 'external';
+/** Pendência do usuário (0037): pergunta aberta, etapa dele pronta/em andamento, etapa travada esperando ele. */
+export type UserActionType = 'question' | 'step' | 'unblock';
 
 export interface ExecutionPlanSummary {
   id: string;
@@ -34,6 +38,29 @@ export interface ExecutionPlanSummary {
   resumeRequestedAt?: string | null;
   resumeRequestedBy?: string | null;
   resumePending?: boolean;
+  /** Quantas coisas dependem do usuário agora (0037). */
+  userPending?: number;
+}
+
+/** Uma pendência do usuário (0037) — espelha `ExecutionUserActionResponse`. */
+export interface ExecutionUserAction {
+  type: UserActionType;
+  stepKey?: string | null;
+  title: string;
+  text?: string | null;
+  questionId?: string | null;
+  since?: string | null;
+}
+
+/** Plano ativo do usuário com pendência dele (0037) — `GET ExecutionPlan/pending`. */
+export interface ExecutionUserPending {
+  planId: string;
+  cardNumber: string;
+  title: string;
+  phase: PlanPhase;
+  status: PlanStatus;
+  count: number;
+  actions: ExecutionUserAction[];
 }
 
 export interface ExecutionSessionInfo {
@@ -63,6 +90,8 @@ export interface ExecutionStep {
   status: StepStatus;
   statusReason?: string | null;
   statusChangedBy?: string | null;
+  /** Etapa "aguardando": de quem depende (0037). */
+  waitingOn?: WaitingOn | null;
   activity?: string | null;
   checkpoint?: string | null;
   startedAt?: string | null;
@@ -157,6 +186,8 @@ export interface ExecutionPlan extends ExecutionPlanSummary {
   artifacts: ExecutionArtifact[];
   questions: ExecutionQuestion[];
   links: ExecutionLink[];
+  /** O que depende do usuário agora, na ordem do plano (0037). */
+  userActions?: ExecutionUserAction[];
   /** Comentários do card inteiro (análise e correção) — 0031. */
   notes?: ExecutionNote[];
   lastLogId: number;
@@ -182,6 +213,10 @@ export interface ExecutionPlanRealtimePayload {
 
 export const EXECUTION_PLAN_EVENT = 'executionPlanUpdated';
 export const executionPlanGroup = (card: string) => `execplan:${card}`;
+
+/** Pendências do usuário fora do card (0037): grupo global; payload { cardNumber, planId, userId }. */
+export const EXECUTION_PENDING_GROUP = 'execplan-pending';
+export const EXECUTION_PENDING_EVENT = 'executionPlanPendingChanged';
 
 /** Botões do rodapé: cada grupo junta um ou mais tipos de arquivo. */
 export interface ArtifactGroup {

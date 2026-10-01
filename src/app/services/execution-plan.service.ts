@@ -10,6 +10,7 @@ import {
   ExecutionQuestion,
   ExecutionPlanSummary,
   ExecutionStep,
+  ExecutionUserPending,
   PlanStatus
 } from '../components/execution-plan/execution-plan.model';
 
@@ -61,6 +62,16 @@ export class ExecutionPlanService {
 
   completeStep(planId: string, stepKey: string, reason?: string | null): Observable<ExecutionStep> {
     return this.http.post<ExecutionStep>(`${this.apiUrl}/${planId}/steps/${encodeURIComponent(stepKey)}/complete`, { reason: reason || null });
+  }
+
+  /** "Já resolvi" (0037): o usuário fez o que a etapa travada esperava dele; a skill tenta de novo. */
+  resolveStep(planId: string, stepKey: string, note?: string | null): Observable<ExecutionStep> {
+    return this.http.post<ExecutionStep>(`${this.apiUrl}/${planId}/steps/${encodeURIComponent(stepKey)}/resolve`, { reason: note || null });
+  }
+
+  /** Planos ativos do usuário logado com pendência dele (0037). */
+  pending(): Observable<ExecutionUserPending[]> {
+    return this.http.get<ExecutionUserPending[]>(`${this.apiUrl}/pending`);
   }
 
   answer(planId: string, questionId: string, answer: string): Observable<ExecutionQuestion> {
