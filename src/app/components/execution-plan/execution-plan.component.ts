@@ -53,6 +53,16 @@ import {
   executionPlanGroup,
   isPlanActive
 } from './execution-plan.model';
+import { ExecutionQueueService } from '../../services/execution-queue.service';
+import {
+  AGENT_INSTALL_COMMAND,
+  ExecutionCardQueue,
+  ExecutionRequest,
+  ExecutionWorker,
+  REQUEST_SOURCE_LABEL,
+  isRequestActive
+} from './execution-queue.model';
+import { ExecutorsDialogComponent } from '../executors-dialog/executors-dialog.component';
 
 /** Evento do card quando os PRs mudam (status sincronizado com o GitHub, PR aberto) — o plano reage na hora (0025). */
 const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
@@ -119,6 +129,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   private clipboard = inject(CliipboardService);
   private hostRef = inject<ElementRef<HTMLElement>>(ElementRef);
   private userPending = inject(UserPendingService);
+  private queueApi = inject(ExecutionQueueService);
 
   readonly plan = signal<ExecutionPlan | null>(null);
   readonly history = signal<ExecutionPlanSummary[]>([]);
@@ -381,6 +392,33 @@ export class ExecutionPlanComponent implements OnDestroy {
     return idle > STALE_AFTER_MS ? Math.floor(idle / 60000) : null;
   });
 
+  // ── 0039: fila de execução (rodar a skill pela tela, sem terminal) ─────────────────────────────
+
+  /** Pedido ativo do card, últimos pedidos e as máquinas de quem está vendo. */
+  readonly queue = signal<ExecutionCardQueue | null>(null);
+  readonly activeRequest = computed(() => this.queue()?.active ?? null);
+  readonly myWorkers = computed(() => this.queue()?.myWorkers ?? []);
+  readonly hasWorkers = computed(() => this.myWorkers().length > 0);
+  /** Último pedido que terminou mal (mostra o motivo e "tentar de novo") — só se for o mais recente do card. */
+  readonly failedRequest = computed(() => {
+    if (this.activeRequest()) return null;
+    const last = this.queue()?.recent?.[0];
+    if (!last || !(last.status === 'failed' || last.status === 'expired')) return null;
+    const plan = this.plan();
+    // A skill andou depois da falha (outra sessão retomou): o aviso já não vale.
+    if (plan?.lastActivityAt && last.finishedAt && Date.parse(plan.lastActivityAt) > Date.parse(last.finishedAt)) return null;
+    return last;
+  });
+  readonly canAskClaude = computed(() => this.hasWorkers() && !this.activeRequest() && !this.pinnedPlanId());
+  readonly askLabel = computed(() => this.plan() && this.isActive() ? 'Continuar com Claude' : 'Analisar com Claude');
+  readonly askOpen = signal(false);
+  readonly showRequestDetail = signal(false);
+  askWorkerId: string | null = null;
+  askNote = '';
+  private queueSub?: Subscription;
+  readonly agentInstallCommand = AGENT_INSTALL_COMMAND;
+  readonly sourceLabel = REQUEST_SOURCE_LABEL;
+
   readonly resumeCommand = computed(() => `/analisar-bug ${this.loadedCard() ?? ''}`.trim());
   /** Terminal (0033): volta para a sessão do Claude que trabalhou no card (ou abre uma nova). */
   readonly terminalCommand = computed(() => `bash ~/.claude/skills/analisar-bug/scripts/prmake-card.sh ${this.loadedCard() ?? ''}`.trim());
@@ -453,7 +491,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.resyncSub = this.ws._resynced.subscribe(() => this.refresh());
     this.clockTimer = setInterval(() => this.now.set(Date.now()), 15_000);
     this.pollTimer = setInterval(() => {
-      if (this.isActive() && !document.hidden) this.refresh();
+      if ((this.isActive() || this.activeRequest()) && !document.hidden) this.refresh();
     }, SAFETY_POLL_MS);
   }
 
@@ -469,6 +507,8 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.switchGroup(normalized);
     if (changed) {
       this.plan.set(null);
+      this.queue.set(null);
+      this.askOpen.set(false);
       this.logs.set([]);
       this.history.set([]);
       this.pinnedPlanId.set(null);
@@ -504,6 +544,8 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.switchGroup(null);
     this.loadedCard.set(null);
     this.plan.set(null);
+    this.queue.set(null);
+    this.askOpen.set(false);
     this.logs.set([]);
     this.history.set([]);
     this.pinnedPlanId.set(null);
@@ -523,6 +565,7 @@ export class ExecutionPlanComponent implements OnDestroy {
       this.loadError.set(false);
     }
 
+    this.loadQueue(card);
     const pinned = this.pinnedPlanId();
     const request = pinned ? this.api.get(pinned) : this.api.getCurrent(card);
     this.loadSub?.unsubscribe();
@@ -983,8 +1026,114 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.clipboard.copyFullDescriptionToClipboard(this.terminalCommand());
   }
 
+  // ── 0039: fila de execução ─────────────────────────────────────────────────────────────────────
+
+  private loadQueue(card: string): void {
+    this.queueSub?.unsubscribe();
+    this.queueSub = this.queueApi.card(card).subscribe({
+      next: (q) => { if (this.loadedCard() === card) this.queue.set(q); },
+      error: () => {}
+    });
+  }
+
+  openAsk(): void {
+    const workers = this.myWorkers();
+    this.askWorkerId = workers.find((w) => w.online && w.status === 'active')?.id ?? null;
+    this.askNote = '';
+    this.askOpen.set(true);
+  }
+
+  /** "Analisar/Continuar com Claude": o executor da máquina escolhida roda a skill sem terminal. */
+  confirmAsk(): void {
+    const card = this.loadedCard();
+    if (!card || this.busy()) return;
+    this.busy.set('ask');
+    this.queueApi.create(card, { targetWorkerId: this.askWorkerId, note: this.askNote }).subscribe({
+      next: (r) => {
+        this.busy.set(null);
+        this.askOpen.set(false);
+        this.applyRequest(r);
+        const where = r.waitReason ? ` ${r.waitReason}.` : '';
+        this.snackBar.open(`Pedido enviado para o Claude.${where}`, 'Ok', { duration: 6000 });
+      },
+      error: (err) => {
+        this.busy.set(null);
+        this.snackBar.open(planApiError(err, 'Não foi possível pedir para o Claude.'), 'Fechar', { duration: 8000 });
+      }
+    });
+  }
+
+  cancelRequest(r: ExecutionRequest): void {
+    if (this.busy()) return;
+    this.busy.set('request-cancel');
+    this.queueApi.cancel(r.id).subscribe({
+      next: (updated) => {
+        this.busy.set(null);
+        this.applyRequest(updated);
+        this.snackBar.open(r.status === 'queued' ? 'Pedido cancelado.' : 'Pedido cancelado — o Claude é encerrado em instantes.', 'Ok', { duration: 5000 });
+      },
+      error: (err) => {
+        this.busy.set(null);
+        this.snackBar.open(planApiError(err, 'Não foi possível cancelar o pedido.'), 'Fechar', { duration: 8000 });
+      }
+    });
+  }
+
+  retryRequest(r: ExecutionRequest): void {
+    if (this.busy()) return;
+    this.busy.set('request-retry');
+    this.queueApi.retry(r.id).subscribe({
+      next: (updated) => { this.busy.set(null); this.applyRequest(updated); },
+      error: (err) => {
+        this.busy.set(null);
+        this.snackBar.open(planApiError(err, 'Não foi possível pedir de novo.'), 'Fechar', { duration: 8000 });
+      }
+    });
+  }
+
+  forceRequest(r: ExecutionRequest): void {
+    if (this.busy()) return;
+    this.busy.set('request-force');
+    this.queueApi.force(r.id).subscribe({
+      next: (updated) => { this.busy.set(null); this.applyRequest(updated); },
+      error: (err) => {
+        this.busy.set(null);
+        this.snackBar.open(planApiError(err, 'Não foi possível liberar o pedido.'), 'Fechar', { duration: 8000 });
+      }
+    });
+  }
+
+  private applyRequest(r: ExecutionRequest): void {
+    const q = this.queue() ?? { recent: [], myWorkers: [], ownerWorkers: [] };
+    const recent = [r, ...q.recent.filter((x) => x.id !== r.id && x.id !== q.active?.id)];
+    this.queue.set({ ...q, active: isRequestActive(r.status) ? r : null, recent: isRequestActive(r.status) ? q.recent : recent });
+    const card = this.loadedCard();
+    if (card) this.loadQueue(card);
+  }
+
+  /** Máquina do pedido (para "offline desde"). */
+  requestWorker(r: ExecutionRequest): ExecutionWorker | null {
+    const q = this.queue();
+    const all = [...(q?.myWorkers ?? []), ...(q?.ownerWorkers ?? [])];
+    return all.find((w) => w.id === (r.workerId ?? r.targetWorkerId)) ?? (all.length === 1 ? all[0] : null);
+  }
+
+  openExecutors(): void {
+    this.dialog.open(ExecutorsDialogComponent, {
+      width: '760px', maxWidth: '96vw', maxHeight: '92vh', panelClass: 'custom-dialog-container', autoFocus: false
+    }).afterClosed().subscribe(() => this.refresh());
+  }
+
+  copyAgentInstall(): void {
+    this.clipboard.copyFullDescriptionToClipboard(this.agentInstallCommand);
+  }
+
   /** "Continuar sozinho" (0033): o vigia da máquina da sessão retoma a conversa em segundo plano. */
   requestResume(): void {
+    if (this.hasWorkers()) {
+      this.openAsk();
+      return;
+    }
     const plan = this.plan();
     if (!plan || this.busy()) return;
     this.busy.set('resume-request');
@@ -1130,6 +1279,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.loadSub?.unsubscribe();
     this.logsSub?.unsubscribe();
     this.resyncSub?.unsubscribe();
+    this.queueSub?.unsubscribe();
     clearTimeout(this.refreshTimer);
     clearTimeout(this.flashTimer);
     clearInterval(this.pollTimer);
