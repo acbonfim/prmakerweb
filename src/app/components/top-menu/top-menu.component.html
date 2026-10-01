@@ -9,8 +9,14 @@
 
   <span class="topbar-spacer"></span>
 
-  <button mat-icon-button class="topbar-icon-btn" matTooltip="Notificações" aria-label="Notificações">
-    <mat-icon>notifications</mat-icon>
+  <button mat-icon-button class="topbar-icon-btn" [class.topbar-icon-btn--alert]="pending.total() > 0"
+          [matMenuTriggerFor]="menuPending" (menuOpened)="pending.refresh()"
+          [matTooltip]="pending.total() ? pending.total() + ' pendência(s) aguardando você' : 'Nada aguardando você'"
+          aria-label="Pendências aguardando você">
+    <mat-icon>{{ pending.total() ? 'notifications_active' : 'notifications' }}</mat-icon>
+    @if (pending.total()) {
+      <span class="topbar-badge">{{ pending.total() > 99 ? '99+' : pending.total() }}</span>
+    }
   </button>
 
   <button type="button" class="profile-chip" [matMenuTriggerFor]="menuUser" aria-label="Menu do usuário">
@@ -29,6 +35,30 @@
   </button>
 </div>
 
+
+<mat-menu #menuPending="matMenu" class="pending-menu" xPosition="before">
+  <div class="pnd-head" (click)="$event.stopPropagation()">
+    <mat-icon>front_hand</mat-icon>
+    <span>{{ pending.total() ? 'Aguardando você' : 'Nada aguardando você' }}</span>
+  </div>
+  @for (item of pending.items(); track item.planId) {
+    <button mat-menu-item class="pnd-item" (click)="openPending(item)">
+      <span class="pnd-card">
+        <span class="pnd-number">AB#{{ item.cardNumber }}</span>
+        <span class="pnd-count">{{ item.count }}</span>
+      </span>
+      <span class="pnd-title">{{ item.title }}</span>
+      @for (a of item.actions.slice(0, 3); track $index) {
+        <span class="pnd-action"><mat-icon>{{ pendingIcon(a) }}</mat-icon><span>{{ pendingLabel(a) }}</span></span>
+      }
+      @if (item.actions.length > 3) {
+        <span class="pnd-more">+{{ item.actions.length - 3 }}</span>
+      }
+    </button>
+  } @empty {
+    <div class="pnd-empty" (click)="$event.stopPropagation()">Quando um plano do Claude precisar de você (pergunta, etapa sua ou algo para liberar), aparece aqui.</div>
+  }
+</mat-menu>
 
 <mat-menu #menuUser="matMenu" class="profile-menu" xPosition="before">
   <div class="pm-header" (click)="$event.stopPropagation()">

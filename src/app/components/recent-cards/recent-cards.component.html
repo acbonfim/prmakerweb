@@ -29,7 +29,14 @@
         <mat-icon>confirmation_number</mat-icon>
       </div>
       <div class="recent-card-body">
-        <span class="recent-card-number">AB#{{ card.cardNumber }}</span>
+        <span class="recent-card-number">
+          AB#{{ card.cardNumber }}
+          @if (pending.byCard().get('' + card.cardNumber); as p) {
+            <span class="recent-card-pending" [title]="p.count + ' pendência(s) no plano: ' + p.actions[0]?.title">
+              <mat-icon>front_hand</mat-icon>Aguardando você{{ p.count > 1 ? ' (' + p.count + ')' : '' }}
+            </span>
+          }
+        </span>
         <span class="recent-card-desc">{{ preview(card.description) }}</span>
         <span class="recent-card-repo" *ngIf="card.repositoryId">
           <mat-icon>folder</mat-icon>{{ card.repositoryId }}

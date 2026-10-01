@@ -244,12 +244,14 @@ export class RegisterComponent implements OnInit, OnDestroy {
     const plan = this.planHeadline;
     if (plan) {
       const phase = plan.phase === 'correction' ? 'Correção' : 'Análise';
-      const extra = plan.openQuestions ? ` · ${plan.openQuestions} pergunta(s)` : plan.waiting ? ' · aguardando' : '';
+      const yours = plan.userPending ?? 0;
+      const extra = yours ? ` · aguardando você (${yours})` : plan.openQuestions ? ` · ${plan.openQuestions} pergunta(s)` : plan.waiting ? ' · aguardando' : '';
       const labels: Record<string, string> = { pending: 'pendente', running: 'em andamento', paused: 'pausado', completed: 'concluído', failed: 'falhou', cancelled: 'cancelado' };
       facts.push({
         icon: 'account_tree', label: `Plano de ${phase.toLowerCase()} · ${labels[plan.status] ?? plan.status}`,
         value: plan.status === 'completed' ? `${phase} concluída` : `${phase} ${plan.done}/${plan.total}${extra}`,
-        tone: plan.status === 'completed' ? 'ok' : plan.openQuestions || plan.status === 'paused' ? 'warn' : plan.status === 'running' ? 'info' : 'muted'
+        tone: plan.status === 'completed' ? 'ok' : yours || plan.openQuestions || plan.status === 'paused' ? 'warn' : plan.status === 'running' ? 'info' : 'muted',
+        tooltip: yours ? 'O plano está esperando você — veja o aviso "Aguardando você" no plano de execução' : undefined
       });
     }
 
