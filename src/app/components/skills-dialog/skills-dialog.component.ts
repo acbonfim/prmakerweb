@@ -118,6 +118,55 @@ interface SkillInfo {
           </div>
         </section>
 
+        <section class="sk__step">
+          <span class="sk__num sk__num--warn">4</span>
+          <div class="sk__step-body">
+            <div class="sk__step-title">Acesso de leitura aos bancos dos clientes</div>
+            <div class="sk__alert">
+              <mat-icon>database_off</mat-icon>
+              <span><strong>Sem isto o Claude não acessa o banco do cliente.</strong> A análise de um card que depende de dados
+                (usuário, cadastro, status, configuração) fica parada em <strong>"Aguardando você"</strong> no plano até você liberar —
+                ela não é concluída sem o banco.</span>
+            </div>
+
+            <p><strong>a) Permissão no Claude Code</strong> — o instalador já libera as consultas somente leitura
+              (<code>sql-query.sh</code>, <code>cognito-query.sh</code>). Para conferir ou liberar de novo{{ os() === 'windows' ? ' (no Git Bash)' : '' }}:</p>
+            <div class="sk__cmd sk__cmd--small">
+              <code>bash ~/.claude/skills/.prmake/prmake-skills.sh doctor</code>
+              <div class="sk__cmd-actions">
+                <button mat-icon-button (click)="copyText('bash ~/.claude/skills/.prmake/prmake-skills.sh doctor')" matTooltip="Copiar"><mat-icon>content_copy</mat-icon></button>
+              </div>
+            </div>
+            <div class="sk__cmd sk__cmd--small">
+              <code>bash ~/.claude/skills/.prmake/prmake-skills.sh permissions</code>
+              <div class="sk__cmd-actions">
+                <button mat-icon-button (click)="copyText('bash ~/.claude/skills/.prmake/prmake-skills.sh permissions')" matTooltip="Copiar"><mat-icon>content_copy</mat-icon></button>
+              </div>
+            </div>
+            <p class="sk__note">Autorizar a leitura numa pergunta do PRMake <strong>não</strong> libera o comando no Claude Code — quem libera é essa regra.</p>
+
+            <p><strong>b) Credenciais dos bancos</strong> — rode <strong>no seu terminal</strong> (não no chat do Claude). O comando pergunta o
+              servidor, o usuário e a senha (a senha não aparece na tela), grava só na sua máquina em
+              <code>~/.claude/sqlserver-credentials.json</code> com acesso só seu e testa a conexão:</p>
+            <div class="sk__cmd sk__cmd--small">
+              <code>bash ~/.claude/skills/.prmake/prmake-skills.sh db-credentials</code>
+              <div class="sk__cmd-actions">
+                <button mat-icon-button (click)="copyText('bash ~/.claude/skills/.prmake/prmake-skills.sh db-credentials')" matTooltip="Copiar"><mat-icon>content_copy</mat-icon></button>
+              </div>
+            </div>
+            <ul class="sk__rules">
+              <li><mat-icon>verified_user</mat-icon><span>Peça as credenciais pelo canal oficial (gestor/infra, cofre de senhas) — de preferência um
+                usuário <strong>somente leitura</strong>.</span></li>
+              <li><mat-icon>block</mat-icon><span><strong>Nunca</strong> cole senha no chat do Claude, em comentário do PRMake, no Teams ou em arquivo
+                do git. Se colou, troque a senha.</span></li>
+              <li><mat-icon>lock</mat-icon><span>O arquivo não sai da sua máquina: as skills leem dele, nunca imprimem a senha e só fazem consultas de
+                leitura (SELECT, sempre com ROLLBACK).</span></li>
+              <li><mat-icon>vpn_lock</mat-icon><span>Os servidores só respondem com a <strong>VPN</strong> conectada.</span></li>
+            </ul>
+            <p class="sk__note">Ver o que está configurado (sem senhas): <code>bash ~/.claude/skills/.prmake/prmake-skills.sh db-credentials list</code></p>
+          </div>
+        </section>
+
         <div class="sk__list-title">Publicadas agora</div>
         @if (loading()) {
           <div class="sk__state"><mat-spinner diameter="22"></mat-spinner></div>
@@ -179,6 +228,15 @@ interface SkillInfo {
     .sk__skill-desc { font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 62%, transparent);
       overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
     .sk__state { display: flex; justify-content: center; padding: 16px; }
+    .sk__num--warn { background: #d29922; color: #1b1300; }
+    .sk__alert { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0 10px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px;
+      border: 1px solid color-mix(in srgb, #d29922 50%, transparent); background: color-mix(in srgb, #d29922 10%, transparent); }
+    .sk__alert .mat-icon { color: #d29922; flex: none; font-size: 20px; width: 20px; height: 20px; }
+    .sk__cmd--small { padding: 4px 4px 4px 12px; align-items: center; margin-bottom: 6px; }
+    .sk__rules { margin: 6px 0 8px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+    .sk__rules li { display: flex; gap: 6px; align-items: flex-start; font-size: 12px;
+      color: color-mix(in srgb, var(--mat-sys-on-surface) 78%, transparent); }
+    .sk__rules .mat-icon { flex: none; font-size: 15px; width: 15px; height: 15px; margin-top: 1px; color: var(--mat-sys-primary); }
     .sk__error { color: var(--mat-sys-error, #f2b8b5); }
   `]
 })
@@ -242,6 +300,11 @@ export class SkillsDialogComponent implements OnInit {
 
   copy(): void {
     if (this.apiKey()) this.globalService.copyToClipBoard(this.command());
+  }
+
+  /** Comandos da etapa 4 (0037) — não dependem da API Key. */
+  copyText(text: string): void {
+    this.globalService.copyToClipBoard(text);
   }
 
   download(skill: SkillInfo): void {

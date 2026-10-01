@@ -394,3 +394,15 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   text-align: left;
   line-height: 1.45;
 }
+
+/* ── 0037: conversa com o Claude (popup no tamanho da tela cheia do plano/linha do tempo) ── */
+.plan-chat-backdrop { background: rgba(0, 0, 0, 0.55); backdrop-filter: blur(2px); }
+.plan-chat-panel .mat-mdc-dialog-surface {
+  border-radius: 14px !important;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55) !important;
+  animation: plan-chat-in 0.32s cubic-bezier(0.2, 0, 0, 1);
+}
+.plan-chat-panel .mat-mdc-dialog-container { --mdc-dialog-container-shape: 14px; }
+@keyframes plan-chat-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .plan-chat-panel .mat-mdc-dialog-surface { animation: none; } }

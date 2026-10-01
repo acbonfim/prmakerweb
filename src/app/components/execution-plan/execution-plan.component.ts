@@ -31,6 +31,7 @@ import { FullscreenPanel } from '../../helpers/fullscreen-panel';
 import { PlanMarkdownPipe } from './plan-markdown.pipe';
 import { PlanFilesDialogComponent, PlanFilesDialogData } from './plan-files-dialog.component';
 import { PlanNotesComponent } from './plan-notes.component';
+import { PlanChatDialogComponent, PlanChatDialogData } from './plan-chat-dialog.component';
 import { StorageService } from '../../services/storage.service';
 import { UserPendingService } from '../../services/user-pending.service';
 import {
@@ -46,6 +47,7 @@ import {
   ExecutionQuestion,
   ExecutionStep,
   ExecutionUserAction,
+  NoteTargetPlan,
   PLAN_STATUS_LABEL,
   PlanStatus,
   executionPlanGroup,
@@ -164,7 +166,56 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly currentUserId: string | null = inject(StorageService).getAccess()?.user?.externalId ?? null;
   readonly panelDropping = signal(false);
   readonly noteCount = computed(() => this.plan()?.notes?.length ?? 0);
-  readonly noteSteps = computed(() => this.steps().map((s) => ({ key: s.key, title: s.title })));
+  readonly noteSteps = computed(() => this.steps().map((s) => ({ key: s.key, title: s.title, status: s.status })));
+
+  // ── 0037: conversa com o Claude (popup) ───────────────────────────────────────────────────────
+
+  /** O outro plano da dupla análise/correção (o comentário pode ir para ele). Carregado ao abrir a conversa. */
+  private readonly otherPlan = signal<ExecutionPlan | null>(null);
+  readonly noteTargets = computed<NoteTargetPlan[]>(() => {
+    const plan = this.plan();
+    if (!plan) return [];
+    const toTarget = (p: ExecutionPlan, current: boolean): NoteTargetPlan => ({
+      planId: p.id, phase: p.phase ?? 'analysis', title: p.title, current,
+      steps: p.steps.slice().sort((a, b) => a.order - b.order).map((s) => ({ key: s.key, title: s.title, status: s.status }))
+    });
+    const list = [toTarget(plan, true)];
+    const other = this.otherPlan();
+    const pair = this.pair();
+    if (other && other.id !== plan.id && (other.id === pair?.analysisId || other.id === pair?.correctionId)) list.push(toTarget(other, false));
+    // Análise antes da correção, como nas abas.
+    return list.sort((a, b) => (a.phase === b.phase ? 0 : a.phase === 'analysis' ? -1 : 1));
+  });
+
+  openChat(): void {
+    const plan = this.plan();
+    if (!plan) return;
+    const pair = this.pair();
+    const otherId = pair ? (pair.analysisId === plan.id ? pair.correctionId : pair.analysisId) : null;
+    if (otherId && this.otherPlan()?.id !== otherId) {
+      this.api.get(otherId).subscribe({ next: (p) => this.otherPlan.set(p), error: () => {} });
+    }
+    const data: PlanChatDialogData = {
+      card: this.loadedCard() ?? plan.cardNumber,
+      plan: this.plan,
+      targets: this.noteTargets,
+      selectedStepKey: this.selectedKey,
+      currentUserId: this.currentUserId,
+      serverOffsetMs: () => this.serverOffsetMs,
+      refresh: () => this.refresh(),
+      openArtifact: (a) => this.openFiles(undefined, a)
+    };
+    this.dialog.open(PlanChatDialogComponent, {
+      data,
+      width: '980px',
+      maxWidth: '96vw',
+      height: '88vh',
+      panelClass: 'plan-chat-panel',
+      backdropClass: 'plan-chat-backdrop',
+      autoFocus: 'textarea',
+      restoreFocus: true
+    });
+  }
   private dropLeaveTimer?: ReturnType<typeof setTimeout>;
 
   /** Arrastar arquivos para qualquer parte do painel anexa ao comentário em edição. */

@@ -323,9 +323,10 @@
         </ol>
 
         <app-plan-notes #notes
-          [planId]="p.id" [planPhase]="p.phase" [notes]="p.notes ?? []" [steps]="noteSteps()"
+          [planId]="p.id" [planPhase]="p.phase" [notes]="p.notes ?? []" [steps]="noteSteps()" [targets]="noteTargets()"
           [selectedStepKey]="selectedKey()" [currentUserId]="currentUserId"
-          (changed)="refresh()" (openArtifact)="openFiles(undefined, $event)"></app-plan-notes>
+          [notesReadNumber]="p.notesReadNumber" [notesReadAt]="p.notesReadAt" [planActive]="isActive()" [claudeOnline]="isActive() && staleMinutes() === null"
+          (changed)="refresh()" (openArtifact)="openFiles(undefined, $event)" (openChat)="openChat()"></app-plan-notes>
       }
     </div>
 
@@ -369,9 +370,9 @@
       </button>
     }
     <span class="plan__spacer"></span>
-    <button mat-icon-button class="plan__zip plan__notes-btn" (click)="focusNotes()" [disabled]="!plan()"
-            [matTooltip]="'Comentários e anexos' + (noteCount() ? ' (' + noteCount() + ')' : '') + ' — arraste ou cole imagens no painel'"
-            aria-label="Comentários e anexos">
+    <button mat-icon-button class="plan__zip plan__notes-btn" (click)="openChat()" [disabled]="!plan()"
+            [matTooltip]="'Conversa com o Claude' + (noteCount() ? ' (' + noteCount() + ' comentários)' : '') + ' — abre a conversa inteira'"
+            aria-label="Conversa com o Claude">
       <mat-icon>forum</mat-icon>
       @if (noteCount()) { <span class="plan__notes-count">{{ noteCount() }}</span> }
     </button>

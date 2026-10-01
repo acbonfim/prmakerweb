@@ -177,6 +177,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   /** Resumo do plano de execução do card (vem da seção do plano) — 0026. */
   planHeadline: PlanHeadline | null = null;
+  private queryCardSub?: Subscription;
 
   /**
    * Resumo do card em etiquetas no cartão do topo (0026): o que antes ficava escondido nos modais —
@@ -408,6 +409,12 @@ export class RegisterComponent implements OnInit, OnDestroy {
       // App é zoneless: sem detectChanges o skeleton ficaria preso mesmo com os dados prontos.
       this.isConfigLoading = false;
       this.cdr.detectChanges();
+      // 0037: a URL muda com a tela já aberta (ex.: clique numa pendência do sino) → busca o card novo.
+      this.queryCardSub ??= this.route.queryParamMap.subscribe((params) => {
+        const card = params.get('card');
+        if (!card || this.integrationsBlocked || card === `${this.cardNumber ?? ''}`.trim()) return;
+        this.autoSearchFromQueryParams();
+      });
     }
 
 
@@ -421,6 +428,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.switchCardGroup(null);
     this.ws.off(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
     this.resyncSub?.unsubscribe();
+    this.queryCardSub?.unsubscribe();
   }
 
   /**
