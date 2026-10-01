@@ -13,11 +13,14 @@ import {
   ARCHITECTURE_KINDS,
   ArchitectureProject,
   ArchitectureSection,
+  ArchitectureSectionBody,
   ArchitectureSectionVersion,
   ArchitectureService,
   ArchitectureSuggestion,
   ChatMessage,
   ChatStatus,
+  ECOSYSTEM_GUIDE_EXTRA,
+  GUIDE_TEMPLATE,
   SECTION_TEMPLATE
 } from '../../../services/architecture.service';
 
@@ -126,6 +129,13 @@ export type KbAdminMode = 'edit' | 'new' | 'history' | 'chat' | 'project';
               <textarea [(ngModel)]="pSummary" rows="5" maxlength="2000"></textarea></label>
             <label>Palavras-chave <span class="ap__muted">(separadas por vírgula — como aparecem nos cards, PT e EN)</span>
               <input [(ngModel)]="pKeywords" /></label>
+            <div class="ap__group"><mat-icon>auto_stories</mat-icon>Para pessoas <span class="ap__muted">(modo Simples — não vai para as skills)</span></div>
+            <label>Nome amigável <span class="ap__muted">(como o usuário chama, ex.: Plano de Ação)</span>
+              <input [(ngModel)]="pDisplayName" maxlength="120" /></label>
+            <label>Frase <span class="ap__muted">(o que o sistema faz, em uma frase simples)</span>
+              <input [(ngModel)]="pTagline" maxlength="300" /></label>
+            <label>Área de negócio <span class="ap__muted">(agrupa legado, revamp e telas do mesmo módulo)</span>
+              <input [(ngModel)]="pArea" maxlength="80" /></label>
             <div class="ap__bar"><span class="ap__spacer"></span>
               <button mat-button (click)="closed.emit()">Cancelar</button>
               <button mat-flat-button color="primary" (click)="saveProject()" [disabled]="saving() || !pName.trim()"><mat-icon>save</mat-icon>Salvar</button>
@@ -140,11 +150,24 @@ export type KbAdminMode = 'edit' | 'new' | 'history' | 'chat' | 'project';
         @if (mode() === 'new') {
           <label>Seção
             <select [(ngModel)]="newKey" (ngModelChange)="onTemplatePick($event)">
-              @for (t of availableTemplate(); track t.key) { <option [value]="t.key">{{ t.order }} · {{ t.title }}</option> }
+              <optgroup label="Técnicas — lidas pelo Claude nas análises">
+                @for (t of availableTemplate(); track t.key) { <option [value]="t.key">{{ t.title }}</option> }
+              </optgroup>
+              <optgroup label="Guia — linguagem simples, só na tela">
+                @for (t of availableGuide(); track t.key) { <option [value]="t.key">{{ t.title }}</option> }
+              </optgroup>
               <option value="__custom">Outra (chave própria)…</option>
             </select>
           </label>
-          @if (newKey === '__custom') { <label>Chave<input [(ngModel)]="customKey" placeholder="ex.: fluxo-aprovacao" /></label> }
+          @if (newKey === '__custom') {
+            <label>Chave<input [(ngModel)]="customKey" placeholder="ex.: fluxo-aprovacao" /></label>
+            <label>Público
+              <select [(ngModel)]="customAudience">
+                <option value="llm">Técnica — vai para as skills (análise de bugs)</option>
+                <option value="human">Guia — linguagem simples, só na tela</option>
+              </select>
+            </label>
+          }
         }
         <label>Título<input [(ngModel)]="title" /></label>
         <div class="ap__bar">
@@ -207,6 +230,8 @@ export type KbAdminMode = 'edit' | 'new' | 'history' | 'chat' | 'project';
     .ap__warn { background: rgba(210,153,34,.14); color: #d29922; }
     .ap__source { background: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent); }
     .ap__warn mat-icon, .ap__source mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .ap__group { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,.08); font-size: 13px; font-weight: 700; }
+    .ap__group mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--mat-sys-primary); }
   `]
 })
 export class KbAdminPanelComponent implements OnChanges {
@@ -247,6 +272,10 @@ export class KbAdminPanelComponent implements OnChanges {
   pRepo = '';
   pSummary = '';
   pKeywords = '';
+  pDisplayName = '';
+  pTagline = '';
+  pArea = '';
+  customAudience: 'llm' | 'human' = 'llm';
 
   @ViewChild('preview') private previewRef?: ElementRef<HTMLElement>;
   @ViewChild('chatBox') private chatRef?: ElementRef<HTMLElement>;
@@ -262,6 +291,9 @@ export class KbAdminPanelComponent implements OnChanges {
   readonly icon = computed(() => ({ edit: 'edit', new: 'note_add', history: 'history', chat: 'auto_fix_high', project: 'tune' })[this.mode()]);
 
   readonly availableTemplate = computed(() => SECTION_TEMPLATE.filter(t => !this.project().sections.some(s => s.key === t.key)));
+  /** Seções do Guia que o projeto ainda não tem (0038). */
+  readonly availableGuide = computed(() => [...GUIDE_TEMPLATE, ...(this.project().key === 'ecossistema' ? ECOSYSTEM_GUIDE_EXTRA : [])]
+    .filter(t => !this.project().sections.some(s => s.key === t.key)));
 
   constructor() {
     effect(() => {
@@ -307,13 +339,16 @@ export class KbAdminPanelComponent implements OnChanges {
         this.pRepo = p.repository ?? '';
         this.pSummary = p.summary ?? '';
         this.pKeywords = p.keywords.join(', ');
+        this.pDisplayName = p.displayName ?? '';
+        this.pTagline = p.tagline ?? '';
+        this.pArea = p.businessArea ?? '';
         break;
     }
   }
 
   // ── Editor ──
   onTemplatePick(key: string): void {
-    const t = SECTION_TEMPLATE.find(x => x.key === key);
+    const t = [...SECTION_TEMPLATE, ...GUIDE_TEMPLATE, ...ECOSYSTEM_GUIDE_EXTRA].find(x => x.key === key);
     if (t) this.title = t.title;
   }
 
@@ -326,8 +361,13 @@ export class KbAdminPanelComponent implements OnChanges {
   saveSection(): void {
     const key = this.mode() === 'new' ? this.resolvedNewKey() : this.section()?.key;
     if (!key || !this.content.trim()) return;
-    const order = this.mode() === 'new' ? (SECTION_TEMPLATE.find(t => t.key === key)?.order ?? null) : null;
-    this.write(key, { title: this.title.trim() || null, content: this.content, order, source: 'admin', note: this.note.trim() || (this.mode() === 'new' ? 'seção criada na tela' : 'editada na tela') });
+    const template = [...SECTION_TEMPLATE, ...GUIDE_TEMPLATE, ...ECOSYSTEM_GUIDE_EXTRA].find(t => t.key === key);
+    const order = this.mode() === 'new' ? (template?.order ?? null) : null;
+    const audience = this.mode() === 'new'
+      ? (this.newKey === '__custom' ? this.customAudience : key.startsWith('guia-') ? 'human' : 'llm')
+      : null;
+    this.write(key, { title: this.title.trim() || null, content: this.content, order, source: 'admin', audience,
+      note: this.note.trim() || (this.mode() === 'new' ? 'seção criada na tela' : 'editada na tela') });
   }
 
   // ── Histórico ──
@@ -417,7 +457,8 @@ export class KbAdminPanelComponent implements OnChanges {
     this.saving.set(true);
     this.api.upsertProject(p.key, {
       name: this.pName.trim(), kind: this.pKind, repository: this.pRepo.trim() || null, summary: this.pSummary.trim() || null,
-      keywords: this.pKeywords.split(',').map(k => k.trim()).filter(Boolean), order: p.order
+      keywords: this.pKeywords.split(',').map(k => k.trim()).filter(Boolean), order: p.order,
+      displayName: this.pDisplayName.trim(), tagline: this.pTagline.trim(), businessArea: this.pArea.trim()
     }).subscribe({
       next: saved => { this.saving.set(false); this.snackBar.open('Projeto salvo', 'Ok', { duration: 3000 }); this.projectSaved.emit(saved); },
       error: err => { this.saving.set(false); this.snackBar.open(err?.error?.error ?? 'Não foi possível salvar.', 'Fechar', { duration: 8000 }); }
@@ -425,7 +466,7 @@ export class KbAdminPanelComponent implements OnChanges {
   }
 
   // ── Comum ──
-  private write(key: string, body: { title?: string | null; content: string; order?: number | null; source: 'admin' | 'ai'; note?: string | null }, after?: () => void | Promise<void>): void {
+  private write(key: string, body: ArchitectureSectionBody, after?: () => void | Promise<void>): void {
     this.saving.set(true);
     this.api.writeSection(this.project().key, key, body).subscribe({
       next: saved => {

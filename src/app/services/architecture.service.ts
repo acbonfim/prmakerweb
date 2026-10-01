@@ -14,6 +14,8 @@ export interface ArchitectureSectionSummary {
   length: number;
   updatedAt: string;
   updatedBy: string;
+  /** Público (0038): llm = técnica (vai para as skills) · human = Guia (linguagem simples, só na tela). */
+  audience?: 'llm' | 'human' | string | null;
 }
 
 export interface ArchitectureSection extends ArchitectureSectionSummary {
@@ -66,6 +68,10 @@ export interface ArchitectureProject {
   sourceCommit?: string | null;
   sourceBranch?: string | null;
   sourceMappedAt?: string | null;
+  /** Dados amigáveis (0038 — fora do export/hash): nome para leigos, uma frase e a área de negócio. */
+  displayName?: string | null;
+  tagline?: string | null;
+  businessArea?: string | null;
   order: number;
   updatedAt: string;
   updatedBy: string;
@@ -112,7 +118,7 @@ export interface ArchitectureSuggestion {
   id: string;
   projectKey: string;
   sectionKey?: string | null;
-  kind: 'learning' | 'divergence' | 'other' | string;
+  kind: 'learning' | 'divergence' | 'gap' | 'other' | string;
   content: string;
   cardNumber?: string | null;
   status: 'pending' | 'applied' | 'dismissed' | string;
@@ -137,7 +143,20 @@ export interface ArchitectureSearchHit {
   score: number;
   matched: string[];
   reason?: string | null;
+  /** 0038: human = trecho do Guia (linguagem simples). */
+  audience?: 'llm' | 'human' | string | null;
 }
+
+/** Seção principal para ler sobre a pergunta (0038 F5). */
+export interface ArchitectureSuggestedSection {
+  projectKey: string;
+  sectionKey: string;
+  heading?: string | null;
+  title: string;
+  reason?: string | null;
+}
+
+export type ArchitectureCoverage = 'answered' | 'partial' | 'not-found' | 'unknown' | string;
 
 /** "Pergunte à Base Solvace" (0037). */
 export interface ArchitectureAskResponse {
@@ -149,6 +168,73 @@ export interface ArchitectureAskResponse {
   aiUnavailableReason?: string | null;
   provider?: string | null;
   model?: string | null;
+  /** 0038 F5: quanto a base cobre a pergunta (unknown = sem IA) e a seção principal para ler. */
+  coverage?: ArchitectureCoverage | null;
+  suggestedSection?: ArchitectureSuggestedSection | null;
+}
+
+/** Proposta de seção nova/atualizada (0038: guia, aprender com card, pergunte a fundo). */
+export interface ArchitectureSectionProposal {
+  projectKey: string;
+  sectionKey: string;
+  title: string;
+  audience: 'llm' | 'human' | string;
+  content: string;
+  reason?: string | null;
+}
+
+/** "Analisar a fundo e propor uma seção" (0038 F5) — não grava nada. */
+export interface ArchitectureDeepAnswerResponse {
+  question: string;
+  answer?: string | null;
+  coverage: ArchitectureCoverage;
+  proposal?: ArchitectureSectionProposal | null;
+  needsCodeAnalysis: boolean;
+  codeHints?: string | null;
+  sourcesRead: string[];
+  provider?: string | null;
+  model?: string | null;
+  aiUnavailableReason?: string | null;
+}
+
+/** Guia proposto pela IA (0038 F3) — o admin revisa e aplica; nada é gravado sem aceite. */
+export interface ArchitectureGuideResponse {
+  provider?: string | null;
+  model?: string | null;
+  displayName?: string | null;
+  tagline?: string | null;
+  businessArea?: string | null;
+  sections: { key: string; title: string; order: number; content: string }[];
+  notes?: string | null;
+}
+
+/** "Aprender com um card" (0038 F4) — não grava; a tela envia as propostas aceitas para a fila de sugestões. */
+export interface LearnFromCardSource {
+  kind: 'devops' | 'pr' | 'timeline' | 'plan' | 'suggestions' | string;
+  label: string;
+  ok: boolean;
+  detail?: string | null;
+}
+
+export interface LearnFromCardProposal {
+  projectKey: string;
+  sectionKey?: string | null;
+  audience: 'llm' | 'human' | string;
+  title: string;
+  content: string;
+  reason?: string | null;
+}
+
+export interface LearnFromCardResponse {
+  cardNumber: string;
+  cardTitle?: string | null;
+  summary?: string | null;
+  sources: LearnFromCardSource[];
+  existing: ArchitectureSuggestion[];
+  proposals: LearnFromCardProposal[];
+  provider?: string | null;
+  model?: string | null;
+  aiUnavailableReason?: string | null;
 }
 
 export interface ChatMessage { role: 'user' | 'assistant'; content: string; }
@@ -167,6 +253,50 @@ export const SECTION_TEMPLATE: { key: string; title: string; order: number }[] =
   { key: 'regras-de-negocio', title: 'Regras de negócio', order: 80 },
   { key: 'armadilhas', title: 'Armadilhas e bugs conhecidos', order: 90 },
 ];
+
+/** Seções do Guia (0038): linguagem simples para QA, gestores e suporte — só na tela, não vão para as skills. */
+export const GUIDE_TEMPLATE: { key: string; title: string; order: number }[] = [
+  { key: 'guia-o-que-e', title: 'O que é e para que serve', order: 510 },
+  { key: 'guia-como-funciona', title: 'Como funciona, passo a passo', order: 520 },
+  { key: 'guia-regras', title: 'Regras de negócio', order: 530 },
+  { key: 'guia-conexoes', title: 'Com quem conversa', order: 540 },
+  { key: 'guia-como-testar', title: 'Como testar', order: 550 },
+  { key: 'guia-perguntas', title: 'Perguntas frequentes', order: 560 },
+];
+
+/** Só no projeto "ecossistema". */
+export const ECOSYSTEM_GUIDE_EXTRA: { key: string; title: string; order: number }[] = [
+  { key: 'guia-glossario', title: 'Glossário', order: 570 },
+];
+
+/** A seção é do Guia (público human; seção antiga sem público e chave guia-* também conta). */
+export function isGuideSection(s: { key: string; audience?: string | null }): boolean {
+  return s.audience ? s.audience === 'human' : s.key.startsWith('guia-');
+}
+
+export interface ArchitectureProjectBody {
+  name: string;
+  kind: string;
+  repository?: string | null;
+  summary?: string | null;
+  keywords?: string[];
+  order?: number | null;
+  relations?: ArchitectureRelation[] | null;
+  /** 0038: null mantém, "" limpa. */
+  displayName?: string | null;
+  tagline?: string | null;
+  businessArea?: string | null;
+}
+
+export interface ArchitectureSectionBody {
+  title?: string | null;
+  content: string;
+  order?: number | null;
+  source: 'admin' | 'ai';
+  note?: string | null;
+  /** 0038: null mantém; seção nova sem público → human se a chave começa com guia-, senão llm. */
+  audience?: 'llm' | 'human' | null;
+}
 
 /** Rótulos e ordem dos tipos de projeto (iguais ao índice do backend). */
 export const ARCHITECTURE_KINDS: { kind: string; label: string; icon: string }[] = [
@@ -210,11 +340,11 @@ export class ArchitectureService {
   }
 
   // ── Admin (0033 F2) ──
-  upsertProject(key: string, body: { name: string; kind: string; repository?: string | null; summary?: string | null; keywords?: string[]; order?: number | null }): Observable<ArchitectureProject> {
+  upsertProject(key: string, body: ArchitectureProjectBody): Observable<ArchitectureProject> {
     return this.http.put<ArchitectureProject>(`${this.api}/projects/${encodeURIComponent(key)}`, body);
   }
 
-  writeSection(projectKey: string, sectionKey: string, body: { title?: string | null; content: string; order?: number | null; source: 'admin' | 'ai'; note?: string | null }): Observable<ArchitectureSection> {
+  writeSection(projectKey: string, sectionKey: string, body: ArchitectureSectionBody): Observable<ArchitectureSection> {
     return this.http.put<ArchitectureSection>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}`, body);
   }
 
@@ -228,6 +358,26 @@ export class ArchitectureService {
 
   suggestions(status: 'pending' | 'all' = 'pending'): Observable<ArchitectureSuggestion[]> {
     return this.http.get<ArchitectureSuggestion[]>(`${this.api}/suggestions`, { params: new HttpParams().set('status', status) });
+  }
+
+  /** Envia uma sugestão para a fila do admin (qualquer logado). */
+  suggest(body: { projectKey: string; sectionKey?: string | null; kind: 'learning' | 'divergence' | 'gap' | 'other'; content: string; cardNumber?: string | null }): Observable<ArchitectureSuggestion> {
+    return this.http.post<ArchitectureSuggestion>(`${this.api}/suggestions`, body);
+  }
+
+  /** 0038 F3: a IA propõe o Guia do projeto (admin) — não grava. */
+  generateGuide(projectKey: string, instructions?: string | null): Observable<ArchitectureGuideResponse> {
+    return this.http.post<ArchitectureGuideResponse>(`${this.api}/projects/${encodeURIComponent(projectKey)}/guide`, { instructions: instructions || null });
+  }
+
+  /** 0038 F4: junta o que se sabe do card e propõe aprendizados — não grava. */
+  learnFromCard(cardNumber: string, instructions?: string | null): Observable<LearnFromCardResponse> {
+    return this.http.post<LearnFromCardResponse>(`${this.api}/learn-from-card`, { cardNumber, instructions: instructions || null });
+  }
+
+  /** 0038 F5: analisa a fundo uma pergunta que a base não cobre bem e propõe uma seção — não grava. */
+  askDeep(question: string): Observable<ArchitectureDeepAnswerResponse> {
+    return this.http.post<ArchitectureDeepAnswerResponse>(`${this.api}/ask/deep`, { question });
   }
 
   resolveSuggestion(id: string, status: 'applied' | 'dismissed', note?: string | null): Observable<ArchitectureSuggestion> {

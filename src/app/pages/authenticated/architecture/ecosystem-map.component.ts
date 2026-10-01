@@ -15,6 +15,7 @@ import {
   RELATION_KINDS,
   relationKind
 } from '../../../services/architecture.service';
+import { friendlyEdge } from './kb-friendly';
 
 /** Cor do nó por tipo de projeto (serviços externos em amarelo, igual à aresta "externo"). */
 const NODE_COLORS: Record<string, string> = {
@@ -35,26 +36,37 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
   imports: [NgTemplateOutlet, FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
   template: `
     <div class="map__head">
+      @if (simple()) {
+        <div>
+          <h2>Como os sistemas se conectam</h2>
+          <p class="map__hint">Escolha um sistema para ver com quem ele conversa: quem ele avisa, quem ele chama e quem depende dele.
+            Passe o mouse nas ligações da lista para ver o detalhe técnico.</p>
+        </div>
+      } @else {
       <div>
         <h2>Mapa do ecossistema</h2>
         <p class="map__hint">Ligações extraídas do código de cada repositório (evidência na ficha do projeto). Clique num projeto para ver
           quem ele usa e quem depende dele; arraste para reorganizar, role para dar zoom.</p>
       </div>
+      }
       <span class="spacer"></span>
-      @if (graph(); as g) { <span class="map__stat">{{ visibleCount().nodes }} projetos · {{ visibleCount().edges }} ligações</span> }
+      @if (graph(); as g) {
+        @if (!simple() || selected()) { <span class="map__stat">{{ visibleCount().nodes }} {{ simple() ? 'sistemas' : 'projetos' }} · {{ visibleCount().edges }} ligações</span> }
+      }
     </div>
 
     <div class="map__filters" role="group" aria-label="Filtros do mapa">
       <div class="map__search">
         <mat-icon>search</mat-icon>
-        <input type="search" placeholder="Achar projeto…" [ngModel]="search()" (ngModelChange)="search.set($event)" (keydown.enter)="focusSearch()" />
+        <input type="search" [placeholder]="simple() ? 'Achar sistema… (Enter)' : 'Achar projeto…'" [ngModel]="search()" (ngModelChange)="search.set($event)" (keydown.enter)="focusSearch()" />
       </div>
       @for (k of relationKinds(); track k.kind) {
         <button type="button" class="chip" [class.chip--off]="!relFilter().has(k.kind)" (click)="toggleRel(k.kind)"
-                [matTooltip]="k.count + ' ligações'">
-          <span class="dot" [style.background]="k.color"></span>{{ k.label }}
+                [matTooltip]="simple() ? k.label : k.count + ' ligações'">
+          <span class="dot" [style.background]="k.color"></span>{{ simple() ? edgeText(k.kind) : k.label }}
         </button>
       }
+      @if (!simple()) {
       <span class="sep"></span>
       @for (k of projectKinds(); track k.kind) {
         <button type="button" class="chip" [class.chip--off]="!kindFilter().has(k.kind)" (click)="toggleKind(k.kind)">
@@ -62,6 +74,7 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
         </button>
       }
       <label class="chk"><input type="checkbox" [ngModel]="hideIsolated()" (ngModelChange)="hideIsolated.set($event)" /> esconder sem ligação</label>
+      }
     </div>
 
     <div class="map__body">
@@ -70,6 +83,10 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
         @if (error()) { <div class="map__state map__state--error"><mat-icon>error_outline</mat-icon>{{ error() }}</div> }
         @if (cyFailed()) {
           <div class="map__state"><mat-icon>cloud_off</mat-icon>Não foi possível carregar o desenho do mapa (sem acesso ao CDN) — use a lista ao lado.</div>
+        }
+        @if (simple() && !selected() && !loading() && !error()) {
+          <div class="map__state map__pick"><mat-icon>touch_app</mat-icon>
+            <span>Escolha um sistema na lista ao lado (ou pela busca) para ver a vizinhança dele.</span></div>
         }
         <div #canvas class="map__canvas" [class.map__canvas--hidden]="cyFailed() || !!error()"></div>
         <div class="map__zoom">
@@ -82,29 +99,34 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
         @if (selectedNode(); as n) {
           <div class="panel__head">
             <span class="dot dot--node" [style.background]="nodeColor(n.kind)"></span>
-            <strong>{{ n.name }}</strong>
+            <strong>{{ label(n) }}</strong>
             <span class="spacer"></span>
             <button mat-icon-button (click)="select(null)" aria-label="Limpar seleção"><mat-icon>close</mat-icon></button>
           </div>
-          <code class="panel__key">{{ n.key }}</code>
+          @if (!simple()) { <code class="panel__key">{{ n.key }}</code> }
           @if (n.mapped) {
-            <button mat-stroked-button class="panel__open" (click)="openProject.emit(n.key)"><mat-icon>open_in_new</mat-icon>Abrir o projeto</button>
+            <button mat-stroked-button class="panel__open" (click)="openProject.emit(n.key)"><mat-icon>open_in_new</mat-icon>{{ simple() ? 'Abrir o sistema' : 'Abrir o projeto' }}</button>
           } @else {
             <div class="panel__muted">{{ n.kind === 'external' ? 'Serviço externo' : 'Ainda não mapeado na base' }}</div>
           }
-          <h4>Depende de ({{ outgoing().length }})</h4>
+          <h4>{{ simple() ? 'Ele conversa com' : 'Depende de' }} ({{ outgoing().length }})</h4>
           @for (x of outgoing(); track x.key) { <ng-container *ngTemplateOutlet="neighbor; context: { $implicit: x }"></ng-container> }
           @empty { <div class="panel__muted">nada encontrado no código</div> }
-          <h4>Usado por ({{ incoming().length }})</h4>
+          <h4>{{ simple() ? 'Conversam com ele' : 'Usado por' }} ({{ incoming().length }})</h4>
           @for (x of incoming(); track x.key) { <ng-container *ngTemplateOutlet="neighbor; context: { $implicit: x }"></ng-container> }
           @empty { <div class="panel__muted">ninguém depende dele (no que foi mapeado)</div> }
         } @else {
+          @if (simple()) {
+            <div class="panel__head"><mat-icon>touch_app</mat-icon><strong>Escolha um sistema</strong></div>
+            <div class="panel__muted">Os mais conectados primeiro — mudança neles costuma afetar muitos outros.</div>
+          } @else {
           <div class="panel__head"><mat-icon>hub</mat-icon><strong>Hubs — mais usados</strong></div>
           <div class="panel__muted">Mudança nestes projetos costuma afetar muitos outros.</div>
-          @for (h of hubs(); track h.key) {
+          }
+          @for (h of (simple() ? pickList() : hubs()); track h.key) {
             <button type="button" class="hub" (click)="select(h.key)">
               <span class="dot dot--node" [style.background]="nodeColor(h.kind)"></span>
-              <span class="hub__name">{{ h.name }}</span>
+              <span class="hub__name">{{ label(h) }}</span>
               <span class="hub__count" matTooltip="projetos que dependem dele">{{ h.users }}</span>
             </button>
           }
@@ -115,14 +137,20 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
     <ng-template #neighbor let-x>
       <div class="nb">
         <button type="button" class="nb__name" (click)="select(x.key)">
-          <span class="dot dot--node" [style.background]="nodeColor(x.kind)"></span>{{ x.name }}
+          <span class="dot dot--node" [style.background]="nodeColor(x.kind)"></span>{{ label(x) }}
         </button>
         @for (e of x.edges; track e.kind) {
+          @if (simple()) {
+            <div class="nb__edge" [matTooltip]="rel(e.kind).label + (e.details.length ? '\n' + e.details.slice(0, 6).join('\n') : '')" matTooltipClass="kb-gloss-tip">
+              <span class="nb__kind" [style.color]="rel(e.kind).color"><mat-icon>{{ rel(e.kind).icon }}</mat-icon>{{ edgePanel(e.kind) }}</span>
+            </div>
+          } @else {
           <div class="nb__edge">
             <span class="nb__kind" [style.color]="rel(e.kind).color"><mat-icon>{{ rel(e.kind).icon }}</mat-icon>{{ rel(e.kind).label }}</span>
             @for (d of e.details.slice(0, 3); track d) { <div class="nb__detail">{{ d }}</div> }
             @if (e.details.length > 3) { <div class="nb__detail nb__detail--more">+{{ e.details.length - 3 }}</div> }
           </div>
+          }
         }
       </div>
     </ng-template>
@@ -154,6 +182,9 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
     .map__state { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 24px;
       text-align: center; font-size: 13px; opacity: .8; z-index: 1; }
     .map__state--error { color: var(--mat-sys-error, #f2b8b5); }
+    .map__pick { flex-direction: column; font-size: 14px; opacity: .75; }
+    .map__pick mat-icon { font-size: 32px; width: 32px; height: 32px; color: var(--mat-sys-primary); }
+    .nb__edge[mattooltip], .nb__edge.mat-mdc-tooltip-trigger { cursor: help; }
     .map__panel { max-height: max(560px, calc(100vh - 360px)); overflow-y: auto; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.03);
       border: 1px solid rgba(255,255,255,.06); }
     .panel__head { display: flex; align-items: center; gap: 8px; min-height: 36px; }
@@ -189,6 +220,10 @@ export class EcosystemMapComponent implements OnDestroy {
 
   /** Projeto a destacar ao abrir (?view=mapa&n=<chave>). */
   readonly focus = input<string | null>(null);
+  /** 0038: modo Simples — só a vizinhança do sistema escolhido, nomes amigáveis e ligações em português. */
+  readonly simple = input(false);
+  /** Nome amigável por chave de projeto (displayName / sem prefixo técnico). */
+  readonly names = input<Record<string, string>>({});
   readonly openProject = output<string>();
 
   readonly graph = signal<ArchitectureGraph | null>(null);
@@ -221,6 +256,13 @@ export class EcosystemMapComponent implements OnDestroy {
     const g = this.graph();
     if (!g) return { nodes: [] as ArchitectureGraphNode[], edges: [] as ArchitectureGraphEdge[] };
     const kinds = this.kindFilter(), rels = this.relFilter();
+    if (this.simple()) {
+      const sel = this.selected();
+      if (!sel) return { nodes: [] as ArchitectureGraphNode[], edges: [] as ArchitectureGraphEdge[] };
+      const edges = g.edges.filter(e => rels.has(e.kind) && (e.source === sel || e.target === sel));
+      const keys = new Set([sel, ...edges.flatMap(e => [e.source, e.target])]);
+      return { nodes: g.nodes.filter(n => keys.has(n.key)), edges };
+    }
     const nodeOk = new Set(g.nodes.filter(n => kinds.has(n.kind)).map(n => n.key));
     const edges = g.edges.filter(e => rels.has(e.kind) && nodeOk.has(e.source) && nodeOk.has(e.target));
     const linked = new Set(edges.flatMap(e => [e.source, e.target]));
@@ -243,6 +285,18 @@ export class EcosystemMapComponent implements OnDestroy {
       .filter(n => n.users > 1).sort((a, b) => b.users - a.users || a.name.localeCompare(b.name)).slice(0, 12);
   });
 
+  /** Modo Simples sem seleção: os sistemas mais conectados (e os que casam com a busca) para escolher. */
+  readonly pickList = computed(() => {
+    const g = this.graph();
+    if (!g) return [];
+    const degree = new Map<string, number>();
+    for (const e of g.edges) { degree.set(e.source, (degree.get(e.source) ?? 0) + 1); degree.set(e.target, (degree.get(e.target) ?? 0) + 1); }
+    const q = normalize(this.search());
+    return g.nodes.filter(n => n.mapped && (degree.get(n.key) ?? 0) > 0 && (!q || normalize(`${this.label(n)} ${n.name} ${n.key}`).includes(q)))
+      .map(n => ({ ...n, users: degree.get(n.key) ?? 0 }))
+      .sort((a, b) => b.users - a.users || this.label(a).localeCompare(this.label(b))).slice(0, q ? 30 : 20);
+  });
+
   constructor() {
     this.api.graph().subscribe({
       next: g => { this.graph.set(g); this.loading.set(false); },
@@ -255,7 +309,7 @@ export class EcosystemMapComponent implements OnDestroy {
       if (!this.graph()) return;
       loadCytoscape().then(cytoscape => this.draw(cytoscape, v)).catch(() => this.cyFailed.set(true));
     });
-    effect(() => this.highlight(this.selected()));
+    effect(() => { const sel = this.selected(); if (!this.simple()) this.highlight(sel); });
     effect(() => {
       const f = this.focus();
       if (f && this.graph()?.nodes.some(n => n.key === f)) this.selected.set(f);
@@ -279,7 +333,8 @@ export class EcosystemMapComponent implements OnDestroy {
   focusSearch(): void {
     const q = normalize(this.search());
     if (!q) return;
-    const hit = this.visible().nodes.find(n => normalize(`${n.name} ${n.key}`).includes(q));
+    const pool = this.simple() ? (this.graph()?.nodes ?? []) : this.visible().nodes;
+    const hit = pool.find(n => normalize(`${this.label(n)} ${n.name} ${n.key}`).includes(q));
     if (hit) this.select(hit.key);
   }
 
@@ -289,6 +344,9 @@ export class EcosystemMapComponent implements OnDestroy {
   relayout(): void { this.runLayout(true); }
 
   rel(kind: string) { return relationKind(kind); }
+  edgeText(kind: string): string { return friendlyEdge(kind).label; }
+  edgePanel(kind: string): string { return friendlyEdge(kind).panel; }
+  label(n: { key: string; name: string }): string { return this.names()[n.key] || shortName(n.name); }
   nodeColor(kind: string): string { return NODE_COLORS[kind] ?? NODE_COLORS['other']; }
 
   private neighbors(match: (e: ArchitectureGraphEdge) => boolean, other: (e: ArchitectureGraphEdge) => string): Neighbor[] {
@@ -313,11 +371,12 @@ export class EcosystemMapComponent implements OnDestroy {
     }
     const elements = [
       ...v.nodes.map(n => ({
-        data: { id: n.key, label: shortName(n.name), color: this.nodeColor(n.kind), size: 16 + Math.min(40, Math.sqrt(degree.get(n.key) ?? 0) * 7) },
+        data: { id: n.key, label: this.label(n), color: this.nodeColor(n.kind), size: 16 + Math.min(40, Math.sqrt(degree.get(n.key) ?? 0) * 7) },
         classes: n.mapped ? '' : 'unmapped'
       })),
       ...v.edges.map(e => ({
-        data: { id: `${e.source}>${e.target}>${e.kind}`, source: e.source, target: e.target, color: relationKind(e.kind).color, width: 1 + Math.min(4, e.count) }
+        data: { id: `${e.source}>${e.target}>${e.kind}`, source: e.source, target: e.target, color: relationKind(e.kind).color, width: 1 + Math.min(4, e.count),
+          label: this.simple() ? friendlyEdge(e.kind).label : '' }
       }))
     ];
     const text = getComputedStyle(this.canvas.nativeElement).color || '#e6edf3';
@@ -336,7 +395,8 @@ export class EcosystemMapComponent implements OnDestroy {
           { selector: 'node.unmapped', style: { shape: 'round-rectangle', 'border-width': 1, 'border-color': text, 'border-style': 'dashed' } },
           { selector: 'edge', style: {
             'line-color': 'data(color)', 'target-arrow-color': 'data(color)', 'target-arrow-shape': 'triangle', 'arrow-scale': 0.8,
-            width: 'data(width)', 'curve-style': 'bezier', opacity: 0.55 } },
+            width: 'data(width)', 'curve-style': 'bezier', opacity: 0.55, label: 'data(label)', 'font-size': 10, color: text,
+            'text-rotation': 'autorotate', 'text-outline-width': 2, 'text-outline-color': '#161b22', 'min-zoomed-font-size': 7 } },
           { selector: '.faded', style: { opacity: 0.08, 'text-opacity': 0.15 } },
           { selector: 'node.focus', style: { 'border-width': 3, 'border-color': '#ffffff' } },
           { selector: 'edge.near', style: { opacity: 1 } }
@@ -354,6 +414,12 @@ export class EcosystemMapComponent implements OnDestroy {
 
   private runLayout(animate: boolean): void {
     if (!this.cy) return;
+    if (this.simple()) {
+      const sel = this.selected();
+      this.cy.layout({ name: 'concentric', animate, animationDuration: 300, concentric: (n: any) => (n.id() === sel ? 2 : 1), levelWidth: () => 1,
+        minNodeSpacing: 70, padding: 40, nodeDimensionsIncludeLabels: true }).run();
+      return;
+    }
     this.cy.layout({
       name: 'cose', animate, animationDuration: 400, randomize: !animate, nodeRepulsion: () => 22000, idealEdgeLength: () => 130,
       edgeElasticity: () => 60, gravity: 0.2, nestingFactor: 1.2, componentSpacing: 80, numIter: 1500, padding: 30, nodeDimensionsIncludeLabels: true
