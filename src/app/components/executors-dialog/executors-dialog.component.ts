@@ -333,7 +333,16 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
   private poll?: ReturnType<typeof setInterval>;
   private debounce?: ReturnType<typeof setTimeout>;
 
-  readonly outdated = (w: ExecutionWorker) => !!w.latestAgentVersion && !!w.agentVersion && w.latestAgentVersion !== w.agentVersion;
+  /** Só quando a versão publicada é MAIS NOVA que a da máquina (1.0.10 > 1.0.9). */
+  readonly outdated = (w: ExecutionWorker) => {
+    if (!w.latestAgentVersion || !w.agentVersion) return false;
+    const a = w.latestAgentVersion.split('.').map(Number), b = w.agentVersion.split('.').map(Number);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const d = (a[i] || 0) - (b[i] || 0);
+      if (d !== 0) return d > 0;
+    }
+    return false;
+  };
 
   ngOnInit(): void {
     this.load(true);
