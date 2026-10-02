@@ -91,6 +91,10 @@ export interface ExecutionUsage {
   cacheReadTokens: number;
   cacheWriteTokens: number;
   updatedAt?: string | null;
+  mcpCalls?: number;
+  scriptCalls?: number;
+  /** 0044: modelo da sessão (custo estimado pela tabela de preços). */
+  model?: string | null;
 }
 
 export interface ExecutionStep {

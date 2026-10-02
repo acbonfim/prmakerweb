@@ -31,9 +31,17 @@ export interface ExecutionRequest {
   exitCode?: number | null;
   finishedReason?: string | null;
   finishedBy?: string | null;
+  /** Custo deste pedido (0044: sem o acumulado das execuções anteriores da mesma sessão). */
   costUsd?: number | null;
+  /** Acumulado da sessão no fim do pedido (como o Claude Code informa). */
+  sessionCostUsd?: number | null;
+  /** Entrada total (nova + cache lido + cache escrito). */
   inputTokens?: number | null;
   outputTokens?: number | null;
+  freshInputTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
+  model?: string | null;
   turns?: number | null;
   createdAt: string;
   claimedAt?: string | null;
@@ -105,6 +113,12 @@ export interface ExecutionUsageReportRow {
   avgTurns: number;
   avgInputTokens: number;
   avgOutputTokens: number;
+  /** 0044: partes da entrada, total e o modelo que mais gastou. */
+  avgFreshInputTokens?: number;
+  avgCacheReadTokens?: number;
+  avgCacheWriteTokens?: number;
+  avgTotalTokens?: number;
+  model?: string | null;
   avgMcpCalls: number;
   avgScriptCalls: number;
 }

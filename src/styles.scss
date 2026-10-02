@@ -478,3 +478,13 @@ html {
 .plan-chat-panel .mat-mdc-dialog-container { --mdc-dialog-container-shape: 14px; }
 @keyframes plan-chat-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .plan-chat-panel .mat-mdc-dialog-surface { animation: none; } }
+
+/* 0044: popover de consumo em tokens (<app-token-usage>) — mais largo que um menu comum */
+.mat-mdc-menu-panel.token-usage-menu {
+  max-width: min(480px, 94vw);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #232323;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  .mat-mdc-menu-content { padding: 0; }
+}

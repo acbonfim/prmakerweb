@@ -65,6 +65,8 @@ import {
   isRequestActive
 } from './execution-queue.model';
 import { ExecutorsDialogComponent } from '../executors-dialog/executors-dialog.component';
+import { TokenUsageComponent } from '../token-usage/token-usage.component';
+import { TokenUsage } from '../../services/token-pricing.service';
 
 /** Evento do card quando os PRs mudam (status sincronizado com o GitHub, PR aberto) — o plano reage na hora (0025). */
 const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
@@ -123,7 +125,7 @@ interface LinkDraft {
 @Component({
   selector: 'app-execution-plan',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent],
+  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, TokenUsageComponent],
   templateUrl: './execution-plan.component.html',
   styleUrls: ['./execution-plan.component.css']
 })
@@ -480,15 +482,24 @@ export class ExecutionPlanComponent implements OnDestroy {
   /** Terminal (0033): volta para a sessão do Claude que trabalhou no card (ou abre uma nova). */
   readonly terminalCommand = computed(() => `bash ~/.claude/skills/analisar-bug/scripts/prmake-card.sh ${this.loadedCard() ?? ''}`.trim());
 
-  /** Custo das sessões do Claude no plano (0033). */
-  readonly usageLabel = computed(() => {
+  /** Consumo das sessões do Claude no plano (0033; 0044: partes da entrada, saída, total e custo num popover). */
+  readonly planUsage = computed<TokenUsage | null>(() => {
     const u = this.plan()?.usage;
     if (!u || !u.turns) return null;
-    const m = (n: number) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} M` : n >= 1000 ? `${Math.round(n / 1000)} mil` : `${n}`;
+    const sessions = `${u.sessions} ${u.sessions === 1 ? 'sessão' : 'sessões'}`;
     return {
-      short: `${u.turns} turnos · ${m(u.cacheReadTokens + u.cacheWriteTokens + u.inputTokens)} tokens de entrada`,
-      detail: `Custo do Claude neste plano (${u.sessions} ${u.sessions === 1 ? 'sessão' : 'sessões'}): ${u.turns} respostas · `
-        + `saída ${m(u.outputTokens)} · cache lido ${m(u.cacheReadTokens)} · cache escrito ${m(u.cacheWriteTokens)} · entrada nova ${m(u.inputTokens)}`
+      freshInput: u.inputTokens,
+      cacheRead: u.cacheReadTokens,
+      cacheWrite: u.cacheWriteTokens,
+      output: u.outputTokens,
+      model: u.model,
+      turns: u.turns,
+      title: 'Consumo do Claude neste plano',
+      subtitle: `${sessions} · ${u.turns} respostas`,
+      notes: [
+        u.mcpCalls || u.scriptCalls ? `Chamadas ao PRMake: ${u.mcpCalls ?? 0} pelo MCP, ${u.scriptCalls ?? 0} pelo script.` : null,
+        u.updatedAt ? `Atualizado ${this.relativeTime(u.updatedAt)} (o executor manda o valor final quando a sessão termina).` : null,
+      ],
     };
   });
 

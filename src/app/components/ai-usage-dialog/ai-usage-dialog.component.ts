@@ -6,6 +6,10 @@ import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
+import { TokenUsageComponent } from '../token-usage/token-usage.component';
+import { TokenUsagePanelComponent } from '../token-usage/token-usage-panel.component';
+import { TokenUsage } from '../../services/token-pricing.service';
 import { StorageService } from '../../services/storage.service';
 import { AiUsageService, AiUsageSummary, AiUsageTotals, formatTokens, formatUsd } from '../../services/ai-usage.service';
 
@@ -16,7 +20,7 @@ import { AiUsageService, AiUsageSummary, AiUsageTotals, formatTokens, formatUsd 
 @Component({
   selector: 'app-ai-usage-dialog',
   standalone: true,
-  imports: [DatePipe, MatButtonModule, MatButtonToggleModule, MatDialogModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [DatePipe, MatButtonModule, MatButtonToggleModule, MatDialogModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, MatMenuModule, TokenUsageComponent, TokenUsagePanelComponent],
   templateUrl: './ai-usage-dialog.component.html',
   styleUrls: ['./ai-usage-dialog.component.css'],
 })
@@ -32,6 +36,8 @@ export class AiUsageDialogComponent implements OnInit {
   readonly error = signal<string | null>(null);
   readonly data = signal<AiUsageSummary | null>(null);
 
+  /** Dia escolhido no gráfico (popover). */
+  readonly selectedDay = signal<{ day: string; totals: AiUsageTotals } | null>(null);
   readonly tokens = formatTokens;
   readonly usd = formatUsd;
 
@@ -74,6 +80,40 @@ export class AiUsageDialogComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  /** 0044: totais no popover — entrada, saída, total e o custo calculado pelo PRMake. */
+  totalsUsage(t: AiUsageTotals, title: string, code?: string): TokenUsage {
+    return {
+      input: t.inputTokens,
+      output: t.outputTokens,
+      reportedCostUsd: t.costUsd,
+      reportedBy: 'PRMake (tabela de preços)',
+      calls: t.calls,
+      title,
+      subtitle: code && code !== title ? code : null,
+      notes: [
+        t.unpriced ? `${t.unpriced} ${t.unpriced === 1 ? 'ação' : 'ações'} de modelo fora da tabela de preços (só tokens).` : null,
+        t.failures ? `${t.failures} com erro.` : null,
+      ],
+    };
+  }
+
+  dayUsage(d: { day: string; totals: AiUsageTotals }): TokenUsage {
+    const [y, m, day] = d.day.split('-');
+    return this.totalsUsage(d.totals, `Consumo de ${day}/${m}/${y}`);
+  }
+
+  recentUsage(r: AiUsageSummary['recent'][number]): TokenUsage {
+    return {
+      input: r.inputTokens,
+      output: r.outputTokens,
+      model: r.model,
+      reportedCostUsd: r.costUsd,
+      reportedBy: 'PRMake (tabela de preços)',
+      title: r.label,
+      subtitle: `${r.provider}${r.durationMs ? ` · ${(r.durationMs / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} s` : ''}${r.success ? '' : ' · com erro'}`,
+    };
   }
 
   totalTokens(t: AiUsageTotals): string {
