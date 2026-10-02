@@ -380,6 +380,10 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
       input: r.avgInputTokens,
       output: r.avgOutputTokens,
       model: r.model,
+      models: (r.models ?? []).map((m) => ({
+        model: m.model, turns: m.avgTurns, freshInput: m.avgInputTokens, cacheRead: m.avgCacheReadTokens,
+        cacheWrite: m.avgCacheWriteTokens, output: m.avgOutputTokens,
+      })),
       average: true,
       title: `Média por plano — ${group}`,
       subtitle: `${r.plans} ${r.plans === 1 ? 'plano' : 'planos'} · ${r.avgTurns} respostas em média`,

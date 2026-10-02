@@ -493,6 +493,10 @@ export class ExecutionPlanComponent implements OnDestroy {
       cacheWrite: u.cacheWriteTokens,
       output: u.outputTokens,
       model: u.model,
+      models: (u.models ?? []).map((m) => ({
+        model: m.model, turns: m.turns, freshInput: m.inputTokens, cacheRead: m.cacheReadTokens,
+        cacheWrite: m.cacheWriteTokens, output: m.outputTokens,
+      })),
       turns: u.turns,
       title: 'Consumo do Claude neste plano',
       subtitle: `${sessions} · ${u.turns} respostas`,
