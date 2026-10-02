@@ -20,16 +20,17 @@ export class AiUsageInterceptor implements HttpInterceptor {
       tap((event) => {
         if (!(event instanceof HttpResponse)) return;
         const usage = parseAiUsageHeader(event.headers.get('X-AI-Usage'));
-        if (usage) this.notify(usage.input + usage.output, usage.cost, usage.model, usage.calls);
+        if (usage) this.notify(usage.input, usage.output, usage.cost, usage.model, usage.calls);
       })
     );
   }
 
-  private notify(tokens: number, cost: number | null, model: string, calls: number): void {
+  private notify(input: number, output: number, cost: number | null, model: string, calls: number): void {
     const price = cost == null ? 'custo não estimado' : `≈ ${formatUsd(cost)}`;
     const many = calls > 1 ? ` em ${calls} chamadas` : '';
+    // 0044: entrada, saída e total em tokens (a gente mede em token).
     const ref = this.injector.get(MatSnackBar).open(
-      `IA: ${formatTokens(tokens)} tokens${many} · ${price}${model ? ` (${model})` : ''}`, 'Detalhes',
+      `IA${many}: entrada ${formatTokens(input)} · saída ${formatTokens(output)} · total ${formatTokens(input + output)} tokens · ${price}${model ? ` (${model})` : ''}`, 'Detalhes',
       { horizontalPosition: 'right', verticalPosition: 'bottom', duration: 7000 });
     ref.onAction().subscribe(() => this.injector.get(MatDialog).open(AiUsageDialogComponent, {
       width: '820px', maxWidth: '96vw', maxHeight: '92vh', panelClass: 'custom-dialog-container', autoFocus: false

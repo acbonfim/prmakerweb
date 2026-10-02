@@ -13,6 +13,9 @@ import { CliipboardService } from '../../services/cliipboard.service';
 import { StorageService } from '../../services/storage.service';
 import { WsService } from '../../services/ws.service';
 import { planApiError } from '../../services/execution-plan.service';
+import { TokenUsageComponent } from '../token-usage/token-usage.component';
+import { TokenUsage } from '../../services/token-pricing.service';
+import { formatUsd } from '../../services/ai-usage.service';
 import {
   AGENT_INSTALL_COMMAND,
   EXECUTION_WORKERS_EVENT,
@@ -35,7 +38,7 @@ const POLL_MS = 30_000;
 @Component({
   selector: 'app-executors-dialog',
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatDialogModule, MatIconModule, MatProgressSpinnerModule, MatSlideToggleModule, MatTooltipModule],
+  imports: [FormsModule, MatButtonModule, MatDialogModule, MatIconModule, MatProgressSpinnerModule, MatSlideToggleModule, MatTooltipModule, TokenUsageComponent],
   template: `
     <div class="ex">
       <div class="ex__header">
@@ -184,7 +187,7 @@ const POLL_MS = 30_000;
               <div class="ex__state">Sem planos com custo registrado no período. O custo vai quando a skill conclui o plano.</div>
             } @else {
               <table class="ex__usage">
-                <thead><tr><th></th><th>Planos</th><th>Turnos</th><th>Tokens de entrada</th><th>Saída</th><th>Chamadas MCP / script</th></tr></thead>
+                <thead><tr><th></th><th>Planos</th><th>Turnos</th><th>Entrada</th><th>Saída</th><th>Total</th><th>MCP / script</th></tr></thead>
                 <tbody>
                   @for (r of usageRows(); track r.channel + r.phase) {
                     <tr [class.ex__usage-sub]="r.phase !== 'all'">
@@ -193,14 +196,16 @@ const POLL_MS = 30_000;
                       <td>{{ r.plans ? r.avgTurns : '—' }}</td>
                       <td>{{ r.plans ? tokens(r.avgInputTokens) : '—' }}</td>
                       <td>{{ r.plans ? tokens(r.avgOutputTokens) : '—' }}</td>
+                      <td>@if (r.plans) { <app-token-usage [usage]="reportUsage(r)" xPosition="before" /> } @else { — }</td>
                       <td>{{ r.plans ? r.avgMcpCalls + ' / ' + r.avgScriptCalls : '—' }}</td>
                     </tr>
                   }
                 </tbody>
               </table>
               @if (usageDiff(); as d) { <p class="ex__note">{{ d }}</p> }
-              <p class="ex__note">Médias por plano. "Com MCP" = a maioria das chamadas ao PRMake pelas ferramentas MCP. Tokens de entrada
-                incluem o cache (o contexto relido a cada resposta).</p>
+              <p class="ex__note">Médias por plano. "Com MCP" = a maioria das chamadas ao PRMake pelas ferramentas MCP. Entrada = nova +
+                cache lido (o contexto relido a cada resposta, com desconto) + cache escrito — toque no total para ver as partes e o custo.
+                A correção não soma o que a mesma sessão gastou na análise.</p>
             }
           }
         </section>
@@ -217,7 +222,7 @@ const POLL_MS = 30_000;
               <span class="ex__req-text">{{ r.kind === 'analyze' ? 'análise' : 'continuar' }} · {{ sourceLabel[r.source] || r.source }}
                 @if (r.workerName) { · {{ r.workerName }} }
                 · {{ ago(r.createdAt) }}
-                @if (r.costUsd) { · US$ {{ r.costUsd.toFixed(2) }} }
+                @if (requestUsage(r); as u) { · <app-token-usage [usage]="u" xPosition="before" /> }
                 @if (r.lastError && (r.status === 'failed' || r.status === 'expired')) { <span class="ex__error"> — {{ r.lastError }}</span> }
                 @else if (r.waitReason && r.status === 'queued') { <span class="ex__note"> — {{ r.waitReason }}</span> }
               </span>
@@ -360,6 +365,48 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
 
   loadUsage(): void {
     this.api.usageReport(this.usageDays(), this.usageAll()).subscribe({ next: (u) => this.usage.set(u), error: () => this.usage.set(null) });
+  }
+
+  /** Média do grupo com as partes da entrada (0044) — popover do total. */
+  reportUsage(r: ExecutionUsageReportRow): TokenUsage {
+    const hasParts = r.avgCacheReadTokens != null;
+    const group = r.phase === 'all' ? (r.channel === 'mcp' ? 'Com MCP' : 'Sem MCP') : `${r.channel === 'mcp' ? 'Com MCP' : 'Sem MCP'} · ${r.phase === 'analysis' ? 'análise' : 'correção'}`;
+    return {
+      freshInput: hasParts ? r.avgFreshInputTokens : null,
+      cacheRead: hasParts ? r.avgCacheReadTokens : null,
+      cacheWrite: hasParts ? r.avgCacheWriteTokens : null,
+      input: r.avgInputTokens,
+      output: r.avgOutputTokens,
+      model: r.model,
+      average: true,
+      title: `Média por plano — ${group}`,
+      subtitle: `${r.plans} ${r.plans === 1 ? 'plano' : 'planos'} · ${r.avgTurns} respostas em média`,
+    };
+  }
+
+  /** Consumo do pedido (0044): custo do pedido (não o acumulado da sessão) e as partes, quando o executor manda. */
+  requestUsage(r: ExecutionRequest): TokenUsage | null {
+    if (!r.inputTokens && !r.outputTokens && r.costUsd == null) return null;
+    const hasParts = r.cacheReadTokens != null;
+    return {
+      freshInput: hasParts ? r.freshInputTokens : null,
+      cacheRead: hasParts ? r.cacheReadTokens : null,
+      cacheWrite: hasParts ? r.cacheWriteTokens : null,
+      input: r.inputTokens,
+      output: r.outputTokens,
+      model: r.model,
+      reportedCostUsd: r.costUsd,
+      reportedBy: 'Claude Code',
+      turns: r.turns,
+      title: `Pedido #${r.cardNumber} — ${r.kind === 'analyze' ? 'análise' : 'continuar'}`,
+      subtitle: r.finishedAt ? `terminou ${this.ago(r.finishedAt)}` : null,
+      notes: [
+        r.sessionCostUsd != null && r.costUsd != null && r.sessionCostUsd > r.costUsd + 0.005
+          ? `A sessão é retomada a cada "continuar": acumulado dela até aqui ${formatUsd(r.sessionCostUsd)} — este pedido custou só a diferença.`
+          : null,
+        hasParts ? null : 'Executor antigo: só a entrada total (as partes chegam no executor 1.0.3).',
+      ],
+    };
   }
 
   usageRows(): ExecutionUsageReportRow[] {

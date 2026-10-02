@@ -50,21 +50,31 @@
       @if (bars().length > 1) {
         <section class="chart" aria-label="Consumo por dia">
           @for (b of bars(); track b.day) {
-            <div class="chart__col" [matTooltip]="(b.day | date:'dd/MM') + ': ' + usd(b.totals.costUsd) + ' · ' + totalTokens(b.totals) + ' tokens · ' + b.totals.calls + ' ações'">
+            <button type="button" class="chart__col" [matMenuTriggerFor]="dayMenu" (menuOpened)="selectedDay.set(b)"
+                    [attr.aria-label]="'Consumo de ' + (b.day | date:'dd/MM')">
               <span class="chart__bar" [style.height.%]="b.pct"></span>
-            </div>
+            </button>
           }
         </section>
+        <p class="chart__hint">Toque numa barra para ver o consumo do dia.</p>
+        <mat-menu #dayMenu="matMenu" class="token-usage-menu">
+          <div (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+            @if (selectedDay(); as sd) { <app-token-usage-panel [usage]="dayUsage(sd)" /> }
+          </div>
+        </mat-menu>
       }
 
       @if (d.byUser?.length) {
         <h3 class="title">Por usuário</h3>
         <div class="au-table-wrap">
           <table class="au-table">
-            <thead><tr><th>Usuário</th><th class="num">Ações</th><th class="num">Tokens</th><th class="num">Custo</th></tr></thead>
+            <thead><tr><th>Usuário</th><th class="num">Ações</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Total</th><th class="num">Custo</th></tr></thead>
             <tbody>
               @for (u of d.byUser; track u.userExternalId ?? u.userName) {
-                <tr><td>{{ u.userName }}</td><td class="num">{{ u.totals.calls }}</td><td class="num">{{ totalTokens(u.totals) }}</td><td class="num">{{ usd(u.totals.costUsd) }}</td></tr>
+                <tr><td>{{ u.userName }}</td><td class="num">{{ u.totals.calls }}</td><td class="num">{{ tokens(u.totals.inputTokens) }}</td>
+                  <td class="num">{{ tokens(u.totals.outputTokens) }}</td>
+                  <td class="num"><app-token-usage [usage]="totalsUsage(u.totals, u.userName)" detail="tokens" [plain]="true" xPosition="before" /></td>
+                  <td class="num">{{ usd(u.totals.costUsd) }}</td></tr>
               }
             </tbody>
           </table>
@@ -74,13 +84,15 @@
       <h3 class="title">Por ação</h3>
       <div class="au-table-wrap">
         <table class="au-table">
-          <thead><tr><th>Ação</th><th class="num">Vezes</th><th class="num">Tokens</th><th class="num">Custo</th><th class="num">Média</th></tr></thead>
+          <thead><tr><th>Ação</th><th class="num">Vezes</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Total</th><th class="num">Custo</th><th class="num">Média</th></tr></thead>
           <tbody>
             @for (a of d.byAction; track a.action) {
               <tr>
-                <td [matTooltip]="a.action">{{ a.label }}</td>
+                <td>{{ a.label }}</td>
                 <td class="num">{{ a.totals.calls }}</td>
-                <td class="num">{{ totalTokens(a.totals) }}</td>
+                <td class="num">{{ tokens(a.totals.inputTokens) }}</td>
+                <td class="num">{{ tokens(a.totals.outputTokens) }}</td>
+                <td class="num"><app-token-usage [usage]="totalsUsage(a.totals, a.label, a.action)" detail="tokens" [plain]="true" xPosition="before" /></td>
                 <td class="num">{{ usd(a.totals.costUsd) }}</td>
                 <td class="num">{{ usd(a.totals.calls > a.totals.unpriced ? a.totals.costUsd / (a.totals.calls - a.totals.unpriced) : null) }}</td>
               </tr>
@@ -92,16 +104,17 @@
       <h3 class="title">Últimas ações</h3>
       <div class="au-table-wrap">
         <table class="au-table">
-          <thead><tr><th>Quando</th><th>Ação</th>@if (scope() === 'all') {<th>Usuário</th>}<th>Modelo</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Custo</th></tr></thead>
+          <thead><tr><th>Quando</th><th>Ação</th>@if (scope() === 'all') {<th>Usuário</th>}<th>Modelo</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Total</th><th class="num">Custo</th></tr></thead>
           <tbody>
             @for (r of d.recent; track $index) {
               <tr [class.failed]="!r.success">
                 <td class="nowrap">{{ r.createdAt | date:'dd/MM HH:mm' }}</td>
-                <td>{{ r.label }}@if (!r.success) { <mat-icon class="fail" matTooltip="A IA respondeu com erro">error_outline</mat-icon> }</td>
+                <td>{{ r.label }}@if (!r.success) { <span class="fail-text">· com erro</span> }</td>
                 @if (scope() === 'all') { <td>{{ r.userName }}</td> }
                 <td class="muted">{{ r.model || r.provider }}</td>
                 <td class="num">{{ tokens(r.inputTokens) }}</td>
                 <td class="num">{{ tokens(r.outputTokens) }}</td>
+                <td class="num"><app-token-usage [usage]="recentUsage(r)" detail="tokens" [plain]="true" xPosition="before" /></td>
                 <td class="num">{{ usd(r.costUsd) }}</td>
               </tr>
             }

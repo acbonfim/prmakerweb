@@ -329,8 +329,8 @@
             @if (p.lastActivityAt && isActive()) {
               · último sinal <span [matTooltip]="formatDateTime(p.lastActivityAt)">{{ relativeTime(p.lastActivityAt) }}</span>
             }
-            @if (usageLabel(); as u) {
-              · <span class="plan__usage" [matTooltip]="u.detail"><mat-icon>toll</mat-icon>{{ u.short }}</span>
+            @if (planUsage(); as u) {
+              · <app-token-usage [usage]="u" detail="full" />
             }
           </span>
         </div>
