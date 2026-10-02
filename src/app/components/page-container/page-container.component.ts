@@ -1,8 +1,13 @@
-import { Component, OnInit } from '@angular/core';
+import {Component, DestroyRef, HostListener, inject, signal} from '@angular/core';
 import {SideMenuComponent} from '../side-menu/side-menu.component';
-import {Router, RouterModule, RouterOutlet} from '@angular/router';
+import {NavigationEnd, Router, RouterModule, RouterOutlet} from '@angular/router';
 import {TopMenuComponent} from '../top-menu/top-menu.component';
 import {CommonModule} from '@angular/common';
+import {filter} from 'rxjs';
+import {BackNavigationService} from '../../services/back-navigation.service';
+
+/** Até aqui o menu é uma gaveta por cima do conteúdo (0043); acima, a coluna lateral de sempre. */
+const COMPACT_QUERY = '(max-width: 768px)';
 
 @Component({
   selector: 'app-page-container',
@@ -16,21 +21,59 @@ import {CommonModule} from '@angular/common';
     CommonModule,
   ]
 })
-export class PageContainerComponent implements OnInit {
-  isSidebarCollapsed = true;
-  constructor() { }
+export class PageContainerComponent {
+  private readonly back = inject(BackNavigationService);
+  private readonly media = window.matchMedia(COMPACT_QUERY);
 
-  ngOnInit() {
+  /** Desktop: menu recolhido (trilho de ícones) ou expandido. */
+  isSidebarCollapsed = true;
+  readonly compact = signal(this.media.matches);
+  readonly drawerOpen = signal(false);
+  private releaseDrawer?: () => void;
+
+  constructor() {
+    const onMedia = (e: MediaQueryListEvent) => {
+      this.compact.set(e.matches);
+      if (!e.matches) this.closeDrawer();
+    };
+    this.media.addEventListener('change', onMedia);
+
+    // Escolheu uma tela no menu (ou veio de outro lugar): a gaveta recolhe sozinha.
+    const sub = inject(Router).events
+      .pipe(filter((e) => e instanceof NavigationEnd))
+      .subscribe(() => this.closeDrawer());
+
+    inject(DestroyRef).onDestroy(() => {
+      this.media.removeEventListener('change', onMedia);
+      sub.unsubscribe();
+      this.closeDrawer();
+    });
   }
 
   toggleSidebar() {
-    this.isSidebarCollapsed = !this.isSidebarCollapsed;
+    if (!this.compact()) {
+      this.isSidebarCollapsed = !this.isSidebarCollapsed;
+    } else if (this.drawerOpen()) {
+      this.closeDrawer();
+    } else {
+      this.drawerOpen.set(true);
+      this.releaseDrawer = this.back.push(() => this.closeDrawer());
+    }
   }
 
   setSidebarState(collapsed: boolean) {
     this.isSidebarCollapsed = collapsed;
   }
 
+  closeDrawer() {
+    if (!this.drawerOpen()) return;
+    this.drawerOpen.set(false);
+    this.releaseDrawer?.();
+    this.releaseDrawer = undefined;
+  }
 
-
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    this.closeDrawer();
+  }
 }

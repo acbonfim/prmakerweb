@@ -30,6 +30,7 @@ import {MyApiKeyDialogComponent} from '../my-api-key-dialog/my-api-key-dialog.co
 import {SkillsDialogComponent} from '../skills-dialog/skills-dialog.component';
 import {ExecutorsDialogComponent} from '../executors-dialog/executors-dialog.component';
 import {AiUsageDialogComponent} from '../ai-usage-dialog/ai-usage-dialog.component';
+import {BackNavigationService} from '../../services/back-navigation.service';
 
 interface AutoCompleteCompleteEvent {
   originalEvent: Event;
@@ -64,6 +65,7 @@ export class TopMenuComponent implements OnInit {
   @Output() toggleSidebar = new EventEmitter<void>();
   @Input() isCollapsed: boolean = false;
   @Output() selectedUserEmit = new EventEmitter<void>();
+  readonly back = inject(BackNavigationService);
 
   sidebarOpen = true;
   user: any = {};

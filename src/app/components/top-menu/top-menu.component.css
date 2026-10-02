@@ -15,6 +15,16 @@
   flex: 1 1 auto;
 }
 
+/* ── Voltar (0043) ── */
+.topbar-back {
+  color: var(--mat-sys-on-surface);
+  margin-left: -6px;
+}
+
+.topbar-back:disabled {
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 28%, transparent);
+}
+
 /* ── Botão hambúrguer ── */
 .menu-toggle {
   color: var(--mat-sys-on-surface);

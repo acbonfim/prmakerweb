@@ -29,7 +29,7 @@ export class SideMenuComponent implements OnInit {
     {
       label: 'Início',
       icon: 'home',
-      link: 'auth/home'
+      link: 'auth/dashboard'
     },
     {
       label: 'Pull Requests',
@@ -112,7 +112,9 @@ export class SideMenuComponent implements OnInit {
 
 
   isActiveRoute(link: string): boolean {
-    return this.currentRoute === ('/' + link) || this.currentRoute.startsWith(link + '/');
+    // Sem a query (a tela de PR guarda o card na URL, 0043).
+    const path = this.currentRoute.split(/[?#]/)[0];
+    return path === ('/' + link) || path.startsWith('/' + link + '/');
   }
 
   navigateTo(link: string) {
