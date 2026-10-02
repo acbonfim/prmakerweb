@@ -1,0 +1,120 @@
+<div class="dialog-header">
+  <mat-icon class="dialog-header__icon">insights</mat-icon>
+  <div class="dialog-header__titles">
+    <span class="dialog-header__title">{{ scope() === 'all' ? 'Consumo de IA de todos' : 'Meu consumo de IA' }}</span>
+    <span class="dialog-header__sub">Tokens e custo estimado de cada ação de IA do PRMake.</span>
+  </div>
+  <button mat-icon-button class="ms-auto" (click)="close()" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+</div>
+
+<div class="toolbar">
+  <mat-button-toggle-group [value]="days()" (change)="setDays($event.value)" aria-label="Período" hideSingleSelectionIndicator>
+    <mat-button-toggle [value]="7">7 dias</mat-button-toggle>
+    <mat-button-toggle [value]="30">30 dias</mat-button-toggle>
+    <mat-button-toggle [value]="90">90 dias</mat-button-toggle>
+  </mat-button-toggle-group>
+  @if (isAdmin) {
+    <mat-button-toggle-group [value]="scope()" (change)="setScope($event.value)" aria-label="De quem" hideSingleSelectionIndicator>
+      <mat-button-toggle value="me">Meu</mat-button-toggle>
+      <mat-button-toggle value="all">Todos</mat-button-toggle>
+    </mat-button-toggle-group>
+  }
+</div>
+
+<mat-dialog-content class="dialog-body">
+  <p class="notice">
+    <mat-icon>info</mat-icon>
+    <span>As ações de IA (Gerar com IA, Pergunte, Analisar a fundo, Gerar guia, Aprender com um card, passagem de
+      conhecimento) usam a <strong>chave de API do seu perfil</strong> em "Minhas integrações" — o custo sai dos seus
+      créditos. O valor é uma estimativa pela tabela de preços; a fatura do provedor é a referência.</span>
+  </p>
+
+  @if (loading()) {
+    <div class="state"><mat-spinner diameter="28"></mat-spinner><span>Carregando o consumo...</span></div>
+  } @else if (error()) {
+    <div class="state state--error"><mat-icon>error_outline</mat-icon><span>{{ error() }}</span></div>
+  } @else if (data(); as d) {
+    @if (!d.total.calls) {
+      <div class="state"><mat-icon>check_circle</mat-icon><span>Nenhuma ação de IA nos últimos {{ d.days }} dias.</span></div>
+    } @else {
+      <section class="au-cards">
+        <div class="au-card"><span class="au-card__label">Custo estimado</span><strong class="au-card__value">{{ usd(d.total.costUsd) }}</strong>
+          @if (d.total.unpriced) { <span class="au-card__hint">+ {{ d.total.unpriced }} sem preço</span> }</div>
+        <div class="au-card"><span class="au-card__label">Ações de IA</span><strong class="au-card__value">{{ d.total.calls }}</strong>
+          @if (d.total.failures) { <span class="au-card__hint">{{ d.total.failures }} com erro</span> }</div>
+        <div class="au-card"><span class="au-card__label">Tokens</span><strong class="au-card__value">{{ totalTokens(d.total) }}</strong>
+          <span class="au-card__hint">{{ tokens(d.total.inputTokens) }} entrada · {{ tokens(d.total.outputTokens) }} saída</span></div>
+        <div class="au-card"><span class="au-card__label">Média por ação</span><strong class="au-card__value">{{ usd(average()) }}</strong></div>
+      </section>
+
+      @if (bars().length > 1) {
+        <section class="chart" aria-label="Consumo por dia">
+          @for (b of bars(); track b.day) {
+            <div class="chart__col" [matTooltip]="(b.day | date:'dd/MM') + ': ' + usd(b.totals.costUsd) + ' · ' + totalTokens(b.totals) + ' tokens · ' + b.totals.calls + ' ações'">
+              <span class="chart__bar" [style.height.%]="b.pct"></span>
+            </div>
+          }
+        </section>
+      }
+
+      @if (d.byUser?.length) {
+        <h3 class="title">Por usuário</h3>
+        <div class="au-table-wrap">
+          <table class="au-table">
+            <thead><tr><th>Usuário</th><th class="num">Ações</th><th class="num">Tokens</th><th class="num">Custo</th></tr></thead>
+            <tbody>
+              @for (u of d.byUser; track u.userExternalId ?? u.userName) {
+                <tr><td>{{ u.userName }}</td><td class="num">{{ u.totals.calls }}</td><td class="num">{{ totalTokens(u.totals) }}</td><td class="num">{{ usd(u.totals.costUsd) }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <h3 class="title">Por ação</h3>
+      <div class="au-table-wrap">
+        <table class="au-table">
+          <thead><tr><th>Ação</th><th class="num">Vezes</th><th class="num">Tokens</th><th class="num">Custo</th><th class="num">Média</th></tr></thead>
+          <tbody>
+            @for (a of d.byAction; track a.action) {
+              <tr>
+                <td [matTooltip]="a.action">{{ a.label }}</td>
+                <td class="num">{{ a.totals.calls }}</td>
+                <td class="num">{{ totalTokens(a.totals) }}</td>
+                <td class="num">{{ usd(a.totals.costUsd) }}</td>
+                <td class="num">{{ usd(a.totals.calls > a.totals.unpriced ? a.totals.costUsd / (a.totals.calls - a.totals.unpriced) : null) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="title">Últimas ações</h3>
+      <div class="au-table-wrap">
+        <table class="au-table">
+          <thead><tr><th>Quando</th><th>Ação</th>@if (scope() === 'all') {<th>Usuário</th>}<th>Modelo</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Custo</th></tr></thead>
+          <tbody>
+            @for (r of d.recent; track $index) {
+              <tr [class.failed]="!r.success">
+                <td class="nowrap">{{ r.createdAt | date:'dd/MM HH:mm' }}</td>
+                <td>{{ r.label }}@if (!r.success) { <mat-icon class="fail" matTooltip="A IA respondeu com erro">error_outline</mat-icon> }</td>
+                @if (scope() === 'all') { <td>{{ r.userName }}</td> }
+                <td class="muted">{{ r.model || r.provider }}</td>
+                <td class="num">{{ tokens(r.inputTokens) }}</td>
+                <td class="num">{{ tokens(r.outputTokens) }}</td>
+                <td class="num">{{ usd(r.costUsd) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <p class="tip">
+        <mat-icon>lightbulb</mat-icon>
+        <span>O que mais pesa é o tamanho do que vai para a IA (entrada): PR com diff grande, card com muito histórico,
+          guia de projeto grande. Para gerar muito conteúdo de uma vez, use as skills no Claude Code (assinatura) em vez
+          dos botões de IA.</span>
+      </p>
+    }
+  }
+</mat-dialog-content>

@@ -308,7 +308,9 @@ export class DialogPrompt implements OnInit {
 
     this.http.post(`${this.urlBase}AI/generate`, body, {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        // Consumo de IA por ação (0042).
+        'X-AI-Action': 'pr:generate'
       }
     }).subscribe(
       (response: any) => {

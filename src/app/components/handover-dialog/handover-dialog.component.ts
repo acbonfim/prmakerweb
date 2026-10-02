@@ -175,7 +175,7 @@ export class HandoverDialogComponent implements OnInit, OnDestroy {
     const body = JSON.stringify(prompt);
     const res: any = await firstValueFrom(
       this.http.post(`${this.urlBase}AI/generate`, body, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-AI-Action': 'handover:generate' },
       }),
     );
     let content = res?.content || res?.text || res;

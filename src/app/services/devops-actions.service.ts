@@ -67,9 +67,9 @@ export class DevOpsActionsService {
   }
 
   /** Gera texto com a IA configurada (mesmo endpoint da descrição/handover). */
-  async generate(prompt: string): Promise<string> {
+  async generate(prompt: string, action = 'devops:summary'): Promise<string> {
     const res: any = await firstValueFrom(this.http.post(`${this.baseUrl}AI/generate`, JSON.stringify(prompt), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-AI-Action': action },
     }));
     let content = res?.content || res?.text || res;
     if (typeof content === 'object' && content?.content) content = content.content;
