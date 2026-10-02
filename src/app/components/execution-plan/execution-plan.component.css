@@ -1036,3 +1036,123 @@
   .step--you-unblock .step__node { animation: none !important; }
 }
 .step__clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ── 0043: celular ─────────────────────────────────────────────────────────────────────────── */
+
+.plan-md ::ng-deep img { max-width: 100%; height: auto; }
+
+/* "⋯" com as ações secundárias: só no painel estreito. */
+.plan__more { display: none !important; }
+.plan__summary-btn { display: none; }
+
+/* Celular: a aba já diz "Plano"; o título dá lugar às ações (status, pausar, ⋯, tela cheia). */
+@container (max-width: 420px) {
+  .plan__title { display: none; }
+}
+
+@container (max-width: 470px) {
+  .plan__action--secondary { display: none !important; }
+  .plan__more { display: inline-block !important; }
+  .plan__header { gap: 2px; padding: 0 6px 0 12px; }
+  /* Detalhes da etapa aproveitam a largura (sem o recuo da trilha). */
+  .step__details { padding: 0 8px 12px 12px; }
+  .step__cta { padding: 0 8px 8px 12px; }
+}
+
+/* Toque: botões do cabeçalho/rodapé com área maior e texto um pouco maior para ler. */
+@media (pointer: coarse) {
+  .plan__action.mat-mdc-icon-button,
+  .plan__expand.mat-mdc-icon-button,
+  .plan__zip.mat-mdc-icon-button {
+    width: 40px;
+    height: 40px;
+    --mdc-icon-button-state-layer-size: 40px;
+  }
+  .plan__file-btn.mat-mdc-outlined-button { height: 40px; }
+  .plan__chip.mat-mdc-outlined-button { height: 36px; }
+  .step__cta .mat-mdc-button-base { height: 38px; }
+  .step__title { font-size: 14px; }
+  .step__sub, .step__activity { font-size: 13px; }
+  .plan-md { font-size: 14px; }
+  .plan-md ::ng-deep code, .plan-md ::ng-deep table { font-size: 12.5px; }
+  .plan-log { font-size: 13px; }
+  .plan-log__time { font-size: 11px; }
+  .plan-q__text, .plan-q__option-head { font-size: 14px; }
+  .plan-q__option-desc { font-size: 13.5px; }
+  .step__row:hover, .plan-log:hover { background: transparent; }
+}
+
+/* Tela cheia no celular: a tela inteira, uma coluna por vez (lista → etapa), leitura confortável. */
+@media (max-width: 768px) {
+  .plan--expanded {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    box-sizing: border-box;
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  .plan--expanded .plan__steps {
+    flex: 1 1 auto;
+    border-right: none;
+    overscroll-behavior: contain;
+  }
+  .plan--expanded .step__chevron { display: inline-block; transform: rotate(-90deg); }
+  .plan--expanded .step--open { box-shadow: none; }
+  .plan--expanded .plan__detail { display: none; }
+  .plan--expanded.plan--detail-open .plan__steps { display: none; }
+  .plan--expanded.plan--detail-open .plan__detail {
+    display: flex;
+    padding: 0 16px 24px;
+    overscroll-behavior: contain;
+  }
+
+  .plan--expanded .plan__summary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    margin-top: 6px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 18px;
+    background: transparent;
+    color: var(--mat-sys-primary);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .plan--expanded .plan__summary-btn .mat-icon { font-size: 18px; width: 18px; height: 18px; }
+
+  .plan__detail-nav {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 0 -16px 8px;
+    padding: 4px 8px;
+    background: var(--surface-2, #323232);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .plan__detail-back.mat-mdc-button { font-size: 15px; }
+  .plan__detail-pos { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--plan-muted); }
+
+  /* Leitura: corpo 16px, entrelinha folgada. */
+  .plan--expanded .plan__meta-title { white-space: normal; font-size: 15px; }
+  .plan--expanded .step__title { font-size: 15px; }
+  .plan--expanded .step__sub, .plan--expanded .step__activity { font-size: 13.5px; }
+  .plan__detail .plan__detail-title { font-size: 19px; line-height: 1.3; }
+  .plan__detail .plan-md { font-size: 16px; line-height: 1.6; }
+  .plan__detail .plan-md ::ng-deep h1,
+  .plan__detail .plan-md ::ng-deep h2,
+  .plan__detail .plan-md ::ng-deep h3,
+  .plan__detail .plan-md ::ng-deep h4 { font-size: 17px; margin: 14px 0 6px; }
+  .plan__detail .plan-md ::ng-deep p { margin-bottom: 10px; }
+  .plan__detail .plan-md ::ng-deep code,
+  .plan__detail .plan-md ::ng-deep table { font-size: 14px; }
+  .plan__detail .plan-md ::ng-deep pre { padding: 10px 12px; }
+  .plan__detail .plan-log { font-size: 15px; line-height: 1.5; padding: 6px 4px; }
+  .plan__detail .plan-log__time { font-size: 12px; }
+  .plan__detail .plan__section-title { font-size: 12px; margin-top: 16px; }
+}

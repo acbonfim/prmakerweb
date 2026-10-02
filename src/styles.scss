@@ -46,6 +46,78 @@ html, body { height: 100%; }
 body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
 
 /* ──────────────────────────────────────────────────────────────
+   Celular (feature 0043).
+   Breakpoints padrão das telas: 576px (celular), 768px (tablet / celular deitado — o menu vira
+   gaveta), 1024px. Use estes valores nas media queries novas.
+   ────────────────────────────────────────────────────────────── */
+:root {
+  --cime-topbar-h: 70px;
+  /* A barra fica sob a barra de status translúcida do app instalado: soma a safe area. */
+  --cime-topbar-total: calc(var(--cime-topbar-h) + env(safe-area-inset-top, 0px));
+}
+
+@media (max-width: 576px) {
+  :root { --cime-topbar-h: 56px; }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* iOS dá zoom ao focar campo com fonte < 16px: no toque, todo campo de texto tem 16px. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select,
+  [contenteditable="true"],
+  .ql-editor {
+    font-size: 16px !important;
+  }
+}
+
+/* Diálogos no celular (MobileDialogsService): grandes em tela cheia, pequenos na largura da tela. */
+@media (max-width: 576px) {
+  .cdk-overlay-pane.mat-mdc-dialog-panel {
+    max-width: calc(100vw - 16px) !important;
+  }
+
+  /* Conteúdo com largura mínima de desktop (ex.: min-width: 460px) não estoura a tela. */
+  .cdk-overlay-pane.mat-mdc-dialog-panel .mat-mdc-dialog-content {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .cdk-overlay-pane.mat-mdc-dialog-panel.cime-dialog--phone {
+    width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .cdk-overlay-pane.mat-mdc-dialog-panel.cime-dialog--full {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+
+    .mat-mdc-dialog-container,
+    .mat-mdc-dialog-surface {
+      border-radius: 0 !important;
+      --mdc-dialog-container-shape: 0;
+      --mat-dialog-container-shape: 0;
+    }
+
+    .mat-mdc-dialog-surface {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      padding-left: env(safe-area-inset-left, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
+      box-sizing: border-box;
+    }
+  }
+
+}
+
+/* ──────────────────────────────────────────────────────────────
    Menus do sistema (overlays do CDK → estilizados globalmente via
    panelClass). Base compartilhada "app-menu" + "profile-menu".
    Mesma linguagem visual do resto da interface.

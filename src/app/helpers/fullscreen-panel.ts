@@ -1,8 +1,11 @@
-import { signal } from '@angular/core';
+import { inject, signal } from '@angular/core';
+import { BackNavigationService } from '../services/back-navigation.service';
 
 /** Mesma animação da tela cheia da linha do tempo (feature 0020). */
 const ANIMATION: KeyframeAnimationOptions = { duration: 320, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
 type Rect = { top: number; left: number; width: number; height: number };
+/** Celular (0043): a tela cheia ocupa a tela toda, sem margem. */
+const PHONE_MAX_WIDTH = 768;
 
 export interface FullscreenPanelOptions {
   /** Elemento que fica no lugar (o host do componente). */
@@ -29,6 +32,11 @@ export class FullscreenPanel {
   private destroyed = false;
   private backdrop?: HTMLDivElement;
   private previousHtmlOverflow = '';
+  /** Quem rola a página é a .content-area (não o <html>): trava as duas enquanto aberto (0043). */
+  private lockedScrollers: { el: HTMLElement; overflow: string }[] = [];
+  /** Voltar do app/sistema fecha a tela cheia (0043). Criado no construtor do componente (contexto de injeção). */
+  private readonly back = inject(BackNavigationService);
+  private releaseBack?: () => void;
 
   constructor(private readonly options: FullscreenPanelOptions) {}
 
@@ -48,7 +56,8 @@ export class FullscreenPanel {
     window.removeEventListener('resize', this.onResize);
     this.options.panel()?.remove();
     this.backdrop?.remove();
-    document.documentElement.style.overflow = this.previousHtmlOverflow;
+    this.unlockScroll();
+    this.releaseBack?.();
   }
 
   private enqueue(step: () => Promise<void>): void {
@@ -78,8 +87,7 @@ export class FullscreenPanel {
     document.body.insertBefore(this.backdrop, overlay);
     document.body.insertBefore(el, overlay);
 
-    this.previousHtmlOverflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
+    this.lockScroll();
 
     el.classList.add(this.options.expandedClass);
     const to = this.expandedRect();
@@ -90,6 +98,7 @@ export class FullscreenPanel {
 
     document.addEventListener('keydown', this.onKeydown);
     window.addEventListener('resize', this.onResize);
+    this.releaseBack = this.back.push(() => this.close());
 
     if (reducedMotion()) return;
     this.animating = true;
@@ -109,6 +118,8 @@ export class FullscreenPanel {
 
     document.removeEventListener('keydown', this.onKeydown);
     window.removeEventListener('resize', this.onResize);
+    this.releaseBack?.();
+    this.releaseBack = undefined;
 
     if (!reducedMotion()) {
       this.animating = true;
@@ -133,8 +144,24 @@ export class FullscreenPanel {
     host.style.height = '';
     this.backdrop?.remove();
     this.backdrop = undefined;
-    document.documentElement.style.overflow = this.previousHtmlOverflow;
+    this.unlockScroll();
     this.expanded.set(false);
+  }
+
+  private lockScroll(): void {
+    this.previousHtmlOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    this.lockedScrollers = Array.from(document.querySelectorAll<HTMLElement>('.content-area')).map((el) => {
+      const saved = { el, overflow: el.style.overflow };
+      el.style.overflow = 'hidden';
+      return saved;
+    });
+  }
+
+  private unlockScroll(): void {
+    document.documentElement.style.overflow = this.previousHtmlOverflow;
+    for (const s of this.lockedScrollers) s.el.style.overflow = s.overflow;
+    this.lockedScrollers = [];
   }
 
   private onKeydown = (event: KeyboardEvent): void => {
@@ -150,10 +177,11 @@ export class FullscreenPanel {
     if (el && !this.animating) applyRect(el, this.expandedRect());
   };
 
-  /** Centralizado, ~92% da tela, no máximo `maxWidth` px de largura. */
+  /** Centralizado, ~92% da tela, no máximo `maxWidth` px de largura; no celular, a tela toda. */
   private expandedRect(): Rect {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    if (vw <= PHONE_MAX_WIDTH) return { top: 0, left: 0, width: vw, height: vh };
     const width = Math.min(this.options.maxWidth ?? 1200, vw - 2 * Math.max(16, vw * 0.04));
     const height = vh - 2 * Math.max(16, vh * 0.04);
     return { top: (vh - height) / 2, left: (vw - width) / 2, width, height };

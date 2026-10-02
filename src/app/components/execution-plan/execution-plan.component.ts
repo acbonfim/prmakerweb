@@ -8,6 +8,7 @@ import {
   OnDestroy,
   ViewChild,
   computed,
+  effect,
   inject,
   signal
 } from '@angular/core';
@@ -28,6 +29,7 @@ import {
   saveBlob
 } from '../../services/execution-plan.service';
 import { FullscreenPanel } from '../../helpers/fullscreen-panel';
+import { BackNavigationService } from '../../services/back-navigation.service';
 import { PlanMarkdownPipe } from './plan-markdown.pipe';
 import { PlanFilesDialogComponent, PlanFilesDialogData } from './plan-files-dialog.component';
 import { PlanNotesComponent } from './plan-notes.component';
@@ -71,6 +73,10 @@ const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
 const STALE_AFTER_MS = 5 * 60 * 1000;
 /** Consulta de segurança enquanto o plano está ativo (caso o tempo real esteja fora). */
 const SAFETY_POLL_MS = 30_000;
+/** Celular (0043): tela cheia com uma coluna por vez (lista de etapas → etapa). */
+const NARROW_QUERY = '(max-width: 768px)';
+/** Rolagem automática (seguir a etapa/os registros) espera o usuário parar de mexer por este tempo. */
+const USER_IDLE_MS = 5000;
 /** Junta rajadas de eventos (a skill manda vários pedaços seguidos). */
 const REFRESH_DEBOUNCE_MS = 250;
 const MAX_LOGS_IN_MEMORY = 3000;
@@ -167,6 +173,57 @@ export class ExecutionPlanComponent implements OnDestroy {
     maxWidth: 1320
   });
   readonly expanded = this.fullscreen.expanded;
+
+  // ── 0043: celular ─────────────────────────────────────────────────────────────────────────────
+
+  private readonly back = inject(BackNavigationService);
+  private readonly narrowMedia = window.matchMedia(NARROW_QUERY);
+  readonly narrow = signal(this.narrowMedia.matches);
+  private readonly onNarrowChange = (e: MediaQueryListEvent) => this.narrow.set(e.matches);
+  /** Tela cheia no celular: true = mostrando a etapa (ou o resumo); false = a lista de etapas. */
+  readonly mobileDetail = signal(false);
+  private releaseMobileDetail?: () => void;
+  private stepsScrollTop = 0;
+  /** Último toque/rolagem do usuário no painel: a rolagem automática não briga com o dedo. */
+  private lastInteraction = 0;
+  @ViewChild('detailBody') private detailBodyRef?: ElementRef<HTMLDivElement>;
+
+  /** Posição da etapa aberta na lista (para "anterior/próxima" na tela cheia do celular). */
+  readonly selectedIndex = computed(() => this.steps().findIndex((s) => s.key === this.selectedKey()));
+
+  markInteraction(): void {
+    this.lastInteraction = Date.now();
+  }
+
+  private userIsInteracting(): boolean {
+    return Date.now() - this.lastInteraction < USER_IDLE_MS;
+  }
+
+  /** Abre a etapa (ou o resumo, com `key` null) por cima da lista — o Voltar volta para a lista. */
+  openMobileDetail(key: string | null): void {
+    this.selectedKey.set(key);
+    if (!this.mobileDetail()) {
+      this.stepsScrollTop = this.stepsBodyRef?.nativeElement.scrollTop ?? 0;
+      this.mobileDetail.set(true);
+      this.releaseMobileDetail = this.back.push(() => this.closeMobileDetail());
+    }
+    setTimeout(() => this.detailBodyRef?.nativeElement.scrollTo({ top: 0 }));
+  }
+
+  closeMobileDetail(): void {
+    if (!this.mobileDetail()) return;
+    this.mobileDetail.set(false);
+    this.releaseMobileDetail?.();
+    this.releaseMobileDetail = undefined;
+    // A lista volta onde estava (display: none perde a rolagem).
+    const top = this.stepsScrollTop;
+    setTimeout(() => this.stepsBodyRef?.nativeElement.scrollTo({ top }));
+  }
+
+  stepNav(delta: number): void {
+    const next = this.steps()[this.selectedIndex() + delta];
+    if (next) this.openMobileDetail(next.key);
+  }
 
   @ViewChild('panel') private panelRef?: ElementRef<HTMLDivElement>;
   @ViewChild('notes') private notesRef?: PlanNotesComponent;
@@ -484,6 +541,11 @@ export class ExecutionPlanComponent implements OnDestroy {
   });
 
   constructor() {
+    this.narrowMedia.addEventListener('change', this.onNarrowChange);
+    // Saiu da tela cheia (Esc, fundo, Voltar): a próxima abertura começa pela lista.
+    effect(() => {
+      if (!this.expanded()) this.closeMobileDetail();
+    });
     this.ws.startConnection();
     this.ws.on(EXECUTION_PLAN_EVENT, this.onRealtime);
     this.ws.on(PULLREQUEST_CARD_EVENT, this.onPullRequestsChanged);
@@ -610,7 +672,8 @@ export class ExecutionPlanComponent implements OnDestroy {
       // A etapa em andamento mudou e o usuário estava acompanhando a anterior: segue a skill.
       const prevRunning = previous.steps.find((s) => s.status === 'running')?.key ?? null;
       const nowRunning = plan.steps.find((s) => s.status === 'running')?.key ?? null;
-      if (nowRunning && nowRunning !== prevRunning && (this.selectedKey() === prevRunning || !this.selectedKey())) {
+      // No celular, com a etapa aberta em tela cheia, não troca o texto que o usuário está lendo.
+      if (nowRunning && nowRunning !== prevRunning && !this.mobileDetail() && (this.selectedKey() === prevRunning || !this.selectedKey())) {
         this.selectedKey.set(nowRunning);
         this.scrollToStep(nowRunning);
       }
@@ -691,7 +754,8 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   toggleStep(step: StepView): void {
     if (this.expanded()) {
-      this.selectedKey.set(step.key);
+      if (this.narrow()) this.openMobileDetail(step.key);
+      else this.selectedKey.set(step.key);
       return;
     }
     this.selectedKey.update((k) => (k === step.key ? null : step.key));
@@ -801,8 +865,12 @@ export class ExecutionPlanComponent implements OnDestroy {
   /** Abre a etapa e rola até ela (do aviso do topo). */
   goToStep(key: string | null | undefined): void {
     if (!key) return;
+    if (this.expanded() && this.narrow()) {
+      this.openMobileDetail(key);
+      return;
+    }
     this.selectedKey.set(key);
-    this.scrollToStep(key);
+    this.scrollToStep(key, true);
   }
 
   /**
@@ -1249,8 +1317,9 @@ export class ExecutionPlanComponent implements OnDestroy {
   trackStep = (_: number, s: StepView) => s.key;
   trackLog = (_: number, l: ExecutionLog) => l.id;
 
-  private scrollToStep(key: string | null): void {
-    if (!key) return;
+  /** `force`: pedido do usuário (ex.: "Ver a etapa"); sem ele, só rola se o usuário não estiver mexendo. */
+  private scrollToStep(key: string | null, force = false): void {
+    if (!key || (!force && this.userIsInteracting())) return;
     setTimeout(() => {
       const body = this.stepsBodyRef?.nativeElement;
       const el = body?.querySelector<HTMLElement>(`[data-step-key="${key}"]`);
@@ -1265,6 +1334,8 @@ export class ExecutionPlanComponent implements OnDestroy {
   }
 
   private scrollLogsToEnd(): void {
+    // Mexer no scrollTop durante o arrasto corta a rolagem do dedo (iOS).
+    if (this.userIsInteracting()) return;
     setTimeout(() => {
       const panel = this.panelRef?.nativeElement;
       panel?.querySelectorAll<HTMLElement>('.plan-logs[data-follow]').forEach((box) => {
@@ -1275,6 +1346,8 @@ export class ExecutionPlanComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.narrowMedia.removeEventListener('change', this.onNarrowChange);
+    this.closeMobileDetail();
     this.fullscreen.destroy();
     this.loadSub?.unsubscribe();
     this.logsSub?.unsubscribe();

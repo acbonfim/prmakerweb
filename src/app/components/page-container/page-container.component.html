@@ -1,13 +1,21 @@
-<div class="page-container">
+<div class="page-container" [class.page-container--compact]="compact()">
   <div class="top-bar">
-    <app-top-menu [isCollapsed]="isSidebarCollapsed"
+    <app-top-menu [isCollapsed]="compact() ? !drawerOpen() : isSidebarCollapsed"
                   (toggleSidebar)="toggleSidebar()"
                   ></app-top-menu>
   </div>
 
   <div class="main-content">
-    <div class="sidebar" [class.collapsed]="isSidebarCollapsed">
-      <app-side-menu [isCollapsed]="isSidebarCollapsed" (toggleSidebar)="toggleSidebar()"></app-side-menu>
+    @if (compact() && drawerOpen()) {
+      <!-- Celular (0043): gaveta por cima do conteúdo; tocar fora fecha. -->
+      <div class="drawer-backdrop" (click)="closeDrawer()" aria-hidden="true"></div>
+    }
+    <div class="sidebar"
+         [class.collapsed]="!compact() && isSidebarCollapsed"
+         [class.drawer]="compact()"
+         [class.drawer--open]="compact() && drawerOpen()"
+         [attr.inert]="compact() && !drawerOpen() ? '' : null">
+      <app-side-menu [isCollapsed]="!compact() && isSidebarCollapsed" (toggleSidebar)="toggleSidebar()"></app-side-menu>
     </div>
 
     <div class="content-area">

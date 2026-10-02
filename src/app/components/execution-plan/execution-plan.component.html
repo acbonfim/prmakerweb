@@ -2,6 +2,8 @@
      [attr.role]="expanded() ? 'dialog' : null" [attr.aria-modal]="expanded() ? 'true' : null"
      [attr.aria-label]="expanded() ? 'Plano de execução em tela cheia' : null"
      [class.plan--dropping]="panelDropping()"
+     [class.plan--detail-open]="expanded() && narrow() && mobileDetail()"
+     (pointerdown)="markInteraction()" (wheel)="markInteraction()" (touchmove)="markInteraction()"
      (dragover)="onPanelDragOver($event)" (dragleave)="onPanelDragLeave($event)" (drop)="onPanelDrop($event)"
      (paste)="onPanelPaste($event)">
   @if (panelDropping()) {
@@ -54,7 +56,7 @@
     }
     @if (plan(); as p) {
       <!-- 0033: volta para a sessão do Claude do card sem copiar /analisar-bug de novo -->
-      <button mat-icon-button class="plan__action" (click)="copyTerminalCommand()"
+      <button mat-icon-button class="plan__action plan__action--secondary" (click)="copyTerminalCommand()"
               [matTooltip]="'Retomar no Claude — copia o comando do terminal que volta para a sessão deste card' + (p.executor?.host ? ' (máquina ' + p.executor!.host + ')' : '') + ' ou abre uma nova'"
               aria-label="Copiar o comando para retomar no Claude">
         <mat-icon>terminal</mat-icon>
@@ -65,7 +67,7 @@
             <mat-icon>hourglass_top</mat-icon>
           </span>
         } @else {
-          <button mat-icon-button class="plan__action" (click)="requestResume()" [disabled]="!!busy()"
+          <button mat-icon-button class="plan__action plan__action--secondary" (click)="requestResume()" [disabled]="!!busy()"
                   [matTooltip]="'Continuar sozinho — o vigia em ' + (p.executor.host || 'a máquina da sessão') + ' retoma o Claude em segundo plano (precisa do vigia ligado: prmake-card.sh agent install)'"
                   aria-label="Pedir para o Claude continuar sozinho">
             <mat-icon>smart_toy</mat-icon>
@@ -74,18 +76,39 @@
       }
     }
     @if (history().length > 1) {
-      <button mat-icon-button class="plan__action" [matMenuTriggerFor]="historyMenu"
+      <button mat-icon-button class="plan__action plan__action--secondary" [matMenuTriggerFor]="historyMenu"
               [matTooltip]="'Histórico (' + history().length + ' planos)'" aria-label="Histórico de planos">
         <mat-icon>history</mat-icon>
       </button>
-      <mat-menu #historyMenu="matMenu" class="plan-history-menu">
-        @for (h of history(); track h.id; let first = $first) {
-          <button mat-menu-item (click)="selectHistory(h)" [class.plan-history--current]="plan()?.id === h.id">
-            <span class="plan-history__dot plan-status--{{ h.status }}"></span>
-            <span class="plan-history__text">
-              <span class="plan-history__title">{{ h.title }}@if (first) { · mais recente }</span>
-              <span class="plan-history__meta">{{ statusLabel[h.status] }} · {{ h.stepsCompleted }}/{{ h.stepsTotal }} · {{ formatDateTime(h.createdAt) }}</span>
-            </span>
+    }
+    <mat-menu #historyMenu="matMenu" class="plan-history-menu">
+      @for (h of history(); track h.id; let first = $first) {
+        <button mat-menu-item (click)="selectHistory(h)" [class.plan-history--current]="plan()?.id === h.id">
+          <span class="plan-history__dot plan-status--{{ h.status }}"></span>
+          <span class="plan-history__text">
+            <span class="plan-history__title">{{ h.title }}@if (first) { · mais recente }</span>
+            <span class="plan-history__meta">{{ statusLabel[h.status] }} · {{ h.stepsCompleted }}/{{ h.stepsTotal }} · {{ formatDateTime(h.createdAt) }}</span>
+          </span>
+        </button>
+      }
+    </mat-menu>
+    @if (plan(); as p) {
+      <!-- 0043: painel estreito (celular) — as ações secundárias do cabeçalho vão para o "⋯". -->
+      <button mat-icon-button class="plan__action plan__more" [matMenuTriggerFor]="moreMenu" aria-label="Mais ações do plano">
+        <mat-icon>more_vert</mat-icon>
+      </button>
+      <mat-menu #moreMenu="matMenu" class="app-menu" xPosition="before">
+        <button mat-menu-item (click)="copyTerminalCommand()">
+          <mat-icon>terminal</mat-icon><span>Retomar no Claude (copiar comando)</span>
+        </button>
+        @if (isActive() && p.executor && !hasWorkers() && !p.resumePending) {
+          <button mat-menu-item (click)="requestResume()" [disabled]="!!busy()">
+            <mat-icon>smart_toy</mat-icon><span>Continuar sozinho</span>
+          </button>
+        }
+        @if (history().length > 1) {
+          <button mat-menu-item [matMenuTriggerFor]="historyMenu">
+            <mat-icon>history</mat-icon><span>Histórico ({{ history().length }} planos)</span>
           </button>
         }
       </mat-menu>
@@ -295,6 +318,11 @@
         <div class="plan__meta">
           <span class="plan__meta-kicker">{{ p.phase === 'correction' ? 'Plano de correção' : 'Plano de análise' }}</span>
           <span class="plan__meta-title" [matTooltip]="p.title">{{ p.title }}</span>
+          @if (expanded() && narrow()) {
+            <button type="button" class="plan__summary-btn" (click)="openMobileDetail(null)">
+              <mat-icon>subject</mat-icon> Resumo e andamento geral do plano
+            </button>
+          }
           <span class="plan__meta-sub">
             {{ counts().done }}/{{ counts().total }} etapas · por {{ p.createdBy }} ·
             <span [matTooltip]="formatDateTime(p.createdAt)">{{ relativeTime(p.createdAt) }}</span>
@@ -417,7 +445,25 @@
     </div>
 
     @if (expanded() && plan()) {
-      <div class="plan__detail">
+      <div class="plan__detail" #detailBody data-keep-scroll>
+        @if (narrow()) {
+          <!-- 0043: celular — volta para a lista e anda entre as etapas sem sair da tela cheia. -->
+          <div class="plan__detail-nav">
+            <button mat-button class="plan__detail-back" (click)="closeMobileDetail()">
+              <mat-icon>arrow_back</mat-icon> Etapas
+            </button>
+            <span class="plan__spacer"></span>
+            @if (selectedStep()) {
+              <button mat-icon-button (click)="stepNav(-1)" [disabled]="selectedIndex() <= 0" aria-label="Etapa anterior">
+                <mat-icon>chevron_left</mat-icon>
+              </button>
+              <span class="plan__detail-pos">{{ selectedIndex() + 1 }}/{{ steps().length }}</span>
+              <button mat-icon-button (click)="stepNav(1)" [disabled]="selectedIndex() >= steps().length - 1" aria-label="Próxima etapa">
+                <mat-icon>chevron_right</mat-icon>
+              </button>
+            }
+          </div>
+        }
         @if (selectedStep(); as step) {
           <div class="plan__detail-head step--{{ step.view }}">
             <span class="plan__detail-kicker">Etapa</span>
@@ -432,7 +478,7 @@
           @if (plan()!.summary) {
             <div class="plan-md" [innerHTML]="plan()!.summary | planMarkdown"></div>
           } @else {
-            <p class="plan__hint">Escolha uma etapa à esquerda para ver o que ela vai fazer e acompanhar ao vivo.</p>
+            <p class="plan__hint">{{ narrow() ? 'Volte para as etapas e toque em uma para ver o que ela vai fazer e acompanhar ao vivo.' : 'Escolha uma etapa à esquerda para ver o que ela vai fazer e acompanhar ao vivo.' }}</p>
           }
           @if (generalLogs().length) {
             <div class="plan__section-title">Andamento geral</div>

@@ -1,4 +1,10 @@
 <div class="topbar-inner">
+  <!-- 0043: instalado (PWA) não há o voltar do navegador. Fecha o que estiver aberto antes de trocar de tela. -->
+  <button mat-icon-button class="topbar-back" (click)="back.back()" [disabled]="!back.canGoBack()"
+          matTooltip="Voltar" aria-label="Voltar">
+    <mat-icon>arrow_back</mat-icon>
+  </button>
+
   <button mat-icon-button class="menu-toggle" (click)="onToggleSidebar()"
           [matTooltip]="isCollapsed ? 'Expandir menu' : 'Recolher menu'" matTooltipPosition="right"
           aria-label="Alternar menu lateral">

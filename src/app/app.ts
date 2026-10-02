@@ -7,6 +7,8 @@ import {PageContainerComponent} from './components/page-container/page-container
 import {PwaService} from './services/pwa.service';
 import {NavigationFeedbackService} from './services/navigation-feedback.service';
 import {AuthService} from './services/auth.service';
+import {BackNavigationService} from './services/back-navigation.service';
+import {MobileDialogsService} from './services/mobile-dialogs.service';
 
 @Component({
   selector: 'app-root',
@@ -46,5 +48,7 @@ export class App {
   constructor() {
     this.pwa.start();
     this.nav.start();
+    inject(BackNavigationService).start();
+    inject(MobileDialogsService).start();
   }
 }
