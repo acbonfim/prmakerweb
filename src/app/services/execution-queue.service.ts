@@ -6,6 +6,7 @@ import {
   ExecutionCardQueue,
   ExecutionRequest,
   ExecutionRequestKind,
+  ExecutionUsageReport,
   ExecutionUserSettings,
   ExecutionWorker
 } from '../components/execution-plan/execution-queue.model';
@@ -80,6 +81,11 @@ export class ExecutionQueueService {
 
   saveSettings(settings: Partial<ExecutionUserSettings>): Observable<ExecutionUserSettings> {
     return this.http.put<ExecutionUserSettings>(`${this.workerUrl}/settings`, settings);
+  }
+
+  /** Consumo médio por plano com MCP × sem MCP (0041); all = de todos (só admin). */
+  usageReport(days = 30, all = false): Observable<ExecutionUsageReport> {
+    return this.http.get<ExecutionUsageReport>(`${environment.apiUrl}ExecutionPlan/usage-report`, { params: { days, all } });
   }
 
   agent(): Observable<{ version?: string | null; rids: string[] }> {
