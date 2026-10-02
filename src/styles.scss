@@ -82,6 +82,12 @@ html {
     max-width: calc(100vw - 16px) !important;
   }
 
+  /* Conteúdo com largura mínima de desktop (ex.: min-width: 460px) não estoura a tela. */
+  .cdk-overlay-pane.mat-mdc-dialog-panel .mat-mdc-dialog-content {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
   .cdk-overlay-pane.mat-mdc-dialog-panel.cime-dialog--phone {
     width: calc(100vw - 16px) !important;
     max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;

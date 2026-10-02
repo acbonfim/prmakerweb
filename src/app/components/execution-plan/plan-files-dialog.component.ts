@@ -66,7 +66,7 @@ const SQL_KEYWORDS = new Set((
         <span class="pf__title">Arquivos do plano · #{{ data.cardNumber }}</span>
         <span class="pf__spacer"></span>
         <button mat-stroked-button (click)="downloadZip()" [disabled]="!all().length || zipping()">
-          <mat-icon>{{ zipping() ? 'progress_activity' : 'folder_zip' }}</mat-icon> Baixar tudo (.zip)
+          <mat-icon>{{ zipping() ? 'progress_activity' : 'folder_zip' }}</mat-icon><span class="pf__zip-label"> Baixar tudo (.zip)</span>
         </button>
         <button mat-icon-button mat-dialog-close matTooltip="Fechar (Esc)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
       </div>
@@ -230,6 +230,11 @@ const SQL_KEYWORDS = new Set((
     .pf__state--error { color: var(--mat-sys-error, #f2b8b5); }
     .pf__spin { animation: pf-spin .9s linear infinite; }
     @keyframes pf-spin { to { transform: rotate(360deg); } }
+    /* Celular (0043): o título não divide espaço com o rótulo do .zip (o ícone basta). */
+    @media (max-width: 576px) {
+      .pf__zip-label { display: none; }
+      .pf__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    }
     @media (max-width: 720px) {
       .pf__body { flex-direction: column; }
       .pf__list { flex: 0 0 auto; max-height: 34%; border-right: none; border-bottom: 1px solid rgba(255,255,255,.06); }

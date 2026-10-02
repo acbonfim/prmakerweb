@@ -212,3 +212,10 @@
   width: 14px;
   height: 14px;
 }
+
+/* Celular (0043): título e ações sem quebrar o botão em duas linhas. */
+@media (max-width: 576px) {
+  .page-header { flex-wrap: wrap; row-gap: 8px; padding: 10px 12px; }
+  .header-title { font-size: 17px; }
+  .page-header button { white-space: nowrap; }
+}

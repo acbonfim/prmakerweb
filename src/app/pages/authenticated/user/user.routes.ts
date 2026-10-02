@@ -18,7 +18,8 @@ export const USER_ROUTES: Routes = [
       },
       {
         path: '',
-        redirectTo: 'dashboard',
+        // Absoluto (0043): relativo ia para /auth/user/dashboard, que não existe.
+        redirectTo: '/auth/dashboard',
         pathMatch: 'full'
       }
 

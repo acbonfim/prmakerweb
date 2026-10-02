@@ -115,6 +115,8 @@ export const PROFILE_PHOTO_KEY = 'prform_profile_photo';
     h2[mat-dialog-title] { display: flex; align-items: center; gap: 8px; }
     .title-icon { color: var(--mat-sys-primary); }
     mat-dialog-content { min-width: 460px; max-width: 520px; }
+    /* Celular (0043): o diálogo ocupa a tela; sem largura mínima de desktop. */
+    @media (max-width: 576px) { mat-dialog-content { min-width: 0; max-width: none; } }
     .user-head { display: flex; align-items: center; gap: 14px; margin: 4px 0 16px; }
     .avatar {
       width: 56px; height: 56px; border-radius: 50%; overflow: hidden;
