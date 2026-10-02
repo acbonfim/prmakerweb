@@ -1156,3 +1156,35 @@
   .plan__detail .plan-log__time { font-size: 12px; }
   .plan__detail .plan__section-title { font-size: 12px; margin-top: 16px; }
 }
+
+/* 0050: o que o Claude está fazendo agora (linha no aviso do pedido + histórico curto) */
+.plan-act {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 4px; padding: 2px 0; border: 0; background: none; cursor: pointer;
+  font: inherit; color: inherit; text-align: left; max-width: 100%;
+}
+.plan-act__icon { font-size: 16px; width: 16px; height: 16px; color: var(--plan-run); flex: none; }
+.plan-act__label { font-weight: 500; overflow-wrap: anywhere; }
+.plan-act__age { color: var(--plan-muted); font-variant-numeric: tabular-nums; }
+.plan-act__quiet { color: var(--plan-warn); }
+.plan-act:hover .plan-act__label, .plan-act:focus-visible .plan-act__label { text-decoration: underline; }
+.plan-act__log {
+  list-style: none; margin: 0 0 8px; padding: 6px 12px;
+  border-left: 2px solid color-mix(in srgb, var(--plan-run) 40%, transparent);
+  font-size: 12px;
+}
+.plan-act__log li { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+.plan-act__log mat-icon { font-size: 14px; width: 14px; height: 14px; color: var(--plan-muted); flex: none; }
+.plan-act__log span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.plan-act__log time { color: var(--plan-muted); font-variant-numeric: tabular-nums; }
+
+/* 0050: texto do chamado pronto para copiar na etapa */
+.plan-ticket {
+  border: 1px solid color-mix(in srgb, var(--mat-sys-on-surface) 14%, transparent);
+  border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+}
+.plan-ticket__title { font-weight: 600; margin-bottom: 6px; overflow-wrap: anywhere; }
+.plan-ticket__body {
+  margin: 0 0 8px; max-height: 260px; overflow: auto;
+  white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 12.5px;
+}

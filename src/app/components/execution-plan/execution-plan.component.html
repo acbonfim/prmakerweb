@@ -176,7 +176,8 @@
       <mat-icon [class.plan-req__spin]="r.status !== 'queued'">{{ r.status === 'queued' ? 'hourglass_top' : 'smart_toy' }}</mat-icon>
       <span class="plan__bar-text">
         @if (r.status === 'queued') {
-          <strong>Na fila do Claude</strong> · {{ r.waitReason || 'começa em instantes' }}
+          <strong>Na fila do Claude</strong> desde {{ formatTime(r.createdAt) }} · {{ r.waitReason || 'começa em instantes' }}
+          @if (r.attempts > 0) { · tentativa {{ r.attempts + 1 }}/{{ r.maxAttempts }} }
           @if (r.waitCode === 'offline' && requestWorker(r)?.lastSeenAt) {
             (último sinal {{ relativeTime(requestWorker(r)!.lastSeenAt) }})
           }
@@ -186,6 +187,18 @@
           @if (r.newSession) { · correção numa sessão nova (só o resumo da análise) }
         }
         <span class="plan-req__meta"> · {{ sourceLabel[r.source] || r.source }} — {{ r.requestedBy }}</span>
+        @if (liveActivity(); as a) {
+          <!-- 0050: o que o Claude está fazendo agora (rótulo do executor, nunca o comando) -->
+          <button type="button" class="plan-act" (click)="showActivityLog.set(!showActivityLog())"
+                  [attr.aria-expanded]="showActivityLog()" matTooltip="Ver as últimas atividades">
+            <mat-icon class="plan-act__icon">{{ activityIcon(a.tool) }}</mat-icon>
+            <span class="plan-act__label">{{ a.label }}</span>
+            <span class="plan-act__age">{{ activityAge(a.at) }}</span>
+            @if (activityQuietMinutes(); as m) {
+              <span class="plan-act__quiet">· sem novidade há {{ m }} min — o Claude pode estar pensando ou esperando um comando terminar</span>
+            }
+          </button>
+        }
       </span>
       @if (r.waitCode === 'budget') {
         <button mat-button (click)="forceRequest(r)" [disabled]="!!busy()">Rodar mesmo assim</button>
@@ -198,6 +211,13 @@
       }
       <button mat-button (click)="cancelRequest(r)" [disabled]="!!busy()">{{ r.status === 'queued' ? 'Cancelar' : 'Parar' }}</button>
     </div>
+    @if (showActivityLog() && recentActivities().length) {
+      <ol class="plan-act__log" aria-label="Últimas atividades do Claude">
+        @for (a of recentActivities(); track a.at + a.label) {
+          <li><mat-icon>{{ activityIcon(a.tool) }}</mat-icon><span>{{ a.label }}</span><time>{{ formatTime(a.at) }}</time></li>
+        }
+      </ol>
+    }
   } @else if (failedRequest(); as r) {
     <div class="plan__bar plan__bar--danger plan-req" role="alert">
       <mat-icon>error_outline</mat-icon>
@@ -383,6 +403,8 @@
                     <span class="step__sub step__sub--you"><mat-icon>front_hand</mat-icon>Sua vez — {{ step.status === 'running' ? 'conclua quando terminar' : 'já pode ser feita' }}</span>
                   } @else if (stalledWarning(step); as w) {
                     <span class="step__sub step__sub--stalled"><mat-icon>warning</mat-icon>Parada com um aviso: {{ w }}</span>
+                  } @else if (step.view === 'running' && liveActivity(); as a) {
+                    <span class="step__activity">{{ a.label }} · {{ activityAge(a.at) }}<span class="step__typing"><i></i><i></i><i></i></span></span>
                   } @else if (step.view === 'running' && step.activity) {
                     <span class="step__activity">{{ step.activity }}<span class="step__typing"><i></i><i></i><i></i></span></span>
                   } @else if (step.view === 'running') {
@@ -648,13 +670,43 @@
     </p>
   }
 
+  @if (step.kind === 'ticket') {
+    <!-- 0050: tudo o que o usuário precisa para abrir o chamado, sem sair da etapa -->
+    @if (ticketFile(step.key); as tf) {
+      <div class="plan__section-title">Texto do chamado</div>
+      <div class="plan-ticket">
+        @switch (ticketText(tf)) {
+          @case ('loading') { <p class="plan__hint">Carregando {{ tf.name }}…</p> }
+          @case ('error') { <p class="plan__hint">Não consegui ler {{ tf.name }} — abra pelos arquivos.</p> }
+          @default {
+            @if (ticketText(tf); as t) {
+              @if (t !== 'loading' && t !== 'error') {
+                <div class="plan-ticket__title">{{ t.title }}</div>
+                <pre class="plan-ticket__body">{{ t.body }}</pre>
+              }
+            }
+          }
+        }
+        <div class="plan__chips">
+          <button mat-stroked-button class="plan__chip" (click)="copyTicket(tf, 'title')"><mat-icon>title</mat-icon>Copiar título</button>
+          <button mat-stroked-button class="plan__chip" (click)="copyTicket(tf, 'body')"><mat-icon>content_copy</mat-icon>Copiar corpo</button>
+          @for (sc of ticketScripts(step.key); track sc.id) {
+            <button mat-stroked-button class="plan__chip" (click)="downloadArtifact(sc)"><mat-icon>download</mat-icon>{{ sc.name }}</button>
+          }
+        </div>
+      </div>
+    } @else {
+      <p class="plan__hint">O texto do chamado ainda não foi anexado nesta etapa.</p>
+    }
+  }
+
   @if (stepArtifacts(step.key); as files) {
     @if (files.length) {
       <div class="plan__section-title">Arquivos</div>
       <div class="plan__chips">
         @for (a of files; track a.id) {
           <button mat-stroked-button class="plan__chip" (click)="openFiles(undefined, a)">
-            <mat-icon>{{ a.kind === 'script' ? 'code' : a.kind === 'analysis' ? 'description' : a.kind === 'image' ? 'image' : a.kind === 'data' ? 'dataset' : 'attach_file' }}</mat-icon>
+            <mat-icon>{{ a.kind === 'script' ? 'code' : a.kind === 'ticket' ? 'confirmation_number' : a.kind === 'analysis' ? 'description' : a.kind === 'image' ? 'image' : a.kind === 'data' ? 'dataset' : 'attach_file' }}</mat-icon>
             {{ a.name }}
           </button>
         }

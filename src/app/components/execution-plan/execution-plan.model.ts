@@ -6,7 +6,8 @@ export type StepExecutor = 'claude' | 'user';
 export type StepKind = 'task' | 'code' | 'pr' | 'ticket' | 'question' | 'validation';
 export type LinkKind = 'ticket' | 'pr' | 'doc' | 'other';
 export type LogKind = 'info' | 'progress' | 'finding' | 'decision' | 'warning' | 'error';
-export type ArtifactKind = 'script' | 'analysis' | 'data' | 'image' | 'attachment';
+/** 0050: `ticket` = texto do chamado (`chamado-<nome>.md`), só no plano de correção. */
+export type ArtifactKind = 'script' | 'analysis' | 'data' | 'image' | 'attachment' | 'ticket';
 /** Etapa "aguardando": de quem depende (0037). `user` = ação do usuário (o motivo diz qual). */
 export type WaitingOn = 'user' | 'answer' | 'external';
 /** Pendência do usuário (0037): pergunta aberta, etapa dele pronta/em andamento, etapa travada esperando ele. */
@@ -237,9 +238,13 @@ export interface ExecutionLog {
 export interface ExecutionPlanRealtimePayload {
   cardNumber: string;
   planId: string;
-  action: 'created' | 'steps' | 'step' | 'log' | 'status' | 'artifact' | 'question' | 'link' | 'note';
+  action: 'created' | 'steps' | 'step' | 'log' | 'status' | 'artifact' | 'question' | 'link' | 'note' | 'request' | 'activity';
   stepKey?: string | null;
-  status?: PlanStatus;
+  status?: PlanStatus | string;
+  /** 0050 (`activity`): o pedido e a atividade nova — a tela atualiza sem refazer o GET. */
+  requestId?: string;
+  activity?: { label: string; tool?: string | null; at: string } | null;
+  recent?: { label: string; tool?: string | null; at: string }[];
 }
 
 export const EXECUTION_PLAN_EVENT = 'executionPlanUpdated';
@@ -251,7 +256,7 @@ export const EXECUTION_PENDING_EVENT = 'executionPlanPendingChanged';
 
 /** Botões do rodapé: cada grupo junta um ou mais tipos de arquivo. */
 export interface ArtifactGroup {
-  id: 'scripts' | 'analyses' | 'data' | 'attachments';
+  id: 'scripts' | 'tickets' | 'analyses' | 'data' | 'attachments';
   label: string;
   icon: string;
   kinds: ArtifactKind[];
@@ -259,6 +264,7 @@ export interface ArtifactGroup {
 
 export const ARTIFACT_GROUPS: ArtifactGroup[] = [
   { id: 'scripts', label: 'Scripts', icon: 'code', kinds: ['script'] },
+  { id: 'tickets', label: 'Chamados', icon: 'confirmation_number', kinds: ['ticket'] },
   { id: 'analyses', label: 'Análises', icon: 'description', kinds: ['analysis'] },
   { id: 'data', label: 'Dados', icon: 'dataset', kinds: ['data'] },
   { id: 'attachments', label: 'Anexos', icon: 'attach_file', kinds: ['image', 'attachment'] }

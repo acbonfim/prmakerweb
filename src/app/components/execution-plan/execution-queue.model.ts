@@ -2,7 +2,14 @@
 
 export type ExecutionRequestStatus = 'queued' | 'claimed' | 'running' | 'done' | 'failed' | 'cancelled' | 'expired';
 export type ExecutionRequestKind = 'analyze' | 'resume';
-export type ExecutionWaitCode = 'no-worker' | 'offline' | 'paused' | 'busy' | 'budget' | 'retry' | 'throttled' | 'gathering';
+export type ExecutionWaitCode = 'no-worker' | 'offline' | 'paused' | 'busy' | 'budget' | 'retry' | 'throttled' | 'gathering' | 'updating';
+
+/** 0050: o que o Claude está fazendo (rótulo montado pelo executor a partir da ferramenta usada — nunca o comando). */
+export interface ExecutionActivity {
+  label: string;
+  tool?: string | null;
+  at: string;
+}
 
 export interface ExecutionRequest {
   id: string;
@@ -52,6 +59,9 @@ export interface ExecutionRequest {
   startedAt?: string | null;
   finishedAt?: string | null;
   lastHeartbeatAt?: string | null;
+  /** 0050 (executor 1.0.8+): atividade atual e as últimas (mais novas primeiro). */
+  currentActivity?: ExecutionActivity | null;
+  recentActivities?: ExecutionActivity[];
 }
 
 export interface ExecutionDoctorCheck {
