@@ -32,6 +32,21 @@ import { TokenPricingService, TokenUsage } from '../../services/token-pricing.se
           }
         </tbody>
       </table>
+      @if (b.models.length) {
+        <!-- 0047: cada modelo pelo seu preço (ex.: análise no Opus, correção no Sonnet). -->
+        <table class="tup__table tup__models">
+          <thead><tr><th>Modelo</th><th class="num">Tokens{{ u.average ? ' (média)' : '' }}</th><th class="num">≈ Custo</th></tr></thead>
+          <tbody>
+            @for (m of b.models; track m.model) {
+              <tr>
+                <td>{{ m.label }}@if (m.turns) { <span class="tup__hint">{{ m.turns }} respostas</span> }</td>
+                <td class="num">{{ tokens(m.tokens) }}</td>
+                <td class="num">{{ m.cost == null ? '—' : usd(m.cost) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
       <ul class="tup__notes">
         @if (u.reportedCostUsd != null) {
           <li><strong>{{ usd(u.reportedCostUsd) }}</strong> informado {{ u.reportedBy ? 'pelo ' + u.reportedBy : '' }}{{ b.estimatedCost != null ? ' (a estimativa acima usa a tabela de preços)' : '' }}.</li>
@@ -43,10 +58,12 @@ import { TokenPricingService, TokenUsage } from '../../services/token-pricing.se
           <li><b>Cache lido</b>: o contexto que o Claude relê a cada resposta (já enviado antes) — cobrado com desconto.
             <b>Cache escrito</b>: contexto novo guardado para as próximas respostas.</li>
         }
-        @if (!b.price && u.model) { <li>Modelo <code>{{ u.model }}</code> fora da tabela de preços (AI Configurations) — só os tokens.</li> }
+        @if (b.models.length) {
+          <li>Vários modelos: cada parte soma o consumo de cada modelo pelo preço dele (US$/milhão por modelo na tabela de preços).</li>
+        } @else if (!b.price && u.model) { <li>Modelo <code>{{ u.model }}</code> fora da tabela de preços (AI Configurations) — só os tokens.</li> }
         @if (u.model || u.turns || u.calls) {
           <li class="tup__meta">
-            @if (u.model) { <span>Modelo <code>{{ u.model }}</code></span> }
+            @if (u.model && !b.models.length) { <span>Modelo <code>{{ u.model }}</code></span> }
             @if (u.turns) { <span>{{ u.turns }} respostas</span> }
             @if (u.calls) { <span>{{ u.calls }} {{ u.calls === 1 ? 'ação' : 'ações' }}</span> }
           </li>
@@ -66,6 +83,7 @@ import { TokenPricingService, TokenUsage } from '../../services/token-pricing.se
     .tup__table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .tup__part td:first-child { padding-left: 16px; }
     .tup__strong td { font-weight: 600; }
+    .tup__models { margin-top: -2px; }
     .tup__hint { display: block; font-size: 10.5px; font-weight: 400; color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); }
     .tup__hint--good { color: #3fb950; }
     .tup__notes { margin: 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; line-height: 1.45;

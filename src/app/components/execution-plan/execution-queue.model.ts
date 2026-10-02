@@ -124,6 +124,8 @@ export interface ExecutionUsageReportRow {
   /** 0045: consultas à Base Solvace e buscas no código, em média por plano. */
   avgKbCalls?: number;
   avgSearchCalls?: number;
+  /** 0047: média por plano em cada modelo do grupo. */
+  models?: { model: string; avgTurns: number; avgInputTokens: number; avgOutputTokens: number; avgCacheReadTokens: number; avgCacheWriteTokens: number }[];
 }
 
 export interface ExecutionUsageReport {

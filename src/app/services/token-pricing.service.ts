@@ -10,6 +10,26 @@ export interface ModelPrice {
   cacheWrite: number;
 }
 
+/** Consumo em UM modelo (0047): a análise roda no Opus e a correção no Sonnet — cada um pelo seu preço. */
+export interface ModelTokenUsage {
+  model: string;
+  freshInput: number;
+  cacheRead: number;
+  cacheWrite: number;
+  output: number;
+  turns?: number | null;
+}
+
+/** Custo de um modelo no detalhe (0047). */
+export interface ModelCostLine {
+  model: string;
+  label: string;
+  tokens: number;
+  output: number;
+  turns: number | null;
+  cost: number | null;
+}
+
 /**
  * Consumo em tokens (0044). Com as partes da entrada (Claude Code: nova, cache lido, cache escrito) ou só a entrada
  * total (IA do PRMake). `reportedCostUsd` = custo já calculado (Claude Code ou PRMake), preferido à estimativa.
@@ -22,6 +42,8 @@ export interface TokenUsage {
   input?: number | null;
   output?: number | null;
   model?: string | null;
+  /** 0047: as mesmas partes separadas por modelo — a estimativa soma cada um pelo seu preço. */
+  models?: ModelTokenUsage[] | null;
   reportedCostUsd?: number | null;
   /** De onde veio o custo informado ("Claude Code", "PRMake"). */
   reportedBy?: string | null;
@@ -54,6 +76,8 @@ export interface TokenUsageBreakdown {
   withoutCache: number | null;
   price: ModelPrice | null;
   hasParts: boolean;
+  /** 0047: uma linha por modelo (vazio quando o consumo é de um modelo só). */
+  models: ModelCostLine[];
 }
 
 /** Tabela de preços (uma vez por sessão do navegador) e o cálculo das partes. */
@@ -81,8 +105,20 @@ export class TokenPricingService {
     return key ? prices[key] : null;
   }
 
+  /** Nome curto do modelo: "claude-opus-5-5" → "Opus 5.5". */
+  label(model: string): string {
+    const m = /claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d+))?/i.exec(model);
+    if (!m) return model;
+    const name = m[1][0].toUpperCase() + m[1].slice(1).toLowerCase();
+    const minor = m[3] && m[3].length <= 2 ? `.${m[3]}` : '';
+    return `${name} ${m[2]}${minor}`;
+  }
+
   breakdown(u: TokenUsage): TokenUsageBreakdown {
-    const price = this.find(u.model);
+    const models = (u.models ?? []).filter((m) => m && m.model);
+    // 0047: mais de um modelo → cada parte é a soma de cada modelo pelo seu preço.
+    if (models.length > 1) return this.multiModel(u, models);
+    const price = this.find(models[0]?.model ?? u.model);
     const cost = (tokens: number, per: number | null | undefined) => (per == null ? null : (tokens * per) / 1_000_000);
     const fresh = u.freshInput ?? 0;
     const cr = u.cacheRead ?? 0;
@@ -117,6 +153,64 @@ export class TokenPricingService {
       withoutCache: hasParts && price ? (totalInput * price.input) / 1_000_000 : null,
       price,
       hasParts,
+      models: [],
+    };
+  }
+
+  /** 0047: consumo com vários modelos (ex.: análise no Opus, correção no Sonnet). */
+  private multiModel(u: TokenUsage, models: ModelTokenUsage[]): TokenUsageBreakdown {
+    const sum = (f: (m: ModelTokenUsage) => number) => models.reduce((s, m) => s + (f(m) || 0), 0);
+    const costOf = (f: (m: ModelTokenUsage) => number, part: keyof ModelPrice) => {
+      let total = 0;
+      for (const m of models) {
+        const p = this.find(m.model);
+        if (!p) return null;
+        total += ((f(m) || 0) * p[part]) / 1_000_000;
+      }
+      return total;
+    };
+    const fresh = sum((m) => m.freshInput);
+    const cr = sum((m) => m.cacheRead);
+    const cw = sum((m) => m.cacheWrite);
+    const output = sum((m) => m.output);
+    const totalInput = fresh + cr + cw;
+    const freshCost = costOf((m) => m.freshInput, 'input');
+    const crCost = costOf((m) => m.cacheRead, 'cacheRead');
+    const cwCost = costOf((m) => m.cacheWrite, 'cacheWrite');
+    const outCost = costOf((m) => m.output, 'output');
+    const inputCost = freshCost == null || crCost == null || cwCost == null ? null : freshCost + crCost + cwCost;
+    const estimatedCost = inputCost == null || outCost == null ? null : inputCost + outCost;
+    const lines: TokenUsageLine[] = [
+      { key: 'fresh', label: 'Entrada nova', hint: 'preço cheio de cada modelo', tokens: fresh, pricePerMillion: null, cost: freshCost },
+      { key: 'cacheRead', label: 'Cache lido', hint: 'com desconto', tokens: cr, pricePerMillion: null, cost: crCost, discount: true },
+      { key: 'cacheWrite', label: 'Cache escrito', tokens: cw, pricePerMillion: null, cost: cwCost },
+      { key: 'input', label: 'Entrada total', tokens: totalInput, pricePerMillion: null, cost: inputCost, strong: true },
+      { key: 'output', label: 'Saída', tokens: output, pricePerMillion: null, cost: outCost },
+      { key: 'total', label: 'Total', tokens: totalInput + output, pricePerMillion: null, cost: estimatedCost ?? u.reportedCostUsd ?? null, strong: true },
+    ];
+    const withoutCache = models.every((m) => this.find(m.model))
+      ? models.reduce((s, m) => s + ((m.freshInput + m.cacheRead + m.cacheWrite) * this.find(m.model)!.input) / 1_000_000, 0)
+      : null;
+    return {
+      lines,
+      totalInput,
+      totalTokens: totalInput + output,
+      estimatedCost,
+      withoutCache,
+      price: null,
+      hasParts: true,
+      models: models.map((m) => {
+        const p = this.find(m.model);
+        const tokens = m.freshInput + m.cacheRead + m.cacheWrite + m.output;
+        return {
+          model: m.model,
+          label: this.label(m.model),
+          tokens,
+          output: m.output,
+          turns: m.turns ?? null,
+          cost: p ? (m.freshInput * p.input + m.cacheRead * p.cacheRead + m.cacheWrite * p.cacheWrite + m.output * p.output) / 1_000_000 : null,
+        };
+      }),
     };
   }
 }

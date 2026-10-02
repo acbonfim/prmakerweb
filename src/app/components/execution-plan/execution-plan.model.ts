@@ -98,6 +98,18 @@ export interface ExecutionUsage {
   /** 0045: consultas à Base Solvace e buscas no código. */
   kbCalls?: number;
   searchCalls?: number;
+  /** 0047: consumo por modelo (Opus na análise, Sonnet na correção). */
+  models?: ExecutionModelTokens[];
+}
+
+/** 0047: consumo em um modelo (entrada nova, saída, cache lido e escrito). */
+export interface ExecutionModelTokens {
+  model: string;
+  turns: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
 }
 
 export interface ExecutionStep {
