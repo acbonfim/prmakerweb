@@ -3,7 +3,7 @@
   color: var(--mat-sys-on-surface);
 }
 
-/* Duas colunas: "Seus últimos cards" | "Últimos handovers" */
+/* Duas colunas: "Seus últimos cards" | "Cards que você participou" (0051) */
 .recent-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -29,17 +29,11 @@
 
 .home-container {
   padding: 20px 24px;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
-}
-
-.home-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 /* ── Hero ── */
@@ -99,246 +93,24 @@
   color: #fff;
 }
 
-/* ── Cabeçalho de seção (linguagem visual de register / gestão de usuários) ── */
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background-color: var(--surface-3, #252525);
-  border-radius: 10px;
-  padding: 10px 16px;
-}
-
-.header-icon { color: var(--mat-sys-primary); }
-
-.section-title {
-  font-size: 18px;
-  font-weight: 500;
-  color: var(--mat-sys-on-surface);
-}
-
-.section-subtitle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--mat-sys-primary);
-  font-weight: 500;
-}
-
-.admin-icon {
-  font-size: 16px;
-  width: 16px;
-  height: 16px;
-}
-
-/* ── Cards grid ── */
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
-}
-
-.quick-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: var(--surface-1, #2a2a2a);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  padding: 16px;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.quick-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: var(--card-color);
-  border-radius: 10px 0 0 10px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.quick-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  border-color: var(--card-color);
-}
-
-.quick-card:hover::before {
-  opacity: 1;
-}
-
-.card-icon-wrap {
-  flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--card-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.card-icon-wrap mat-icon {
-  font-size: 24px;
-  width: 24px;
-  height: 24px;
-}
-
-.card-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.card-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--mat-sys-on-surface);
-  margin: 0 0 4px 0;
-}
-
-.card-description {
-  font-size: 12px;
-  color: var(--mat-sys-on-surface);
-  opacity: 0.65;
-  margin: 0;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.card-arrow {
-  flex-shrink: 0;
-  color: var(--mat-sys-on-surface);
-  opacity: 0.35;
-  transition: color 0.15s, transform 0.15s, opacity 0.15s;
-  font-size: 20px;
-  width: 20px;
-  height: 20px;
-}
-
-.quick-card:hover .card-arrow {
-  color: var(--card-color);
-  opacity: 1;
-  transform: translateX(3px);
-}
-
-/* ── Banner de Saldo (Férias) ── */
-.balance-banner {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  background: var(--surface-1, #2a2a2a);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  padding: 18px 24px;
-  flex-wrap: wrap;
-}
-
-.balance-banner-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--mat-sys-on-surface);
-  white-space: nowrap;
-}
-
-.balance-banner-title mat-icon {
-  color: #ffa726;
-}
-
-.balance-stats {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  flex: 1;
-}
-
-.balance-stat {
+/* Nenhuma das listas tem card ainda. */
+.home-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  min-width: 60px;
+  gap: 8px;
+  padding: 48px 16px;
+  border-radius: 12px;
+  text-align: center;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent);
+  background: var(--surface-1, #262b33);
 }
 
-.stat-value {
-  font-size: 26px;
-  font-weight: 700;
+.home-empty mat-icon {
+  font-size: 40px;
+  width: 40px;
+  height: 40px;
   color: var(--mat-sys-primary);
-  line-height: 1;
-}
-
-.stat-value.used {
-  color: #ffa726;
-}
-
-.stat-value.remaining {
-  color: #66bb6a;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: var(--mat-sys-on-surface);
-  opacity: 0.6;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.balance-divider {
-  width: 1px;
-  height: 36px;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.balance-action-btn {
-  margin-left: auto;
-  white-space: nowrap;
-}
-
-.balance-action-btn mat-icon {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
-  margin-right: 4px;
-}
-
-/* ── Skeleton shimmer (mesmo padrão de gestão de usuários) ── */
-.skeleton-card { pointer-events: none; }
-
-.sk {
-  border-radius: 6px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.05) 25%,
-    rgba(255, 255, 255, 0.12) 37%,
-    rgba(255, 255, 255, 0.05) 63%
-  );
-  background-size: 400% 100%;
-  animation: shimmer 1.4s ease infinite;
-}
-
-.sk-balance-title { height: 18px; width: 160px; }
-.sk-balance-stat { height: 34px; width: 64px; border-radius: 8px; }
-.sk-balance-btn { height: 36px; width: 150px; margin-left: auto; border-radius: 18px; }
-
-@keyframes shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: 0 0; }
 }
 
 /* ── Responsive ── */
@@ -358,26 +130,5 @@
 
   .hero-decoration {
     display: none;
-  }
-
-  .balance-banner {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 16px 20px;
-    gap: 16px;
-  }
-
-  .balance-stats {
-    width: 100%;
-    justify-content: space-around;
-  }
-
-  .balance-action-btn {
-    margin-left: 0;
-    width: 100%;
-  }
-
-  .cards-grid {
-    grid-template-columns: 1fr;
   }
 }

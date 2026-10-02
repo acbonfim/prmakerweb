@@ -461,6 +461,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
     this.ws.off(PULLREQUEST_CARD_EVENT, this.onCardUpdated);
     this.resyncSub?.unsubscribe();
     this.queryCardSub?.unsubscribe();
+    clearTimeout(this.focusTimer);
   }
 
   /**
@@ -606,6 +607,25 @@ export class RegisterComponent implements OnInit, OnDestroy {
     // setTimeout garante que os @ViewChild (ex.: linha do tempo) já estejam resolvidos
     // antes de disparar a busca — o mesmo caminho do botão "Buscar".
     setTimeout(() => this.getPullRequestByCardNumber());
+
+    // Atalho da home (0051): ?focus=plan|timeline|prs abre direto naquele painel.
+    const focus = params.get('focus');
+    if (focus === 'prs' || focus === 'plan' || focus === 'timeline') this.focusPanel(focus);
+  }
+
+  /** Painel destacado por um atalho (0051): no celular vira a aba aberta; no desktop rola até ele e pisca a borda. */
+  readonly focusedPanel = signal<MobileTab | null>(null);
+  private focusTimer?: ReturnType<typeof setTimeout>;
+
+  private focusPanel(tab: MobileTab): void {
+    this.selectMobileTab(tab);
+    this.focusedPanel.set(tab);
+    clearTimeout(this.focusTimer);
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(tab === 'prs' ? '.pr-fields' : tab === 'plan' ? '.pr-plan' : '.pr-timeline');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }, 300);
+    this.focusTimer = setTimeout(() => { this.focusedPanel.set(null); this.cdr.detectChanges(); }, 2200);
   }
 
   /** Atualização em tempo real: repositórios/branches mudam para todos na tela de PR. */
