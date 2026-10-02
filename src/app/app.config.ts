@@ -9,6 +9,7 @@ import {providePrimeNG} from 'primeng/config';
 import Aura from '@primeuix/themes/aura';
 import {AuthInterceptor} from './auth/auth.interceptor';
 import {PersonalIntegrationInterceptor} from './auth/personal-integration.interceptor';
+import {AiUsageInterceptor} from './auth/ai-usage.interceptor';
 import {provideServiceWorker} from '@angular/service-worker';
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -31,6 +32,12 @@ export const appConfig: ApplicationConfig = {
       // 403 de integração pessoal pendente → aviso + "Minhas integrações" (feature 0002).
       provide: HTTP_INTERCEPTORS,
       useClass: PersonalIntegrationInterceptor,
+      multi: true
+    },
+    {
+      // Resposta com X-AI-Usage → aviso com os tokens e o custo estimado da ação de IA (0042).
+      provide: HTTP_INTERCEPTORS,
+      useClass: AiUsageInterceptor,
       multi: true
     },
     // PWA (feature 0019): app instalável e aviso de versão nova; desligado no `ng serve`.

@@ -29,6 +29,7 @@ import {MyIntegrationsDialogComponent} from '../my-integrations-dialog/my-integr
 import {MyApiKeyDialogComponent} from '../my-api-key-dialog/my-api-key-dialog.component';
 import {SkillsDialogComponent} from '../skills-dialog/skills-dialog.component';
 import {ExecutorsDialogComponent} from '../executors-dialog/executors-dialog.component';
+import {AiUsageDialogComponent} from '../ai-usage-dialog/ai-usage-dialog.component';
 
 interface AutoCompleteCompleteEvent {
   originalEvent: Event;
@@ -157,6 +158,17 @@ export class TopMenuComponent implements OnInit {
       maxWidth: '94vw',
       maxHeight: '90vh',
       panelClass: 'custom-dialog-container'
+    });
+  }
+
+  /** Tokens e custo estimado das ações de IA, pagos com a chave do perfil (0042). */
+  openAiUsage() {
+    this.dialog.open(AiUsageDialogComponent, {
+      width: '820px',
+      maxWidth: '96vw',
+      maxHeight: '92vh',
+      panelClass: 'custom-dialog-container',
+      autoFocus: false
     });
   }
 
