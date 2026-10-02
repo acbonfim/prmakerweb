@@ -1,0 +1,160 @@
+@if (loading() || cards().length > 0) {
+<section class="hc-section">
+  <div class="section-header">
+    <mat-icon class="header-icon">{{ icon }}</mat-icon>
+    <span class="section-title">{{ title }}</span>
+    @if (!loading() && cards().length > 0) {
+      <span class="header-count">{{ cards().length }}</span>
+    }
+  </div>
+
+  <div class="hc-list">
+    @if (loading()) {
+      @for (s of skeletons; track $index) {
+        <div class="hc hc-skeleton">
+          <div class="hc-head">
+            <div class="sk sk-avatar"></div>
+            <div class="hc-id"><div class="sk sk-title"></div><div class="sk sk-line"></div></div>
+          </div>
+          <div class="sk sk-row"></div>
+          <div class="sk sk-row short"></div>
+        </div>
+      }
+    } @else {
+      @for (c of cards(); track c.cardNumber) {
+        @let d = devopsOf(c);
+        <article class="hc" role="button" tabindex="0" [attr.aria-label]="'Abrir card ' + c.cardNumber"
+                 (click)="open(c)" (keydown.enter)="open(c)">
+
+          <!-- Cabeçalho: envolvidos, número, estado no DevOps, pendência e título -->
+          <header class="hc-head">
+            <app-avatar-stack [people]="people(c)" [total]="c.participantsCount" [size]="36" [max]="4"></app-avatar-stack>
+            <div class="hc-id">
+              <div class="hc-line">
+                <span class="hc-number">AB#{{ c.cardNumber }}</span>
+                @if (d?.state) {
+                  <span class="chip" [attr.data-tone]="stateTone(d?.state)" [matTooltip]="d?.workItemType || ''">{{ d?.state }}</span>
+                }
+                @if (d?.boardColumn && d?.boardColumn !== d?.state) {
+                  <span class="chip chip-outline" matTooltip="Coluna do board">{{ d?.boardColumn }}</span>
+                }
+                @if (pending.byCard().get('' + c.cardNumber); as p) {
+                  <span class="chip" data-tone="pending" [matTooltip]="p.count + ' pendência(s) no plano: ' + (p.actions[0]?.title || '')">
+                    <mat-icon>front_hand</mat-icon>Aguardando você{{ p.count > 1 ? ' (' + p.count + ')' : '' }}
+                  </span>
+                }
+              </div>
+              <div class="hc-title" [class.muted]="!d?.title">
+                {{ d?.title || (c.registered ? 'Card registrado no PRMake' : 'Card sem registro no PRMake') }}
+              </div>
+            </div>
+            <span class="hc-ago" [matTooltip]="'Última atividade: ' + fullDate(c.lastActivity?.at)">{{ ago(c.lastActivity?.at) }}</span>
+          </header>
+
+          <!-- Como você participou (lista "participei") e o que o card já tem -->
+          @if ((scope === 'participated' && c.myRoles.length) || c.hasRootCause || c.summaryPublished || c.handover) {
+            <div class="hc-tags">
+              @if (scope === 'participated') {
+                @for (r of c.myRoles; track r) {
+                  <span class="tag tag-me">{{ roleLabel(r) }}</span>
+                }
+              }
+              @if (c.hasRootCause) { <span class="tag"><mat-icon>task_alt</mat-icon>Root Cause</span> }
+              @if (c.summaryPublished) { <span class="tag"><mat-icon>campaign</mat-icon>Resumo publicado</span> }
+              @if (c.handover) { <span class="tag"><mat-icon>swap_horiz</mat-icon>Handover</span> }
+            </div>
+          }
+
+          <div class="hc-rows">
+            <!-- Plano de execução -->
+            @if (c.plan; as plan) {
+              @let st = planStatus(plan.status);
+              <button type="button" class="hc-row hc-row-wrap" (click)="open(c, 'plan', $event)" matTooltip="Abrir o plano">
+                <mat-icon class="row-icon">checklist</mat-icon>
+                <span class="row-label">Plano de {{ phaseLabel(plan.phase) }}</span>
+                <span class="chip" [attr.data-tone]="st.tone">{{ st.label }}</span>
+                @if (plan.stepsTotal > 0) {
+                  <span class="progress" [attr.aria-label]="plan.stepsDone + ' de ' + plan.stepsTotal + ' etapas'">
+                    <span class="progress-bar" [style.width.%]="progress(plan.stepsDone, plan.stepsTotal)"></span>
+                  </span>
+                  <span class="muted nowrap">{{ plan.stepsDone }}/{{ plan.stepsTotal }}</span>
+                }
+                @if (plan.currentStep) {
+                  <span class="ellipsis muted" [title]="plan.waitingReason || plan.currentStep">· {{ plan.currentStep }}</span>
+                }
+                @if (plan.openQuestions > 0) {
+                  <span class="chip" data-tone="pending">{{ plan.openQuestions }} pergunta{{ plan.openQuestions > 1 ? 's' : '' }}</span>
+                }
+              </button>
+            }
+
+            <!-- PRs do GitHub (o chip abre o PR) -->
+            @if (c.pullRequests.length) {
+              <div class="hc-row hc-row-static">
+                <mat-icon class="row-icon">merge</mat-icon>
+                <div class="pr-chips">
+                  @for (pr of c.pullRequests.slice(0, 3); track pr.url) {
+                    <a class="pr-chip" [attr.data-tone]="prTone(pr)" [href]="pr.url" target="_blank" rel="noopener"
+                       (click)="stop($event)" [matTooltip]="pr.title + ' — ' + pr.repositoryId">
+                      <span class="pr-dot"></span>#{{ pr.number }} {{ pr.repositoryId }}<span class="pr-status">{{ prLabel(pr) }}</span>
+                    </a>
+                  }
+                  @if (c.pullRequests.length > 3) {
+                    <button type="button" class="pr-more" (click)="open(c, 'prs', $event)">+{{ c.pullRequests.length - 3 }}</button>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- Última entrada da Timeline -->
+            @if (c.timeline.last; as t) {
+              <button type="button" class="hc-row" (click)="open(c, 'timeline', $event)" matTooltip="Abrir a Timeline">
+                <mat-icon class="row-icon">forum</mat-icon>
+                <span class="quote"><b>{{ firstName(t.userName) }}:</b> {{ t.excerpt || '(sem texto)' }}</span>
+                <span class="muted nowrap">{{ ago(t.createdAt) }}</span>
+              </button>
+            }
+
+            <!-- Último comentário do plano -->
+            @if (c.notes.last; as n) {
+              <button type="button" class="hc-row" (click)="open(c, 'plan', $event)" matTooltip="Abrir os comentários do plano">
+                <mat-icon class="row-icon">chat_bubble_outline</mat-icon>
+                <span class="quote"><b>{{ firstName(n.userName) }}@if (n.number) { (#{{ n.number }})}:</b> {{ n.excerpt || '(anexo)' }}</span>
+                <span class="muted nowrap">{{ ago(n.createdAt) }}</span>
+              </button>
+            }
+
+            @if (!hasDetails(c)) {
+              <div class="hc-row hc-row-static muted">Sem plano, PRs ou Timeline ainda.</div>
+            }
+          </div>
+
+          <!-- Rodapé: última atividade + atalhos -->
+          <footer class="hc-foot">
+            <span class="hc-last ellipsis" [title]="lastText(c)">
+              @if (c.lastActivity) { <mat-icon>bolt</mat-icon>{{ lastText(c) }} }
+            </span>
+            <div class="hc-actions">
+              <button type="button" class="qa" (click)="open(c, 'plan', $event)" [matTooltip]="c.plan ? 'Plano de execução' : 'Sem plano ainda'">
+                <mat-icon>checklist</mat-icon>
+              </button>
+              <button type="button" class="qa" (click)="open(c, 'timeline', $event)" matTooltip="Timeline">
+                <mat-icon>forum</mat-icon>@if (c.timeline.count) {<span>{{ c.timeline.count }}</span>}
+              </button>
+              <button type="button" class="qa" (click)="open(c, 'prs', $event)"
+                      [matTooltip]="c.pullRequests.length ? openPrs(c) + ' aberto(s) de ' + c.pullRequests.length : 'Nenhum PR'">
+                <mat-icon>merge</mat-icon>@if (c.pullRequests.length) {<span>{{ c.pullRequests.length }}</span>}
+              </button>
+              @if (d?.url) {
+                <a class="qa" [href]="d?.url" target="_blank" rel="noopener" (click)="stop($event)" matTooltip="Abrir no Azure DevOps">
+                  <mat-icon>open_in_new</mat-icon>
+                </a>
+              }
+            </div>
+          </footer>
+        </article>
+      }
+    }
+  </div>
+</section>
+}

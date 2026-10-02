@@ -98,7 +98,7 @@
             </button>
           </div>
 
-          <div class="pr-fields" [class.pr-tab-panel--on]="mobileTab() === 'prs'">
+          <div class="pr-fields" [class.pr-tab-panel--on]="mobileTab() === 'prs'" [class.pr-focus]="focusedPanel() === 'prs'">
             <!-- PRs abertos no GitHub para o card, com status atual (spec 1.4/3); clique abre o modal (3.1) -->
             <app-card-panel class="pr-panel" title="Pull Requests" icon="merge">
               @if (prInfo) {
@@ -121,11 +121,11 @@
           </div>
 
           <!-- Plano de execução da skill analisar-bug, ao vivo (feature 0023) -->
-          <div class="pr-plan" [class.pr-tab-panel--on]="mobileTab() === 'plan'">
+          <div class="pr-plan" [class.pr-tab-panel--on]="mobileTab() === 'plan'" [class.pr-focus]="focusedPanel() === 'plan'">
             <app-execution-plan [cardNumber]="cardNumber" (headline)="planHeadline = $event"></app-execution-plan>
           </div>
 
-          <div class="pr-timeline" [class.pr-tab-panel--on]="mobileTab() === 'timeline'">
+          <div class="pr-timeline" [class.pr-tab-panel--on]="mobileTab() === 'timeline'" [class.pr-focus]="focusedPanel() === 'timeline'">
             <app-card-timeline [cardNumber]="cardNumber"></app-card-timeline>
           </div>
         </div>
