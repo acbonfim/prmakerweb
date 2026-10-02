@@ -155,10 +155,17 @@
   .panel-action .mat-icon.panel-action__spin { animation-duration: 2.5s; }
 }
 
-/* Empilha em telas estreitas (permite scroll normal da página) */
+/* Abas do celular (0043): no desktop as três seções ficam lado a lado. */
+.pr-tabs { display: none; }
+
+/* ── Celular/tablet (0043): abas PRs | Plano | Linha do tempo, uma de cada vez, e a tela rola inteira.
+   Uma área de rolagem só (a .content-area): os painéis crescem com o conteúdo (sem caixas de altura fixa
+   uma dentro da outra), o cabeçalho do painel e as abas ficam presos no topo e as ações da tela no rodapé.
+   A tela cheia (plano/linha do tempo) sai daqui para o <body>, então estas regras não valem nela. ── */
 @media (max-width: 900px) {
   :host {
     height: auto;
+    --pr-tabs-h: 48px;
   }
 
   :host ::ng-deep .mat-mdc-card-content {
@@ -168,30 +175,141 @@
   .pr-content-row {
     display: flex;
     flex-direction: column;
+    gap: 10px;
+    margin-top: 0;
   }
+
+  .pr-tabs {
+    position: sticky;
+    /* Compensa o padding da .content-area: cola no topo da área visível. */
+    top: calc(-1 * var(--cime-content-pad, 8px));
+    z-index: 6;
+    display: flex;
+    gap: 4px;
+    height: var(--pr-tabs-h);
+    box-sizing: border-box;
+    margin: 0 calc(-1 * var(--cime-content-pad, 8px));
+    padding: 4px var(--cime-content-pad, 8px);
+    background: #14181d;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .pr-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .pr-tab span:not(.pr-tab__count) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pr-tab .mat-icon { font-size: 19px; width: 19px; height: 19px; flex: none; }
+
+  .pr-tab--on {
+    color: var(--mat-sys-primary);
+    background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
+  }
+
+  .pr-tab__count {
+    flex: none;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border-radius: 9px;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    background: color-mix(in srgb, var(--mat-sys-on-surface) 18%, transparent);
+    color: var(--mat-sys-on-surface);
+  }
+
+  .pr-tab__count--you { background: #d29922; color: #1f1f1f; }
 
   .pr-fields,
   .pr-plan,
   .pr-timeline {
-    flex: 1 1 auto;
+    display: none;
+    flex: none;
     max-width: 100%;
+    /* Painel vazio ainda ocupa a tela (o rodapé não sobe para o meio). */
+    min-height: calc(100dvh - var(--cime-topbar-total) - var(--pr-tabs-h) - 96px);
   }
 
-  .pr-plan {
-    flex: none;
-    height: 420px;
+  .pr-fields.pr-tab-panel--on,
+  .pr-plan.pr-tab-panel--on,
+  .pr-timeline.pr-tab-panel--on {
+    display: flex;
+    flex-direction: column;
   }
 
-  /* flex: none — com flex-basis 0 numa coluna de altura automática o painel encolhia a 0 e a
-     lista de PRs sumia no celular (0021). */
   .pr-panel {
-    flex: none;
-    height: 260px;
+    flex: 1 1 auto;
+    height: auto;
   }
 
-  .pr-timeline {
-    height: 360px;
+  /* Painéis com a altura do conteúdo. overflow: clip (e não hidden) mantém os cantos arredondados sem
+     criar outra área de rolagem — o position: sticky do cabeçalho continua valendo. */
+  :host ::ng-deep .pr-fields app-card-panel,
+  :host ::ng-deep .pr-plan app-execution-plan,
+  :host ::ng-deep .pr-timeline app-card-timeline {
+    flex: 1 1 auto;
+    height: auto;
   }
+
+  :host ::ng-deep .pr-fields .panel,
+  :host ::ng-deep .pr-plan .plan,
+  :host ::ng-deep .pr-timeline .timeline {
+    height: auto;
+    min-height: 100%;
+    overflow: clip;
+  }
+
+  :host ::ng-deep .pr-fields .panel__body,
+  :host ::ng-deep .pr-fields .pr-scroll,
+  :host ::ng-deep .pr-plan .plan__steps,
+  :host ::ng-deep .pr-timeline .timeline__body {
+    overflow: visible;
+  }
+
+  :host ::ng-deep .pr-fields .panel__header,
+  :host ::ng-deep .pr-plan .plan__header,
+  :host ::ng-deep .pr-timeline .timeline__header {
+    position: sticky;
+    top: calc(var(--pr-tabs-h) - var(--cime-content-pad, 8px));
+    z-index: 5;
+  }
+
+  /* Ações da tela sempre à mão. */
+  .page-footer {
+    position: sticky;
+    bottom: calc(-1 * var(--cime-content-pad, 8px) - env(safe-area-inset-bottom, 0px));
+    z-index: 6;
+    margin: 10px calc(-1 * var(--cime-content-pad, 8px)) calc(-1 * var(--cime-content-pad, 8px) - env(safe-area-inset-bottom, 0px));
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    background-color: #1a1f27;
+  }
+
+  .page-header { margin-bottom: 8px; }
+  .pr-top-row { margin-bottom: 8px; }
 }
 
 /* ── Toolbar de configuração do PR (Angular Material) ────────────────────────

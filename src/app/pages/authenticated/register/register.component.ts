@@ -1,5 +1,5 @@
 import { TeamsService } from '../../../services/teams.service';
-import {ChangeDetectorRef, Component, effect, inject, OnDestroy, OnInit, untracked, ViewChild} from '@angular/core';
+import {ChangeDetectorRef, Component, effect, ElementRef, inject, OnDestroy, OnInit, signal, untracked, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -69,6 +69,17 @@ const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
 /** Vigia dos PRs abertos (0025): consulta o GitHub por baixo dos panos e só redesenha se o status mudar. */
 const PR_WATCH_INTERVAL_MS = 45_000;
 const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
+
+type MobileTab = 'prs' | 'plan' | 'timeline';
+const MOBILE_TAB_KEY = 'prmake.pr-mobile-tab';
+
+function loadMobileTab(): MobileTab {
+  try {
+    const v = localStorage.getItem(MOBILE_TAB_KEY);
+    if (v === 'prs' || v === 'plan' || v === 'timeline') return v;
+  } catch { /* sem storage */ }
+  return 'plan';
+}
 
 @Component({
   selector: 'app-register',
@@ -177,6 +188,27 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   /** Resumo do plano de execução do card (vem da seção do plano) — 0026. */
   planHeadline: PlanHeadline | null = null;
+
+  /**
+   * Celular (0043): PRs, plano e linha do tempo viram abas, uma de cada vez, e a tela rola inteira (uma
+   * área de rolagem só). As três continuam montadas — o tempo real do plano/linha do tempo não para.
+   */
+  readonly mobileTab = signal<MobileTab>(loadMobileTab());
+  @ViewChild('contentRow') private contentRowRef?: ElementRef<HTMLElement>;
+
+  selectMobileTab(tab: MobileTab): void {
+    if (this.mobileTab() === tab) return;
+    this.mobileTab.set(tab);
+    try { localStorage.setItem(MOBILE_TAB_KEY, tab); } catch { /* sem storage: só não lembra */ }
+    // Já rolou para baixo das abas: a aba nova começa do topo, logo abaixo delas.
+    const row = this.contentRowRef?.nativeElement;
+    const scroller = row?.closest<HTMLElement>('.content-area');
+    if (!row || !scroller) return;
+    const top = scroller.scrollTop + row.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    // Linha do tempo: o mais recente fica embaixo (perto de onde se escreve).
+    if (tab === 'timeline') setTimeout(() => scroller.scrollTo({ top: scroller.scrollHeight }));
+    else if (scroller.scrollTop > top) scroller.scrollTop = top;
+  }
   private queryCardSub?: Subscription;
 
   /**

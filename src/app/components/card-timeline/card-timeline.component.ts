@@ -7,6 +7,7 @@ import {
   OnDestroy,
   Output,
   ViewChild,
+  inject,
   signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -23,6 +24,7 @@ import { TeamsGraphService, TeamsChat } from '../../services/teams-graph.service
 import { WsService } from '../../services/ws.service';
 import { TimelineEntry } from './timeline.model';
 import { TimelineMarkdownPipe } from '../../pipes/timeline-markdown.pipe';
+import { BackNavigationService } from '../../services/back-navigation.service';
 
 /** Evento e prefixo de grupo do tempo real da timeline (em sincronia com o backend). */
 const TIMELINE_EVENT = 'timelineUpdated';
@@ -161,6 +163,11 @@ export class CardTimelineComponent implements OnDestroy {
   private destroyed = false;
   private backdrop?: HTMLDivElement;
   private previousHtmlOverflow = '';
+  /** 0043: a página rola na .content-area — trava junto com o <html> enquanto a tela cheia está aberta. */
+  private lockedScrollers: { el: HTMLElement; overflow: string }[] = [];
+  /** 0043: Voltar do app/sistema fecha a tela cheia. */
+  private readonly back = inject(BackNavigationService);
+  private releaseBack?: () => void;
 
   private sub?: Subscription;
   private resyncSub?: Subscription;
@@ -665,8 +672,7 @@ export class CardTimelineComponent implements OnDestroy {
     document.body.insertBefore(this.backdrop, overlay);
     document.body.insertBefore(el, overlay);
 
-    this.previousHtmlOverflow = document.documentElement.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
+    this.lockScroll();
 
     el.classList.add('timeline--expanded');
     const to = this.expandedRect();
@@ -677,6 +683,7 @@ export class CardTimelineComponent implements OnDestroy {
 
     document.addEventListener('keydown', this.onKeydownWhileExpanded);
     window.addEventListener('resize', this.onResizeWhileExpanded);
+    this.releaseBack = this.back.push(() => this.enqueue(() => this.collapse()));
 
     if (this.reducedMotion()) return;
     this.animating = true;
@@ -701,6 +708,8 @@ export class CardTimelineComponent implements OnDestroy {
 
     document.removeEventListener('keydown', this.onKeydownWhileExpanded);
     window.removeEventListener('resize', this.onResizeWhileExpanded);
+    this.releaseBack?.();
+    this.releaseBack = undefined;
 
     if (!this.reducedMotion()) {
       this.animating = true;
@@ -731,8 +740,24 @@ export class CardTimelineComponent implements OnDestroy {
     host.style.height = '';
     this.backdrop?.remove();
     this.backdrop = undefined;
-    document.documentElement.style.overflow = this.previousHtmlOverflow;
+    this.unlockScroll();
     this.expanded.set(false);
+  }
+
+  private lockScroll(): void {
+    this.previousHtmlOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    this.lockedScrollers = Array.from(document.querySelectorAll<HTMLElement>('.content-area')).map((el) => {
+      const saved = { el, overflow: el.style.overflow };
+      el.style.overflow = 'hidden';
+      return saved;
+    });
+  }
+
+  private unlockScroll(): void {
+    document.documentElement.style.overflow = this.previousHtmlOverflow;
+    for (const s of this.lockedScrollers) s.el.style.overflow = s.overflow;
+    this.lockedScrollers = [];
   }
 
   private onBackdropClick = (): void => {
@@ -751,10 +776,11 @@ export class CardTimelineComponent implements OnDestroy {
     if (el && !this.animating) this.applyRect(el, this.expandedRect());
   };
 
-  /** Retângulo do modal: centralizado, ~92% da tela, no máximo 1200 px de largura. */
+  /** Retângulo do modal: centralizado, ~92% da tela, no máximo 1200 px de largura; no celular, a tela toda (0043). */
   private expandedRect(): Rect {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    if (vw <= 768) return { top: 0, left: 0, width: vw, height: vh };
     const width = Math.min(1200, vw - 2 * Math.max(16, vw * 0.04));
     const height = vh - 2 * Math.max(16, vh * 0.04);
     return { top: (vh - height) / 2, left: (vw - width) / 2, width, height };
@@ -810,7 +836,8 @@ export class CardTimelineComponent implements OnDestroy {
       window.removeEventListener('resize', this.onResizeWhileExpanded);
       this.timelineRef?.nativeElement.remove();
       this.backdrop?.remove();
-      document.documentElement.style.overflow = this.previousHtmlOverflow;
+      this.unlockScroll();
+      this.releaseBack?.();
     }
     this.sub?.unsubscribe();
     if (this.currentGroup) this.ws.removeFromGroup(this.currentGroup);

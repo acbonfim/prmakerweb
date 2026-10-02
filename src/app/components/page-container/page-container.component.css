@@ -50,9 +50,11 @@
 }
 
 .content-area {
+  /* Telas com barra presa no topo/rodapé (ex.: tela de PR no celular) compensam este padding. */
+  --cime-content-pad: 10px;
   flex: 1;
   min-width: 0;
-  padding: 10px max(10px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) 10px;
+  padding: var(--cime-content-pad) max(var(--cime-content-pad), env(safe-area-inset-right, 0px)) calc(var(--cime-content-pad) + env(safe-area-inset-bottom, 0px)) max(var(--cime-content-pad), env(safe-area-inset-left, 0px));
   overflow-y: auto;
   overscroll-behavior-y: contain;
   background-color: var(--mat-sys-surface);
@@ -99,9 +101,7 @@
 }
 
 @media (max-width: 576px) {
-  .content-area {
-    padding: 8px max(8px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
-  }
+  .content-area { --cime-content-pad: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

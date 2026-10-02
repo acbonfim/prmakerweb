@@ -22,7 +22,9 @@ export class MobileDialogsService {
 
   private adapt(ref: MatDialogRef<unknown>): void {
     if (!window.matchMedia(PHONE_QUERY).matches) return;
-    const pane = document.getElementById(ref.id)?.closest<HTMLElement>('.cdk-overlay-pane');
+    // O painel do diálogo recém-aberto é o último (o id do container só entra na próxima detecção de mudanças).
+    const panes = document.querySelectorAll<HTMLElement>('.cdk-overlay-pane.mat-mdc-dialog-panel');
+    const pane = panes[panes.length - 1];
     if (!pane) return;
     ref.addPanelClass(isLarge(pane.style) ? 'cime-dialog--full' : 'cime-dialog--phone');
   }
