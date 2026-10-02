@@ -403,7 +403,7 @@ export class PlanFilesDialogComponent implements OnDestroy {
   }
 
   iconOf(a: ExecutionArtifact): string {
-    return { script: 'code', analysis: 'description', data: 'dataset', image: 'image', attachment: 'attach_file' }[a.kind] ?? 'insert_drive_file';
+    return { script: 'code', analysis: 'description', data: 'dataset', image: 'image', attachment: 'attach_file', ticket: 'confirmation_number' }[a.kind] ?? 'insert_drive_file';
   }
 
   size(bytes: number): string {

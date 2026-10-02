@@ -521,6 +521,93 @@ export class ExecutionPlanComponent implements OnDestroy {
     return own.filter((a) => a.noteId || !attached.has(a.sha256));
   });
 
+  // ── 0050: o que o Claude está fazendo agora ─────────────────────────────────────────────────────
+
+  /** Atividade atual do pedido rodando (executor 1.0.8+); null na fila ou com executor antigo. */
+  readonly liveActivity = computed(() => {
+    const r = this.activeRequest();
+    return r && r.status !== 'queued' ? r.currentActivity ?? null : null;
+  });
+  readonly recentActivities = computed(() => {
+    const r = this.activeRequest();
+    return r && r.status !== 'queued' ? r.recentActivities ?? [] : [];
+  });
+  readonly showActivityLog = signal(false);
+  /** Minutos sem atividade nova com o processo vivo (a partir de 3) — "pode estar pensando". */
+  readonly activityQuietMinutes = computed(() => {
+    const a = this.liveActivity();
+    if (!a) return 0;
+    const min = Math.floor((this.now() + this.serverOffsetMs - Date.parse(a.at)) / 60_000);
+    return min >= 3 ? min : 0;
+  });
+
+  /** "há 12 s" / "há 3 min" (a linha "agora" conta em segundos). */
+  activityAge(at?: string | null): string {
+    if (!at) return '';
+    const sec = Math.max(0, Math.floor((this.now() + this.serverOffsetMs - Date.parse(at)) / 1000));
+    if (isNaN(sec)) return '';
+    if (sec < 60) return `há ${sec} s`;
+    return `há ${Math.floor(sec / 60)} min`;
+  }
+
+  activityIcon(tool?: string | null): string {
+    if (!tool) return 'bolt';
+    if (tool === 'Read') return 'menu_book';
+    if (tool === 'Grep' || tool === 'Glob') return 'search';
+    if (tool === 'Edit' || tool === 'Write' || tool === 'MultiEdit') return 'edit';
+    if (tool.startsWith('mcp__prmake__')) return 'checklist';
+    if (tool === 'Task' || tool === 'Agent') return 'hub';
+    return 'terminal';
+  }
+
+  // ── 0050: texto do chamado na etapa ─────────────────────────────────────────────────────────────
+
+  /** Texto dos arquivos `ticket` por sha (título = 1ª linha, corpo = o resto). */
+  readonly ticketTexts = signal<Record<string, { title: string; body: string } | 'loading' | 'error'>>({});
+
+  ticketFile(key: string): ExecutionArtifact | undefined {
+    return this.stepArtifacts(key).find((a) => a.kind === 'ticket');
+  }
+
+  ticketScripts(key: string): ExecutionArtifact[] {
+    return this.stepArtifacts(key).filter((a) => a.kind === 'script');
+  }
+
+  ticketText(a: ExecutionArtifact): { title: string; body: string } | 'loading' | 'error' | undefined {
+    return this.ticketTexts()[a.sha256];
+  }
+
+  private loadTicketTexts(artifacts: ExecutionArtifact[]): void {
+    for (const a of artifacts.filter((x) => x.kind === 'ticket')) {
+      if (this.ticketTexts()[a.sha256]) continue;
+      this.ticketTexts.update((m) => ({ ...m, [a.sha256]: 'loading' }));
+      this.api.content(a.planId, a.id).subscribe({
+        next: (blob) =>
+          blob.text().then((text) => {
+            const lines = text.replace(/\r\n/g, '\n').split('\n');
+            const first = lines.findIndex((l) => l.trim() !== '');
+            const title = first < 0 ? '' : lines[first].replace(/^#+\s*/, '').replace(/^\*\*(.*)\*\*$/, '$1').trim();
+            const body = lines.slice(first + 1).join('\n').trim();
+            this.ticketTexts.update((m) => ({ ...m, [a.sha256]: { title, body } }));
+          }),
+        error: () => this.ticketTexts.update((m) => ({ ...m, [a.sha256]: 'error' }))
+      });
+    }
+  }
+
+  copyTicket(a: ExecutionArtifact, part: 'title' | 'body'): void {
+    const t = this.ticketText(a);
+    if (!t || typeof t === 'string') return;
+    this.clipboard.copyFullDescriptionToClipboard(part === 'title' ? t.title : t.body);
+  }
+
+  downloadArtifact(a: ExecutionArtifact): void {
+    this.api.content(a.planId, a.id).subscribe({
+      next: (blob) => saveBlob(blob, a.name),
+      error: () => this.snackBar.open(`Não foi possível baixar ${a.name}.`, 'Fechar', { duration: 6000 })
+    });
+  }
+
   readonly artifactCounts = computed(() => {
     const artifacts = this.planArtifacts();
     const map: Record<string, number> = {};
@@ -564,12 +651,19 @@ export class ExecutionPlanComponent implements OnDestroy {
     effect(() => {
       if (!this.expanded()) this.closeMobileDetail();
     });
+    // 0050: texto do chamado pronto para copiar na etapa (arquivos pequenos; carrega uma vez por versão).
+    effect(() => this.loadTicketTexts(this.planArtifacts()));
     this.ws.startConnection();
     this.ws.on(EXECUTION_PLAN_EVENT, this.onRealtime);
     this.ws.on(PULLREQUEST_CARD_EVENT, this.onPullRequestsChanged);
     // A conexão voltou depois de cair: os eventos da queda se perderam — recarrega em silêncio.
     this.resyncSub = this.ws._resynced.subscribe(() => this.refresh());
-    this.clockTimer = setInterval(() => this.now.set(Date.now()), 15_000);
+    // 0050: com o Claude rodando, a linha "agora" conta em segundos; fora isso, 15 s bastam.
+    let ticks = 0;
+    this.clockTimer = setInterval(() => {
+      ticks++;
+      if (this.liveActivity() || ticks % 15 === 0) this.now.set(Date.now());
+    }, 1_000);
     this.pollTimer = setInterval(() => {
       if ((this.isActive() || this.activeRequest()) && !document.hidden) this.refresh();
     }, SAFETY_POLL_MS);
@@ -731,6 +825,18 @@ export class ExecutionPlanComponent implements OnDestroy {
   private onRealtime = (payload: ExecutionPlanRealtimePayload): void => {
     const card = payload?.cardNumber != null ? `${payload.cardNumber}`.trim() : null;
     if (!card || card !== this.loadedCard()) return;
+    // 0050: atividade nova do Claude — atualiza a linha "agora" sem refazer o GET do plano.
+    if (payload.action === 'activity') {
+      const q = this.queue();
+      if (q?.active && q.active.id === payload.requestId) {
+        this.queue.set({ ...q, active: { ...q.active, currentActivity: payload.activity ?? null, recentActivities: payload.recent ?? [] } });
+        this.now.set(Date.now());
+      } else {
+        clearTimeout(this.refreshTimer);
+        this.refreshTimer = setTimeout(() => this.refresh(), REFRESH_DEBOUNCE_MS);
+      }
+      return;
+    }
     // Vendo um plano antigo: só interessa se o evento é dele.
     const pinned = this.pinnedPlanId();
     if (pinned && payload.planId !== pinned) {
