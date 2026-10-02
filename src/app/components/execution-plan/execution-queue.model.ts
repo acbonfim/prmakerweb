@@ -73,7 +73,7 @@ export interface ExecutionWorker {
   online: boolean;
   lastSeenAt?: string | null;
   createdAt: string;
-  capabilities?: { repos?: string[]; os?: string } | null;
+  capabilities?: { repos?: string[]; os?: string; repoMap?: ExecutionRepoMap | null } | null;
   doctor?: ExecutionDoctorCheck[] | null;
   doctorAt?: string | null;
   /** "Rodar diagnóstico agora" pedido e ainda não recebido. */
@@ -83,6 +83,31 @@ export interface ExecutionWorker {
   doctorProblems: number;
   running: number;
   latestAgentVersion?: string | null;
+}
+
+/** Repositório do mapa da máquina (0048): nome pelo remote → pasta local. */
+export interface ExecutionRepoMapItem {
+  name: string;
+  path: string;
+  kind?: string | null;
+  branch?: string | null;
+  /** scan = achado pela busca · manual = fixado com "repos set" · env = variável (EDV_SOLVACE_DIR, REVAMP_DIR). */
+  source?: string | null;
+  confirmed?: boolean;
+  /** A pasta do mapa não existe mais. */
+  gone?: boolean;
+}
+
+/** Mapa dos repositórios da máquina (~/.prmake/repos.json), mandado pelo executor 1.0.7+. */
+export interface ExecutionRepoMap {
+  items: ExecutionRepoMapItem[];
+  /** Quando o executor manda só parte (limite do report). */
+  total?: number;
+  /** Mais de um clone do mesmo repositório: nome → pastas. */
+  ambiguous?: Record<string, string[]>;
+  /** Padrões do BranchStrategy sem nenhum clone na máquina. */
+  missing?: string[];
+  updatedAt?: string | null;
 }
 
 export interface ExecutionCardQueue {
@@ -163,3 +188,5 @@ export const isRequestActive = (status: ExecutionRequestStatus | undefined | nul
 
 /** Comando que instala o executor (depois das skills). */
 export const AGENT_INSTALL_COMMAND = 'bash ~/.claude/skills/.prmake/prmake-skills.sh agent install';
+/** Mostra/corrige o mapa de repositórios da máquina (0048). */
+export const REPOS_COMMAND = 'bash ~/.claude/skills/.prmake/prmake-skills.sh repos';

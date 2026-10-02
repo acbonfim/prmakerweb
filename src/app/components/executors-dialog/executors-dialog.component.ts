@@ -23,7 +23,9 @@ import {
   ExecutionUsageReport,
   ExecutionUsageReportRow,
   ExecutionUserSettings,
+  ExecutionRepoMap,
   ExecutionWorker,
+  REPOS_COMMAND,
   REQUEST_SOURCE_LABEL,
   REQUEST_STATUS_LABEL
 } from '../execution-plan/execution-queue.model';
@@ -124,6 +126,54 @@ const POLL_MS = 30_000;
                   </button>
                 }
               </div>
+              @if (w.capabilities?.repoMap; as map) {
+                <button type="button" class="ex__doctor-toggle" [class.ex__doctor-toggle--warn]="repoPending(map)" (click)="toggleRepos(w.id)">
+                  <mat-icon>{{ repoPending(map) ? 'warning' : 'folder_open' }}</mat-icon>
+                  Repositórios ({{ map.total ?? map.items.length }}){{ repoPendingText(map) }}
+                  <mat-icon>{{ openRepos() === w.id ? 'expand_less' : 'expand_more' }}</mat-icon>
+                </button>
+                @if (openRepos() === w.id) {
+                  <div class="ex__repos">
+                    @for (a of ambiguousList(map); track a.name) {
+                      <p class="ex__repos-warn"><mat-icon>call_split</mat-icon>
+                        <span><strong>{{ a.name }}</strong> tem mais de um clone — escolha com
+                          <code>{{ reposCommand }} set {{ a.name }} &lt;pasta&gt;</code>: {{ a.paths.join(' · ') }}</span></p>
+                    }
+                    @if (map.missing?.length) {
+                      <p class="ex__repos-warn"><mat-icon>search_off</mat-icon>
+                        <span>Sem clone nesta máquina: <strong>{{ map.missing!.join(', ') }}</strong> — clonou em outra pasta?
+                          <code>{{ reposCommand }} set &lt;repo&gt; &lt;pasta&gt;</code></span></p>
+                    }
+                    <div class="ex__repos-scroll">
+                      <table class="ex__repos-table">
+                        <thead><tr><th>Repositório</th><th>Tipo</th><th>Branch</th><th>Pasta</th><th>Origem</th></tr></thead>
+                        <tbody>
+                          @for (r of map.items; track r.name) {
+                            <tr [class.ex__repos-gone]="r.gone">
+                              <td>{{ r.name }}</td>
+                              <td>{{ r.kind || '—' }}</td>
+                              <td>{{ r.gone ? 'pasta sumiu' : (r.branch || '—') }}</td>
+                              <td class="ex__repos-path" [title]="r.path"><bdi>{{ r.path }}</bdi></td>
+                              <td>{{ sourceText(r.source, r.confirmed) }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                    @if (map.total && map.total > map.items.length) {
+                      <p class="ex__note">Mostrando {{ map.items.length }} de {{ map.total }}.</p>
+                    }
+                    <div class="ex__cmd ex__cmd--small">
+                      <code>{{ reposCommand }}</code>
+                      <button mat-icon-button (click)="copy(reposCommand)" matTooltip="Copiar"><mat-icon>content_copy</mat-icon></button>
+                    </div>
+                    <p class="ex__note">Mapa da máquina (nome do repositório pelo remote → pasta){{ map.updatedAt ? ', atualizado ' + ago(map.updatedAt) : '' }}.
+                      Na máquina: <code>repos</code> mostra, <code>repos scan</code> procura de novo e <code>repos set &lt;repo&gt; &lt;pasta&gt;</code> fixa.</p>
+                  </div>
+                }
+              } @else if (w.online && w.capabilities) {
+                <p class="ex__note">Mapa de repositórios: chega com o executor 1.0.7 (atualiza sozinho) — ou rode na máquina <code>{{ reposCommand }} scan</code>.</p>
+              }
               @if (w.doctor?.length) {
                 @if (openDoctor() === w.id) {
                   <ul class="ex__doctor">
@@ -276,6 +326,18 @@ const POLL_MS = 30_000;
     .ex__doctor-pending { margin-top: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
       color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent); }
     .ex__doctor-toggle--bad { color: #f0716a; }
+    .ex__doctor-toggle--warn { color: #d29922; }
+    .ex__repos { margin-top: 6px; font-size: 12px; }
+    .ex__repos-warn { display: flex; gap: 6px; align-items: flex-start; margin: 4px 0; color: #d29922; }
+    .ex__repos-warn span { color: var(--mat-sys-on-surface); min-width: 0; overflow-wrap: anywhere; }
+    .ex__repos-warn .mat-icon { font-size: 15px; width: 15px; height: 15px; flex: none; }
+    .ex__repos-scroll { overflow-x: auto; margin: 6px 0; }
+    .ex__repos-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .ex__repos-table th { text-align: left; font-weight: 500; padding: 3px 6px; color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent); }
+    .ex__repos-table td { padding: 3px 6px; border-top: 1px solid rgba(255,255,255,.05); white-space: nowrap; }
+    .ex__repos-path { max-width: 360px; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+    .ex__repos-gone td { color: #f0716a; }
+    .ex__cmd--small { margin: 6px 0; }
     .ex__doctor { list-style: none; margin: 6px 0 0; padding: 0; font-size: 12px; }
     .ex__doctor li { display: flex; gap: 6px; align-items: flex-start; padding: 2px 0; }
     .ex__doctor .mat-icon { font-size: 15px; width: 15px; height: 15px; color: #3fb950; flex: none; }
@@ -313,6 +375,7 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
   private userId: string | null = inject(StorageService).getAccess()?.user?.externalId ?? null;
 
   readonly installCommand = AGENT_INSTALL_COMMAND;
+  readonly reposCommand = REPOS_COMMAND;
   readonly statusLabel = REQUEST_STATUS_LABEL;
   readonly sourceLabel = REQUEST_SOURCE_LABEL;
 
@@ -323,6 +386,7 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
   readonly latestVersion = signal<string | null>(null);
   readonly busy = signal<string | null>(null);
   readonly openDoctor = signal<string | null>(null);
+  readonly openRepos = signal<string | null>(null);
   readonly now = signal(Date.now());
   readonly usage = signal<ExecutionUsageReport | null>(null);
   readonly usageDays = signal(30);
@@ -530,6 +594,35 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
 
   toggleDoctor(id: string): void {
     this.openDoctor.set(this.openDoctor() === id ? null : id);
+  }
+
+  toggleRepos(id: string): void {
+    this.openRepos.set(this.openRepos() === id ? null : id);
+  }
+
+  /** Mapa com algo para resolver: clone repetido, padrão sem clone ou pasta que sumiu (0048). */
+  repoPending(map: ExecutionRepoMap): boolean {
+    return Object.keys(map.ambiguous ?? {}).length > 0 || (map.missing?.length ?? 0) > 0 || map.items.some((r) => r.gone);
+  }
+
+  repoPendingText(map: ExecutionRepoMap): string {
+    const parts: string[] = [];
+    const amb = Object.keys(map.ambiguous ?? {}).length;
+    if (amb) parts.push(`${amb} com mais de um clone`);
+    if (map.missing?.length) parts.push(`${map.missing.length} sem clone`);
+    const gone = map.items.filter((r) => r.gone).length;
+    if (gone) parts.push(`${gone} pasta${gone === 1 ? '' : 's'} sumiu`);
+    return parts.length ? ` · ${parts.join(', ')}` : '';
+  }
+
+  ambiguousList(map: ExecutionRepoMap): { name: string; paths: string[] }[] {
+    return Object.entries(map.ambiguous ?? {}).map(([name, paths]) => ({ name, paths }));
+  }
+
+  sourceText(source?: string | null, confirmed?: boolean): string {
+    if (source === 'manual') return 'fixado';
+    if (source === 'env') return 'variável';
+    return confirmed ? 'busca (confirmado)' : 'busca';
   }
 
   copy(text: string): void {
