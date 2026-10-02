@@ -183,11 +183,15 @@
         } @else {
           <strong>Claude rodando</strong> em {{ r.workerName || 'sua máquina' }} desde {{ relativeTime(r.startedAt || r.claimedAt) }}
           @if (r.attempts > 1) { · tentativa {{ r.attempts }}/{{ r.maxAttempts }} }
+          @if (r.newSession) { · correção numa sessão nova (só o resumo da análise) }
         }
         <span class="plan-req__meta"> · {{ sourceLabel[r.source] || r.source }} — {{ r.requestedBy }}</span>
       </span>
       @if (r.waitCode === 'budget') {
         <button mat-button (click)="forceRequest(r)" [disabled]="!!busy()">Rodar mesmo assim</button>
+      }
+      @if (r.waitCode === 'gathering') {
+        <button mat-button (click)="startNow()" [disabled]="!!busy()">Começar agora</button>
       }
       @if (r.waitCode === 'no-worker' || r.waitCode === 'offline' || r.waitCode === 'paused') {
         <button mat-button (click)="openExecutors()">Meus executores</button>

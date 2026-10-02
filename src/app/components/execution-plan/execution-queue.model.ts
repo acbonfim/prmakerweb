@@ -2,7 +2,7 @@
 
 export type ExecutionRequestStatus = 'queued' | 'claimed' | 'running' | 'done' | 'failed' | 'cancelled' | 'expired';
 export type ExecutionRequestKind = 'analyze' | 'resume';
-export type ExecutionWaitCode = 'no-worker' | 'offline' | 'paused' | 'busy' | 'budget' | 'retry' | 'throttled';
+export type ExecutionWaitCode = 'no-worker' | 'offline' | 'paused' | 'busy' | 'budget' | 'retry' | 'throttled' | 'gathering';
 
 export interface ExecutionRequest {
   id: string;
@@ -43,6 +43,10 @@ export interface ExecutionRequest {
   cacheWriteTokens?: number | null;
   model?: string | null;
   turns?: number | null;
+  /** 0049: fase do card quando a máquina pegou o pedido. */
+  phase?: 'analysis' | 'correction' | null;
+  /** 0049: a correção começou numa sessão nova do Claude (só o resumo da análise). */
+  newSession?: boolean;
   createdAt: string;
   claimedAt?: string | null;
   startedAt?: string | null;

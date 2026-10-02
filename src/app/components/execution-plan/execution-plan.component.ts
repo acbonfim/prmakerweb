@@ -1189,6 +1189,20 @@ export class ExecutionPlanComponent implements OnDestroy {
     });
   }
 
+  /** 0049: o pedido espera mais comentários para retomar uma vez só — "Começar agora" não espera. */
+  startNow(): void {
+    const plan = this.plan();
+    if (!plan || this.busy()) return;
+    this.busy.set('request-now');
+    this.api.requestResume(plan.id).subscribe({
+      next: () => { this.busy.set(null); this.refresh(); },
+      error: (err) => {
+        this.busy.set(null);
+        this.snackBar.open(planApiError(err, 'Não foi possível começar agora.'), 'Fechar', { duration: 8000 });
+      }
+    });
+  }
+
   private applyRequest(r: ExecutionRequest): void {
     const q = this.queue() ?? { recent: [], myWorkers: [], ownerWorkers: [] };
     const recent = [r, ...q.recent.filter((x) => x.id !== r.id && x.id !== q.active?.id)];
