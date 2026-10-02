@@ -187,7 +187,7 @@ const POLL_MS = 30_000;
               <div class="ex__state">Sem planos com custo registrado no período. O custo vai quando a skill conclui o plano.</div>
             } @else {
               <table class="ex__usage">
-                <thead><tr><th></th><th>Planos</th><th>Turnos</th><th>Entrada</th><th>Saída</th><th>Total</th><th>MCP / script</th></tr></thead>
+                <thead><tr><th></th><th>Planos</th><th>Turnos</th><th>Entrada</th><th>Saída</th><th>Total</th><th>MCP / script</th><th>Base / buscas</th></tr></thead>
                 <tbody>
                   @for (r of usageRows(); track r.channel + r.phase) {
                     <tr [class.ex__usage-sub]="r.phase !== 'all'">
@@ -198,6 +198,7 @@ const POLL_MS = 30_000;
                       <td>{{ r.plans ? tokens(r.avgOutputTokens) : '—' }}</td>
                       <td>@if (r.plans) { <app-token-usage [usage]="reportUsage(r)" xPosition="before" /> } @else { — }</td>
                       <td>{{ r.plans ? r.avgMcpCalls + ' / ' + r.avgScriptCalls : '—' }}</td>
+                      <td>{{ r.plans && r.avgKbCalls != null ? r.avgKbCalls + ' / ' + r.avgSearchCalls : '—' }}</td>
                     </tr>
                   }
                 </tbody>
@@ -205,7 +206,8 @@ const POLL_MS = 30_000;
               @if (usageDiff(); as d) { <p class="ex__note">{{ d }}</p> }
               <p class="ex__note">Médias por plano. "Com MCP" = a maioria das chamadas ao PRMake pelas ferramentas MCP. Entrada = nova +
                 cache lido (o contexto relido a cada resposta, com desconto) + cache escrito — toque no total para ver as partes e o custo.
-                A correção não soma o que a mesma sessão gastou na análise.</p>
+                A correção não soma o que a mesma sessão gastou na análise. "Base / buscas" = consultas à Base Solvace × buscas no código
+                (grep/find) — a base vem primeiro e encurta a investigação.</p>
             }
           }
         </section>

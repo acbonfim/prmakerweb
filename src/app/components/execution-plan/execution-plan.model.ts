@@ -95,6 +95,9 @@ export interface ExecutionUsage {
   scriptCalls?: number;
   /** 0044: modelo da sessão (custo estimado pela tabela de preços). */
   model?: string | null;
+  /** 0045: consultas à Base Solvace e buscas no código. */
+  kbCalls?: number;
+  searchCalls?: number;
 }
 
 export interface ExecutionStep {

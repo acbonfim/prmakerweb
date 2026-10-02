@@ -121,6 +121,9 @@ export interface ExecutionUsageReportRow {
   model?: string | null;
   avgMcpCalls: number;
   avgScriptCalls: number;
+  /** 0045: consultas à Base Solvace e buscas no código, em média por plano. */
+  avgKbCalls?: number;
+  avgSearchCalls?: number;
 }
 
 export interface ExecutionUsageReport {

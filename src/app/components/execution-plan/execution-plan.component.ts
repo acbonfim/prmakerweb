@@ -498,6 +498,9 @@ export class ExecutionPlanComponent implements OnDestroy {
       subtitle: `${sessions} · ${u.turns} respostas`,
       notes: [
         u.mcpCalls || u.scriptCalls ? `Chamadas ao PRMake: ${u.mcpCalls ?? 0} pelo MCP, ${u.scriptCalls ?? 0} pelo script.` : null,
+        u.kbCalls != null || u.searchCalls != null
+          ? `Base Solvace: ${u.kbCalls ?? 0} ${u.kbCalls === 1 ? 'consulta' : 'consultas'} · buscas no código: ${u.searchCalls ?? 0}${!u.kbCalls && u.searchCalls ? ' (foi direto ao código, sem a base)' : ''}.`
+          : null,
         u.updatedAt ? `Atualizado ${this.relativeTime(u.updatedAt)} (o executor manda o valor final quando a sessão termina).` : null,
       ],
     };
