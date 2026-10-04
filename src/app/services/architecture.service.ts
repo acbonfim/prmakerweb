@@ -78,6 +78,8 @@ export interface ArchitectureProject {
   sections: ArchitectureSectionSummary[];
   relations?: ArchitectureRelation[];
   usedBy?: ArchitectureIncomingRelation[];
+  /** 0054: seções antigas substituídas pela engenharia reversa (chave → por quais documentos) — histórico. */
+  supersededSections?: Record<string, string>;
 }
 
 export interface KnowledgeArticle {
@@ -148,6 +150,8 @@ export interface ArchitectureSuggestion {
   resolvedBy?: string | null;
   resolvedAt?: string | null;
   resolutionNote?: string | null;
+  /** 0054: item da engenharia reversa (RN-012). */
+  itemId?: string | null;
 }
 
 /** Trecho que casou com a busca no conteúdo (0037): seção de projeto ou artigo do KC. */

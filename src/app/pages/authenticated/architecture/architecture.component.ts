@@ -32,6 +32,7 @@ import {
   KnowledgeState,
   relationKind
 } from '../../../services/architecture.service';
+import { REVERSE_DOCS } from '../../../services/reverse-engineering.service';
 
 type Selection =
   | { type: 'overview' }
@@ -243,6 +244,8 @@ export class ArchitectureComponent implements OnInit {
   isModule(p: ArchitectureProject) { return ['legacy', 'revamp', 'frontend', 'integration', 'auth'].includes(p.kind); }
   /** Documentos da engenharia reversa publicados (seções re-*). */
   reverseCount(p: ArchitectureProject) { return p.sections.filter(s => s.key.startsWith('re-')).length; }
+  /** Documentos da engenharia reversa (7 com a visão prática — 0054). */
+  readonly reverseTotal = REVERSE_DOCS.length;
   openReverse(key: string) { this.router.navigate(['/auth/reverse-engineering'], { queryParams: { m: key } }); }
 
   ngOnInit(): void {

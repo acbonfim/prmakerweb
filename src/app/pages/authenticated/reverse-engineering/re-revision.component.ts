@@ -54,13 +54,14 @@ import { ReverseEngineeringService, ReverseRevision } from '../../../services/re
 
         @if (r.coverage?.byCategory; as cats) {
           <details class="block">
-            <summary>Cobertura do inventário do código — {{ r.coverage?.covered }}/{{ r.coverage?.total }}
+            <!-- 0054: na visão prática a cobertura é das perguntas reais do "Pergunte" sobre o módulo -->
+            <summary>{{ cats['pergunta'] ? 'Perguntas reais respondidas' : 'Cobertura do inventário do código' }} — {{ r.coverage?.covered }}/{{ r.coverage?.total }}
               @if (r.coverage?.missingCount) { · {{ r.coverage?.missingCount }} sem menção }</summary>
             <div class="chips">@for (c of catEntries(); track c[0]) { <span class="chip">{{ c[0] }} {{ c[1].covered }}/{{ c[1].total }}</span> }</div>
             @if (r.coverage?.missing?.length) {
               <ul class="missing">
                 @for (m of r.coverage!.missing!.slice(0, 120); track $index) {
-                  <li><span class="chip">{{ m.cat }}</span> {{ m.name }} <span class="muted">{{ m.file }}:{{ m.line }}</span></li>
+                  <li><span class="chip">{{ m.cat }}</span> {{ m.name }} @if (m.file) { <span class="muted">{{ m.file }}:{{ m.line }}</span> }</li>
                 }
               </ul>
             }

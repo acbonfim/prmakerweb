@@ -55,6 +55,8 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
               <button type="button" (click)="copy('/engenharia-reversa ' + module().key + ' tudo')" matTooltip="Copiar"><mat-icon>content_copy</mat-icon></button>
             </div>
           </div>
+          <div class="muted"><b>Visão prática</b> (para quem usa o sistema: como chegar, como fazer, perguntas práticas) — só depois que os demais exigidos forem
+            aprovados e publicados; é escrita só do que foi publicado.</div>
           <div class="muted">Já publicado? <code>/engenharia-reversa {{ module().key }} melhorar &lt;doc&gt;</code> (vê o que mudou no código e no banco desde a versão
             publicada, aplica as sugestões das análises e a nota do revisor) ou <code>/engenharia-reversa {{ module().key }} refazer &lt;doc&gt;</code> (do zero,
             mantendo os IDs). <code>&lt;doc&gt;</code> = {{ docKeys }}. Ordem recomendada no "tudo": arquitetura → UI/UX → funcional → visão → spec. arquitetura →

@@ -54,6 +54,10 @@ export interface ReversePublishedInfo { version: number; updatedAt: string; upda
 export interface ReverseDocStatus {
   type: string; title: string; required: boolean; state: string; published?: ReversePublishedInfo | null; open?: ReverseRevisionHead | null;
   pendingSuggestions: number;
+  /** 0054 (visão prática): documentos técnicos republicados depois dela. */
+  staleBecause?: string[];
+  /** 0054: exigidos que faltam publicar antes de começar. */
+  blockedBy?: string[];
 }
 
 export interface ReverseModuleSummary {
@@ -71,6 +75,14 @@ export interface ReverseModule extends ReverseModuleSummary {
   itemsByKind: Record<string, number>; relations: ArchitectureRelation[]; usedBy: ArchitectureIncomingRelation[]; siblings: string[]; canApprove: boolean;
   /** 0053: termos do glossário que ainda não são apelido nem palavra-chave. */
   suggestedTerms?: string[];
+  /** 0054 */
+  traps?: number; trapsToReview?: number; trapsMigratedAt?: string | null; supersededSections?: Record<string, string>;
+}
+
+/** 0054: armadilha — o que já deu errado, ligada aos itens. */
+export interface ReverseTrap {
+  id: string; moduleKey: string; title: string; text: string; items: string[]; cards: string[]; origin: string; needsReview: boolean;
+  reviewedBy?: string | null; createdAt: string; createdBy: string;
 }
 
 export interface ReverseDocType {
@@ -99,13 +111,14 @@ export interface ReverseSettings {
 }
 
 /** Ordem e rótulos curtos dos documentos (a tela usa sem esperar a API). */
-export const REVERSE_DOCS: { key: string; short: string; icon: string }[] = [
+export const REVERSE_DOCS: { key: string; short: string; icon: string; human?: boolean }[] = [
   { key: 'funcional', short: 'Funcional', icon: 'rule' },
   { key: 'arquitetura', short: 'Arquitetura', icon: 'lan' },
   { key: 'uiux', short: 'UI/UX', icon: 'design_services' },
   { key: 'visao', short: 'Visão', icon: 'visibility' },
   { key: 'spec-arquitetura', short: 'Spec. arquitetura', icon: 'architecture' },
   { key: 'design', short: 'Spec. design', icon: 'palette' },
+  { key: 'pratica', short: 'Visão prática', icon: 'support_agent', human: true },
 ];
 
 export const REVERSE_STATE: Record<string, { label: string; color: string; icon: string }> = {
@@ -141,6 +154,14 @@ export class ReverseEngineeringService {
   resolveTerm(key: string, term: string, action: 'alias' | 'keyword' | 'dismiss'): Observable<ReverseModule> {
     return this.http.post<ReverseModule>(`${this.api}/modules/${encodeURIComponent(key)}/terms`, { term, action });
   }
+  /** 0054: armadilhas, sugestão → armadilha, divergências com o KC. */
+  traps(module: string): Observable<ReverseTrap[]> { return this.http.get<ReverseTrap[]>(`${this.api}/traps`, { params: new HttpParams().set('module', module) }); }
+  updateTrap(id: string, body: { title?: string; text?: string; items?: string[]; confirm?: boolean }): Observable<ReverseTrap> {
+    return this.http.put<ReverseTrap>(`${this.api}/traps/${id}`, body);
+  }
+  deleteTrap(id: string): Observable<void> { return this.http.delete<void>(`${this.api}/traps/${id}`); }
+  suggestionToTrap(id: string, title?: string): Observable<ReverseTrap> { return this.http.post<ReverseTrap>(`${this.api}/suggestions/${id}/to-trap`, { title: title ?? '' , text: '' }); }
+  kcDivergences(): Observable<ArchitectureSuggestion[]> { return this.http.get<ArchitectureSuggestion[]>(`${this.api}/kc-divergences`); }
   doc(key: string, doc: string): Observable<ReverseDoc> {
     return this.http.get<ReverseDoc>(`${this.api}/modules/${encodeURIComponent(key)}/docs/${encodeURIComponent(doc)}`);
   }

@@ -125,6 +125,15 @@ a { color: var(--mat-sys-primary); cursor: pointer; text-decoration: none; }
 .term button { border: none; background: transparent; color: var(--mat-sys-primary); cursor: pointer; font: inherit; font-size: 11px; padding: 0 3px; display: inline-flex; align-items: center; }
 .term button mat-icon { font-size: 14px; width: 14px; height: 14px; color: inherit; opacity: .7; }
 
+.superseded, .stale { display: flex; gap: 8px; align-items: flex-start; margin: 10px 0; padding: 8px 12px; border-radius: 8px; font-size: 13px; }
+.superseded { background: rgba(63,185,80,.07); border: 1px solid rgba(63,185,80,.25); }
+.superseded mat-icon { color: #3fb950; font-size: 18px; width: 18px; height: 18px; flex: none; }
+.stale { background: rgba(210,153,34,.10); border: 1px solid rgba(210,153,34,.35); }
+.stale mat-icon { color: #d29922; font-size: 18px; width: 18px; height: 18px; flex: none; }
+.stale code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.link-btn { border: none; background: transparent; color: var(--mat-sys-primary); cursor: pointer; font: inherit; font-size: 12px; }
+.kc-title { margin-top: 22px !important; }
+
 @media (max-width: 900px) {
   .re { grid-template-columns: 1fr; }
   .re__tree { display: none; position: static; max-height: none; }

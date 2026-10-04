@@ -19,6 +19,7 @@ import { ReRevisionComponent } from './re-revision.component';
 import { ReAssetsComponent } from './re-assets.component';
 import { ReIndexComponent } from './re-index.component';
 import { ReGlossaryComponent } from './re-glossary.component';
+import { ReTrapsComponent } from './re-traps.component';
 
 type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
 
@@ -32,7 +33,7 @@ type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
   selector: 'app-reverse-engineering',
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe,
-    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent],
+    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent, ReTrapsComponent],
   templateUrl: './reverse-engineering.component.html',
   styleUrls: ['./reverse-engineering.component.css']
 })
@@ -76,6 +77,8 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   showHistory = signal(false);
   tocFilter = signal('');
   pending = signal<ReverseRevisionHead[]>([]);
+  /** 0054: divergências Knowledge Center × código (para o time de produto). */
+  kc = signal<{ id: string; projectKey: string; content: string; cardNumber?: string | null; createdBy: string; itemId?: string | null }[]>([]);
   /** Muda a cada evento da revisão aberta — o painel de revisão recarrega. */
   revisionStamp = signal<string | null>(null);
 
@@ -227,7 +230,21 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     });
   }
 
-  loadPending() { this.api.revisions({ status: 'open' }).subscribe({ next: r => this.pending.set(r) }); }
+  loadPending() {
+    this.api.revisions({ status: 'open' }).subscribe({ next: r => this.pending.set(r) });
+    this.api.kcDivergences().subscribe({ next: k => this.kc.set(k as any) });
+  }
+
+  /** 0054: sugestão que é "o que deu errado" vira armadilha ligada ao item (aprovador). */
+  suggestionToTrap(id: string) {
+    this.api.suggestionToTrap(id).subscribe({
+      next: () => { this.snack.open('Virou armadilha do módulo.', 'OK', { duration: 2500 }); this.loadDoc(); const k = this.moduleKey(); if (k) this.loadModule(k, false); },
+      error: e => this.toast(e)
+    });
+  }
+
+  objectEntriesS(o: Record<string, string> | undefined | null) { return Object.entries(o ?? {}); }
+  supersededKeys(o: Record<string, string> | undefined | null) { return Object.keys(o ?? {}).join(', '); }
 
   private joinModuleGroup(key: string | null) {
     const group = key ? reverseGroup(key) : null;

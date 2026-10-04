@@ -392,7 +392,7 @@
           @if (guideTabs().length) { <span class="kb__fact kb__fact--ok"><mat-icon>menu_book</mat-icon>guia em linguagem simples</span> }
         </div>
         @if (isModule(p)) {
-          <a class="kb__re" (click)="openReverse(p.key)"><mat-icon>biotech</mat-icon>Documentação completa (engenharia reversa): {{ reverseCount(p) }}/6 publicados<mat-icon>chevron_right</mat-icon></a>
+          <a class="kb__re" (click)="openReverse(p.key)"><mat-icon>biotech</mat-icon>Documentação completa (engenharia reversa): {{ reverseCount(p) }}/{{ reverseTotal }} publicados<mat-icon>chevron_right</mat-icon></a>
         }
         <app-kb-connections [project]="p" [projects]="projects()" (openProject)="openProjectByKey($event)" (openMap)="openMap(p.key)"></app-kb-connections>
         } @else {
@@ -413,7 +413,7 @@
         </div>
         @if (isModule(p)) {
           <a class="kb__re" (click)="openReverse(p.key)" matTooltip="Documentos com cada regra, caso de uso, tela, endpoint e integração — aprovados e usados pelas análises">
-            <mat-icon>biotech</mat-icon>Engenharia reversa: {{ reverseCount(p) }}/6 documentos publicados{{ reverseCount(p) ? '' : ' — gerar' }}<mat-icon>chevron_right</mat-icon>
+            <mat-icon>biotech</mat-icon>Engenharia reversa: {{ reverseCount(p) }}/{{ reverseTotal }} documentos publicados{{ reverseCount(p) ? '' : ' — gerar' }}<mat-icon>chevron_right</mat-icon>
           </a>
         }
         @if (p.summary) { <p class="kb__summary">{{ p.summary }}</p> }
@@ -509,14 +509,19 @@
         } @else if (p.sections.length) {
           <nav class="kb__tabs" aria-label="Seções">
             @for (s of p.sections; track s.key) {
-              <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" (click)="selectProject(p, s.key)"
-                      [matTooltip]="'versão ' + s.version + ' · ' + tokens(s.length) + (s.audience === 'human' ? ' · Guia (não vai para as skills)' : '')">
+              <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" [class.kb__tab--old]="!!p.supersededSections?.[s.key]" (click)="selectProject(p, s.key)"
+                      [matTooltip]="(p.supersededSections?.[s.key] ? 'Histórico — ' + p.supersededSections?.[s.key] + '. ' : '') + 'versão ' + s.version + ' · ' + tokens(s.length) + (s.audience === 'human' ? ' · Guia (não vai para as skills)' : '')">
                 @if (s.audience === 'human') { <mat-icon class="kb__tab-icon">menu_book</mat-icon> }{{ s.title }}</button>
             }
           </nav>
         }
 
         @if (section(); as s) {
+          @if (p.supersededSections?.[s.key]; as why) {
+            <div class="kb__superseded"><mat-icon>history</mat-icon>
+              <span><b>Histórico.</b> Esta seção foi {{ why }} — as análises e a busca usam a engenharia reversa.
+                <a (click)="openReverse(p.key)">Abrir a engenharia reversa</a></span></div>
+          }
           @if (!simple()) {
             <div class="kb__section-meta">
               versão {{ s.version }} · {{ sourceLabel(s.source) }} · {{ s.updatedBy }}, {{ date(s.updatedAt) }} · {{ tokens(s.length) }}
