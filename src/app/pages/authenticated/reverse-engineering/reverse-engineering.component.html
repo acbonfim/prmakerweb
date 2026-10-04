@@ -15,6 +15,7 @@
     <button type="button" [class.on]="view() === 'modulos'" (click)="setView('modulos')"><mat-icon>view_module</mat-icon>Módulos</button>
     <button type="button" [class.on]="view() === 'revisoes'" (click)="setView('revisoes')"><mat-icon>rate_review</mat-icon>Revisões e sessões</button>
     <button type="button" [class.on]="view() === 'indice'" (click)="setView('indice')"><mat-icon>manage_search</mat-icon>Índice</button>
+    <button type="button" [class.on]="view() === 'glossario'" (click)="setView('glossario')"><mat-icon>translate</mat-icon>Glossário</button>
   </div>
   <button mat-icon-button class="tree-toggle" (click)="treeOpen.set(!treeOpen())" aria-label="Lista de módulos"><mat-icon>{{ treeOpen() ? 'close' : 'menu' }}</mat-icon></button>
 </div>
@@ -79,6 +80,14 @@
       <app-re-index [modules]="modules()" [kinds]="settings()?.kinds ?? []" (goTo)="goToItem($event)"></app-re-index>
     }
 
+    <!-- ── Visão: glossário (0053) ─────────────────────────────────────────────────────── -->
+    @if (view() === 'glossario') {
+      <h2>Glossário</h2>
+      <p class="muted">Os termos de todos os módulos com os sinônimos (sigla, nome antigo, traduções, tabela). Os sinônimos também valem na busca: procurar
+        "RCA" acha o que só diz "A3" — no Índice, no Pergunte e nas análises de bug.</p>
+      <app-re-glossary [modules]="modules()" (goTo)="goToItem($event)"></app-re-glossary>
+    }
+
     <!-- ── Visão: módulos ───────────────────────────────────────────────────────────────── -->
     @if (view() === 'modulos') {
       @if (!moduleKey()) {
@@ -120,7 +129,26 @@
           </div>
         </header>
 
-        @if (showHowTo()) { <app-re-how-to [module]="m" [approverRoles]="settings()?.approverRoles ?? []"></app-re-how-to> }
+        @if (showHowTo()) { <app-re-how-to [module]="m" [approverRoles]="settings()?.approverRoles ?? []" [reference]="settings()?.referenceDatabase"></app-re-how-to> }
+
+        @if (m.suggestedTerms?.length) {
+          <details class="terms" [open]="m.canApprove">
+            <summary><mat-icon>translate</mat-icon>{{ m.suggestedTerms!.length }} termos do glossário ainda não são apelido nem palavra-chave</summary>
+            <p class="muted">Apelido = como o campo "Module" dos cards chama este módulo (a análise de bug acha a engenharia reversa por ele). Palavra-chave = ajuda a
+              Base Solvace a achar o módulo. Dispensar = não sugerir de novo.</p>
+            <div class="terms__list">
+              @for (t of m.suggestedTerms; track t) {
+                <span class="term">{{ t }}
+                  @if (m.canApprove) {
+                    <button type="button" (click)="resolveTerm(t, 'alias')" matTooltip="Virar apelido do módulo">apelido</button>
+                    <button type="button" (click)="resolveTerm(t, 'keyword')" matTooltip="Virar palavra-chave do projeto">palavra-chave</button>
+                    <button type="button" (click)="resolveTerm(t, 'dismiss')" matTooltip="Não sugerir de novo"><mat-icon>close</mat-icon></button>
+                  }
+                </span>
+              }
+            </div>
+          </details>
+        }
 
         @if (showSources()) {
           <section class="sources">

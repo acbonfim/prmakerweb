@@ -107,14 +107,23 @@ a { color: var(--mat-sys-primary); cursor: pointer; text-decoration: none; }
 
 .md { font-size: 14px; line-height: 1.65; min-width: 0; overflow-wrap: anywhere; }
 .md ::ng-deep h1, .md ::ng-deep h2 { font-size: 18px; margin: 22px 0 8px; }
-.md ::ng-deep h3 { font-size: 15.5px; margin: 18px 0 6px; scroll-margin-top: 16px; }
-.md ::ng-deep h4 { scroll-margin-top: 16px; }
-.md ::ng-deep .flash { background: color-mix(in srgb, var(--mat-sys-primary) 22%, transparent); transition: background .6s; }
+.md ::ng-deep h2, .md ::ng-deep h3, .md ::ng-deep h4 { scroll-margin-top: 28px; }
+.md ::ng-deep h3 { font-size: 15.5px; margin: 18px 0 6px; }
+.md ::ng-deep .flash { background: color-mix(in srgb, var(--mat-sys-primary) 22%, transparent); outline: 2px solid color-mix(in srgb, var(--mat-sys-primary) 40%, transparent);
+  border-radius: 4px; transition: background .6s; }
 .md ::ng-deep table { border-collapse: collapse; margin: 10px 0; display: block; overflow-x: auto; }
 .md ::ng-deep th, .md ::ng-deep td { border: 1px solid rgba(255,255,255,.12); padding: 5px 9px; text-align: left; }
 .md ::ng-deep pre { padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,.35); overflow-x: auto; }
 .md ::ng-deep code { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 12.5px; }
 .md ::ng-deep :not(pre) > code { padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.07); }
+
+.terms { margin: 10px 0; font-size: 13px; padding: 8px 12px; border-radius: 8px; background: rgba(255,255,255,.03); }
+.terms summary { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+.terms summary mat-icon { font-size: 17px; width: 17px; height: 17px; color: var(--mat-sys-primary); }
+.terms__list { display: flex; flex-wrap: wrap; gap: 6px; }
+.term { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 9px; border-radius: 12px; background: rgba(255,255,255,.07); font-size: 12.5px; }
+.term button { border: none; background: transparent; color: var(--mat-sys-primary); cursor: pointer; font: inherit; font-size: 11px; padding: 0 3px; display: inline-flex; align-items: center; }
+.term button mat-icon { font-size: 14px; width: 14px; height: 14px; color: inherit; opacity: .7; }
 
 @media (max-width: 900px) {
   .re { grid-template-columns: 1fr; }

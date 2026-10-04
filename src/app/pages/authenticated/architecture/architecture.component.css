@@ -287,3 +287,6 @@
 .kb__re { display: inline-flex; align-items: center; gap: 6px; margin: 6px 0 4px; padding: 5px 12px; border-radius: 999px; font-size: 12.5px; cursor: pointer;
   color: var(--mat-sys-primary); background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent); text-decoration: none; }
 .kb__re mat-icon { font-size: 16px; width: 16px; height: 16px; }
+
+/* 0053: título não fica colado na barra superior ao rolar pelo sumário */
+.kb__md ::ng-deep h1, .kb__md ::ng-deep h2, .kb__md ::ng-deep h3, .kb__md ::ng-deep h4 { scroll-margin-top: 28px; }

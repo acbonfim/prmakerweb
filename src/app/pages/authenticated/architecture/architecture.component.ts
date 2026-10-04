@@ -18,7 +18,7 @@ import { KbLearnCardComponent } from './kb-learn-card.component';
 import { KbAskDeepComponent } from './kb-ask-deep.component';
 import { KbQuestionsComponent } from './kb-questions.component';
 import {
-  KbViewMode, TocItem, areaGroups, articleMarkdown, friendlyKind, friendlyName, friendlyTagline, guideSections, headingsOf, projectArea, techSections
+  KbViewMode, TocItem, areaGroups, cleanInline, articleMarkdown, friendlyKind, friendlyName, friendlyTagline, guideSections, headingsOf, projectArea, techSections
 } from './kb-friendly';
 import {
   ARCHITECTURE_KINDS,
@@ -302,9 +302,11 @@ export class ArchitectureComponent implements OnInit {
   scrollToHeading(item: TocItem): void {
     const root = this.contentRef?.nativeElement;
     if (!root) return;
-    const target = normalize(item.text);
-    const el = Array.from(root.querySelectorAll<HTMLElement>('.kb__md h2, .kb__md h3')).find(h => normalize(h.textContent ?? '') === target);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const el = findHeading(Array.from(root.querySelectorAll<HTMLElement>('.kb__md h2, .kb__md h3, .kb__md h4')), item.text);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('kb-flash');
+    setTimeout(() => el.classList.remove('kb-flash'), 2400);
   }
 
   private selectionSection(): string | undefined {
@@ -475,9 +477,8 @@ export class ArchitectureComponent implements OnInit {
     const wanted = this.pendingHeading();
     const root = this.contentRef?.nativeElement;
     if (!wanted || !root || !this.section()) return;
-    const target = normalize(wanted.replace(/[*`]/g, ''));
     const headings = Array.from(root.querySelectorAll<HTMLElement>('.kb__md h1, .kb__md h2, .kb__md h3, .kb__md h4'));
-    const el = headings.find(h => normalize(h.textContent ?? '') === target) ?? headings.find(h => normalize(h.textContent ?? '').includes(target));
+    const el = findHeading(headings, wanted);
     if (!el) return;
     this.pendingHeading.set(null);
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -640,6 +641,19 @@ function readMode(): KbViewMode {
 function isQuestion(value: string): boolean {
   const q = value.trim();
   return q.endsWith('?') || QUESTION_START.test(normalize(q)) || q.split(/\s+/).length >= 5;
+}
+
+/**
+ * 0053: acha o título pelo texto do sumário com a MESMA limpeza dos dois lados (o sumário tira `_`, `*` e crases do
+ * markdown — o título renderizado tem `TB_SA3_A3`); item com ID (RN-012 — …) casa pelo ID.
+ */
+function findHeading(headings: HTMLElement[], text: string): HTMLElement | undefined {
+  const key = (v: string) => normalize(cleanInline(v));
+  const target = key(text);
+  const id = /^\s*([A-Z]{2,4}-\d{1,4})\b/.exec(cleanInline(text))?.[1];
+  return (id ? headings.find(h => cleanInline(h.textContent ?? '').trim().startsWith(id)) : undefined)
+    ?? headings.find(h => key(h.textContent ?? '') === target)
+    ?? headings.find(h => key(h.textContent ?? '').includes(target));
 }
 
 function normalize(value: string): string {
