@@ -253,7 +253,7 @@
             <details class="suggestions">
               <summary><mat-icon>lightbulb</mat-icon>{{ d.suggestions.length }} sugestões pendentes para este documento (entram na próxima sessão "melhorar")</summary>
               @for (s of d.suggestions; track s.id) {
-                <div class="sugg"><span class="chip">{{ s.kind }}</span>@if (s.itemId) { <span class="chip">{{ s.itemId }}</span> }@if (s.cardNumber) { <span class="muted">card {{ s.cardNumber }}</span> } <span class="muted">{{ s.createdBy }}</span>
+                <div class="sugg"><span class="chip">{{ s.kind }}</span>@if (s.itemId) { <span class="chip">{{ s.itemId }}</span> }@if (s.cardNumber) { <span class="muted">card {{ s.cardNumber }} ·</span> } <span class="muted">{{ s.createdBy }}</span>
                   @if (m.canApprove) { <button type="button" class="link-btn" (click)="suggestionToTrap(s.id)" matTooltip="É o que deu errado, não muda o 'como o sistema é' → armadilha ligada ao item">virar armadilha</button> }
                   <div [innerHTML]="s.content | planMarkdown"></div></div>
               }

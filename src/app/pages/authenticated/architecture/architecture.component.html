@@ -392,7 +392,7 @@
           @if (guideTabs().length) { <span class="kb__fact kb__fact--ok"><mat-icon>menu_book</mat-icon>guia em linguagem simples</span> }
         </div>
         @if (isModule(p)) {
-          <a class="kb__re" (click)="openReverse(p.key)"><mat-icon>biotech</mat-icon>Documentação completa (engenharia reversa): {{ reverseCount(p) }}/6 publicados<mat-icon>chevron_right</mat-icon></a>
+          <a class="kb__re" (click)="openReverse(p.key)"><mat-icon>biotech</mat-icon>Documentação completa (engenharia reversa): {{ reverseCount(p) }}/{{ reverseTotal }} publicados<mat-icon>chevron_right</mat-icon></a>
         }
         <app-kb-connections [project]="p" [projects]="projects()" (openProject)="openProjectByKey($event)" (openMap)="openMap(p.key)"></app-kb-connections>
         } @else {
@@ -413,7 +413,7 @@
         </div>
         @if (isModule(p)) {
           <a class="kb__re" (click)="openReverse(p.key)" matTooltip="Documentos com cada regra, caso de uso, tela, endpoint e integração — aprovados e usados pelas análises">
-            <mat-icon>biotech</mat-icon>Engenharia reversa: {{ reverseCount(p) }}/6 documentos publicados{{ reverseCount(p) ? '' : ' — gerar' }}<mat-icon>chevron_right</mat-icon>
+            <mat-icon>biotech</mat-icon>Engenharia reversa: {{ reverseCount(p) }}/{{ reverseTotal }} documentos publicados{{ reverseCount(p) ? '' : ' — gerar' }}<mat-icon>chevron_right</mat-icon>
           </a>
         }
         @if (p.summary) { <p class="kb__summary">{{ p.summary }}</p> }
