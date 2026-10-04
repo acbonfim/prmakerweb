@@ -70,6 +70,19 @@
           </button>
         } @empty { <div class="muted">Nada aberto agora.</div> }
       </div>
+      @if (kc().length) {
+        <h2 class="kc-title">Divergências entre o Knowledge Center e o código</h2>
+        <p class="muted">As análises encontraram regra do Knowledge Center diferente do que o sistema faz — para o time de produto decidir (corrigir o artigo ou o sistema).</p>
+        <div class="pending">
+          @for (s of kc(); track s.id) {
+            <button type="button" class="pending__row" (click)="openModule(s.projectKey, 'funcional', s.itemId ?? undefined)">
+              <mat-icon style="color:#d29922">compare_arrows</mat-icon><b>{{ s.projectKey }}</b>{{ s.itemId ? ' · ' + s.itemId : '' }}
+              <span class="muted">{{ s.content.slice(0, 160) }}</span><span class="spacer"></span>
+              <span class="muted">{{ s.cardNumber ? 'card ' + s.cardNumber + ' · ' : '' }}{{ s.createdBy }}</span>
+            </button>
+          }
+        </div>
+      }
     }
 
     <!-- ── Visão: índice ─────────────────────────────────────────────────────────────────── -->
@@ -128,6 +141,13 @@
             }
           </div>
         </header>
+
+        @if (objectEntriesS(m.supersededSections).length) {
+          <div class="superseded"><mat-icon>verified</mat-icon><span><b>Fonte: engenharia reversa.</b> Seções antigas da Base Solvace já substituídas (ficam só como
+            histórico): {{ supersededKeys(m.supersededSections) }}.</span></div>
+        }
+        <app-re-traps [moduleKey]="m.key" [canApprove]="m.canApprove" [migratedAt]="m.trapsMigratedAt" [stamp]="m.traps"
+                      (changed)="loadModule(m.key, false)" (goTo)="scrollTo($event)"></app-re-traps>
 
         @if (showHowTo()) { <app-re-how-to [module]="m" [approverRoles]="settings()?.approverRoles ?? []" [reference]="settings()?.referenceDatabase"></app-re-how-to> }
 
@@ -197,11 +217,23 @@
             <app-re-assets [moduleKey]="m.key" [assets]="m.assets" (changed)="loadModule(m.key, false)"></app-re-assets>
           }
 
+          @if (ds.staleBecause?.length) {
+            <div class="stale"><mat-icon>update</mat-icon><span><b>Desatualizada:</b> {{ ds.staleBecause!.join(', ') }} foi republicado depois dela. Rode
+              <code>/engenharia-reversa {{ m.key }} melhorar {{ ds.type }}</code>.</span></div>
+          }
           @if (ds.open; as open) {
             @if (open.status === 'draft' || open.status === 'changes') {
               <app-re-progress [revision]="open"></app-re-progress>
             }
             <app-re-revision [revisionId]="open.id" [stamp]="revisionStamp()" (changed)="onRevisionChanged()"></app-re-revision>
+          } @else if (!ds.published && ds.blockedBy?.length) {
+            <div class="empty">
+              <mat-icon>lock</mat-icon>
+              <div>
+                <b>{{ docTitle(ds.type) }} é escrita só do que já foi aprovado.</b>
+                <div class="muted">Publique antes: {{ ds.blockedBy!.join(', ') }}. Depois, no Claude Code: <code>/engenharia-reversa {{ m.key }} {{ ds.type }}</code></div>
+              </div>
+            </div>
           } @else if (!ds.published) {
             <div class="empty">
               <mat-icon>hourglass_empty</mat-icon>
@@ -221,7 +253,8 @@
             <details class="suggestions">
               <summary><mat-icon>lightbulb</mat-icon>{{ d.suggestions.length }} sugestões pendentes para este documento (entram na próxima sessão "melhorar")</summary>
               @for (s of d.suggestions; track s.id) {
-                <div class="sugg"><span class="chip">{{ s.kind }}</span>@if (s.cardNumber) { <span class="muted">card {{ s.cardNumber }}</span> } <span class="muted">{{ s.createdBy }}</span>
+                <div class="sugg"><span class="chip">{{ s.kind }}</span>@if (s.itemId) { <span class="chip">{{ s.itemId }}</span> }@if (s.cardNumber) { <span class="muted">card {{ s.cardNumber }}</span> } <span class="muted">{{ s.createdBy }}</span>
+                  @if (m.canApprove) { <button type="button" class="link-btn" (click)="suggestionToTrap(s.id)" matTooltip="É o que deu errado, não muda o 'como o sistema é' → armadilha ligada ao item">virar armadilha</button> }
                   <div [innerHTML]="s.content | planMarkdown"></div></div>
               }
             </details>

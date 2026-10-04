@@ -91,8 +91,11 @@ export function areaGroups(projects: ArchitectureProject[]): AreaGroup[] {
     Number(b.business) - Number(a.business) || (a.business ? a.area.localeCompare(b.area) : kindOrder(a) - kindOrder(b)));
 }
 
+/** 0054: o Guia (Simples) — a visão prática da engenharia reversa vem primeiro; o Guia antigo que ela substituiu sai. */
 export function guideSections(p: ArchitectureProject | null | undefined): ArchitectureSectionSummary[] {
-  return (p?.sections ?? []).filter(isGuideSection).sort((a, b) => a.order - b.order);
+  const superseded = p?.supersededSections ?? {};
+  return (p?.sections ?? []).filter(isGuideSection).filter(s => !superseded[s.key])
+    .sort((a, b) => (a.key === 're-pratica' ? -1 : b.key === 're-pratica' ? 1 : a.order - b.order));
 }
 
 export function techSections(p: ArchitectureProject | null | undefined): ArchitectureSectionSummary[] {

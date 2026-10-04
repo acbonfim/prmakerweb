@@ -509,14 +509,19 @@
         } @else if (p.sections.length) {
           <nav class="kb__tabs" aria-label="Seções">
             @for (s of p.sections; track s.key) {
-              <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" (click)="selectProject(p, s.key)"
-                      [matTooltip]="'versão ' + s.version + ' · ' + tokens(s.length) + (s.audience === 'human' ? ' · Guia (não vai para as skills)' : '')">
+              <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" [class.kb__tab--old]="!!p.supersededSections?.[s.key]" (click)="selectProject(p, s.key)"
+                      [matTooltip]="(p.supersededSections?.[s.key] ? 'Histórico — ' + p.supersededSections?.[s.key] + '. ' : '') + 'versão ' + s.version + ' · ' + tokens(s.length) + (s.audience === 'human' ? ' · Guia (não vai para as skills)' : '')">
                 @if (s.audience === 'human') { <mat-icon class="kb__tab-icon">menu_book</mat-icon> }{{ s.title }}</button>
             }
           </nav>
         }
 
         @if (section(); as s) {
+          @if (p.supersededSections?.[s.key]; as why) {
+            <div class="kb__superseded"><mat-icon>history</mat-icon>
+              <span><b>Histórico.</b> Esta seção foi {{ why }} — as análises e a busca usam a engenharia reversa.
+                <a (click)="openReverse(p.key)">Abrir a engenharia reversa</a></span></div>
+          }
           @if (!simple()) {
             <div class="kb__section-meta">
               versão {{ s.version }} · {{ sourceLabel(s.source) }} · {{ s.updatedBy }}, {{ date(s.updatedAt) }} · {{ tokens(s.length) }}
