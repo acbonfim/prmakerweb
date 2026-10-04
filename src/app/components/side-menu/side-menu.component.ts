@@ -42,6 +42,11 @@ export class SideMenuComponent implements OnInit {
       link: 'auth/architecture'
     },
     {
+      label: 'Engenharia reversa',
+      icon: 'biotech',
+      link: 'auth/reverse-engineering'
+    },
+    {
       label: 'Gestão de usuários',
       icon: 'manage_accounts',
       link: 'auth/user/manager',
