@@ -32,7 +32,7 @@ import { ReverseEngineeringService, ReverseIndexHit, ReverseModuleSummary } from
           @if (t.synonyms?.length) {
             <div class="syn">@for (s of t.synonyms; track s) { <span class="chip">{{ s }}</span> }</div>
           }
-          @if (t.snippet) { <div class="muted">{{ t.snippet }}</div> }
+          @if (meaning(t.snippet); as m) { <div class="muted">{{ m }}</div> }
         </div>
       } @empty {
         @if (!loading()) { <div class="muted">Nenhum termo publicado ainda — o glossário nasce no levantamento funcional de cada módulo.</div> }
@@ -74,6 +74,11 @@ export class ReGlossaryComponent implements OnInit {
       .filter(t => !f || norm(`${t.title} ${(t.synonyms ?? []).join(' ')} ${t.moduleName ?? ''} ${t.snippet}`).includes(f))
       .sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'));
   });
+
+  /** O resumo sem as linhas de metadados (os sinônimos já aparecem nos chips). */
+  meaning(snippet: string) {
+    return (snippet ?? '').split(' · ').filter(p => !/^-?\s*(Sin[ôo]nimos|Onde aparece|Tags|Tabelas|Onde):/i.test(p.trim())).join(' · ').trim();
+  }
 
   ngOnInit() {
     this.api.search('', { kind: 'GLO', limit: 2000 }).subscribe({
