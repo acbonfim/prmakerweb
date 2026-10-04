@@ -39,6 +39,11 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadComponent: () => import('./plugin/plugin.component').then(m => m.PluginComponent)
       },
       {
+        path: 'reverse-engineering',
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./reverse-engineering/reverse-engineering.component').then(m => m.ReverseEngineeringComponent)
+      },
+      {
         path: 'architecture',
         canActivate: [AuthGuard],
         loadComponent: () => import('./architecture/architecture.component').then(m => m.ArchitectureComponent)

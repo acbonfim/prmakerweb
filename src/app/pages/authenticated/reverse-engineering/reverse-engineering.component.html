@@ -1,0 +1,247 @@
+<div class="page-header">
+  <mat-icon class="header-icon">biotech</mat-icon>
+  <div class="header-titles">
+    <span class="header-title">Engenharia reversa</span>
+    <span class="header-sub">Cada módulo (legado e revamp, back e front) documentado a fundo — regras, casos de uso, telas, integrações — aprovado e publicado na Base Solvace.</span>
+  </div>
+  <span class="header-spacer"></span>
+  @if (!loading()) {
+    <span class="stat" matTooltip="Módulos com todos os documentos exigidos publicados"><mat-icon>verified</mat-icon>{{ totals().complete }}/{{ totals().modules }} completos</span>
+    <span class="stat"><mat-icon>list_alt</mat-icon>{{ totals().items }} itens no índice</span>
+    @if (totals().live) { <span class="stat stat--live"><span class="dot dot--live"></span>{{ totals().live }} gerando agora</span> }
+    @if (totals().review) { <span class="stat stat--warn"><mat-icon>rate_review</mat-icon>{{ totals().review }} para revisar</span> }
+  }
+  <div class="views" role="tablist">
+    <button type="button" [class.on]="view() === 'modulos'" (click)="setView('modulos')"><mat-icon>view_module</mat-icon>Módulos</button>
+    <button type="button" [class.on]="view() === 'revisoes'" (click)="setView('revisoes')"><mat-icon>rate_review</mat-icon>Revisões e sessões</button>
+    <button type="button" [class.on]="view() === 'indice'" (click)="setView('indice')"><mat-icon>manage_search</mat-icon>Índice</button>
+  </div>
+  <button mat-icon-button class="tree-toggle" (click)="treeOpen.set(!treeOpen())" aria-label="Lista de módulos"><mat-icon>{{ treeOpen() ? 'close' : 'menu' }}</mat-icon></button>
+</div>
+
+<div class="re">
+  <!-- ── Módulos ────────────────────────────────────────────────────────────────────────────── -->
+  <aside class="re__tree" [class.re__tree--open]="treeOpen()">
+    <div class="re__search">
+      <mat-icon>search</mat-icon>
+      <input type="search" placeholder="Filtrar módulos…" [ngModel]="filter()" (ngModelChange)="filter.set($event)">
+    </div>
+    <div class="worlds">
+      @for (w of ['', 'revamp', 'legado', 'front', 'integração']; track w) {
+        <button type="button" [class.on]="world() === w" (click)="world.set(w)">{{ w || 'todos' }}</button>
+      }
+    </div>
+    @if (loading()) { <div class="state"><mat-spinner diameter="24"></mat-spinner></div> }
+    @for (g of groups(); track g.area) {
+      <div class="area">
+        <div class="area__title">{{ g.area }}</div>
+        @for (m of g.modules; track m.key) {
+          <button type="button" class="mod" [class.mod--on]="moduleKey() === m.key" (click)="openModule(m.key)">
+            <mat-icon class="mod__world" [matTooltip]="m.world">{{ worldIcon(m.world) }}</mat-icon>
+            <span class="mod__name">{{ m.displayName || m.name }} <span class="muted">{{ m.world }}</span></span>
+            @if (moduleLive(m)) { <span class="dot dot--live" matTooltip="Gerando agora"></span> }
+            @if (m.inReview) { <span class="badge" matTooltip="Documentos esperando aprovação">{{ m.inReview }}</span> }
+            <span class="dots">
+              @for (d of docs; track d.key) {
+                <span class="dot" [style.background]="state(docState(m, d.key)).color" [matTooltip]="d.short + ': ' + state(docState(m, d.key)).label"></span>
+              }
+            </span>
+          </button>
+        }
+      </div>
+    }
+  </aside>
+
+  <main class="re__main">
+    <!-- ── Visão: revisões e sessões ─────────────────────────────────────────────────────── -->
+    @if (view() === 'revisoes') {
+      <h2>Revisões e sessões abertas</h2>
+      <p class="muted">Sessões do Claude gerando agora, rascunhos, documentos esperando aprovação e com ajustes pedidos — em todos os módulos.</p>
+      <div class="pending">
+        @for (r of pending(); track r.id) {
+          <button type="button" class="pending__row" (click)="openModule(r.moduleKey, r.docType)">
+            @if (isLive(r)) { <span class="dot dot--live"></span> } @else { <mat-icon [style.color]="state(r.status).color">{{ state(r.status).icon }}</mat-icon> }
+            <b>{{ r.moduleName || r.moduleKey }}</b> · {{ docTitle(r.docType) }}
+            <span class="chip">#{{ r.number }} {{ statusLabel(r.status) }}</span>
+            @if (r.progress?.activity && isLive(r)) { <span class="muted">agora: {{ r.progress?.activity }}</span> }
+            <span class="spacer"></span>
+            <span class="muted">{{ r.createdBy }} · {{ date(r.progressAt || r.updatedAt) }}</span>
+          </button>
+        } @empty { <div class="muted">Nada aberto agora.</div> }
+      </div>
+    }
+
+    <!-- ── Visão: índice ─────────────────────────────────────────────────────────────────── -->
+    @if (view() === 'indice') {
+      <h2>Índice da engenharia reversa</h2>
+      <p class="muted">Ache partes específicas de um ou de vários módulos — regras (RN), casos de uso (UC), telas (TELA), endpoints (API), tabelas (DB),
+        integrações (INT)… É o mesmo índice que as análises de bug consultam pelo MCP, sem ir ao código.</p>
+      <app-re-index [modules]="modules()" [kinds]="settings()?.kinds ?? []" (goTo)="goToItem($event)"></app-re-index>
+    }
+
+    <!-- ── Visão: módulos ───────────────────────────────────────────────────────────────── -->
+    @if (view() === 'modulos') {
+      @if (!moduleKey()) {
+        <div class="intro">
+          <h2>Como funciona</h2>
+          <ol>
+            <li><b>Escolha um módulo</b> à esquerda (legado e revamp são módulos separados; a área de negócio junta os dois).</li>
+            <li><b>Gere no Claude Code</b>, na sua máquina, aberto na pasta do código do módulo — o módulo mostra o passo a passo e os comandos prontos.</li>
+            <li><b>Acompanhe aqui ao vivo</b>: etapas, o que o Claude está fazendo e o rascunho crescendo.</li>
+            <li><b>Revise e publique</b>: diferença por item, cobertura do código, avisos. Publicado = ativo na Base Solvace e nas análises.</li>
+            <li><b>Melhore sempre</b>: as análises de cards sugerem correções e lacunas; a próxima sessão "melhorar" usa tudo isso.</li>
+          </ol>
+          <div class="legend">
+            @for (s of ['none', 'draft', 'review', 'changes', 'approved', 'published']; track s) {
+              <span><span class="dot" [style.background]="state(s).color"></span>{{ state(s).label }}</span>
+            }
+          </div>
+        </div>
+      }
+
+      @if (moduleLoading()) { <div class="state"><mat-spinner diameter="28"></mat-spinner></div> }
+      @if (module(); as m) {
+        <header class="modhead">
+          <div class="modhead__kicker"><mat-icon>{{ worldIcon(m.world) }}</mat-icon>{{ m.world }}{{ m.businessArea ? ' · ' + m.businessArea : '' }}</div>
+          <h1>{{ m.displayName || m.name }} <span class="key">{{ m.key }}</span></h1>
+          <div class="meta">
+            <span [class.ok]="m.complete"><mat-icon>{{ m.complete ? 'verified' : 'pending' }}</mat-icon>{{ m.publishedRequired }}/{{ m.requiredCount }} documentos exigidos publicados</span>
+            <span><mat-icon>list_alt</mat-icon>{{ m.items }} itens</span>
+            <a (click)="router.navigate(['/auth/architecture'], { queryParams: { p: m.key } })"><mat-icon>account_tree</mat-icon>Ver na Base Solvace</a>
+            @for (s of m.siblings; track s) { <a (click)="openModule(s)"><mat-icon>swap_horiz</mat-icon>{{ s }}</a> }
+          </div>
+          @if (m.summary) { <p class="summary">{{ m.summary }}</p> }
+          <div class="modhead__actions">
+            <button mat-stroked-button type="button" [class.on]="showHowTo()" (click)="showHowTo.set(!showHowTo())"><mat-icon>terminal</mat-icon>Como gerar</button>
+            <button mat-stroked-button type="button" (click)="showSources() ? showSources.set(false) : editSources()"><mat-icon>source</mat-icon>Fontes e apelidos</button>
+            @if (m.itemsByKind; as kinds) {
+              <span class="chips">@for (k of objectEntries(kinds); track k[0]) { <span class="chip">{{ k[0] }} {{ k[1] }}</span> }</span>
+            }
+          </div>
+        </header>
+
+        @if (showHowTo()) { <app-re-how-to [module]="m" [approverRoles]="settings()?.approverRoles ?? []"></app-re-how-to> }
+
+        @if (showSources()) {
+          <section class="sources">
+            <h3>Fontes do código e apelidos</h3>
+            <p class="muted">Onde está o código do módulo (repositório pelo nome do remote, como no mapa da máquina, e a pasta) — o Claude lê tudo isso.
+              Apelidos = valores do campo "Module" dos cards que caem neste módulo (a análise de bug usa para achar a engenharia reversa).</p>
+            @for (s of sourcesDraft; track $index; let i = $index) {
+              <div class="src">
+                <input [(ngModel)]="s.repository" placeholder="repositório (ex.: revamp-Kaizen, edv-solvace-apps)" [disabled]="!m.canApprove">
+                <input [(ngModel)]="s.path" placeholder="pasta (ex.: projects/kaizen)" [disabled]="!m.canApprove">
+                <select [(ngModel)]="s.role" [disabled]="!m.canApprove">
+                  <option value="backend">back</option><option value="frontend">front</option><option value="database">banco</option><option value="other">outro</option>
+                </select>
+                @if (m.canApprove) { <button type="button" class="icon" (click)="removeSource(i)"><mat-icon>close</mat-icon></button> }
+              </div>
+            }
+            <input class="aliases" [(ngModel)]="aliasesDraft" placeholder="Apelidos: Kaizen, Kaizen (Revamp), Melhorias" [disabled]="!m.canApprove">
+            @if (m.canApprove) {
+              <div class="row">
+                <button mat-button type="button" (click)="addSource()"><mat-icon>add</mat-icon>Fonte</button>
+                <button mat-flat-button color="primary" type="button" (click)="saveSources()">Salvar</button>
+              </div>
+            } @else { <p class="muted">Só {{ settings()?.approverRoles?.join(' ou ') }} altera as fontes.</p> }
+          </section>
+        }
+
+        <nav class="doctabs">
+          @for (d of m.docs; track d.type) {
+            <button type="button" class="doctab" [class.doctab--on]="docKey() === d.type" (click)="selectDoc(d.type)">
+              @if (isLive(d.open)) { <span class="dot dot--live"></span> } @else { <span class="dot" [style.background]="state(d.state).color"></span> }
+              {{ docTitle(d.type) }}
+              @if (d.pendingSuggestions) { <span class="badge" matTooltip="Sugestões pendentes das análises">{{ d.pendingSuggestions }}</span> }
+            </button>
+          }
+        </nav>
+
+        @if (docStatus(); as ds) {
+          <div class="docinfo">
+            <span class="docinfo__state" [style.color]="state(ds.state).color"><mat-icon>{{ state(ds.state).icon }}</mat-icon>{{ state(ds.state).label }}</span>
+            @if (ds.published) { <span class="muted">publicado v{{ ds.published.version }} · {{ ds.published.items }} itens · {{ date(ds.published.updatedAt) }} por {{ ds.published.updatedBy }}</span> }
+            @if (!ds.required) { <span class="chip">opcional</span> }
+            @if (docType(); as t) { <span class="muted purpose">{{ t.purpose }}</span> }
+          </div>
+
+          @if (docKey() === 'uiux' || docKey() === 'design') {
+            <app-re-assets [moduleKey]="m.key" [assets]="m.assets" (changed)="loadModule(m.key, false)"></app-re-assets>
+          }
+
+          @if (ds.open; as open) {
+            @if (open.status === 'draft' || open.status === 'changes') {
+              <app-re-progress [revision]="open"></app-re-progress>
+            }
+            <app-re-revision [revisionId]="open.id" [stamp]="revisionStamp()" (changed)="onRevisionChanged()"></app-re-revision>
+          } @else if (!ds.published) {
+            <div class="empty">
+              <mat-icon>hourglass_empty</mat-icon>
+              <div>
+                <b>{{ docTitle(ds.type) }} ainda não foi gerado.</b>
+                <div class="muted">No Claude Code aberto na pasta do módulo:</div>
+                <code>/engenharia-reversa {{ m.key }} {{ ds.type }}</code>
+                <div><a (click)="showHowTo.set(true)">Ver o passo a passo</a></div>
+              </div>
+            </div>
+          }
+        }
+
+        @if (docLoading()) { <div class="state"><mat-spinner diameter="22"></mat-spinner></div> }
+        @if (doc(); as d) {
+          @if (d.suggestions.length) {
+            <details class="suggestions">
+              <summary><mat-icon>lightbulb</mat-icon>{{ d.suggestions.length }} sugestões pendentes para este documento (entram na próxima sessão "melhorar")</summary>
+              @for (s of d.suggestions; track s.id) {
+                <div class="sugg"><span class="chip">{{ s.kind }}</span>@if (s.cardNumber) { <span class="muted">card {{ s.cardNumber }}</span> } <span class="muted">{{ s.createdBy }}</span>
+                  <div [innerHTML]="s.content | planMarkdown"></div></div>
+              }
+            </details>
+          }
+          @if (d.content) {
+            <div class="pub">
+              <aside class="toc">
+                <input type="search" placeholder="Filtrar itens…" [ngModel]="tocFilter()" (ngModelChange)="tocFilter.set($event)">
+                @for (g of toc(); track g.kind) {
+                  <div class="toc__group">{{ g.label }} <span class="muted">{{ g.items.length }}</span></div>
+                  @for (i of g.items; track i.id) {
+                    <button type="button" class="toc__item" [class.toc__item--removed]="i.removed" (click)="scrollTo(i.id)"><span class="id">{{ i.id }}</span>{{ i.title }}</button>
+                  }
+                }
+              </aside>
+              <article #docContent class="md" [innerHTML]="d.content | planMarkdown"></article>
+            </div>
+          }
+          @if (d.revisions.length) {
+            <details class="history" [open]="showHistory()" (toggle)="showHistory.set($any($event.target).open)">
+              <summary>Histórico de revisões ({{ d.revisions.length }})</summary>
+              @for (r of d.revisions; track r.id) {
+                <div class="history__row">
+                  <span class="chip">#{{ r.number }}</span> {{ statusLabel(r.status) }} · {{ r.mode }} · {{ r.createdBy }} · {{ date(r.updatedAt) }}
+                  @if (r.publishedBy) { <span class="muted">publicada por {{ r.publishedBy }}</span> }
+                  @if (r.coverageRatio != null) { <span class="muted">cobertura {{ pct(r.coverageRatio) }}</span> }
+                  @if (r.summary) { <div class="muted">{{ r.summary }}</div> }
+                  @if (r.reviewNote) { <div class="muted">revisor: {{ r.reviewNote }}</div> }
+                </div>
+              }
+            </details>
+          }
+        }
+
+        @if (m.relations.length || m.usedBy.length) {
+          <details class="links">
+            <summary><mat-icon>hub</mat-icon>Integrações com outros módulos ({{ m.relations.length }} saindo · {{ m.usedBy.length }} chegando)</summary>
+            <div class="links__cols">
+              <div><b>Depende de</b>
+                @for (r of m.relations; track $index) { <div><a (click)="openModule(r.target)">{{ r.target }}</a> <span class="muted">{{ r.kind }} · {{ r.detail }}</span></div> }
+              </div>
+              <div><b>Usado por</b>
+                @for (r of m.usedBy; track $index) { <div><a (click)="openModule(r.source)">{{ r.source }}</a> <span class="muted">{{ r.kind }} · {{ r.detail }}</span></div> }
+              </div>
+            </div>
+          </details>
+        }
+      }
+    }
+  </main>
+</div>

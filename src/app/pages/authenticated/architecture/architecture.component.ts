@@ -239,6 +239,12 @@ export class ArchitectureComponent implements OnInit {
     });
   }
 
+  /** 0052: projetos que são módulo na Engenharia reversa (legado/revamp/front/integração/login). */
+  isModule(p: ArchitectureProject) { return ['legacy', 'revamp', 'frontend', 'integration', 'auth'].includes(p.kind); }
+  /** Documentos da engenharia reversa publicados (seções re-*). */
+  reverseCount(p: ArchitectureProject) { return p.sections.filter(s => s.key.startsWith('re-')).length; }
+  openReverse(key: string) { this.router.navigate(['/auth/reverse-engineering'], { queryParams: { m: key } }); }
+
   ngOnInit(): void {
     this.load();
     this.route.queryParamMap.subscribe(q => {
