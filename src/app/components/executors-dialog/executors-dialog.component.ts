@@ -237,7 +237,7 @@ const POLL_MS = 30_000;
               <div class="ex__state">Sem planos com custo registrado no período. O custo vai quando a skill conclui o plano.</div>
             } @else {
               <table class="ex__usage">
-                <thead><tr><th></th><th>Planos</th><th>Turnos</th><th>Entrada</th><th>Saída</th><th>Total</th><th>MCP / script</th><th>Base / buscas</th></tr></thead>
+                <thead><tr><th></th><th>Planos</th><th>Turnos</th><th>Entrada</th><th>Saída</th><th>Total</th><th>MCP / script</th><th>Base / buscas</th><th>Lido da ER</th></tr></thead>
                 <tbody>
                   @for (r of usageRows(); track r.channel + r.phase) {
                     <tr [class.ex__usage-sub]="r.phase !== 'all'">
@@ -249,6 +249,7 @@ const POLL_MS = 30_000;
                       <td>@if (r.plans) { <app-token-usage [usage]="reportUsage(r)" xPosition="before" /> } @else { — }</td>
                       <td>{{ r.plans ? r.avgMcpCalls + ' / ' + r.avgScriptCalls : '—' }}</td>
                       <td>{{ r.plans && r.avgKbCalls != null ? r.avgKbCalls + ' / ' + r.avgSearchCalls : '—' }}</td>
+                      <td>{{ r.avgReverseShare != null ? pct(r.avgReverseShare) : '—' }}</td>
                     </tr>
                   }
                 </tbody>
@@ -257,7 +258,8 @@ const POLL_MS = 30_000;
               <p class="ex__note">Médias por plano. "Com MCP" = a maioria das chamadas ao PRMake pelas ferramentas MCP. Entrada = nova +
                 cache lido (o contexto relido a cada resposta, com desconto) + cache escrito — toque no total para ver as partes e o custo.
                 A correção não soma o que a mesma sessão gastou na análise. "Base / buscas" = consultas à Base Solvace × buscas no código
-                (grep/find) — a base vem primeiro e encurta a investigação.</p>
+                (grep/find) — a base vem primeiro e encurta a investigação. "Lido da ER" = quanto do que a análise leu veio da engenharia
+                reversa (o resto: base antiga, código e buscas) — o detalhe por origem está no popover do total.</p>
             }
           }
         </section>
@@ -434,6 +436,10 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
   }
 
   /** Média do grupo com as partes da entrada (0044) — popover do total. */
+  pct(v: number): string {
+    return `${Math.round(v * 100)}%`;
+  }
+
   reportUsage(r: ExecutionUsageReportRow): TokenUsage {
     const hasParts = r.avgCacheReadTokens != null;
     const group = r.phase === 'all' ? (r.channel === 'mcp' ? 'Com MCP' : 'Sem MCP') : `${r.channel === 'mcp' ? 'Com MCP' : 'Sem MCP'} · ${r.phase === 'analysis' ? 'análise' : 'correção'}`;
@@ -449,6 +455,11 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
         cacheWrite: m.avgCacheWriteTokens, output: m.avgOutputTokens,
       })),
       average: true,
+      // 0055: média por origem de leitura (só os planos que mediram)
+      reads: r.sources?.length ? {
+        sources: r.sources.map((s) => ({ key: s.key, calls: s.avgCalls, tokens: s.avgTokens })),
+        reverseShare: r.avgReverseShare, plans: r.readPlans,
+      } : null,
       title: `Média por plano — ${group}`,
       subtitle: `${r.plans} ${r.plans === 1 ? 'plano' : 'planos'} · ${r.avgTurns} respostas em média`,
     };

@@ -101,6 +101,10 @@ export interface ExecutionUsage {
   searchCalls?: number;
   /** 0047: consumo por modelo (Opus na análise, Sonnet na correção). */
   models?: ExecutionModelTokens[];
+  /** 0055: de onde leu (re | base | code-confirm | code-explore | code-search) — vazio = sessões antigas. */
+  sources?: { key: string; calls: number; tokens: number }[];
+  reverseShare?: number | null;
+  exploredFiles?: { path: string; reads: number; tokens: number }[];
 }
 
 /** 0047: consumo em um modelo (entrada nova, saída, cache lido e escrito). */
