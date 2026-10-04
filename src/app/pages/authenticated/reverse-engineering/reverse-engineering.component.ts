@@ -18,8 +18,9 @@ import { ReProgressComponent } from './re-progress.component';
 import { ReRevisionComponent } from './re-revision.component';
 import { ReAssetsComponent } from './re-assets.component';
 import { ReIndexComponent } from './re-index.component';
+import { ReGlossaryComponent } from './re-glossary.component';
 
-type View = 'modulos' | 'revisoes' | 'indice';
+type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
 
 /**
  * Engenharia reversa (feature 0052): cada módulo (legado ou revamp) com os seis documentos — levantamento funcional,
@@ -31,7 +32,7 @@ type View = 'modulos' | 'revisoes' | 'indice';
   selector: 'app-reverse-engineering',
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe,
-    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent],
+    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent],
   templateUrl: './reverse-engineering.component.html',
   styleUrls: ['./reverse-engineering.component.css']
 })
@@ -41,7 +42,15 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   readonly router = inject(Router);
   private snack = inject(MatSnackBar);
-  @ViewChild('docContent') docContent?: ElementRef<HTMLElement>;
+  /**
+   * 0053: o conteúdo do documento pode ser redesenhado a qualquer momento (app zoneless, tempo real, volta do Índice) —
+   * as âncoras dos itens são postas a cada mudança no DOM (MutationObserver), não uma vez só depois da carga.
+   */
+  @ViewChild('docContent') set docContentRef(ref: ElementRef<HTMLElement> | undefined) { this.observeDoc(ref?.nativeElement); }
+  private docEl?: HTMLElement;
+  private docObserver?: MutationObserver;
+  private mermaidFor?: string;
+  private pendingScroll: { id: string; until: number } | null = null;
   @ViewChild(ReIndexComponent) indexRef?: ReIndexComponent;
 
   readonly docs = REVERSE_DOCS;
@@ -159,6 +168,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.docObserver?.disconnect();
     this.ws.off(REVERSE_EVENT, this.onRealtime);
     this.ws.removeFromGroup(reverseGroup(null));
     this.joinModuleGroup(null);
@@ -211,7 +221,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
       next: d => {
         this.doc.set(d);
         this.docLoading.set(false);
-        setTimeout(() => { this.decorate(); if (item) this.scrollTo(item); }, 0);
+        if (item) this.scrollTo(item);
       },
       error: e => { this.docLoading.set(false); this.doc.set(null); this.toast(e); }
     });
@@ -227,21 +237,50 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     if (group) this.ws.addToGroup(group);
   }
 
-  /** Âncoras nos itens (### RN-012 — …) para o sumário e os links ?i=, e os diagramas mermaid. */
+  /** Liga o observador no conteúdo do documento (o @ViewChild muda quando o bloco é redesenhado). */
+  private observeDoc(el: HTMLElement | undefined) {
+    if (el === this.docEl) return;
+    this.docObserver?.disconnect();
+    this.docEl = el;
+    if (!el) return;
+    this.decorate();
+    this.docObserver = new MutationObserver(() => this.decorate());
+    this.docObserver.observe(el, { childList: true, subtree: true });
+  }
+
+  /** Âncoras nos itens (### RN-012 — …) para o sumário e os links ?i=; diagramas mermaid uma vez por conteúdo. */
   private decorate() {
-    const root = this.docContent?.nativeElement; if (!root) return;
+    const root = this.docEl; if (!root) return;
     root.querySelectorAll('h2, h3, h4').forEach(h => {
+      if (h.id) return;
       const m = /^\s*([A-Z]{2,4}-\d{1,4})\b/.exec(h.textContent ?? '');
       if (m) h.id = `item-${m[1]}`;
     });
-    renderMermaidIn(root);
+    const key = `${this.moduleKey()}|${this.docKey()}|${this.doc()?.published?.version}`;
+    if (this.mermaidFor !== key) {
+      this.mermaidFor = key;
+      // o diagrama muda a altura da página: depois de desenhar, rola de novo até o item pedido
+      renderMermaidIn(root).then(() => { const p = this.pendingScroll; if (p && Date.now() < p.until) this.reveal(p.id, false); });
+    }
+    const p = this.pendingScroll;
+    if (p && Date.now() < p.until && !document.getElementById(`item-${p.id}`)?.dataset['revealed']) this.reveal(p.id, true);
   }
 
   scrollTo(id: string) {
+    this.pendingScroll = { id, until: Date.now() + 4000 };
+    if (!document.getElementById(`item-${id}`)) this.decorate();
+    this.reveal(id, true);
+  }
+
+  private reveal(id: string, flash: boolean) {
     const el = document.getElementById(`item-${id}`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    el?.classList.add('flash');
-    setTimeout(() => el?.classList.remove('flash'), 1800);
+    if (!el) return; // ainda não desenhado: o observador tenta de novo quando o conteúdo aparecer
+    el.dataset['revealed'] = '1';
+    el.scrollIntoView({ behavior: flash ? 'smooth' : 'auto', block: 'start' });
+    if (flash) {
+      el.classList.add('flash');
+      setTimeout(() => { el.classList.remove('flash'); delete el.dataset['revealed']; }, 1800);
+    }
   }
 
   // ── Fontes e apelidos (aprovadores) ────────────────────────────────────────────────────────
@@ -264,6 +303,15 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
       aliases: this.aliasesDraft.split(',').map(a => a.trim()).filter(Boolean)
     }).subscribe({
       next: x => { this.module.set(x); this.showSources.set(false); this.snack.open('Fontes e apelidos salvos.', 'OK', { duration: 2500 }); },
+      error: e => this.toast(e)
+    });
+  }
+
+  /** 0053: termo sugerido pelo glossário → apelido, palavra-chave ou dispensado. */
+  resolveTerm(term: string, action: 'alias' | 'keyword' | 'dismiss') {
+    const m = this.module(); if (!m) return;
+    this.api.resolveTerm(m.key, term, action).subscribe({
+      next: x => { this.module.set(x); this.snack.open(action === 'dismiss' ? `"${term}" dispensado.` : `"${term}" virou ${action === 'alias' ? 'apelido do módulo' : 'palavra-chave'}.`, 'OK', { duration: 2500 }); },
       error: e => this.toast(e)
     });
   }

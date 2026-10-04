@@ -55,9 +55,15 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
               <button type="button" (click)="copy('/engenharia-reversa ' + module().key + ' tudo')" matTooltip="Copiar"><mat-icon>content_copy</mat-icon></button>
             </div>
           </div>
-          <div class="muted">Já publicado? <code>/engenharia-reversa melhorar &lt;doc&gt;</code> (usa as sugestões das análises e a nota do revisor) ou
-            <code>/engenharia-reversa refazer &lt;doc&gt;</code> (do zero, mantendo os IDs). Ordem recomendada no "tudo": arquitetura → UI/UX → funcional → visão →
-            spec. arquitetura → spec. design.</div>
+          <div class="muted">Já publicado? <code>/engenharia-reversa {{ module().key }} melhorar &lt;doc&gt;</code> (vê o que mudou no código e no banco desde a versão
+            publicada, aplica as sugestões das análises e a nota do revisor) ou <code>/engenharia-reversa {{ module().key }} refazer &lt;doc&gt;</code> (do zero,
+            mantendo os IDs). <code>&lt;doc&gt;</code> = {{ docKeys }}. Ordem recomendada no "tudo": arquitetura → UI/UX → funcional → visão → spec. arquitetura →
+            spec. design.</div>
+        </li>
+        <li>
+          <b>Banco de dados</b>: o Claude lê <b>direto do banco {{ dbLabel() }}</b> (somente leitura) as views, procedures, functions, triggers, check
+          constraints e jobs do módulo — deixe a <b>VPN ligada</b> e a credencial do servidor cadastrada na máquina
+          (<code>prmake-skills.sh db-credentials</code>). Scripts SQL versionados no repositório não são usados.
         </li>
         <li>
           <b>UI/UX</b>: antes de gerar UI/UX e Spec. design, anexe na aba <b>UI/UX</b> os links do Figma/protótipo ou as imagens — o Claude compara com o que está implementado.
@@ -96,6 +102,9 @@ export class ReHowToComponent {
   private snack = inject(MatSnackBar);
   module = input.required<ReverseModule>();
   approverRoles = input<string[]>([]);
+  reference = input<{ environment: string; host: string; global: string; locals: string[] } | null | undefined>(null);
+  readonly docKeys = REVERSE_DOCS.map(d => d.key).join(' · ');
+  dbLabel = computed(() => { const r = this.reference(); return r ? `${r.environment} (${r.global} + ${r.locals.length} locais)` : 'de referência (DEMO)'; });
   readonly docs = REVERSE_DOCS;
   readonly installCmd = 'bash ~/.claude/skills/.prmake/prmake-skills.sh update engenharia-reversa';
   readonly reposCmd = 'bash ~/.claude/skills/.prmake/prmake-skills.sh repos scan';

@@ -67,6 +67,22 @@ import { ReverseEngineeringService, ReverseRevision } from '../../../services/re
           </details>
         }
 
+        @if (r.suggestionDecisions?.length) {
+          <div class="block">
+            <b>Sugestões tratadas nesta revisão</b> <span class="muted">(saem da fila ao publicar; o card de origem fica sabendo pela Timeline)</span>
+            <ul class="decisions">
+              @for (d of r.suggestionDecisions; track d.suggestionId) {
+                <li [class.dec--ok]="d.decision === 'applied'" [class.dec--no]="d.decision !== 'applied'">
+                  <span class="chip">{{ d.decision === 'applied' ? 'aplicada' : 'recusada' }}</span>
+                  @if (d.items.length) { <span class="id">{{ d.items.join(', ') }}</span> }
+                  {{ d.note }}
+                  <div class="muted">{{ d.kind }}{{ d.cardNumber ? ' · card ' + d.cardNumber : '' }}{{ d.status && d.status !== 'pending' ? ' · já ' + d.status : '' }} — {{ d.content }}</div>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
         @if (r.diff; as d) {
           <div class="diff">
             <div class="diff__head">
@@ -156,6 +172,9 @@ import { ReverseEngineeringService, ReverseRevision } from '../../../services/re
     .block--err { border-left: 3px solid #f85149; } .block--warn { border-left: 3px solid #d29922; }
     .block summary { cursor: pointer; }
     .missing { list-style: none; padding: 0; max-height: 260px; overflow-y: auto; }
+    .decisions { list-style: none; padding: 0; margin: 6px 0 0; display: flex; flex-direction: column; gap: 6px; }
+    .decisions li { padding-left: 8px; border-left: 3px solid transparent; }
+    .dec--ok { border-left-color: #3fb950 !important; } .dec--no { border-left-color: #d29922 !important; }
     .diff { margin: 10px 0; }
     .diff__head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; margin-bottom: 6px; }
     .diff__item { font-size: 12.5px; border-left: 3px solid transparent; padding: 2px 8px; }

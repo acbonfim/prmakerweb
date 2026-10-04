@@ -36,10 +36,17 @@ export interface ReverseCoverage {
 export interface ReverseItemDiff { id: string; title: string; change: 'added' | 'removed' | 'changed' | string; before?: string | null; after?: string | null; }
 export interface ReverseRevisionDiff { added: number; removed: number; changed: number; unchanged: number; otherTextChanged: boolean; items: ReverseItemDiff[]; }
 
+/** 0053: o que a sessão fez com cada sugestão do pacote (resolvidas ao publicar). */
+export interface ReverseSuggestionDecision {
+  suggestionId: string; decision: 'applied' | 'dismissed' | string; items: string[]; note?: string | null;
+  kind?: string | null; sectionKey?: string | null; content?: string | null; cardNumber?: string | null; status?: string | null;
+}
+
 export interface ReverseRevision extends ReverseRevisionHead {
   content: string; lint?: ReverseLint | null; coverage?: ReverseCoverage | null; session?: any; baseVersion?: number | null;
   publishedVersion?: number | null; submittedBy?: string | null; reviewedAt?: string | null; publishedChangedSinceBase: boolean;
   currentPublishedVersion?: number | null; diff?: ReverseRevisionDiff | null; canApprove: boolean;
+  suggestionDecisions?: ReverseSuggestionDecision[];
 }
 
 export interface ReversePublishedInfo { version: number; updatedAt: string; updatedBy: string; length: number; items: number; }
@@ -62,6 +69,8 @@ export interface ReverseAsset {
 export interface ReverseModule extends ReverseModuleSummary {
   repository?: string | null; summary?: string | null; sources: ReverseSource[]; notes?: string | null; configured: boolean; assets: ReverseAsset[];
   itemsByKind: Record<string, number>; relations: ArchitectureRelation[]; usedBy: ArchitectureIncomingRelation[]; siblings: string[]; canApprove: boolean;
+  /** 0053: termos do glossário que ainda não são apelido nem palavra-chave. */
+  suggestedTerms?: string[];
 }
 
 export interface ReverseDocType {
@@ -77,12 +86,17 @@ export interface ReverseDoc {
 
 export interface ReverseIndexHit {
   ref: string; moduleKey: string; moduleName?: string | null; docType: string; itemId: string; kind: string; kindLabel: string; title: string;
-  snippet: string; tags: string[]; tables: string[]; modules: string[]; removed: boolean; score: number;
+  snippet: string; tags: string[]; tables: string[]; modules: string[]; synonyms?: string[]; removed: boolean; score: number;
 }
 export interface ReverseItem extends ReverseIndexHit { body: string; refs: string[]; evidence: string[]; referencedBy: string[]; sectionVersion: number; }
 
 export interface ReverseKind { prefix: string; label: string; plural: string; }
-export interface ReverseSettings { approverRoles: string[]; requiredDocs: string[]; gateStep?: string | null; minCoverage: number; canApprove: boolean; kinds: ReverseKind[]; }
+export interface ReverseReferenceDatabase { environment: string; host: string; global: string; locals: string[]; }
+export interface ReverseSettings {
+  approverRoles: string[]; requiredDocs: string[]; gateStep?: string | null; minCoverage: number; canApprove: boolean; kinds: ReverseKind[];
+  /** 0053: banco de referência (DEMO) e palavras genéricas fora do glossário. */
+  referenceDatabase?: ReverseReferenceDatabase | null; glossaryExclusions?: string[];
+}
 
 /** Ordem e rótulos curtos dos documentos (a tela usa sem esperar a API). */
 export const REVERSE_DOCS: { key: string; short: string; icon: string }[] = [
@@ -122,6 +136,10 @@ export class ReverseEngineeringService {
   module(key: string): Observable<ReverseModule> { return this.http.get<ReverseModule>(`${this.api}/modules/${encodeURIComponent(key)}`); }
   saveModule(key: string, body: { sources?: ReverseSource[]; aliases?: string[]; notes?: string | null }): Observable<ReverseModule> {
     return this.http.put<ReverseModule>(`${this.api}/modules/${encodeURIComponent(key)}`, body);
+  }
+  /** 0053: termo sugerido pelo glossário → apelido (alias), palavra-chave (keyword) ou dispensado (dismiss). */
+  resolveTerm(key: string, term: string, action: 'alias' | 'keyword' | 'dismiss'): Observable<ReverseModule> {
+    return this.http.post<ReverseModule>(`${this.api}/modules/${encodeURIComponent(key)}/terms`, { term, action });
   }
   doc(key: string, doc: string): Observable<ReverseDoc> {
     return this.http.get<ReverseDoc>(`${this.api}/modules/${encodeURIComponent(key)}/docs/${encodeURIComponent(doc)}`);
