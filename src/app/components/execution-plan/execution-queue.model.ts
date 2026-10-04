@@ -165,6 +165,10 @@ export interface ExecutionUsageReportRow {
   avgSearchCalls?: number;
   /** 0047: média por plano em cada modelo do grupo. */
   models?: { model: string; avgTurns: number; avgInputTokens: number; avgOutputTokens: number; avgCacheReadTokens: number; avgCacheWriteTokens: number }[];
+  /** 0055: planos que mediram de onde leram, média da fração lida da engenharia reversa e média por origem. */
+  readPlans?: number;
+  avgReverseShare?: number | null;
+  sources?: { key: string; avgCalls: number; avgTokens: number }[];
 }
 
 export interface ExecutionUsageReport {

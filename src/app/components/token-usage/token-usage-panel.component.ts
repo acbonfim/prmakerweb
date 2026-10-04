@@ -1,6 +1,6 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { formatTokens, formatUsd } from '../../services/ai-usage.service';
-import { TokenPricingService, TokenUsage } from '../../services/token-pricing.service';
+import { READ_SOURCE_LABELS, TokenPricingService, TokenUsage } from '../../services/token-pricing.service';
 
 /**
  * Detalhe do consumo em tokens (0044): entrada nova, cache lido (com desconto), cache escrito, entrada total, saída e
@@ -47,7 +47,33 @@ import { TokenPricingService, TokenUsage } from '../../services/token-pricing.se
           </tbody>
         </table>
       }
+      @if (readRows(); as rows) {
+        <!-- 0055: de onde leu — a análise deve ler da engenharia reversa e abrir o código só para confirmar o item. -->
+        <table class="tup__table tup__reads">
+          <thead><tr><th>De onde leu</th><th class="num">Chamadas</th><th class="num">≈ Tokens{{ u.average ? ' (média)' : '' }}</th><th class="num">%</th></tr></thead>
+          <tbody>
+            @for (r of rows; track r.key) {
+              <tr [class.tup__re]="r.key === 're'" [class.tup__warn]="r.key === 'code-explore' && r.pct >= 0.4">
+                <td>{{ r.label }}<span class="tup__hint">{{ r.hint }}</span></td>
+                <td class="num">{{ r.calls }}</td>
+                <td class="num">{{ tokens(r.tokens) }}</td>
+                <td class="num">{{ pct(r.pct) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (u.reads?.exploredFiles?.length) {
+          <div class="tup__explored">
+            <span>Código explorado sem item da engenharia reversa (lacuna?):</span>
+            @for (f of u.reads!.exploredFiles!; track f.path) { <code>{{ f.path }}</code><span class="tup__hint tup__hint--inline">{{ f.reads }}× · {{ tokens(f.tokens) }}</span> }
+          </div>
+        }
+      }
       <ul class="tup__notes">
+        @if (u.reads?.reverseShare != null) {
+          <li><strong>{{ pct(u.reads!.reverseShare!) }}</strong> do que foi lido veio da engenharia reversa{{ u.reads?.plans ? ' (' + u.reads!.plans + (u.reads!.plans === 1 ? ' plano mediu' : ' planos mediram') + ')' : '' }}.
+            Tokens estimados pelo tamanho de cada resultado (÷ 4).</li>
+        }
         @if (u.reportedCostUsd != null) {
           <li><strong>{{ usd(u.reportedCostUsd) }}</strong> informado {{ u.reportedBy ? 'pelo ' + u.reportedBy : '' }}{{ b.estimatedCost != null ? ' (a estimativa acima usa a tabela de preços)' : '' }}.</li>
         }
@@ -88,6 +114,12 @@ import { TokenPricingService, TokenUsage } from '../../services/token-pricing.se
     .tup__hint--good { color: #3fb950; }
     .tup__notes { margin: 0; padding: 0 0 0 16px; display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; line-height: 1.45;
       color: color-mix(in srgb, var(--mat-sys-on-surface) 72%, transparent); }
+    .tup__re td { color: #3fb950; }
+    .tup__warn td { color: #d29922; }
+    .tup__explored { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 11.5px;
+      color: color-mix(in srgb, var(--mat-sys-on-surface) 72%, transparent); }
+    .tup__explored > span:first-child { flex-basis: 100%; }
+    .tup__hint--inline { display: inline; margin-right: 6px; }
     .tup__meta { list-style: none; margin-left: -16px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
     code { font-size: 11px; }
   `],
@@ -97,11 +129,25 @@ export class TokenUsagePanelComponent {
   readonly usage = input.required<TokenUsage>();
   readonly breakdown = computed(() => this.pricing.breakdown(this.usage()));
   readonly notes = computed(() => (this.usage().notes ?? []).filter((n): n is string => !!n));
+  /** 0055: uma linha por origem lida (na ordem: engenharia reversa primeiro), com a fração dos tokens lidos. */
+  readonly readRows = computed(() => {
+    const sources = (this.usage().reads?.sources ?? []).filter((s) => s.calls > 0 || s.tokens > 0);
+    if (!sources.length) return null;
+    const total = sources.reduce((n, s) => n + s.tokens, 0);
+    return Object.keys(READ_SOURCE_LABELS)
+      .map((key) => ({ key, s: sources.find((x) => x.key === key) }))
+      .filter((x) => !!x.s)
+      .map(({ key, s }) => ({ key, ...READ_SOURCE_LABELS[key], calls: s!.calls, tokens: s!.tokens, pct: total ? s!.tokens / total : 0 }));
+  });
   readonly tokens = formatTokens;
   readonly usd = formatUsd;
 
   constructor() {
     this.pricing.ensureLoaded();
+  }
+
+  pct(v: number): string {
+    return `${Math.round(v * 100)}%`;
   }
 
   price(v: number): string {

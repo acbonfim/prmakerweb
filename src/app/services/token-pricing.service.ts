@@ -54,7 +54,29 @@ export interface TokenUsage {
   notes?: (string | null | undefined)[];
   /** Valores são médias (relatório). */
   average?: boolean;
+  /** 0055: de onde a sessão leu — engenharia reversa × base antiga/KC × código (confirmando item × explorando) × buscas. */
+  reads?: TokenUsageReads | null;
 }
+
+/** 0055: leituras por origem (chamadas e tokens estimados do que entrou no contexto). */
+export interface TokenUsageReads {
+  sources: { key: string; calls: number; tokens: number }[];
+  /** Fração dos tokens lidos que veio da engenharia reversa (0–1). */
+  reverseShare?: number | null;
+  /** Arquivos de código lidos sem item da engenharia reversa que os cite — candidatos a lacuna. */
+  exploredFiles?: { path: string; reads: number; tokens: number }[];
+  /** Planos que mediram (relatório: as médias são só deles). */
+  plans?: number | null;
+}
+
+/** 0055: nome de cada origem de leitura na tela. */
+export const READ_SOURCE_LABELS: Record<string, { label: string; hint: string }> = {
+  're': { label: 'Engenharia reversa', hint: 'itens, contexto do card, MCP' },
+  'base': { label: 'Base antiga e KC', hint: 'seções e artigos' },
+  'code-confirm': { label: 'Código — confirmando item', hint: 'o arquivo que o item cita' },
+  'code-explore': { label: 'Código — explorando', hint: 'sem item que o cite' },
+  'code-search': { label: 'Buscas no código', hint: 'grep, find, Glob' },
+};
 
 export interface TokenUsageLine {
   key: 'fresh' | 'cacheRead' | 'cacheWrite' | 'input' | 'output' | 'total';
