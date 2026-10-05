@@ -58,6 +58,11 @@ import { ReverseEngineeringService, ReverseRevision } from '../../../services/re
             <summary>{{ cats['pergunta'] ? 'Perguntas reais respondidas' : 'Cobertura do inventário do código' }} — {{ r.coverage?.covered }}/{{ r.coverage?.total }}
               @if (r.coverage?.missingCount) { · {{ r.coverage?.missingCount }} sem menção }</summary>
             <div class="chips">@for (c of catEntries(); track c[0]) { <span class="chip">{{ c[0] }} {{ c[1].covered }}/{{ c[1].total }}</span> }</div>
+            @if (r.coverage?.outsideGlossary?.length) {
+              <!-- 0056: termos fora do domínio/de outro módulo registrados numa lacuna — contam, mas o revisor vê o motivo -->
+              <div class="muted outside">Fora do glossário (em lacuna) — {{ r.coverage!.outsideGlossary!.length }}:
+                @for (o of r.coverage!.outsideGlossary!.slice(0, 80); track $index) { <span class="chip">{{ o.name }} · {{ o.gap }}</span> }</div>
+            }
             @if (r.coverage?.missing?.length) {
               <ul class="missing">
                 @for (m of r.coverage!.missing!.slice(0, 120); track $index) {
@@ -191,6 +196,14 @@ import { ReverseEngineeringService, ReverseRevision } from '../../../services/re
     .form textarea.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
     .form__row { display: flex; gap: 8px; align-items: center; }
     .md { margin-top: 10px; font-size: 13.5px; line-height: 1.6; max-height: 70vh; overflow-y: auto; padding-right: 8px; }
+    /* 0056: tabelas no preview da revisão — mesmo tratamento do documento publicado (sem espremer coluna a 1 letra). */
+    .md ::ng-deep table { border-collapse: collapse; margin: 10px 0; display: block; overflow-x: auto; max-width: 100%; }
+    .md ::ng-deep th, .md ::ng-deep td { border: 1px solid rgba(255,255,255,.12); padding: 5px 9px; text-align: left;
+      overflow-wrap: normal; word-break: normal; min-width: 9ch; vertical-align: top; }
+    .md ::ng-deep th { white-space: nowrap; }
+    .md ::ng-deep td code, .md ::ng-deep th code { white-space: nowrap; }
+    .md ::ng-deep code { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 12px; }
+    .md ::ng-deep :not(pre) > code { padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.07); }
   `]
 })
 export class ReRevisionComponent {

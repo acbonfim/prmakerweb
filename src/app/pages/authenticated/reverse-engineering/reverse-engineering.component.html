@@ -152,8 +152,9 @@
         @if (showHowTo()) { <app-re-how-to [module]="m" [approverRoles]="settings()?.approverRoles ?? []" [reference]="settings()?.referenceDatabase"></app-re-how-to> }
 
         @if (m.suggestedTerms?.length) {
-          <details class="terms" [open]="m.canApprove">
-            <summary><mat-icon>translate</mat-icon>{{ m.suggestedTerms!.length }} termos do glossário ainda não são apelido nem palavra-chave</summary>
+          <details class="terms" [open]="termsOpen()" (toggle)="onTermsToggle($event)">
+            <summary [matTooltip]="termsOpen() ? '' : 'Abra para ver os ' + m.suggestedTerms!.length + ' termos e decidir: apelido, palavra-chave ou dispensar'">
+              <mat-icon>translate</mat-icon>{{ m.suggestedTerms!.length }} termos do glossário ainda não são apelido nem palavra-chave</summary>
             <p class="muted">Apelido = como o campo "Module" dos cards chama este módulo (a análise de bug acha a engenharia reversa por ele). Palavra-chave = ajuda a
               Base Solvace a achar o módulo. Dispensar = não sugerir de novo.</p>
             <div class="terms__list">
@@ -219,7 +220,7 @@
 
           @if (ds.staleBecause?.length) {
             <div class="stale"><mat-icon>update</mat-icon><span><b>Desatualizada:</b> {{ ds.staleBecause!.join(', ') }} foi republicado depois dela. Rode
-              <code>/engenharia-reversa {{ m.key }} melhorar {{ ds.type }}</code>.</span></div>
+              <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' melhorar ' + ds.type" />.</span></div>
           }
           @if (ds.open; as open) {
             @if (open.status === 'draft' || open.status === 'changes') {
@@ -231,7 +232,7 @@
               <mat-icon>lock</mat-icon>
               <div>
                 <b>{{ docTitle(ds.type) }} é escrita só do que já foi aprovado.</b>
-                <div class="muted">Publique antes: {{ ds.blockedBy!.join(', ') }}. Depois, no Claude Code: <code>/engenharia-reversa {{ m.key }} {{ ds.type }}</code></div>
+                <div class="muted">Publique antes: {{ ds.blockedBy!.join(', ') }}. Depois, no Claude Code: <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" /></div>
               </div>
             </div>
           } @else if (!ds.published) {
@@ -240,7 +241,7 @@
               <div>
                 <b>{{ docTitle(ds.type) }} ainda não foi gerado.</b>
                 <div class="muted">No Claude Code aberto na pasta do módulo:</div>
-                <code>/engenharia-reversa {{ m.key }} {{ ds.type }}</code>
+                <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" [block]="true" />
                 <div><a (click)="showHowTo.set(true)">Ver o passo a passo</a></div>
               </div>
             </div>
@@ -264,9 +265,17 @@
               <aside class="toc">
                 <input type="search" placeholder="Filtrar itens…" [ngModel]="tocFilter()" (ngModelChange)="tocFilter.set($event)">
                 @for (g of toc(); track g.kind) {
-                  <div class="toc__group">{{ g.label }} <span class="muted">{{ g.items.length }}</span></div>
-                  @for (i of g.items; track i.id) {
-                    <button type="button" class="toc__item" [class.toc__item--removed]="i.removed" (click)="scrollTo(i.id)"><span class="id">{{ i.id }}</span>{{ i.title }}</button>
+                  @if (isTocCollapsible(g.kind)) {
+                    <button type="button" class="toc__group toc__group--btn" (click)="toggleTocGroup(g.kind)" [attr.aria-expanded]="!tocCollapsed(g.kind)"
+                            [matTooltip]="tocCollapsed(g.kind) ? 'Abra para ver os ' + g.items.length + ' itens' : ''">
+                      <mat-icon>{{ tocCollapsed(g.kind) ? 'chevron_right' : 'expand_more' }}</mat-icon>{{ g.label }} <span class="muted">{{ g.items.length }}</span></button>
+                  } @else {
+                    <div class="toc__group">{{ g.label }} <span class="muted">{{ g.items.length }}</span></div>
+                  }
+                  @if (!tocCollapsed(g.kind)) {
+                    @for (i of g.items; track i.id) {
+                      <button type="button" class="toc__item" [class.toc__item--removed]="i.removed" (click)="scrollTo(i.id)"><span class="id">{{ i.id }}</span>{{ i.title }}</button>
+                    }
                   }
                 }
               </aside>

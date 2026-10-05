@@ -20,6 +20,7 @@ import { ReAssetsComponent } from './re-assets.component';
 import { ReIndexComponent } from './re-index.component';
 import { ReGlossaryComponent } from './re-glossary.component';
 import { ReTrapsComponent } from './re-traps.component';
+import { ReCopyCommandComponent } from './re-copy-command.component';
 
 type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
 
@@ -33,7 +34,7 @@ type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
   selector: 'app-reverse-engineering',
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe,
-    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent, ReTrapsComponent],
+    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent, ReTrapsComponent, ReCopyCommandComponent],
   templateUrl: './reverse-engineering.component.html',
   styleUrls: ['./reverse-engineering.component.css']
 })
@@ -118,6 +119,30 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   docStatus = computed<ReverseDocStatus | null>(() => this.module()?.docs.find(d => d.type === this.docKey()) ?? null);
   docType = computed(() => this.docTypes().find(t => t.key === this.docKey()) ?? null);
   openRevision = computed(() => this.docStatus()?.open ?? null);
+  /** 0056: grupos do sumário que vêm recolhidos (o glossário tem centenas de termos) — abertos por clique ou ao ir a um item. */
+  private static readonly COLLAPSED_KINDS = ['GLO'];
+  readonly tocOpened = signal<Set<string>>(new Set());
+  tocCollapsed(kind: string) {
+    return ReverseEngineeringComponent.COLLAPSED_KINDS.includes(kind) && !this.tocOpened().has(kind) && !this.tocFilter().trim();
+  }
+  isTocCollapsible(kind: string) { return ReverseEngineeringComponent.COLLAPSED_KINDS.includes(kind); }
+  toggleTocGroup(kind: string) {
+    if (!this.isTocCollapsible(kind)) return;
+    this.tocOpened.update(s => { const n = new Set(s); n.has(kind) ? n.delete(kind) : n.add(kind); return n; });
+  }
+
+  /** 0056: painel de termos sugeridos do glossário — sempre recolhido; quem abre fica lembrado (só neste navegador). */
+  readonly termsOpen = signal(ReverseEngineeringComponent.readTermsOpen());
+  private static readonly TERMS_KEY = 're.termsOpen';
+  private static readTermsOpen(): boolean {
+    try { return localStorage.getItem(ReverseEngineeringComponent.TERMS_KEY) === '1'; } catch { return false; }
+  }
+  onTermsToggle(ev: Event) {
+    const open = (ev.target as HTMLDetailsElement).open;
+    this.termsOpen.set(open);
+    try { localStorage.setItem(ReverseEngineeringComponent.TERMS_KEY, open ? '1' : '0'); } catch { /* sem storage: só nesta tela */ }
+  }
+
   toc = computed(() => {
     const f = this.normalize(this.tocFilter());
     const items = (this.doc()?.items ?? []).filter(i => !f || this.normalize(`${i.id} ${i.title}`).includes(f));
@@ -284,6 +309,8 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   }
 
   scrollTo(id: string) {
+    const kind = /^([A-Z]{2,4})-/.exec(id)?.[1];
+    if (kind && this.isTocCollapsible(kind)) this.tocOpened.update(s => new Set(s).add(kind));
     this.pendingScroll = { id, until: Date.now() + 4000 };
     if (!document.getElementById(`item-${id}`)) this.decorate();
     this.reveal(id, true);
