@@ -32,6 +32,26 @@ export class CliipboardService {
 
   }
 
+  /**
+   * Copia conteúdo formatado (HTML) com o texto puro como alternativa: colar em Teams/Outlook/DevOps
+   * traz a tabela; colar em editor de texto traz o `text`. Sem suporte a ClipboardItem, copia só o texto.
+   */
+  async copyRichToClipboard(html: string, text: string): Promise<void> {
+    try {
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+        })]);
+        this._snackBar.open('Copiado com sucesso', 'Ok', {direction : "ltr", horizontalPosition: "right", verticalPosition: "top"});
+        return;
+      }
+    } catch (e) {
+      console.error('Erro ao copiar HTML para a área de transferência:', e);
+    }
+    this.copyFullDescriptionToClipboard(text);
+  }
+
   private fallbackCopyToClipboard(text: string) {
     const textArea = document.createElement('textarea');
     textArea.value = text;

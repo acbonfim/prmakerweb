@@ -33,6 +33,8 @@ export class ToolbarItemDirective {
   readonly id = input.required<string>({ alias: 'appToolbarItem' });
   readonly label = input.required<string>({ alias: 'toolbarLabel' });
   readonly icon = input('', { alias: 'toolbarIcon' });
+  /** Ícone SVG registrado no MatIconRegistry (ex.: "github"); tem prioridade sobre `toolbarIcon`. */
+  readonly svgIcon = input('', { alias: 'toolbarSvgIcon' });
   readonly disabled = input(false, { alias: 'toolbarDisabled' });
   /** Abre um popover próprio (mostra › no menu do "⋯"). */
   readonly submenu = input(false, { alias: 'toolbarSubmenu' });
@@ -81,7 +83,8 @@ const MORE_WIDTH = 40;
       <div class="tb-list" role="menu">
         @for (item of overflow(); track item.id()) {
           <button type="button" class="tb-item" role="menuitem" [disabled]="item.disabled()" (click)="run(item)">
-            @if (item.icon()) { <mat-icon>{{ item.icon() }}</mat-icon> }
+            @if (item.svgIcon()) { <mat-icon [svgIcon]="item.svgIcon()"></mat-icon> }
+            @else if (item.icon()) { <mat-icon>{{ item.icon() }}</mat-icon> }
             <span>{{ item.label() }}</span>
             @if (item.submenu()) { <mat-icon class="tb-item__caret">chevron_right</mat-icon> }
           </button>

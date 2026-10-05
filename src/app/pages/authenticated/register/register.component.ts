@@ -54,6 +54,7 @@ import {CardPrStateService} from '../../../services/card-pr-state.service';
 import {RepoOption} from '../../../interfaces/RepoOption';
 import {DevOpsActionsMenuComponent} from '../../../components/devops-actions-menu/devops-actions-menu.component';
 import {SmartActionsMenuComponent} from '../../../components/smart-actions-menu/smart-actions-menu.component';
+import {GithubActionsMenuComponent} from '../../../components/github-actions-menu/github-actions-menu.component';
 import {ActionToolbarComponent, ToolbarItemDirective} from '../../../components/action-toolbar/action-toolbar.component';
 import {SummaryDialogComponent, SummaryDialogData} from '../../../components/summary-dialog/summary-dialog.component';
 
@@ -116,6 +117,7 @@ function loadMobileTab(): MobileTab {
     GithubPrListComponent,
     DevOpsActionsMenuComponent,
     SmartActionsMenuComponent,
+    GithubActionsMenuComponent,
     ActionToolbarComponent,
     ToolbarItemDirective
   ]
@@ -861,6 +863,11 @@ export class RegisterComponent implements OnInit, OnDestroy {
   /** "Abrir PR" disponível depois que o card foi buscado. */
   get canOpenPr(): boolean {
     return !!this.cardNumber && !!this.prInfo && !this.isPullRequestLoading;
+  }
+
+  /** Há PR aberto/mesclado do card para copiar (menu "Ações GitHub", 0062). */
+  get hasCopyablePrs(): boolean {
+    return this.prState.githubPrs().some(pr => (pr.status === 'OPEN' || pr.status === 'MERGED') && !!pr.url);
   }
 
   /** Repositório padrão (último escolhido no modal / querystring / primeiro da configuração). */
