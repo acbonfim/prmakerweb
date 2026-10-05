@@ -135,10 +135,15 @@
            Ações inteligentes. -->
       <div class="page-footer">
         <app-action-toolbar>
-          <span appToolbarItem="open-pr" toolbarLabel="Abrir PR" toolbarIcon="merge"
-                [toolbarDisabled]="!canOpenPr" (toolbarActivate)="openPrDialog()">
-            <button mat-raised-button (click)="openPrDialog()"
-                    [disabled]="!canOpenPr">Abrir PR<mat-icon>merge</mat-icon></button>
+          <!-- 0062: "Abrir PR" virou o menu "Ações GitHub" (Abrir PR + Copiar PR) -->
+          <span appToolbarItem="github" toolbarLabel="Ações GitHub" toolbarSvgIcon="github" [toolbarSubmenu]="true"
+                [toolbarDisabled]="!canOpenPr && !hasCopyablePrs" (toolbarActivate)="githubMenu.openAt($event)">
+            <app-github-actions-menu #githubMenu
+                    [cardNumber]="cardNumber?.toString() ?? null"
+                    [canOpenPr]="canOpenPr"
+                    [prs]="prState.githubPrs()"
+                    [targetOptions]="justifyOptions"
+                    (openPr)="openPrDialog()"></app-github-actions-menu>
           </span>
 
           <span appToolbarItem="save" toolbarLabel="Salvar" toolbarIcon="save"
