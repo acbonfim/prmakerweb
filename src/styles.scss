@@ -426,6 +426,28 @@ html {
   min-height: 0;
 }
 
+/* ── Popovers da engenharia reversa (Como gerar, Fontes, Armadilhas, Termos) — vão para o body ── */
+.p-popover.re-popover .p-popover-content { padding: 0; }
+.re-popover__body {
+  width: min(780px, 92vw);
+  max-height: min(70vh, calc(100dvh - 140px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 18px;
+}
+@media (max-width: 768px) {
+  .p-popover.re-popover {
+    position: fixed !important;
+    top: 8px !important;
+    left: 8px !important;
+    right: 8px !important;
+    margin: 0 !important;
+  }
+  .p-popover.re-popover::before,
+  .p-popover.re-popover::after { display: none; }
+  .re-popover__body { width: 100%; max-height: calc(100dvh - 24px); }
+}
+
 /* "!" de pendência no item "Minhas integrações" do menu do usuário */
 .mat-mdc-menu-panel.profile-menu .pm-pending {
   margin-left: 8px;

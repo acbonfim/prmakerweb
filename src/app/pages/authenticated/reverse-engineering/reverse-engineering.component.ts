@@ -1,14 +1,16 @@
-import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal, untracked } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { Popover, PopoverModule } from 'primeng/popover';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdown.pipe';
 import { renderMermaidIn } from '../../../helpers/mermaid-loader';
 import { WsService } from '../../../services/ws.service';
+import { TabStatus, TabsService } from '../../../services/tabs.service';
 import {
   REVERSE_DOCS, REVERSE_EVENT, ReverseDoc, ReverseDocStatus, ReverseDocType, ReverseEngineeringService, ReverseModule, ReverseModuleSummary,
   ReverseRevisionHead, ReverseSettings, ReverseSource, reverseGroup, reverseState
@@ -34,7 +36,7 @@ type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
 @Component({
   selector: 'app-reverse-engineering',
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe,
+  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PopoverModule, PlanMarkdownPipe,
     ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent, ReTrapsComponent, ReInfraComponent, ReCopyCommandComponent],
   templateUrl: './reverse-engineering.component.html',
   styleUrls: ['./reverse-engineering.component.css']
@@ -45,6 +47,10 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   readonly router = inject(Router);
   private snack = inject(MatSnackBar);
+  private host = inject(ElementRef<HTMLElement>);
+  private tabs = inject(TabsService);
+  /** Abas internas (0065): só a aba ativa dá nome/status à aba (a tela fica viva em segundo plano). */
+  private tabScreen = this.tabs.bindScreen(inject(DestroyRef));
   /**
    * 0053: o conteúdo do documento pode ser redesenhado a qualquer momento (app zoneless, tempo real, volta do Índice) —
    * as âncoras dos itens são postas a cada mudança no DOM (MutationObserver), não uma vez só depois da carga.
@@ -55,6 +61,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   private mermaidFor?: string;
   private pendingScroll: { id: string; until: number } | null = null;
   @ViewChild(ReIndexComponent) indexRef?: ReIndexComponent;
+  @ViewChild('srcPop') srcPop?: Popover;
 
   readonly docs = REVERSE_DOCS;
   readonly state = reverseState;
@@ -74,8 +81,6 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   docKey = signal<string>('funcional');
   doc = signal<ReverseDoc | null>(null);
   docLoading = signal(false);
-  showHowTo = signal(false);
-  showSources = signal(false);
   showHistory = signal(false);
   tocFilter = signal('');
   pending = signal<ReverseRevisionHead[]>([]);
@@ -132,18 +137,6 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     this.tocOpened.update(s => { const n = new Set(s); n.has(kind) ? n.delete(kind) : n.add(kind); return n; });
   }
 
-  /** 0056: painel de termos sugeridos do glossário — sempre recolhido; quem abre fica lembrado (só neste navegador). */
-  readonly termsOpen = signal(ReverseEngineeringComponent.readTermsOpen());
-  private static readonly TERMS_KEY = 're.termsOpen';
-  private static readTermsOpen(): boolean {
-    try { return localStorage.getItem(ReverseEngineeringComponent.TERMS_KEY) === '1'; } catch { return false; }
-  }
-  onTermsToggle(ev: Event) {
-    const open = (ev.target as HTMLDetailsElement).open;
-    this.termsOpen.set(open);
-    try { localStorage.setItem(ReverseEngineeringComponent.TERMS_KEY, open ? '1' : '0'); } catch { /* sem storage: só nesta tela */ }
-  }
-
   toc = computed(() => {
     const f = this.normalize(this.tocFilter());
     const items = (this.doc()?.items ?? []).filter(i => !f || this.normalize(`${i.id} ${i.title}`).includes(f));
@@ -152,6 +145,29 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     for (const i of items) map.set(i.kind, [...(map.get(i.kind) ?? []), i]);
     return [...map.entries()].map(([kind, list]) => ({ kind, label: kinds.find(k => k.prefix === kind)?.plural ?? kind, items: list }));
   });
+
+  constructor() {
+    // 1: a aba mostra só o ícone da tela + o módulo aberto + o status dele (sem o nome da tela).
+    effect(() => {
+      if (!this.tabScreen.active()) return;
+      const m = this.module();
+      const label = m ? (m.displayName || m.name) : null;
+      const status = m ? this.moduleStatus(m) : null;
+      untracked(() => this.tabs.setMeta(this.tabScreen.tabId(), { label, status }));
+    });
+  }
+
+  /** Situação do módulo para a aba: o que pede atenção primeiro (gerando, revisão, ajustes), depois completo ou X/Y publicados. */
+  private moduleStatus(m: ReverseModule): TabStatus {
+    if (m.docs.some(d => this.isLive(d.open))) return { text: 'gerando', tone: 'info' };
+    const open = m.docs.map(d => d.open?.status);
+    if (open.includes('review')) return { text: 'em revisão', tone: 'warn' };
+    if (open.includes('changes')) return { text: 'ajustes', tone: 'warn' };
+    if (open.includes('approved')) return { text: 'aprovado', tone: 'info' };
+    if (open.includes('draft')) return { text: 'rascunho', tone: 'neutral' };
+    if (m.complete) return { text: 'completo', tone: 'ok' };
+    return { text: `${m.publishedRequired}/${m.requiredCount}`, tone: 'neutral' };
+  }
 
   private onRealtime = (head: ReverseRevisionHead) => {
     if (!head?.moduleKey) return;
@@ -237,7 +253,6 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
       next: m => {
         this.module.set(m);
         this.moduleLoading.set(false);
-        if (spinner) this.showHowTo.set(!m.docs.some(d => d.published || d.open));
       },
       error: e => { this.moduleLoading.set(false); this.toast(e); }
     });
@@ -331,12 +346,13 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
 
   // ── Fontes e apelidos (aprovadores) ────────────────────────────────────────────────────────
 
-  editSources() {
+  /** 3: "Fontes e apelidos" abre num popover; o rascunho é recarregado do módulo a cada abertura. */
+  openSources(event: Event) {
     const m = this.module(); if (!m) return;
     this.sourcesDraft = m.sources.map(s => ({ ...s }));
     if (!this.sourcesDraft.length) this.sourcesDraft.push({ repository: '', path: '', role: 'backend' });
     this.aliasesDraft = m.aliases.join(', ');
-    this.showSources.set(true);
+    this.srcPop?.toggle(event);
   }
 
   addSource() { this.sourcesDraft.push({ repository: '', path: '', role: 'frontend' }); }
@@ -348,7 +364,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
       sources: this.sourcesDraft.filter(s => s.repository.trim()),
       aliases: this.aliasesDraft.split(',').map(a => a.trim()).filter(Boolean)
     }).subscribe({
-      next: x => { this.module.set(x); this.showSources.set(false); this.snack.open('Fontes e apelidos salvos.', 'OK', { duration: 2500 }); },
+      next: x => { this.module.set(x); this.srcPop?.hide(); this.snack.open('Fontes e apelidos salvos.', 'OK', { duration: 2500 }); },
       error: e => this.toast(e)
     });
   }
@@ -363,6 +379,12 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   }
 
   onRevisionChanged() { const k = this.moduleKey(); if (k) { this.loadModule(k, false); this.loadDoc(); } this.loadModules(false); }
+
+  /** 5: depois de aprovar/publicar/pedir ajustes, a revisão (embaixo) vira outra coisa — volta ao topo da página. */
+  scrollToTop() {
+    const area = (this.host.nativeElement as HTMLElement).closest('.content-area') as HTMLElement | null;
+    (area ?? document.scrollingElement)?.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   goToItem(e: { module: string; doc: string; item?: string }) { this.openModule(e.module, e.doc, e.item); }
 

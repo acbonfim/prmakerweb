@@ -1,5 +1,7 @@
 import { Component, OnChanges, inject, input, output, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { PopoverModule } from 'primeng/popover';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdown.pipe';
@@ -12,34 +14,44 @@ import { ReverseEngineeringService, ReverseTrap } from '../../../services/revers
 @Component({
   selector: 'app-re-traps',
   standalone: true,
-  imports: [MatIconModule, MatTooltipModule, PlanMarkdownPipe],
+  imports: [MatButtonModule, MatIconModule, MatTooltipModule, PopoverModule, PlanMarkdownPipe],
   template: `
-    <details class="traps" [open]="open()">
-      <summary><mat-icon>report</mat-icon>Armadilhas ({{ traps().length }}){{ toReview() ? ' · ' + toReview() + ' a conferir' : '' }}
-        @if (migratedAt()) { <span class="muted">· antigas migradas em {{ date(migratedAt()) }}</span> }</summary>
-      <p class="muted">O que já deu errado neste módulo, ligado aos itens. As análises de bug recebem a armadilha junto com o item; as marcadas "a conferir"
-        vieram de análises ou da migração automática das antigas.</p>
-      @for (t of traps(); track t.id) {
-        <div class="trap" [class.trap--review]="t.needsReview">
-          <div class="trap__head">
-            <b>{{ t.title }}</b>
-            @if (t.needsReview) { <span class="chip chip--warn">a conferir</span> }
-            @for (i of t.items; track i) { <button type="button" class="chip chip--link" (click)="goTo.emit(i)">{{ i }}</button> }
-            @for (c of t.cards; track c) { <span class="chip">card {{ c }}</span> }
-            <span class="spacer"></span>
-            @if (canApprove() && t.needsReview) { <button type="button" class="act" (click)="confirm(t)">Conferir</button> }
-            @if (canApprove()) { <button type="button" class="act act--warn" (click)="remove(t)" matTooltip="Remover"><mat-icon>delete</mat-icon></button> }
-          </div>
-          <div class="md" [innerHTML]="t.text | planMarkdown"></div>
-          <div class="muted">{{ originLabel(t.origin) }} · {{ t.createdBy }} · {{ date(t.createdAt) }}{{ t.reviewedBy ? ' · conferida por ' + t.reviewedBy : '' }}</div>
+    <button mat-stroked-button type="button" class="traps-btn" [class.traps-btn--review]="toReview() > 0" (click)="pop.toggle($event)"
+            matTooltip="O que já deu errado neste módulo, ligado aos itens">
+      <mat-icon>report</mat-icon>Armadilhas ({{ traps().length }}){{ toReview() ? ' · ' + toReview() + ' a conferir' : '' }}
+    </button>
+    <p-popover #pop appendTo="body" styleClass="re-popover">
+      <ng-template #content>
+        <div class="re-popover__body traps">
+          <h3><mat-icon>report</mat-icon>Armadilhas ({{ traps().length }}){{ toReview() ? ' · ' + toReview() + ' a conferir' : '' }}
+            @if (migratedAt()) { <span class="muted">· antigas migradas em {{ date(migratedAt()) }}</span> }</h3>
+          <p class="muted">O que já deu errado neste módulo, ligado aos itens. As análises de bug recebem a armadilha junto com o item; as marcadas "a conferir"
+            vieram de análises ou da migração automática das antigas.</p>
+          @for (t of traps(); track t.id) {
+            <div class="trap" [class.trap--review]="t.needsReview">
+              <div class="trap__head">
+                <b>{{ t.title }}</b>
+                @if (t.needsReview) { <span class="chip chip--warn">a conferir</span> }
+                @for (i of t.items; track i) { <button type="button" class="chip chip--link" (click)="pop.hide(); goTo.emit(i)">{{ i }}</button> }
+                @for (c of t.cards; track c) { <span class="chip">card {{ c }}</span> }
+                <span class="spacer"></span>
+                @if (canApprove() && t.needsReview) { <button type="button" class="act" (click)="confirm(t)">Conferir</button> }
+                @if (canApprove()) { <button type="button" class="act act--warn" (click)="remove(t)" matTooltip="Remover"><mat-icon>delete</mat-icon></button> }
+              </div>
+              <div class="md" [innerHTML]="t.text | planMarkdown"></div>
+              <div class="muted">{{ originLabel(t.origin) }} · {{ t.createdBy }} · {{ date(t.createdAt) }}{{ t.reviewedBy ? ' · conferida por ' + t.reviewedBy : '' }}</div>
+            </div>
+          } @empty { <div class="muted">Nenhuma armadilha registrada ainda.</div> }
         </div>
-      } @empty { <div class="muted">Nenhuma armadilha registrada ainda.</div> }
-    </details>
+      </ng-template>
+    </p-popover>
   `,
   styles: [`
-    .traps { margin: 10px 0; font-size: 13px; padding: 8px 12px; border-radius: 8px; background: rgba(248,81,73,.05); border: 1px solid rgba(248,81,73,.2); }
-    .traps summary { cursor: pointer; display: flex; align-items: center; gap: 6px; }
-    .traps summary mat-icon { font-size: 17px; width: 17px; height: 17px; color: #f85149; }
+    .traps-btn mat-icon, .traps h3 mat-icon { color: #f85149; }
+    .traps-btn--review { border-color: rgba(210,153,34,.6); }
+    .traps { font-size: 13px; }
+    .traps h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 14.5px; }
+    .traps h3 mat-icon { font-size: 17px; width: 17px; height: 17px; }
     .muted { font-size: 12px; opacity: .65; }
     .trap { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); }
     .trap--review { border-left: 3px solid #d29922; padding-left: 8px; }
@@ -66,7 +78,6 @@ export class ReTrapsComponent implements OnChanges {
   goTo = output<string>();
   traps = signal<ReverseTrap[]>([]);
   toReview = () => this.traps().filter(t => t.needsReview).length;
-  open = () => this.toReview() > 0 && this.canApprove();
 
   ngOnChanges() { this.load(); }
 

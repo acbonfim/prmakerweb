@@ -214,6 +214,8 @@ export class ReRevisionComponent {
   stamp = input<string | null | undefined>(null);
   actor = input<string>('');
   changed = output<ReverseRevision>();
+  /** Decisão tomada (aprovou, publicou, pediu ajustes, descartou) — a tela volta ao topo; salvar rascunho não conta. */
+  decided = output<ReverseRevision>();
 
   rev = signal<ReverseRevision | null>(null);
   loading = signal(false);
@@ -253,7 +255,7 @@ export class ReRevisionComponent {
     if (action === 'discard' && !confirm(`Descartar a revisão #${r.number}? O publicado continua como está.`)) return;
     this.busy.set(true);
     this.api.review(r.id, action, action === 'changes' ? this.note : null).subscribe({
-      next: x => { this.busy.set(false); this.mode.set(null); this.note = ''; this.snack.open(this.actionDone(action), 'OK', { duration: 3000 }); this.load(x.id); this.changed.emit(x); },
+      next: x => { this.busy.set(false); this.mode.set(null); this.note = ''; this.snack.open(this.actionDone(action), 'OK', { duration: 3000 }); this.load(x.id); this.changed.emit(x); this.decided.emit(x); },
       error: e => { this.busy.set(false); this.toast(e); }
     });
   }
@@ -262,7 +264,7 @@ export class ReRevisionComponent {
     const r = this.rev(); if (!r) return;
     this.busy.set(true);
     this.api.publish(r.id, r.status === 'review').subscribe({
-      next: x => { this.busy.set(false); this.snack.open('Publicado — já vale na Base Solvace e nas análises.', 'OK', { duration: 4000 }); this.load(x.id); this.changed.emit(x); },
+      next: x => { this.busy.set(false); this.snack.open('Publicado — já vale na Base Solvace e nas análises.', 'OK', { duration: 4000 }); this.load(x.id); this.changed.emit(x); this.decided.emit(x); },
       error: e => { this.busy.set(false); this.toast(e); }
     });
   }

@@ -21,6 +21,9 @@
           <span class="tab__card">#{{ tab.card }}</span>
         }
         <span class="tab__title">{{ titleOf(tab) }}</span>
+        @if (tab.status; as st) {
+          <span class="tab__status" [class]="'tab__status tab__status--' + st.tone">{{ st.text }}</span>
+        }
         @if (waiting(tab)) {
           <mat-icon class="tab__ind tab__ind--warn" aria-label="Aguardando você">hourglass_top</mat-icon>
         }

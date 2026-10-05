@@ -134,68 +134,86 @@
           </div>
           @if (m.summary) { <p class="summary">{{ m.summary }}</p> }
           <div class="modhead__actions">
-            <button mat-stroked-button type="button" [class.on]="showHowTo()" (click)="showHowTo.set(!showHowTo())"><mat-icon>terminal</mat-icon>Como gerar</button>
-            <button mat-stroked-button type="button" (click)="showSources() ? showSources.set(false) : editSources()"><mat-icon>source</mat-icon>Fontes e apelidos</button>
+            <button mat-stroked-button type="button" #howBtn (click)="howPop.toggle($event)"><mat-icon>terminal</mat-icon>Como gerar</button>
+            <button mat-stroked-button type="button" #srcBtn (click)="openSources($event)"><mat-icon>source</mat-icon>Fontes e apelidos</button>
+            <app-re-traps [moduleKey]="m.key" [canApprove]="m.canApprove" [migratedAt]="m.trapsMigratedAt" [stamp]="m.traps"
+                          (changed)="loadModule(m.key, false)" (goTo)="scrollTo($event)"></app-re-traps>
+            @if (m.suggestedTerms?.length) {
+              <button mat-stroked-button type="button" #termsBtn (click)="termsPop.toggle($event)"
+                      matTooltip="Termos do glossário que ainda não são apelido nem palavra-chave: decida o que fazer com cada um">
+                <mat-icon>translate</mat-icon>Termos ({{ m.suggestedTerms!.length }})</button>
+            }
             @if (m.itemsByKind; as kinds) {
               <span class="chips">@for (k of objectEntries(kinds); track k[0]) { <span class="chip">{{ k[0] }} {{ k[1] }}</span> }</span>
             }
           </div>
+
+          <!-- Popovers (o conteúdo só nasce quando abre). -->
+          <p-popover #howPop appendTo="body" styleClass="re-popover">
+            <ng-template #content>
+              <div class="re-popover__body">
+                <app-re-how-to [module]="m" [approverRoles]="settings()?.approverRoles ?? []" [reference]="settings()?.referenceDatabase"></app-re-how-to>
+              </div>
+            </ng-template>
+          </p-popover>
+
+          <p-popover #srcPop appendTo="body" styleClass="re-popover">
+            <ng-template #content>
+              <div class="re-popover__body">
+                <section class="sources">
+                  <h3>Fontes do código e apelidos</h3>
+                  <p class="muted">Onde está o código do módulo (repositório pelo nome do remote, como no mapa da máquina, e a pasta) — o Claude lê tudo isso.
+                    Apelidos = valores do campo "Module" dos cards que caem neste módulo (a análise de bug usa para achar a engenharia reversa).</p>
+                  @for (s of sourcesDraft; track $index; let i = $index) {
+                    <div class="src">
+                      <input [(ngModel)]="s.repository" placeholder="repositório (ex.: revamp-Kaizen, edv-solvace-apps)" [disabled]="!m.canApprove">
+                      <input [(ngModel)]="s.path" placeholder="pasta (ex.: projects/kaizen)" [disabled]="!m.canApprove">
+                      <select [(ngModel)]="s.role" [disabled]="!m.canApprove">
+                        <option value="backend">back</option><option value="frontend">front</option><option value="database">banco</option><option value="other">outro</option>
+                      </select>
+                      @if (m.canApprove) { <button type="button" class="icon" (click)="removeSource(i)"><mat-icon>close</mat-icon></button> }
+                    </div>
+                  }
+                  <input class="aliases" [(ngModel)]="aliasesDraft" placeholder="Apelidos: Kaizen, Kaizen (Revamp), Melhorias" [disabled]="!m.canApprove">
+                  @if (m.canApprove) {
+                    <div class="row">
+                      <button mat-button type="button" (click)="addSource()"><mat-icon>add</mat-icon>Fonte</button>
+                      <button mat-flat-button color="primary" type="button" (click)="saveSources()">Salvar</button>
+                    </div>
+                  } @else { <p class="muted">Só {{ settings()?.approverRoles?.join(' ou ') }} altera as fontes.</p> }
+                </section>
+              </div>
+            </ng-template>
+          </p-popover>
+
+          <p-popover #termsPop appendTo="body" styleClass="re-popover">
+            <ng-template #content>
+              <div class="re-popover__body">
+                <section class="terms">
+                  <h3><mat-icon>translate</mat-icon>{{ m.suggestedTerms?.length ?? 0 }} termos do glossário ainda não são apelido nem palavra-chave</h3>
+                  <p class="muted">Apelido = como o campo "Module" dos cards chama este módulo (a análise de bug acha a engenharia reversa por ele). Palavra-chave = ajuda a
+                    Base Solvace a achar o módulo. Dispensar = não sugerir de novo.</p>
+                  <div class="terms__list">
+                    @for (t of m.suggestedTerms; track t) {
+                      <span class="term">{{ t }}
+                        @if (m.canApprove) {
+                          <button type="button" (click)="resolveTerm(t, 'alias')" matTooltip="Virar apelido do módulo">apelido</button>
+                          <button type="button" (click)="resolveTerm(t, 'keyword')" matTooltip="Virar palavra-chave do projeto">palavra-chave</button>
+                          <button type="button" (click)="resolveTerm(t, 'dismiss')" matTooltip="Não sugerir de novo"><mat-icon>close</mat-icon></button>
+                        }
+                      </span>
+                    }
+                  </div>
+                </section>
+              </div>
+            </ng-template>
+          </p-popover>
         </header>
 
         @if (objectEntriesS(m.supersededSections).length) {
           <div class="superseded"><mat-icon>verified</mat-icon><span><b>Fonte: engenharia reversa.</b> Seções antigas da Base Solvace já substituídas (ficam só como
             histórico): {{ supersededKeys(m.supersededSections) }}.</span></div>
         }
-        <app-re-traps [moduleKey]="m.key" [canApprove]="m.canApprove" [migratedAt]="m.trapsMigratedAt" [stamp]="m.traps"
-                      (changed)="loadModule(m.key, false)" (goTo)="scrollTo($event)"></app-re-traps>
-
-        @if (showHowTo()) { <app-re-how-to [module]="m" [approverRoles]="settings()?.approverRoles ?? []" [reference]="settings()?.referenceDatabase"></app-re-how-to> }
-
-        @if (m.suggestedTerms?.length) {
-          <details class="terms" [open]="termsOpen()" (toggle)="onTermsToggle($event)">
-            <summary [matTooltip]="termsOpen() ? '' : 'Abra para ver os ' + m.suggestedTerms!.length + ' termos e decidir: apelido, palavra-chave ou dispensar'">
-              <mat-icon>translate</mat-icon>{{ m.suggestedTerms!.length }} termos do glossário ainda não são apelido nem palavra-chave</summary>
-            <p class="muted">Apelido = como o campo "Module" dos cards chama este módulo (a análise de bug acha a engenharia reversa por ele). Palavra-chave = ajuda a
-              Base Solvace a achar o módulo. Dispensar = não sugerir de novo.</p>
-            <div class="terms__list">
-              @for (t of m.suggestedTerms; track t) {
-                <span class="term">{{ t }}
-                  @if (m.canApprove) {
-                    <button type="button" (click)="resolveTerm(t, 'alias')" matTooltip="Virar apelido do módulo">apelido</button>
-                    <button type="button" (click)="resolveTerm(t, 'keyword')" matTooltip="Virar palavra-chave do projeto">palavra-chave</button>
-                    <button type="button" (click)="resolveTerm(t, 'dismiss')" matTooltip="Não sugerir de novo"><mat-icon>close</mat-icon></button>
-                  }
-                </span>
-              }
-            </div>
-          </details>
-        }
-
-        @if (showSources()) {
-          <section class="sources">
-            <h3>Fontes do código e apelidos</h3>
-            <p class="muted">Onde está o código do módulo (repositório pelo nome do remote, como no mapa da máquina, e a pasta) — o Claude lê tudo isso.
-              Apelidos = valores do campo "Module" dos cards que caem neste módulo (a análise de bug usa para achar a engenharia reversa).</p>
-            @for (s of sourcesDraft; track $index; let i = $index) {
-              <div class="src">
-                <input [(ngModel)]="s.repository" placeholder="repositório (ex.: revamp-Kaizen, edv-solvace-apps)" [disabled]="!m.canApprove">
-                <input [(ngModel)]="s.path" placeholder="pasta (ex.: projects/kaizen)" [disabled]="!m.canApprove">
-                <select [(ngModel)]="s.role" [disabled]="!m.canApprove">
-                  <option value="backend">back</option><option value="frontend">front</option><option value="database">banco</option><option value="other">outro</option>
-                </select>
-                @if (m.canApprove) { <button type="button" class="icon" (click)="removeSource(i)"><mat-icon>close</mat-icon></button> }
-              </div>
-            }
-            <input class="aliases" [(ngModel)]="aliasesDraft" placeholder="Apelidos: Kaizen, Kaizen (Revamp), Melhorias" [disabled]="!m.canApprove">
-            @if (m.canApprove) {
-              <div class="row">
-                <button mat-button type="button" (click)="addSource()"><mat-icon>add</mat-icon>Fonte</button>
-                <button mat-flat-button color="primary" type="button" (click)="saveSources()">Salvar</button>
-              </div>
-            } @else { <p class="muted">Só {{ settings()?.approverRoles?.join(' ou ') }} altera as fontes.</p> }
-          </section>
-        }
-
         <nav class="doctabs">
           @for (d of m.docs; track d.type) {
             <button type="button" class="doctab" [class.doctab--on]="docKey() === d.type" (click)="selectDoc(d.type)">
@@ -234,7 +252,7 @@
             @if (open.status === 'draft' || open.status === 'changes') {
               <app-re-progress [revision]="open"></app-re-progress>
             }
-            <app-re-revision [revisionId]="open.id" [stamp]="revisionStamp()" (changed)="onRevisionChanged()"></app-re-revision>
+            <app-re-revision [revisionId]="open.id" [stamp]="revisionStamp()" (changed)="onRevisionChanged()" (decided)="scrollToTop()"></app-re-revision>
           } @else if (!ds.published && ds.blockedBy?.length) {
             <div class="empty">
               <mat-icon>lock</mat-icon>
@@ -250,7 +268,7 @@
                 <b>{{ docTitle(ds.type) }} ainda não foi gerado.</b>
                 <div class="muted">No Claude Code aberto na pasta do módulo:</div>
                 <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" [block]="true" />
-                <div><a (click)="showHowTo.set(true)">Ver o passo a passo</a></div>
+                <div><a (click)="howPop.show($event, howBtn)">Ver o passo a passo</a></div>
               </div>
             </div>
           }

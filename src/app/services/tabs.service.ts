@@ -1,4 +1,4 @@
-import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, Signal, computed, inject, signal } from '@angular/core';
 import { ActivatedRouteSnapshot, DetachedRouteHandle, NavigationEnd, Route, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, filter } from 'rxjs';
@@ -23,6 +23,12 @@ export interface TabRouteData {
   card?: boolean;
 }
 
+/** Situação curta mostrada na aba (ex.: status do módulo na engenharia reversa). */
+export interface TabStatus {
+  text: string;
+  tone: 'ok' | 'info' | 'warn' | 'error' | 'neutral';
+}
+
 export interface Tab {
   id: string;
   url: string;
@@ -30,6 +36,10 @@ export interface Tab {
   icon: string;
   /** Número do card, nas telas de card. */
   card: string | null;
+  /** A tela dá o nome da aba (ex.: módulo aberto): no lugar do título da rota. */
+  label: string | null;
+  /** Situação curta ao lado do nome. */
+  status: TabStatus | null;
   /** Momento em que deixou de ser a ativa; null enquanto é a ativa. */
   inactiveSince: number | null;
   /** Congelada: sem tela em memória; reabre pela URL. */
@@ -39,7 +49,7 @@ export interface Tab {
 }
 
 interface PersistedTabs {
-  tabs: Pick<Tab, 'id' | 'url' | 'title' | 'icon' | 'card'>[];
+  tabs: Pick<Tab, 'id' | 'url' | 'title' | 'icon' | 'card' | 'label' | 'status'>[];
   activeId: string;
   savedAt: number;
 }
@@ -174,7 +184,7 @@ export class TabsService {
     }
     if (!ok) {
       // URL que não abre mais (guarda de perfil, rota removida): a aba vira Home em vez de ficar quebrada.
-      this.patch(id, { url: HOME_URL, title: 'Início', icon: 'home', card: null, dirty: false });
+      this.patch(id, { url: HOME_URL, title: 'Início', icon: 'home', card: null, label: null, status: null, dirty: false });
       await this.router.navigateByUrl(HOME_URL, { replaceUrl: true });
       return;
     }
@@ -213,6 +223,38 @@ export class TabsService {
   setDirty(id: string, dirty: boolean): void {
     const tab = this.tabs().find((t) => t.id === id);
     if (tab && tab.dirty !== dirty) this.patch(id, { dirty });
+  }
+
+  /** A tela dá nome e situação à sua aba (ex.: módulo aberto + status). `null` volta ao título da rota. */
+  setMeta(id: string, meta: { label: string | null; status: TabStatus | null }): void {
+    const tab = this.tabs().find((t) => t.id === id);
+    if (!tab) return;
+    const same = tab.label === meta.label && tab.status?.text === meta.status?.text && tab.status?.tone === meta.status?.tone;
+    if (!same) this.patch(id, { label: meta.label, status: meta.status });
+  }
+
+  /**
+   * Para telas que ficam vivas em segundo plano: diz a aba da tela e se ela é a ativa. Só a aba ativa deve gravar
+   * no que é compartilhado (nome da aba, estado global); a que sai guarda/devolve o que precisar em `onLeave/onEnter`.
+   */
+  bindScreen(destroyRef: DestroyRef, hooks: { onLeave?: () => void; onEnter?: () => void } = {}): { tabId: () => string; active: Signal<boolean> } {
+    const active = signal(true);
+    let cached = '';
+    const tabId = () => (cached ||= this.activeId());
+    const leaving = this.leaving$.subscribe((id) => {
+      // Tela ativa que ainda não sabia a aba (F5: nasce antes das abas serem restauradas): a que sai é a dela.
+      if (!cached && active()) cached = id;
+      if (id !== tabId()) return;
+      hooks.onLeave?.();
+      active.set(false);
+    });
+    const entered = this.entered$.subscribe((id) => {
+      if (id !== tabId()) return;
+      hooks.onEnter?.();
+      active.set(true);
+    });
+    destroyRef.onDestroy(() => { leaving.unsubscribe(); entered.unsubscribe(); });
+    return { tabId, active: active.asReadonly() };
   }
 
   // ---- telas guardadas (usadas pela TabRouteReuseStrategy) ----
@@ -278,7 +320,7 @@ export class TabsService {
     const sameScreen = active.title === meta.title && active.card === meta.card;
     this.patch(active.id, {
       url, title: meta.title, icon: meta.icon, card: meta.card,
-      ...(sameScreen ? {} : { dirty: false }),
+      ...(sameScreen ? {} : { dirty: false, label: null, status: null }),
     });
   }
 
@@ -294,7 +336,7 @@ export class TabsService {
       return;
     }
 
-    const restored: Tab[] = saved.tabs.map((t) => ({ ...t, inactiveSince: Date.now(), frozen: true, dirty: false }));
+    const restored: Tab[] = saved.tabs.map((t) => ({ ...t, label: t.label ?? null, status: t.status ?? null, inactiveSince: Date.now(), frozen: true, dirty: false }));
     const savedActive = restored.find((t) => t.id === saved.activeId) ?? restored[0];
     const live = (id: string, patch: Partial<Tab> = {}): void => {
       this.tabs.set(restored.map((t) => (t.id === id ? { ...t, inactiveSince: null, frozen: false, ...patch } : t)));
@@ -315,7 +357,7 @@ export class TabsService {
       restored.push(tab);
       return live(tab.id);
     }
-    live(savedActive.id, { url, title: meta.title, icon: meta.icon, card: meta.card }); // cheio → troca a ativa
+    live(savedActive.id, { url, title: meta.title, icon: meta.icon, card: meta.card, label: null, status: null }); // cheio → troca a ativa
   }
 
   private screenMeta(url: string): { title: string; icon: string; card: string | null } {
@@ -333,7 +375,7 @@ export class TabsService {
 
   private newTab(url: string): Tab {
     const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `t${Date.now()}${Math.random()}`;
-    return { id, url, title: 'Início', icon: 'home', card: null, inactiveSince: null, frozen: false, dirty: false };
+    return { id, url, title: 'Início', icon: 'home', card: null, label: null, status: null, inactiveSince: null, frozen: false, dirty: false };
   }
 
   private patch(id: string, changes: Partial<Tab>): void {
@@ -365,7 +407,7 @@ export class TabsService {
     clearTimeout(this.saveTimer);
     if (!this.storageKey || this.tabs().length === 0) return;
     const data: PersistedTabs = {
-      tabs: this.tabs().map(({ id, url, title, icon, card }) => ({ id, url, title, icon, card })),
+      tabs: this.tabs().map(({ id, url, title, icon, card, label, status }) => ({ id, url, title, icon, card, label, status })),
       activeId: this.activeId(),
       savedAt: Date.now(),
     };
