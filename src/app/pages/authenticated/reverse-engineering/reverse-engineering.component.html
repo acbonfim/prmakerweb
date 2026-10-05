@@ -204,7 +204,15 @@
               @if (d.pendingSuggestions) { <span class="badge" matTooltip="Sugestões pendentes das análises">{{ d.pendingSuggestions }}</span> }
             </button>
           }
+          <button type="button" class="doctab" [class.doctab--on]="docKey() === 'infra'" (click)="selectDoc('infra')"
+                  matTooltip="Infra na AWS: Lambdas, esteiras, buckets, segredos e logs (etapa opcional da skill)">
+            <mat-icon class="doctab__icon">cloud</mat-icon>Infra
+          </button>
         </nav>
+
+        @if (docKey() === 'infra') {
+          <app-re-infra [moduleKey]="m.key" [stamp]="revisionStamp()"></app-re-infra>
+        }
 
         @if (docStatus(); as ds) {
           <div class="docinfo">

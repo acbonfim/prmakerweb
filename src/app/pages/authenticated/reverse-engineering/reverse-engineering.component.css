@@ -153,3 +153,4 @@ a { color: var(--mat-sys-primary); cursor: pointer; text-decoration: none; }
   .toc { position: static; max-height: 240px; }
   .re__main { padding: 14px; }
 }
+.doctab__icon { font-size: 16px; width: 16px; height: 16px; }

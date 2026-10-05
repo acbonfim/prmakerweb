@@ -20,6 +20,7 @@ import { ReAssetsComponent } from './re-assets.component';
 import { ReIndexComponent } from './re-index.component';
 import { ReGlossaryComponent } from './re-glossary.component';
 import { ReTrapsComponent } from './re-traps.component';
+import { ReInfraComponent } from './re-infra.component';
 import { ReCopyCommandComponent } from './re-copy-command.component';
 
 type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
@@ -34,7 +35,7 @@ type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
   selector: 'app-reverse-engineering',
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe,
-    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent, ReTrapsComponent, ReCopyCommandComponent],
+    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent, ReTrapsComponent, ReInfraComponent, ReCopyCommandComponent],
   templateUrl: './reverse-engineering.component.html',
   styleUrls: ['./reverse-engineering.component.css']
 })
@@ -244,6 +245,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
 
   loadDoc(item?: string | null) {
     const key = this.moduleKey(); if (!key) return;
+    if (this.docKey() === 'infra') { this.doc.set(null); this.docLoading.set(false); return; }  // 0059: aba Infra não é um documento
     this.docLoading.set(true);
     this.api.doc(key, this.docKey()).subscribe({
       next: d => {
