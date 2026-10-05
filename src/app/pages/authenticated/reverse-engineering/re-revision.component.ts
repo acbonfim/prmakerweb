@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -235,7 +235,8 @@ export class ReRevisionComponent {
     effect(() => {
       const id = this.revisionId();
       this.stamp();
-      this.load(id);
+      // load() lê e grava `rev`/`loading`: sem untracked o effect se re-executava a cada resposta (loop de GET, ~2/s)
+      untracked(() => this.load(id));
     });
   }
 
