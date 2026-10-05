@@ -248,7 +248,7 @@
     flex: none;
     max-width: 100%;
     /* Painel vazio ainda ocupa a tela (o rodapé não sobe para o meio). */
-    min-height: calc(100dvh - var(--cime-topbar-total) - var(--pr-tabs-h) - 96px);
+    min-height: calc(100dvh - var(--cime-topbar-total) - var(--cime-tabs-h) - var(--pr-tabs-h) - 96px);
   }
 
   .pr-fields.pr-tab-panel--on,

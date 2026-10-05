@@ -49,11 +49,20 @@
   min-width: 78px;
 }
 
+.content-column {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .content-area {
   /* Telas com barra presa no topo/rodapé (ex.: tela de PR no celular) compensam este padding. */
   --cime-content-pad: 10px;
   flex: 1;
   min-width: 0;
+  min-height: 0;
   padding: var(--cime-content-pad) max(var(--cime-content-pad), env(safe-area-inset-right, 0px)) calc(var(--cime-content-pad) + env(safe-area-inset-bottom, 0px)) max(var(--cime-content-pad), env(safe-area-inset-left, 0px));
   overflow-y: auto;
   overscroll-behavior-y: contain;

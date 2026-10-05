@@ -1,0 +1,147 @@
+:host { display: block; flex: none; }
+
+/* Faixa fina (--cime-tabs-h, definida no styles.scss): a tela de PR precisa da altura. */
+.tabbar {
+  display: flex;
+  align-items: stretch;
+  height: var(--cime-tabs-h);
+  background-color: rgb(18, 18, 18);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0 max(6px, env(safe-area-inset-right, 0px)) 0 max(6px, env(safe-area-inset-left, 0px));
+  gap: 2px;
+}
+
+.tabbar__scroll {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.tabbar__scroll::-webkit-scrollbar { display: none; }
+
+.tab {
+  --tab-fg: color-mix(in srgb, var(--mat-sys-on-surface) 68%, transparent);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* Encolhe até o mínimo e só então a faixa rola; o título é quem trunca. */
+  flex: 0 1 200px;
+  min-width: 96px;
+  max-width: 220px;
+  padding: 0 4px 0 8px;
+  margin-top: 3px;
+  border-radius: 7px 7px 0 0;
+  color: var(--tab-fg);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  outline: none;
+  transition: background-color 0.12s, color 0.12s;
+}
+.tab:hover { background: color-mix(in srgb, var(--mat-sys-on-surface) 7%, transparent); }
+.tab:focus-visible { box-shadow: inset 0 0 0 2px var(--mat-sys-primary); }
+
+.tab--active {
+  --tab-fg: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface);
+  box-shadow: inset 0 2px 0 var(--mat-sys-primary);
+}
+.tab--active:hover { background: var(--mat-sys-surface); }
+
+/* Aguardando você: âmbar, também na aba inativa. */
+.tab--waiting {
+  --tab-fg: #ffd54f;
+  background: rgba(255, 193, 7, 0.14);
+  box-shadow: inset 0 2px 0 #ffb300;
+}
+.tab--waiting:hover { background: rgba(255, 193, 7, 0.22); }
+.tab--waiting.tab--active { background: rgba(255, 193, 7, 0.2); }
+
+.tab--frozen { opacity: 0.62; }
+.tab--frozen:hover, .tab--frozen:focus-visible { opacity: 1; }
+
+.tab__icon { flex: none; width: 15px; height: 15px; font-size: 15px; }
+.tab__card { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tab__title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.tab__ind { flex: none; width: 14px; height: 14px; font-size: 14px; }
+.tab__ind--info { color: #64b5f6; }
+.tab__ind--warn { color: #ffb300; }
+.tab__ind--ok { color: #81c784; }
+.tab__ind--error { color: #e57373; }
+.tab__ind--neutral, .tab__ind--frozen { color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); }
+
+.tab__pr {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.tab__pr mat-icon { width: 13px; height: 13px; font-size: 13px; }
+.tab__pr--open { color: #81c784; }
+.tab__pr--merged { color: #ba68c8; }
+.tab__pr--closed { color: #e57373; }
+
+.tab__dirty { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #ffb300; }
+
+.tab__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.55;
+}
+.tab__close mat-icon { width: 13px; height: 13px; font-size: 13px; }
+.tab__close:hover { opacity: 1; background: color-mix(in srgb, var(--mat-sys-on-surface) 16%, transparent); }
+.tab--active .tab__close, .tab:hover .tab__close { opacity: 0.9; }
+
+.tabbar__add {
+  flex: none;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mat-sys-on-surface);
+  cursor: pointer;
+}
+.tabbar__add mat-icon { width: 18px; height: 18px; font-size: 18px; }
+.tabbar__add:hover:not(:disabled) { background: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent); }
+.tabbar__add:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.tabbar__count {
+  flex: none;
+  align-self: center;
+  margin-left: auto;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+}
+
+@media (max-width: 768px) {
+  .tab { flex-basis: 150px; min-width: 84px; padding-left: 6px; }
+  .tabbar__count { display: none; }
+}

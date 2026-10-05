@@ -1,0 +1,55 @@
+<div class="tabbar" role="tablist" aria-label="Abas abertas">
+  <div class="tabbar__scroll">
+    @for (tab of tabs.tabs(); track tab.id; let i = $index) {
+      <div class="tab"
+           role="tab"
+           tabindex="0"
+           [class.tab--active]="tab.id === tabs.activeId()"
+           [class.tab--frozen]="tab.frozen"
+           [class.tab--waiting]="waiting(tab)"
+           [attr.aria-selected]="tab.id === tabs.activeId()"
+           [attr.data-tab-id]="tab.id"
+           [matTooltip]="tooltip(tab)"
+           matTooltipClass="tab-tooltip"
+           (click)="select(tab)"
+           (auxclick)="auxClick($event, tab)"
+           (keydown.enter)="select(tab)"
+           (keydown.space)="select(tab); $event.preventDefault()"
+           (keydown)="onKey($event, i)">
+        <mat-icon class="tab__icon" aria-hidden="true">{{ tab.icon }}</mat-icon>
+        @if (tab.card) {
+          <span class="tab__card">#{{ tab.card }}</span>
+        }
+        <span class="tab__title">{{ titleOf(tab) }}</span>
+        @if (waiting(tab)) {
+          <mat-icon class="tab__ind tab__ind--warn" aria-label="Aguardando você">hourglass_top</mat-icon>
+        }
+        @if (plan(tab); as p) {
+          <mat-icon class="tab__ind" [class]="'tab__ind tab__ind--' + p.tone" [attr.aria-label]="p.label">{{ p.icon }}</mat-icon>
+        }
+        @if (prs(tab); as pr) {
+          <span class="tab__pr" [class]="'tab__pr tab__pr--' + pr.tone" [attr.aria-label]="pr.label">
+            <mat-icon aria-hidden="true">merge</mat-icon>{{ pr.count }}
+          </span>
+        }
+        @if (tab.frozen) {
+          <mat-icon class="tab__ind tab__ind--frozen" aria-label="Congelada">ac_unit</mat-icon>
+        }
+        @if (tab.dirty) {
+          <span class="tab__dirty" aria-label="Edição não salva"></span>
+        }
+        <button type="button" class="tab__close" tabindex="-1" aria-label="Fechar aba" (click)="closeClick($event, tab)">
+          <mat-icon aria-hidden="true">close</mat-icon>
+        </button>
+      </div>
+    }
+  </div>
+  <button type="button" class="tabbar__add"
+          [disabled]="!tabs.canAdd()"
+          [attr.aria-label]="'Nova aba'"
+          [matTooltip]="tabs.canAdd() ? 'Nova aba' : 'Limite de ' + tabs.max + ' abas'"
+          (click)="add()">
+    <mat-icon aria-hidden="true">add</mat-icon>
+  </button>
+  <span class="tabbar__count" aria-hidden="true">{{ tabs.tabs().length }}/{{ tabs.max }}</span>
+</div>

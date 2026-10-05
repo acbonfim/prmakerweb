@@ -54,11 +54,16 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; }
   --cime-topbar-h: 70px;
   /* A barra fica sob a barra de status translúcida do app instalado: soma a safe area. */
   --cime-topbar-total: calc(var(--cime-topbar-h) + env(safe-area-inset-top, 0px));
+  /* Faixa de abas internas (0065), entre o topbar e o conteúdo; telas com altura calculada subtraem. */
+  --cime-tabs-h: 30px;
 }
 
 @media (max-width: 576px) {
-  :root { --cime-topbar-h: 56px; }
+  :root { --cime-topbar-h: 56px; --cime-tabs-h: 28px; }
 }
+
+/* Tooltip das abas: uma informação por linha. */
+.tab-tooltip .mdc-tooltip__surface { white-space: pre-line; }
 
 html {
   -webkit-text-size-adjust: 100%;
