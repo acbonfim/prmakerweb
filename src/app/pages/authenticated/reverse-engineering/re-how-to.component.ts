@@ -74,6 +74,11 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
           </details>
         </li>
         <li>
+          <b>Infra na AWS</b> <span class="muted">(opcional)</span>: esteiras de deploy, Lambdas, buckets, segredos (só nomes) e onde ver os logs no
+          CloudWatch — lidos pelo AWS CLI, somente leitura, e mostrados na aba <b>Infra</b> do módulo.
+          <app-copy-command [command]="'/engenharia-reversa ' + module().key + ' infra'" label="Infra" icon="cloud" [block]="true" />
+        </li>
+        <li>
           <b>Banco de dados</b>: o Claude lê <b>direto do banco {{ dbLabel() }}</b> (somente leitura) as views, procedures, functions, triggers, check
           constraints e jobs do módulo — deixe a <b>VPN ligada</b> e a credencial do servidor cadastrada na máquina
           (<code>prmake-skills.sh db-credentials</code>). Scripts SQL versionados no repositório não são usados.

@@ -24,8 +24,8 @@ interface Group { service: string; label: string; items: ReverseInfraResource[];
         <mat-icon>cloud_off</mat-icon>
         <div>
           <b>A infra deste módulo ainda não foi mapeada.</b>
-          <div class="muted">Etapa opcional: lê a AWS pelo CLI (somente leitura, nunca o valor de segredo) e liga ao módulo. No Claude Code aberto na pasta do módulo, depois do inventário:</div>
-          <app-copy-command [command]="'bash $RE infra ' + moduleKey()" [block]="true" />
+          <div class="muted">Etapa opcional: lê a AWS pelo CLI (somente leitura, nunca o valor de segredo) e liga ao módulo. No Claude Code aberto na pasta do módulo:</div>
+          <app-copy-command [command]="command()" [block]="true" />
         </div>
       </div>
     } @else {
@@ -36,7 +36,7 @@ interface Group { service: string; label: string; items: ReverseInfraResource[];
             <b>Conta {{ acc.account }}</b>
             <span class="muted">{{ acc.regions.join(', ') }} · lida por {{ infra()!.collectedBy }} em {{ date(infra()!.collectedAt) }} · {{ acc.resources.length }} recursos do módulo de {{ acc.summary.total }} na conta</span>
             <span class="spacer"></span>
-            <app-copy-command [command]="'bash $RE infra ' + moduleKey()" icon="refresh" label="Reler" />
+            <app-copy-command [command]="command()" icon="refresh" label="Reler" />
           </header>
 
           @if (acc.denied.length) {
@@ -158,6 +158,7 @@ export class ReInfraComponent implements OnChanges {
     { key: 'recursos', label: 'Recursos' }, { key: 'esteiras', label: 'Esteiras de deploy' }, { key: 'segredos', label: 'Segredos' },
     { key: 'logs', label: 'Logs' }, { key: 'conta', label: 'Conta' }
   ] as const;
+  command = computed(() => '/engenharia-reversa ' + this.moduleKey() + ' infra');
   accounts = computed<ReverseInfraAccount[]>(() => this.infra()?.data?.accounts ?? []);
 
   ngOnChanges() {
