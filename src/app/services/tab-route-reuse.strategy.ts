@@ -1,4 +1,4 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, Injector, inject } from '@angular/core';
 import { ActivatedRouteSnapshot, DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { PageContainerComponent } from '../components/page-container/page-container.component';
 import { TabsService } from './tabs.service';
@@ -11,7 +11,13 @@ import { TabsService } from './tabs.service';
  */
 @Injectable()
 export class TabRouteReuseStrategy implements RouteReuseStrategy {
-  private readonly tabs = inject(TabsService);
+  private readonly injector = inject(Injector);
+  private tabsRef?: TabsService;
+
+  /** Preguiçoso: o Router depende desta estratégia e o TabsService depende do Router (ciclo se injetado direto). */
+  private get tabs(): TabsService {
+    return (this.tabsRef ??= this.injector.get(TabsService));
+  }
 
   private isTabScreen(route: ActivatedRouteSnapshot): boolean {
     if (!route.component || route.component === PageContainerComponent) return false;
