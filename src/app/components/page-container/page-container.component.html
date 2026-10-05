@@ -18,8 +18,12 @@
       <app-side-menu [isCollapsed]="!compact() && isSidebarCollapsed" (toggleSidebar)="toggleSidebar()"></app-side-menu>
     </div>
 
-    <div class="content-area">
-      <router-outlet></router-outlet>
+    <div class="content-column">
+      <!-- Abas internas (0065): faixa fina entre o topbar e o conteúdo. -->
+      <app-tab-bar></app-tab-bar>
+      <div class="content-area" #contentArea>
+        <router-outlet></router-outlet>
+      </div>
     </div>
   </div>
 </div>

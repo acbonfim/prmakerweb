@@ -18,6 +18,16 @@ export interface AiRepository {
   manual?: boolean;
 }
 
+export interface CardPrSnapshot {
+  cardNumber: string | null;
+  register: PullRequestRegister | null;
+  description: string | null;
+  rootCause: string | null;
+  githubPrs: GithubPullRequest[];
+  aiRepositories: AiRepository[];
+  aiSelections: Record<string, RepoCommitSelection>;
+}
+
 /**
  * Estado do card em tratamento, compartilhado entre a tela de PR, o modal "Abrir PR",
  * os popovers e a geração com IA. Descrição e root cause vivem aqui para que uma edição
@@ -106,6 +116,29 @@ export class CardPrStateService {
   resetAi(): void {
     this.aiRepositories.set([]);
     this.aiSelections.set({});
+  }
+
+  /** Foto do estado do card (abas internas, 0065): a aba que sai guarda; ao voltar, devolve. */
+  snapshot(): CardPrSnapshot {
+    return {
+      cardNumber: this.cardNumber(),
+      register: this.register(),
+      description: this.description(),
+      rootCause: this.rootCause(),
+      githubPrs: this.githubPrs(),
+      aiRepositories: this.aiRepositories(),
+      aiSelections: this.aiSelections(),
+    };
+  }
+
+  restore(s: CardPrSnapshot): void {
+    this.cardNumber.set(s.cardNumber);
+    this.register.set(s.register);
+    this.description.set(s.description);
+    this.rootCause.set(s.rootCause);
+    this.githubPrs.set(s.githubPrs);
+    this.aiRepositories.set(s.aiRepositories);
+    this.aiSelections.set(s.aiSelections);
   }
 
   reset(): void {

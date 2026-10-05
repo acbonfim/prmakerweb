@@ -1,5 +1,5 @@
 import { TeamsService } from '../../../services/teams.service';
-import {ChangeDetectorRef, Component, effect, ElementRef, inject, OnDestroy, OnInit, signal, untracked, ViewChild} from '@angular/core';
+import {ChangeDetectorRef, Component, DestroyRef, effect, ElementRef, inject, OnDestroy, OnInit, signal, untracked, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
@@ -50,7 +50,8 @@ import {UserIntegrationService} from '../../../services/user-integration.service
 import {MyIntegrationsDialogComponent} from '../../../components/my-integrations-dialog/my-integrations-dialog.component';
 import {OpenPrDialogComponent, OpenPrDialogData} from '../../../components/open-pr-dialog/open-pr-dialog.component';
 import {GithubPullRequest, PullRequestService} from '../../../services/pull-request.service';
-import {CardPrStateService} from '../../../services/card-pr-state.service';
+import {CardPrSnapshot, CardPrStateService} from '../../../services/card-pr-state.service';
+import {TabsService} from '../../../services/tabs.service';
 import {RepoOption} from '../../../interfaces/RepoOption';
 import {DevOpsActionsMenuComponent} from '../../../components/devops-actions-menu/devops-actions-menu.component';
 import {SmartActionsMenuComponent} from '../../../components/smart-actions-menu/smart-actions-menu.component';
@@ -376,6 +377,20 @@ export class RegisterComponent implements OnInit, OnDestroy {
   private _globalService = inject(GlobalService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
+  private tabs = inject(TabsService);
+
+  /**
+   * Abas internas (0065): o estado do card é um singleton, então só a aba ativa pode lê-lo/escrevê-lo. A aba que
+   * sai guarda uma foto e deixa de reagir; ao voltar, devolve a foto. Sem isto, outra aba de PR sobrescreveria
+   * descrição/root cause desta (e um "Salvar" gravaria o texto do outro card).
+   */
+  private tabIdCache = '';
+  /** Id da aba desta tela (pode não existir ainda no F5, quando a tela nasce antes das abas serem restauradas). */
+  private get tabId(): string {
+    return this.tabIdCache ||= this.tabs.activeId();
+  }
+  private readonly tabActive = signal(true);
+  private tabSnapshot?: CardPrSnapshot;
 
   constructor(
     private http: HttpClient,
@@ -393,9 +408,40 @@ export class RegisterComponent implements OnInit, OnDestroy {
     // Edições feitas nos painéis (aqui, no modal ou nos popovers) chegam pelo estado
     // compartilhado; espelha no modelo local usado por salvar/copiar/abrir PR.
     effect(() => {
+      if (!this.tabActive()) return;
       const description = this.prState.description();
       const rootCause = this.prState.rootCause();
       untracked(() => this.onSharedContentChange(description, rootCause));
+    });
+
+    // Edição não salva: a aba não congela e pede confirmação ao fechar.
+    effect(() => {
+      if (!this.tabActive()) return;
+      const saved = this.prState.register();
+      const dirty =
+        (this.prState.description() ?? '') !== (saved?.description ?? '') ||
+        (this.prState.rootCause() ?? '') !== (saved?.rootCause ?? '');
+      untracked(() => this.tabs.setDirty(this.tabId, dirty));
+    });
+
+    const leaving = this.tabs.leaving$.subscribe((id) => {
+      // Tela ativa que ainda não sabia a aba: a que está saindo é a dela.
+      if (!this.tabIdCache && this.tabActive()) this.tabIdCache = id;
+      if (id !== this.tabId) return;
+      this.tabSnapshot = this.prState.snapshot();
+      this.tabActive.set(false);
+    });
+    const entered = this.tabs.entered$.subscribe((id) => {
+      if (id !== this.tabId) return;
+      if (this.tabSnapshot) this.prState.restore(this.tabSnapshot);
+      this.tabSnapshot = undefined;
+      this.tabActive.set(true);
+      this.cdr.detectChanges();
+    });
+    inject(DestroyRef).onDestroy(() => {
+      leaving.unsubscribe();
+      entered.unsubscribe();
+      this.tabs.setDirty(this.tabId, false);
     });
   }
 
@@ -472,6 +518,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
    * voltar/avançar entre cards deixaria URL e tela diferentes.
    */
   private syncCardInUrl(card: string | null): void {
+    if (!this.tabActive()) return;
     const current = this.route.snapshot.queryParamMap.get('card');
     if ((card || null) === current && !this.route.snapshot.queryParamMap.has('repositoryId')) return;
     void this.router.navigate([], {
@@ -651,7 +698,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
    */
   private watchOpenPrs(): void {
     const card = this.cardNumber?.toString();
-    if (!card || document.hidden || this.prWatchBusy || this.isPullRequestLoading || this.prState.githubPrsLoading()) return;
+    if (!card || !this.tabActive() || document.hidden || this.prWatchBusy || this.isPullRequestLoading || this.prState.githubPrsLoading()) return;
     const current = this.prState.githubPrs();
     if (!current.some((pr) => pr.status === 'OPEN')) return;
 

@@ -1,5 +1,6 @@
 import { ApplicationConfig, isDevMode, provideBrowserGlobalErrorListeners, provideZonelessChangeDetection } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { RouteReuseStrategy, provideRouter } from '@angular/router';
+import {TabRouteReuseStrategy} from './services/tab-route-reuse.strategy';
 
 import { routes } from './app.routes';
 import {HTTP_INTERCEPTORS, provideHttpClient, withInterceptorsFromDi} from '@angular/common/http';
@@ -18,6 +19,8 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
     provideRouter(routes),
+    // Abas internas (0065): guarda/reanexa a tela de cada aba.
+    { provide: RouteReuseStrategy, useClass: TabRouteReuseStrategy },
     provideHttpClient(withInterceptorsFromDi()),
     provideAnimationsAsync(),
     providePrimeNG({

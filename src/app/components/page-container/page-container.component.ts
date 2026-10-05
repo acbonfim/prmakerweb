@@ -1,10 +1,12 @@
-import {Component, DestroyRef, HostListener, inject, signal} from '@angular/core';
+import {afterNextRender, Component, DestroyRef, ElementRef, HostListener, inject, signal, viewChild} from '@angular/core';
 import {SideMenuComponent} from '../side-menu/side-menu.component';
 import {NavigationEnd, Router, RouterModule, RouterOutlet} from '@angular/router';
 import {TopMenuComponent} from '../top-menu/top-menu.component';
 import {CommonModule} from '@angular/common';
 import {filter} from 'rxjs';
 import {BackNavigationService} from '../../services/back-navigation.service';
+import {TabsService} from '../../services/tabs.service';
+import {TabBarComponent} from '../tab-bar/tab-bar.component';
 
 /** Até aqui o menu é uma gaveta por cima do conteúdo (0043); acima, a coluna lateral de sempre. */
 const COMPACT_QUERY = '(max-width: 768px)';
@@ -19,11 +21,14 @@ const COMPACT_QUERY = '(max-width: 768px)';
     RouterOutlet,
     TopMenuComponent,
     CommonModule,
+    TabBarComponent,
   ]
 })
 export class PageContainerComponent {
   private readonly back = inject(BackNavigationService);
+  private readonly tabs = inject(TabsService);
   private readonly media = window.matchMedia(COMPACT_QUERY);
+  private readonly contentArea = viewChild<ElementRef<HTMLElement>>('contentArea');
 
   /** Desktop: menu recolhido (trilho de ícones) ou expandido. */
   isSidebarCollapsed = true;
@@ -32,6 +37,10 @@ export class PageContainerComponent {
   private releaseDrawer?: () => void;
 
   constructor() {
+    // Abas internas (0065): restaura/sincroniza as abas do usuário a cada navegação da área logada.
+    this.tabs.start(inject(DestroyRef));
+    afterNextRender(() => this.tabs.registerScrollHost(this.contentArea()?.nativeElement));
+
     const onMedia = (e: MediaQueryListEvent) => {
       this.compact.set(e.matches);
       if (!e.matches) this.closeDrawer();

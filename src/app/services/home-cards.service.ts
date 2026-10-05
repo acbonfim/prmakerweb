@@ -101,6 +101,14 @@ export class HomeCardsService {
     return this.http.get<HomeCard[]>(`${this.baseUrl}Home/cards?scope=${scope}&take=${take}`);
   }
 
+  /** Resumo de cards específicos (abas internas, 0065) — qualquer card, na ordem pedida (máx. 10). */
+  getByNumbers(cards: string[]): Observable<HomeCard[]> {
+    if (!cards.length) return of([]);
+    return this.http
+      .get<HomeCard[]>(`${this.baseUrl}Home/cards/by-numbers?cards=${encodeURIComponent(cards.join(','))}`)
+      .pipe(catchError(() => of([])));
+  }
+
   /** Título/estado no DevOps de vários cards numa chamada; é enfeite — falha vira lista vazia. */
   getDevOpsSummary(cards: string[]): Observable<DevOpsCardSummary[]> {
     if (!cards.length) return of([]);
