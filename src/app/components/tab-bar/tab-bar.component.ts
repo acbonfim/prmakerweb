@@ -51,6 +51,7 @@ export class TabBarComponent implements OnInit, OnDestroy {
 
   /** "#75294" fica fixo; o resto (título) é o que trunca. */
   titleOf(tab: Tab): string {
+    if (tab.label) return tab.label;   // a tela deu nome à aba (ex.: módulo da engenharia reversa)
     if (!tab.card) return tab.title;
     return this.infoOf(tab)?.devops?.title?.trim() || tab.title;
   }
@@ -75,7 +76,8 @@ export class TabBarComponent implements OnInit, OnDestroy {
 
   tooltip(tab: Tab): string {
     const lines: string[] = [];
-    lines.push(tab.card ? `#${tab.card} · ${this.titleOf(tab)}` : tab.title);
+    lines.push(tab.card ? `#${tab.card} · ${this.titleOf(tab)}` : tab.label ? `${tab.title} · ${tab.label}` : tab.title);
+    if (tab.status) lines.push(`Situação: ${tab.status.text}`);
     const info = this.infoOf(tab);
     if (info?.devops?.state) lines.push(`DevOps: ${info.devops.state}`);
     const plan = info?.card?.plan;
