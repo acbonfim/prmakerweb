@@ -94,6 +94,23 @@ export function reverseDocOfItem(id: string): string {
   return 'funcional';
 }
 
+/** 0059: mapa de infra (AWS) do módulo lido pela skill (re.sh infra) — só o ligado ao módulo + resumo da conta. */
+export interface ReverseInfraResource {
+  service: string; label: string; name: string; arn: string; region: string; why: string; details: Record<string, any>;
+  stages?: { name: string; actions: { name: string; provider: string; config: Record<string, string> }[] }[]; buildspec?: string;
+}
+export interface ReverseInfraAccount {
+  account: string; profile: string; regions: string[]; module: string; terms: string[];
+  summary: { total: number; byService: { service: string; label: string; count: number }[] };
+  resources: ReverseInfraResource[];
+  logs: { resource: string; group: string; exists: boolean; retention: any; command: string }[];
+  denied: { call: string; message: string }[]; failed: { call: string; message: string }[];
+}
+export interface ReverseInfra {
+  moduleKey: string; account: string; collectedAt: string; collectedBy: string;
+  data?: { collectedAt?: string; accounts: ReverseInfraAccount[]; repoPipelines: { repo: string; file: string; detail: string; facts: string[] }[] } | null;
+}
+
 export interface ReverseTrap {
   id: string; moduleKey: string; title: string; text: string; items: string[]; cards: string[]; origin: string; needsReview: boolean;
   reviewedBy?: string | null; createdAt: string; createdBy: string;
@@ -169,6 +186,7 @@ export class ReverseEngineeringService {
     return this.http.post<ReverseModule>(`${this.api}/modules/${encodeURIComponent(key)}/terms`, { term, action });
   }
   /** 0054: armadilhas, sugestão → armadilha, divergências com o KC. */
+  infra(module: string): Observable<ReverseInfra | null> { return this.http.get<ReverseInfra | null>(`${this.api}/modules/${encodeURIComponent(module)}/infra`); }
   traps(module: string): Observable<ReverseTrap[]> { return this.http.get<ReverseTrap[]>(`${this.api}/traps`, { params: new HttpParams().set('module', module) }); }
   updateTrap(id: string, body: { title?: string; text?: string; items?: string[]; confirm?: boolean }): Observable<ReverseTrap> {
     return this.http.put<ReverseTrap>(`${this.api}/traps/${id}`, body);
