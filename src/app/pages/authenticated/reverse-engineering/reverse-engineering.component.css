@@ -100,6 +100,9 @@ a { color: var(--mat-sys-primary); cursor: pointer; text-decoration: none; }
 .toc { position: sticky; top: 12px; max-height: calc(100vh - 160px); overflow-y: auto; font-size: 12.5px; }
 .toc input { width: 100%; box-sizing: border-box; padding: 5px 8px; border-radius: 6px; background: rgba(0,0,0,.3); color: inherit; border: 1px solid rgba(255,255,255,.15); font: inherit; font-size: 12.5px; margin-bottom: 6px; }
 .toc__group { margin: 8px 0 2px; font-weight: 600; font-size: 12px; }
+.toc__group--btn { display: flex; align-items: center; gap: 2px; width: 100%; border: none; background: transparent; color: inherit; cursor: pointer;
+  padding: 0; text-align: left; font-family: inherit; }
+.toc__group--btn mat-icon { font-size: 16px; width: 16px; height: 16px; }
 .toc__item { display: block; width: 100%; padding: 2px 4px; border: none; background: transparent; color: inherit; font: inherit; font-size: 12px; text-align: left; cursor: pointer; border-radius: 4px; }
 .toc__item:hover { background: rgba(255,255,255,.05); }
 .toc__item--removed { opacity: .45; text-decoration: line-through; }
@@ -111,8 +114,15 @@ a { color: var(--mat-sys-primary); cursor: pointer; text-decoration: none; }
 .md ::ng-deep h3 { font-size: 15.5px; margin: 18px 0 6px; }
 .md ::ng-deep .flash { background: color-mix(in srgb, var(--mat-sys-primary) 22%, transparent); outline: 2px solid color-mix(in srgb, var(--mat-sys-primary) 40%, transparent);
   border-radius: 4px; transition: background .6s; }
-.md ::ng-deep table { border-collapse: collapse; margin: 10px 0; display: block; overflow-x: auto; }
-.md ::ng-deep th, .md ::ng-deep td { border: 1px solid rgba(255,255,255,.12); padding: 5px 9px; text-align: left; }
+.md ::ng-deep table { border-collapse: collapse; margin: 10px 0; display: block; overflow-x: auto; max-width: 100%; }
+/* 0056: dentro de tabelas, só quebra entre palavras (nunca "anywhere" — isso encolhia cada coluna a 1 caractere,
+   porque "anywhere" conta como se pudesse quebrar em qualquer ponto ao calcular a largura mínima da coluna).
+   Código/identificador inline (caminho, hdnAction=…) nunca quebra (white-space: nowrap) — sem isso, um token sem
+   espaços ainda forçava uma quebra no meio da palavra; agora, se não couber, é a TABELA que rola na horizontal. */
+.md ::ng-deep th, .md ::ng-deep td { border: 1px solid rgba(255,255,255,.12); padding: 5px 9px; text-align: left;
+  overflow-wrap: normal; word-break: normal; min-width: 9ch; vertical-align: top; }
+.md ::ng-deep th { white-space: nowrap; }
+.md ::ng-deep td code, .md ::ng-deep th code { white-space: nowrap; }
 .md ::ng-deep pre { padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,.35); overflow-x: auto; }
 .md ::ng-deep code { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 12.5px; }
 .md ::ng-deep :not(pre) > code { padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.07); }

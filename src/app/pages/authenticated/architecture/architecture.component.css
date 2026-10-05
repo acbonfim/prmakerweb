@@ -32,6 +32,9 @@
 .kb__node:hover { background: rgba(255,255,255,.05); }
 .kb__node--on { background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent); color: var(--mat-sys-primary); }
 .kb__node--root mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; }
+.kb__node--hist { display: flex; align-items: center; gap: 4px; font-size: 11.5px; opacity: .7; }
+.kb__node--hist mat-icon { font-size: 15px; width: 15px; height: 15px; }
+.kb__node--old { padding-left: 46px !important; font-size: 12px; opacity: .6; font-style: italic; }
 .kb__node--leaf { padding-left: 32px; font-size: 12.5px; color: color-mix(in srgb, var(--mat-sys-on-surface) 80%, transparent); }
 .kb__chevron { font-size: 18px; width: 18px; height: 18px; flex: none; opacity: .7; }
 .kb__node-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -68,8 +71,13 @@
 .kb__md { font-size: 14px; line-height: 1.65; max-width: 980px; overflow-wrap: anywhere; }
 .kb__md ::ng-deep h1, .kb__md ::ng-deep h2 { font-size: 18px; margin: 22px 0 8px; }
 .kb__md ::ng-deep h3 { font-size: 15.5px; margin: 18px 0 6px; }
-.kb__md ::ng-deep table { border-collapse: collapse; margin: 10px 0; display: block; overflow-x: auto; }
-.kb__md ::ng-deep th, .kb__md ::ng-deep td { border: 1px solid rgba(255,255,255,.12); padding: 5px 9px; text-align: left; }
+.kb__md ::ng-deep table { border-collapse: collapse; margin: 10px 0; display: block; overflow-x: auto; max-width: 100%; }
+/* 0056: idem reverse-engineering.component.css — só quebra entre palavras; código/identificador nunca quebra
+   (senão força quebra no meio da palavra) — se não couber, a tabela rola na horizontal. */
+.kb__md ::ng-deep th, .kb__md ::ng-deep td { border: 1px solid rgba(255,255,255,.12); padding: 5px 9px; text-align: left;
+  overflow-wrap: normal; word-break: normal; min-width: 9ch; vertical-align: top; }
+.kb__md ::ng-deep th { white-space: nowrap; }
+.kb__md ::ng-deep td code, .kb__md ::ng-deep th code { white-space: nowrap; }
 .kb__md ::ng-deep th { background: rgba(255,255,255,.05); }
 .kb__md ::ng-deep pre { padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,.35); overflow-x: auto; }
 .kb__md ::ng-deep code { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 12.5px; }
@@ -297,3 +305,13 @@
   background: rgba(210,153,34,.10); border: 1px solid rgba(210,153,34,.35); }
 .kb__superseded mat-icon { color: #d29922; font-size: 18px; width: 18px; height: 18px; flex: none; }
 .kb__superseded a { color: var(--mat-sys-primary); cursor: pointer; }
+
+/* 0056: armadilhas da engenharia reversa no Técnico */
+.kb__tab--traps { color: #f85149; }
+.kb__traps { display: flex; flex-direction: column; gap: 10px; max-width: 980px; }
+.kb__trap { padding: 8px 12px; border-radius: 8px; background: rgba(248,81,73,.05); border: 1px solid rgba(248,81,73,.2); }
+.kb__trap--review { border-left: 3px solid #d29922; }
+.kb__trap-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.kb__chip { font-size: 11px; padding: 1px 7px; border-radius: 8px; background: rgba(255,255,255,.07); }
+.kb__chip--warn { color: #d29922; background: rgba(210,153,34,.14); }
+.kb__chip--link { cursor: pointer; color: var(--mat-sys-primary); font-family: 'JetBrains Mono', monospace; }

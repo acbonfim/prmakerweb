@@ -2,6 +2,7 @@ import { Component, computed, inject, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { ReCopyCommandComponent } from './re-copy-command.component';
 import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineering.service';
 
 /**
@@ -11,7 +12,7 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
 @Component({
   selector: 'app-re-how-to',
   standalone: true,
-  imports: [MatIconModule, MatTooltipModule],
+  imports: [MatIconModule, MatTooltipModule, ReCopyCommandComponent],
   template: `
     <section class="how">
       <h3><mat-icon>terminal</mat-icon>Como gerar a engenharia reversa de {{ module().displayName || module().name }}</h3>
@@ -57,10 +58,20 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
           </div>
           <div class="muted"><b>Visão prática</b> (para quem usa o sistema: como chegar, como fazer, perguntas práticas) — só depois que os demais exigidos forem
             aprovados e publicados; é escrita só do que foi publicado.</div>
-          <div class="muted">Já publicado? <code>/engenharia-reversa {{ module().key }} melhorar &lt;doc&gt;</code> (vê o que mudou no código e no banco desde a versão
-            publicada, aplica as sugestões das análises e a nota do revisor) ou <code>/engenharia-reversa {{ module().key }} refazer &lt;doc&gt;</code> (do zero,
-            mantendo os IDs). <code>&lt;doc&gt;</code> = {{ docKeys }}. Ordem recomendada no "tudo": arquitetura → UI/UX → funcional → visão → spec. arquitetura →
-            spec. design.</div>
+          <div class="muted"><b>Já publicado?</b> "melhorar" vê o que mudou no código e no banco desde a versão publicada e aplica as sugestões das
+            análises e a nota do revisor. Ordem recomendada no "tudo": arquitetura → UI/UX → funcional → visão → spec. arquitetura → spec. design.</div>
+          <!-- 0056: todo comando com o botão de copiar -->
+          <div class="how__cmds">
+            @for (d of docs; track d.key) {
+              <app-copy-command [command]="'/engenharia-reversa ' + module().key + ' melhorar ' + d.key" [label]="'Melhorar ' + d.short" icon="auto_fix_high" [block]="true" />
+            }
+          </div>
+          <details class="how__redo">
+            <summary class="muted">Refazer do zero (mantém os IDs)</summary>
+            @for (d of docs; track d.key) {
+              <app-copy-command [command]="'/engenharia-reversa ' + module().key + ' refazer ' + d.key" [label]="d.short" icon="restart_alt" [block]="true" />
+            }
+          </details>
         </li>
         <li>
           <b>Banco de dados</b>: o Claude lê <b>direto do banco {{ dbLabel() }}</b> (somente leitura) as views, procedures, functions, triggers, check
@@ -95,6 +106,8 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
     .cmd button mat-icon, .cmd__icon { font-size: 17px; width: 17px; height: 17px; }
     .cmd__label { width: 120px; flex: none; font-size: 12px; opacity: .8; }
     .cmd--all { border: 1px dashed rgba(255,255,255,.18); }
+    .how__redo { margin: 4px 0; }
+    .how__redo summary { cursor: pointer; }
     .muted { font-size: 12px; opacity: .7; margin-top: 4px; }
     .warn { font-size: 12.5px; color: #d29922; margin-top: 4px; }
     code { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; }

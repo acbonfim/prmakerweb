@@ -20,12 +20,14 @@ import { KbQuestionsComponent } from './kb-questions.component';
 import {
   KbViewMode, TocItem, areaGroups, cleanInline, articleMarkdown, friendlyKind, friendlyName, friendlyTagline, guideSections, headingsOf, projectArea, techSections
 } from './kb-friendly';
+import { ReverseEngineeringService, ReverseTrap, reverseDocOfItem } from '../../../services/reverse-engineering.service';
 import {
   ARCHITECTURE_KINDS,
   ArchitectureAskResponse,
   ArchitectureProject,
   ArchitectureSearchHit,
   ArchitectureSection,
+  ArchitectureSectionSummary,
   ArchitectureService,
   ArchitectureSuggestion,
   KnowledgeArticle,
@@ -86,6 +88,11 @@ export class ArchitectureComponent implements OnInit {
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private storage = inject(StorageService);
+  private reverse = inject(ReverseEngineeringService);
+  /** 0056: armadilhas da engenharia reversa do projeto (aba "Armadilhas" no Técnico, só leitura). */
+  readonly traps = signal<ReverseTrap[]>([]);
+  readonly showTraps = signal(false);
+  private trapsKey: string | null = null;
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
@@ -214,6 +221,15 @@ export class ArchitectureComponent implements OnInit {
   });
 
   constructor() {
+    // 0056: armadilhas do projeto aberto (as novas, ligadas aos itens) — carregadas uma vez por projeto.
+    effect(() => {
+      const key = this.currentProject()?.key ?? null;
+      if (key === this.trapsKey) return;
+      this.trapsKey = key;
+      this.traps.set([]);
+      this.showTraps.set(false);
+      if (key) this.reverse.traps(key).subscribe({ next: t => { if (this.trapsKey === key) this.traps.set(t); }, error: () => {} });
+    });
     // Diagramas: depois que o conteúdo da seção/artigo aparece na tela.
     effect(() => {
       this.section();
@@ -246,7 +262,10 @@ export class ArchitectureComponent implements OnInit {
   reverseCount(p: ArchitectureProject) { return p.sections.filter(s => s.key.startsWith('re-')).length; }
   /** Documentos da engenharia reversa (7 com a visão prática — 0054). */
   readonly reverseTotal = REVERSE_DOCS.length;
-  openReverse(key: string) { this.router.navigate(['/auth/reverse-engineering'], { queryParams: { m: key } }); }
+  openReverse(key: string, item?: string) {
+    this.router.navigate(['/auth/reverse-engineering'], { queryParams: { m: key, d: item ? reverseDocOfItem(item) : null, i: item ?? null } });
+  }
+  trapDate(at: string) { return new Date(at).toLocaleDateString('pt-BR'); }
 
   ngOnInit(): void {
     this.load();
@@ -519,6 +538,13 @@ export class ArchitectureComponent implements OnInit {
   selectArticle(a: KnowledgeArticle): void {
     this.router.navigate([], { queryParams: { art: a.articleNumber } });
     this.treeOpen.set(false);
+  }
+
+  /** 0056: árvore do Simples — o Guia que vale e, à parte, o antigo já substituído pela engenharia reversa (histórico). */
+  guideOf(p: ArchitectureProject): ArchitectureSectionSummary[] { return guideSections(p); }
+  oldGuideOf(p: ArchitectureProject): ArchitectureSectionSummary[] {
+    const superseded = p.supersededSections ?? {};
+    return p.sections.filter(s => (s.audience === 'human' || s.key.startsWith('guia-')) && !!superseded[s.key]);
   }
 
   toggle(key: string): void {

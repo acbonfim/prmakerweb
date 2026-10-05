@@ -85,11 +85,26 @@
                 <span class="kb__node-text">{{ friendly(p) }}</span>
               </button>
               @if (isOpen(p.key)) {
-                @for (s of p.sections; track s.key) {
-                  @if (s.audience === 'human' || s.key.startsWith('guia-')) {
-                    <button type="button" class="kb__node kb__node--leaf"
-                            [class.kb__node--on]="currentProject()?.key === p.key && section()?.key === s.key"
-                            (click)="selectProject(p, s.key)">{{ s.title }}</button>
+                <!-- 0056: o que vale (a visão prática primeiro); as seções antigas substituídas num "Histórico" recolhido -->
+                @for (s of guideOf(p); track s.key) {
+                  <button type="button" class="kb__node kb__node--leaf"
+                          [class.kb__node--on]="currentProject()?.key === p.key && section()?.key === s.key"
+                          (click)="selectProject(p, s.key)">{{ s.title }}</button>
+                }
+                @if (oldGuideOf(p); as old) {
+                  @if (old.length) {
+                    <button type="button" class="kb__node kb__node--leaf kb__node--hist" (click)="toggle('hist:' + p.key)"
+                            [attr.aria-expanded]="expanded().has('hist:' + p.key)"
+                            matTooltip="Seções antigas já substituídas pela engenharia reversa — ficam só como histórico" matTooltipPosition="right">
+                      <mat-icon>{{ expanded().has('hist:' + p.key) ? 'expand_more' : 'history' }}</mat-icon>Histórico ({{ old.length }})
+                    </button>
+                    @if (expanded().has('hist:' + p.key)) {
+                      @for (s of old; track s.key) {
+                        <button type="button" class="kb__node kb__node--leaf kb__node--old"
+                                [class.kb__node--on]="currentProject()?.key === p.key && section()?.key === s.key"
+                                (click)="selectProject(p, s.key)">{{ s.title }}</button>
+                      }
+                    }
                   }
                 }
               }
@@ -509,14 +524,36 @@
         } @else if (p.sections.length) {
           <nav class="kb__tabs" aria-label="Seções">
             @for (s of p.sections; track s.key) {
-              <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" [class.kb__tab--old]="!!p.supersededSections?.[s.key]" (click)="selectProject(p, s.key)"
+              <button type="button" class="kb__tab" [class.kb__tab--on]="!showTraps() && section()?.key === s.key" [class.kb__tab--old]="!!p.supersededSections?.[s.key]" (click)="showTraps.set(false); selectProject(p, s.key)"
                       [matTooltip]="(p.supersededSections?.[s.key] ? 'Histórico — ' + p.supersededSections?.[s.key] + '. ' : '') + 'versão ' + s.version + ' · ' + tokens(s.length) + (s.audience === 'human' ? ' · Guia (não vai para as skills)' : '')">
                 @if (s.audience === 'human') { <mat-icon class="kb__tab-icon">menu_book</mat-icon> }{{ s.title }}</button>
+            }
+            @if (traps().length) {
+              <!-- 0056: as armadilhas novas, ligadas aos itens da engenharia reversa (o que já deu errado) -->
+              <button type="button" class="kb__tab kb__tab--traps" [class.kb__tab--on]="showTraps()" (click)="showTraps.set(true)"
+                      matTooltip="O que já deu errado neste módulo, ligado aos itens da engenharia reversa (as análises recebem junto com o item)">
+                <mat-icon class="kb__tab-icon">report</mat-icon>Armadilhas ({{ traps().length }})</button>
             }
           </nav>
         }
 
-        @if (section(); as s) {
+        @if (!simple() && showTraps() && traps().length) {
+          <div class="kb__traps">
+            <p class="kb__muted">Geradas das armadilhas da engenharia reversa. Conferir, remover ou registrar novas:
+              <a (click)="openReverse(p.key)">Engenharia reversa</a>.</p>
+            @for (t of traps(); track t.id) {
+              <div class="kb__trap" [class.kb__trap--review]="t.needsReview">
+                <div class="kb__trap-head"><b>{{ t.title }}</b>
+                  @if (t.needsReview) { <span class="kb__chip kb__chip--warn">a conferir</span> }
+                  @for (i of t.items; track i) { <a class="kb__chip kb__chip--link" (click)="openReverse(p.key, i)">{{ i }}</a> }
+                  @for (c of t.cards; track c) { <span class="kb__chip">card {{ c }}</span> }
+                </div>
+                <div class="kb__md" [innerHTML]="t.text | planMarkdown"></div>
+                <div class="kb__muted">{{ t.createdBy }} · {{ trapDate(t.createdAt) }}{{ t.reviewedBy ? ' · conferida por ' + t.reviewedBy : '' }}</div>
+              </div>
+            }
+          </div>
+        } @else if (section(); as s) {
           @if (p.supersededSections?.[s.key]; as why) {
             <div class="kb__superseded"><mat-icon>history</mat-icon>
               <span><b>Histórico.</b> Esta seção foi {{ why }} — as análises e a busca usam a engenharia reversa.

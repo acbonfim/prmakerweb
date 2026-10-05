@@ -31,6 +31,8 @@ export interface ReverseCoverage {
   total?: number; covered?: number; ratio?: number | null; missingCount?: number;
   byCategory?: Record<string, { total: number; covered: number }>;
   missing?: { cat: string; name: string; file: string; line: number; detail?: string }[];
+  /** 0056: termos que contam como cobertos por estarem numa lacuna "fora do glossário" (GAP-…). */
+  outsideGlossary?: { name: string; gap: string }[];
 }
 
 export interface ReverseItemDiff { id: string; title: string; change: 'added' | 'removed' | 'changed' | string; before?: string | null; after?: string | null; }
@@ -80,6 +82,18 @@ export interface ReverseModule extends ReverseModuleSummary {
 }
 
 /** 0054: armadilha — o que já deu errado, ligada aos itens. */
+/** 0056: documento da engenharia reversa onde fica um item, pelo prefixo do ID (links de fora da tela: ?m=&d=&i=). */
+export function reverseDocOfItem(id: string): string {
+  const kind = (/^([A-Z]{2,4})-\d+/.exec((id || '').toUpperCase().split('#').pop() ?? '') ?? [])[1] ?? '';
+  if (['INT', 'API', 'DB', 'TEC', 'CMP', 'EVT', 'JOB', 'SQL', 'TRG'].includes(kind)) return 'arquitetura';
+  if (['TELA', 'FLX'].includes(kind)) return 'uiux';
+  if (kind === 'UI') return 'design';
+  if (['TUT', 'FAQ'].includes(kind)) return 'pratica';
+  if (['OBJ', 'PER'].includes(kind)) return 'visao';
+  if (['ADR', 'NFR', 'SEQ'].includes(kind)) return 'spec-arquitetura';
+  return 'funcional';
+}
+
 export interface ReverseTrap {
   id: string; moduleKey: string; title: string; text: string; items: string[]; cards: string[]; origin: string; needsReview: boolean;
   reviewedBy?: string | null; createdAt: string; createdBy: string;
