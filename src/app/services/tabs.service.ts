@@ -1,7 +1,7 @@
 import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { ActivatedRouteSnapshot, DetachedRouteHandle, NavigationEnd, Route, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { filter } from 'rxjs';
+import { Subject, filter } from 'rxjs';
 import { StorageService } from './storage.service';
 
 /** Máximo de abas abertas (0065). */
@@ -66,6 +66,11 @@ export class TabsService {
   readonly active = computed(() => this.tabs().find((t) => t.id === this.activeId()) ?? null);
   readonly canAdd = computed(() => this.tabs().length < MAX_TABS);
   readonly max = MAX_TABS;
+
+  /** A aba vai sair de cena (a tela dela será guardada): quem usa estado compartilhado deve tirar uma foto. */
+  readonly leaving$ = new Subject<string>();
+  /** A tela guardada da aba foi reanexada: devolver o estado compartilhado e retomar o trabalho. */
+  readonly entered$ = new Subject<string>();
 
   /** Troca de aba em andamento; a estratégia de rotas só guarda/reanexa telas enquanto isto existe. */
   switching: { from: string; to: string } | null = null;
@@ -152,6 +157,7 @@ export class TabsService {
       this.patch(from, { inactiveSince: now });
     }
     const hadScreen = this.stash.has(id);
+    if (from && from !== id) this.leaving$.next(from);
     this.patch(id, { inactiveSince: null, frozen: false });
     this.activeId.set(id);
     this.switching = { from, to: id };
@@ -172,6 +178,7 @@ export class TabsService {
       await this.router.navigateByUrl(HOME_URL, { replaceUrl: true });
       return;
     }
+    if (hadScreen) this.entered$.next(id);
     if (hadScreen && this.scrollHost) {
       const top = this.scrolls.get(id) ?? 0;
       requestAnimationFrame(() => { if (this.scrollHost) this.scrollHost.scrollTop = top; });

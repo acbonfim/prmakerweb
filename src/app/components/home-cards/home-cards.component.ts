@@ -1,3 +1,4 @@
+import {TabsService} from '../../services/tabs.service';
 import { ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, OnInit, Output, inject, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { Router } from '@angular/router';
@@ -60,6 +61,7 @@ const PLAN_STATUS: Record<string, { label: string; tone: string }> = {
 })
 export class HomeCardsComponent implements OnInit, OnDestroy {
   private router = inject(Router);
+  private tabs = inject(TabsService);
   private storage = inject(StorageService);
   private auth = inject(AuthService);
   private api = inject(HomeCardsService);
@@ -189,13 +191,20 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
   /** Abre o card na tela de PR; com `focus`, já no painel (plano, Timeline ou PRs). */
   open(card: HomeCard, focus?: PanelFocus, event?: Event) {
     event?.stopPropagation();
-    this.router.navigate(['/auth/register'], {
-      queryParams: {
-        card: card.cardNumber,
-        repositoryId: card.repositoryId ?? undefined,
-        focus: focus ?? undefined,
-      },
-    });
+    const queryParams = {
+      card: card.cardNumber,
+      repositoryId: card.repositoryId ?? undefined,
+      focus: focus ?? undefined,
+    };
+    // Ctrl/Cmd+clique ou botão do meio: o card abre numa aba nova (0065); o clique normal usa a aba atual.
+    if (event instanceof MouseEvent && (event.ctrlKey || event.metaKey || event.button === 1)) {
+      event.preventDefault();
+      this.tabs.open(this.router.serializeUrl(this.router.createUrlTree(['/auth/register'], { queryParams })));
+      return;
+    }
+    // Botão do meio sem o resto do clique (auxclick de outros botões): ignora.
+    if (event instanceof MouseEvent && event.type === 'auxclick') return;
+    this.router.navigate(['/auth/register'], { queryParams });
   }
 
   stop(event: Event) {

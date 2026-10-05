@@ -24,7 +24,7 @@
       @for (c of cards(); track c.cardNumber) {
         @let d = devopsOf(c);
         <article class="hc" role="button" tabindex="0" [attr.aria-label]="'Abrir card ' + c.cardNumber"
-                 (click)="open(c)" (keydown.enter)="open(c)">
+                 (click)="open(c, undefined, $event)" (auxclick)="open(c, undefined, $event)" (keydown.enter)="open(c)">
 
           <!-- Cabeçalho: envolvidos, número, estado no DevOps, pendência e título -->
           <header class="hc-head">
