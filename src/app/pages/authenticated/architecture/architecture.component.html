@@ -227,7 +227,7 @@
         <button mat-stroked-button (click)="load()">Tentar de novo</button>
       </div>
     } @else if (selection().type === 'map') {
-      <app-ecosystem-map [focus]="mapFocus()" [simple]="simple()" [names]="friendlyNames()" (openProject)="openProjectByKey($event)"></app-ecosystem-map>
+      <app-ecosystem-map [focus]="mapFocus()" [simple]="simple()" [names]="friendlyNames()" (openProject)="openProjectByKey($event)" (openItem)="openReverseRef($event)"></app-ecosystem-map>
     } @else if (selection().type === 'ask') {
       <section class="ask" aria-live="polite">
         <form class="ask__box ask__box--top" (submit)="$event.preventDefault(); askAi()">
@@ -410,6 +410,9 @@
           <a class="kb__re" (click)="openReverse(p.key)"><mat-icon>biotech</mat-icon>Documentação completa (engenharia reversa): {{ reverseCount(p) }}/{{ reverseTotal }} publicados<mat-icon>chevron_right</mat-icon></a>
         }
         <app-kb-connections [project]="p" [projects]="projects()" (openProject)="openProjectByKey($event)" (openMap)="openMap(p.key)"></app-kb-connections>
+        @if (isModule(p) && reverseCount(p)) {
+          <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)"></app-kb-by-question>
+        }
         } @else {
         <div class="kb__doc-kicker">
           <mat-icon>{{ kindIcon(p.kind) }}</mat-icon>{{ kindLabel(p.kind) }}
@@ -460,9 +463,13 @@
                           <span class="kb__link-name kb__link-name--ext">{{ g.name }}</span>
                         }
                         @for (it of g.items; track $index) {
-                          <div class="kb__link-item" [matTooltip]="it.evidence ? 'Evidência: ' + it.evidence : ''">
+                          <div class="kb__link-item" [matTooltip]="it.evidence && !reItem(it.evidence) ? 'Evidência: ' + it.evidence : ''">
                             <mat-icon [style.color]="rel(it.kind).color">{{ rel(it.kind).icon }}</mat-icon>
                             <span>{{ it.detail || rel(it.kind).label }}</span>
+                            @if (reItem(it.evidence); as id) {
+                              <a class="kb__chip kb__chip--link" matTooltip="Item da engenharia reversa — abrir"
+                                 (click)="openReverse(col.title === 'Depende de' ? p.key : g.key, id)">{{ id }}</a>
+                            }
                           </div>
                         }
                       </div>
@@ -474,6 +481,9 @@
               </div>
             }
           </section>
+        }
+        @if (isModule(p) && reverseCount(p)) {
+          <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)"></app-kb-by-question>
         }
         }
 
