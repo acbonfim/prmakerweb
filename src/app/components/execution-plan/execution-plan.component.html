@@ -605,7 +605,21 @@
             @if (l.statusChangedAt) { · {{ linkStatusLabel(l) | lowercase }} por {{ l.statusChangedBy }} em {{ formatDateTime(l.statusChangedAt) }} }
             @if (l.blocksStep) { · <span matTooltip="A etapa aguarda este chamado">bloqueia a etapa</span> }
           </span>
+          @if (l.kind === 'pr' && l.status === 'open' && l.checksFailed?.length) {
+            <span class="plan-link__checks">
+              @for (c of l.checksFailed; track c.name) {
+                <a class="plan-link__check" [class.plan-link__check--base]="c.preexisting" [href]="c.url" target="_blank"
+                   rel="noopener noreferrer"
+                   [matTooltip]="c.preexisting ? 'Já falha nos PRs recentes para a mesma branch — não é deste card' : 'Falhou neste PR'">
+                  {{ c.name }}@if (c.preexisting) { (já falhava na base) }
+                </a>
+              }
+            </span>
+          }
         </div>
+        @if (l.kind === 'pr' && l.status === 'open' && l.checksStatus; as ci) {
+          <span class="plan-link__status plan-link__ci plan-link__ci--{{ ci }}" [matTooltip]="ciTooltip(l)">{{ ciLabel(ci) }}</span>
+        }
         @if (linkStatusLabel(l); as st) {
           <span class="plan-link__status">{{ st }}</span>
         }

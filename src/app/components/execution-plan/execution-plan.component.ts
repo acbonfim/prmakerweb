@@ -1116,6 +1116,21 @@ export class ExecutionPlanComponent implements OnDestroy {
     return { ticket: 'confirmation_number', pr: 'merge', doc: 'description', other: 'link' }[link.kind] ?? 'link';
   }
 
+  /** 0069: CI do PR na etapa. */
+  ciLabel(state: 'pending' | 'success' | 'failure'): string {
+    return { pending: 'CI rodando', success: 'CI ok', failure: 'CI falhou' }[state];
+  }
+
+  ciTooltip(link: ExecutionLink): string {
+    const base = (link.checksFailed ?? []).filter(c => c.preexisting).length;
+    const text = {
+      pending: 'O CI do PR ainda está rodando',
+      success: 'O CI do PR passou',
+      failure: 'O CI do PR falhou — o Claude é chamado para corrigir'
+    }[link.checksStatus ?? 'pending'];
+    return base ? `${text} (${base} falha(s) que a base já tem, fora do card)` : text;
+  }
+
   linkStatusLabel(link: ExecutionLink): string {
     const labels: Record<string, string> = link.kind === 'pr'
       ? { open: 'Aberto', merged: 'Mesclado', closed: 'Fechado' }
