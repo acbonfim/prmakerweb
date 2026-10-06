@@ -109,7 +109,10 @@ export function externalName(key: string): string {
     'ext:microsoft-graph': 'Microsoft Graph / Teams', 'ext:azure-ad': 'Azure AD / Entra ID', 'ext:openai': 'OpenAI', 'ext:anthropic': 'Anthropic',
     'ext:gemini': 'Google Gemini', 'ext:hubspot': 'HubSpot', 'ext:azure-devops': 'Azure DevOps', 'ext:powerbi': 'Power BI',
     'ext:snowflake': 'Snowflake', 'ext:databricks': 'Databricks', 'ext:cognito': 'AWS Cognito', 'ext:s3': 'AWS S3', 'ext:sqs': 'AWS SQS',
-    'ext:opensearch': 'OpenSearch', 'ext:onlyoffice': 'OnlyOffice'
+    'ext:opensearch': 'OpenSearch', 'ext:onlyoffice': 'OnlyOffice', 'ext:redis': 'Redis (ElastiCache)', 'ext:sns': 'AWS SNS',
+    'ext:eventbridge': 'AWS EventBridge', 'ext:lambda': 'AWS Lambda', 'ext:ses': 'AWS SES (e-mail)', 'ext:cloudwatch': 'AWS CloudWatch',
+    'ext:secrets-manager': 'AWS Secrets Manager', 'ext:sql-agent': 'SQL Server Agent (jobs)', 'ext:smtp': 'Servidor de e-mail (SMTP)',
+    'ext:google-maps': 'Google Maps', 'ext:signalr': 'SignalR'
   };
   return names[key] ?? key.slice(4);
 }
@@ -144,10 +147,14 @@ const SENTENCES: Record<string, { out: [string, string]; in: [string, string, st
   package: { out: ['Usa peças de código de ', ''], in: [' usa peças de código deste sistema', ' usam peças de código deste sistema', ''], tag: 'pacote' },
   external: { out: ['Usa o serviço externo ', ''], in: [' usa este sistema como serviço externo', ' usam este sistema como serviço externo', ''], tag: 'serviço externo' },
   frontend: { out: ['É a tela de ', ''], in: [' é a tela deste sistema', ' são as telas deste sistema', ''], tag: 'front-end' },
+  cache: { out: ['Guarda dados em cache em ', ' (pode mostrar dado antigo até o cache vencer)'], in: [' guarda dados deste sistema em cache', ' guardam dados deste sistema em cache', ''], tag: 'cache' },
+  storage: { out: ['Troca arquivos com ', ''], in: [' troca arquivos com este sistema', ' trocam arquivos com este sistema', ''], tag: 'arquivo / S3' },
+  job: { out: ['Tem rotinas automáticas ligadas a ', ''], in: [' roda rotinas automáticas sobre este sistema', ' rodam rotinas automáticas sobre este sistema', ''], tag: 'job / rotina' },
+  trigger: { out: ['Dispara gatilhos do banco em ', ''], in: [' dispara gatilhos do banco sobre este sistema', ' disparam gatilhos do banco sobre este sistema', ''], tag: 'trigger' },
   other: { out: ['Tem outra ligação com ', ''], in: [' tem outra ligação com este sistema', ' têm outra ligação com este sistema', ''], tag: '' }
 };
 
-const KIND_ORDER = ['frontend', 'http', 'event', 'queue', 'database', 'external', 'package', 'other'];
+const KIND_ORDER = ['frontend', 'http', 'event', 'queue', 'job', 'trigger', 'cache', 'storage', 'database', 'external', 'package', 'other'];
 
 export function buildConnections(project: ArchitectureProject | null, projects: ArchitectureProject[]): { out: ConnectionSentence[]; in: ConnectionSentence[]; count: number } {
   if (!project) return { out: [], in: [], count: 0 };
@@ -193,6 +200,10 @@ export const FRIENDLY_EDGE: Record<string, { label: string; panel: string }> = {
   package: { label: 'usa código', panel: 'Usa peças de código (pacote)' },
   external: { label: 'usa', panel: 'Usa o serviço externo' },
   frontend: { label: 'tela de', panel: 'É a tela de' },
+  cache: { label: 'cache', panel: 'Guarda dados em cache (Redis)' },
+  storage: { label: 'arquivos', panel: 'Troca arquivos (S3 / armazenamento)' },
+  job: { label: 'rotina', panel: 'Rotina automática (job / agendamento)' },
+  trigger: { label: 'gatilho', panel: 'Gatilho do banco (trigger)' },
   other: { label: 'ligado', panel: 'Outra ligação' }
 };
 
@@ -221,6 +232,8 @@ export const GLOSSARY: GlossaryEntry[] = [
   { term: 'Pacote', pattern: 'pacotes?', definition: 'Peça de código pronta, compartilhada entre vários sistemas.' },
   { term: 'Webhook', pattern: 'webhooks?', definition: 'Aviso automático que um sistema manda para outro, por um endereço da internet, quando algo acontece.' },
   { term: 'S3', pattern: 'S3', definition: 'Armazenamento de arquivos da AWS (anexos, imagens, documentos).' },
+  { term: 'Cache', pattern: 'cache|Redis', definition: 'Cópia rápida de dados guardada por um tempo. Enquanto o cache não vence, a tela pode mostrar o valor antigo mesmo depois de alguém mudar o dado.' },
+  { term: 'Trigger', pattern: 'triggers?|gatilhos?', definition: 'Regra escondida dentro do banco de dados: quando um registro é gravado ou alterado, o banco faz outra coisa sozinho (ex.: grava um histórico).' },
   { term: 'Serviço externo', pattern: 'servi(ç|c)os? externos?|terceiros', definition: 'Serviço de outra empresa (ex.: Microsoft, OpenAI) que o Solvace usa pela internet.' }
 ];
 

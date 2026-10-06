@@ -38,7 +38,14 @@ export interface ArchitectureIncomingRelation {
 }
 
 export interface ArchitectureGraphNode { key: string; name: string; kind: string; mapped: boolean; }
-export interface ArchitectureGraphEdge { source: string; target: string; kind: string; count: number; details: string[]; }
+/** 0066: item INT da engenharia reversa por trás de uma ligação do mapa. */
+export interface ArchitectureGraphEdgeItem { ref: string; title: string; mechanism?: string | null; contract?: string | null; toConfirm?: boolean; }
+export interface ArchitectureGraphEdge {
+  source: string; target: string; kind: string; count: number; details: string[];
+  /** 0066: base (extrator/curadoria) · engenharia (itens INT publicados) · ambos. */
+  origin?: 'base' | 'engenharia' | 'ambos';
+  items?: ArchitectureGraphEdgeItem[];
+}
 export interface ArchitectureGraph { nodes: ArchitectureGraphNode[]; edges: ArchitectureGraphEdge[]; }
 
 /** Tipos de relação: rótulo, ícone e cor (a mesma no mapa e nos painéis). */
@@ -50,6 +57,11 @@ export const RELATION_KINDS: { kind: string; label: string; icon: string; color:
   { kind: 'external', label: 'Serviço externo', icon: 'public', color: '#d29922' },
   { kind: 'package', label: 'Pacote', icon: 'inventory_2', color: '#8b949e' },
   { kind: 'frontend', label: 'Front-end', icon: 'web', color: '#39c5cf' },
+  // 0066: mecanismos que a engenharia reversa descreve
+  { kind: 'cache', label: 'Cache (Redis)', icon: 'memory', color: '#ff7b72' },
+  { kind: 'storage', label: 'Arquivo / S3', icon: 'folder_zip', color: '#e3b341' },
+  { kind: 'job', label: 'Job / agendamento', icon: 'schedule', color: '#d2a8ff' },
+  { kind: 'trigger', label: 'Trigger do banco', icon: 'bolt', color: '#db61a2' },
   { kind: 'other', label: 'Outro', icon: 'more_horiz', color: '#6e7681' },
 ];
 

@@ -146,10 +146,29 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
             </div>
           } @else {
           <div class="nb__edge">
-            <span class="nb__kind" [style.color]="rel(e.kind).color"><mat-icon>{{ rel(e.kind).icon }}</mat-icon>{{ rel(e.kind).label }}</span>
-            @for (d of e.details.slice(0, 3); track d) { <div class="nb__detail">{{ d }}</div> }
-            @if (e.details.length > 3) { <div class="nb__detail nb__detail--more">+{{ e.details.length - 3 }}</div> }
+            <span class="nb__kind" [style.color]="rel(e.kind).color"><mat-icon>{{ rel(e.kind).icon }}</mat-icon>{{ rel(e.kind).label }}
+              @if (e.origin === 'engenharia' || e.origin === 'ambos') {
+                <span class="nb__origin" matTooltip="Confirmada na engenharia reversa publicada (clique no item para ler)">engenharia reversa</span>
+              }
+            </span>
+            @if (e.origin !== 'engenharia') {
+              @for (d of e.details.slice(0, 3); track d) { <div class="nb__detail">{{ d }}</div> }
+              @if (e.details.length > 3) { <div class="nb__detail nb__detail--more">+{{ e.details.length - 3 }}</div> }
+            }
           </div>
+          }
+          <!-- 0066: os itens INT por trás da ligação — abrem o item na engenharia reversa -->
+          @if (e.items?.length) {
+            <div class="nb__items">
+              @for (it of e.items!.slice(0, 6); track it.ref) {
+                <button type="button" class="nb__item" (click)="openItem.emit(it.ref)" matTooltipClass="kb-gloss-tip"
+                        [matTooltip]="(it.mechanism ? 'Como: ' + it.mechanism : '') + (it.contract ? '\nContrato: ' + it.contract : '') + (it.toConfirm ? '\n(a confirmar)' : '')">
+                  <span class="nb__ref">{{ itemId(it.ref) }}</span><span class="nb__item-title">{{ it.title }}</span>
+                  @if (it.toConfirm) { <mat-icon class="nb__warn">help_outline</mat-icon> }
+                </button>
+              }
+              @if (e.items!.length > 6) { <div class="nb__detail nb__detail--more">+{{ e.items!.length - 6 }}</div> }
+            </div>
           }
         }
       </div>
@@ -173,6 +192,15 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
     .dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; flex: none; }
     .dot--node { width: 9px; height: 9px; border-radius: 50%; }
     .sep { width: 1px; height: 18px; background: rgba(255,255,255,.12); margin: 0 4px; }
+    .nb__origin { margin-left: 6px; font-size: 10.5px; padding: 0 6px; border-radius: 8px; background: rgba(63,185,80,.15); color: #3fb950; }
+    .nb__items { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 4px 22px; }
+    .nb__item { display: flex; align-items: center; gap: 6px; border: none; background: transparent; padding: 1px 0; color: inherit; font: inherit;
+      font-size: 12px; text-align: left; cursor: pointer; opacity: .9; }
+    .nb__item:hover .nb__item-title { text-decoration: underline; }
+    .nb__ref { flex: none; font-family: ui-monospace, monospace; font-size: 11px; padding: 0 5px; border-radius: 6px; background: rgba(255,255,255,.08);
+      color: var(--mat-sys-primary); }
+    .nb__item-title { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .nb__warn { font-size: 14px; width: 14px; height: 14px; opacity: .6; flex: none; }
     .chk { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; opacity: .8; }
     .map__body { display: grid; grid-template-columns: 1fr 320px; gap: 12px; }
     .map__canvas-wrap { position: relative; min-height: max(560px, calc(100vh - 360px)); border-radius: 10px; background: rgba(0,0,0,.18); border: 1px solid rgba(255,255,255,.06); }
@@ -225,6 +253,8 @@ export class EcosystemMapComponent implements OnDestroy {
   /** Nome amigável por chave de projeto (displayName / sem prefixo técnico). */
   readonly names = input<Record<string, string>>({});
   readonly openProject = output<string>();
+  /** 0066: abre um item da engenharia reversa (modulo#INT-001). */
+  readonly openItem = output<string>();
 
   readonly graph = signal<ArchitectureGraph | null>(null);
   readonly loading = signal(true);
@@ -344,6 +374,7 @@ export class EcosystemMapComponent implements OnDestroy {
   relayout(): void { this.runLayout(true); }
 
   rel(kind: string) { return relationKind(kind); }
+  itemId(ref: string): string { return ref.includes('#') ? ref.split('#')[1] : ref; }
   edgeText(kind: string): string { return friendlyEdge(kind).label; }
   edgePanel(kind: string): string { return friendlyEdge(kind).panel; }
   label(n: { key: string; name: string }): string { return this.names()[n.key] || shortName(n.name); }

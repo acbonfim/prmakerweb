@@ -12,6 +12,7 @@ import { StorageService } from '../../../services/storage.service';
 import { KbAdminMode, KbAdminPanelComponent } from './kb-admin-panel.component';
 import { EcosystemMapComponent } from './ecosystem-map.component';
 import { KbFriendlyOverviewComponent } from './kb-friendly-overview.component';
+import { KbByQuestionComponent } from './kb-by-question.component';
 import { KbConnectionsComponent } from './kb-connections.component';
 import { KbGuideReviewComponent } from './kb-guide-review.component';
 import { KbLearnCardComponent } from './kb-learn-card.component';
@@ -78,6 +79,7 @@ interface TreeGroup {
   selector: 'app-architecture',
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, KbAdminPanelComponent, EcosystemMapComponent,
+    KbByQuestionComponent,
     KbFriendlyOverviewComponent, KbConnectionsComponent, KbGuideReviewComponent, KbLearnCardComponent, KbAskDeepComponent, KbQuestionsComponent],
   templateUrl: './architecture.component.html',
   styleUrls: ['./architecture.component.css']
@@ -262,6 +264,12 @@ export class ArchitectureComponent implements OnInit {
   reverseCount(p: ArchitectureProject) { return p.sections.filter(s => s.key.startsWith('re-')).length; }
   /** Documentos da engenharia reversa (7 com a visão prática — 0054). */
   readonly reverseTotal = REVERSE_DOCS.length;
+  /** 0066: relação que veio de um item INT da engenharia reversa (evidência re#INT-001) → o ID do item. */
+  reItem(evidence?: string | null): string | null { return evidence?.startsWith('re#') ? evidence.slice(3) : null; }
+  openReverseRef(ref: string) {
+    const [module, id] = ref.split('#');
+    if (module && id) this.openReverse(module, id);
+  }
   openReverse(key: string, item?: string) {
     this.router.navigate(['/auth/reverse-engineering'], { queryParams: { m: key, d: item ? reverseDocOfItem(item) : null, i: item ?? null } });
   }
