@@ -158,6 +158,10 @@ export interface ExecutionQuestion {
   answeredBy?: string | null;
   answeredVia?: 'prmake' | 'claude' | null;
   answeredAt?: string | null;
+  /** Por que foi cancelada (ex.: "Substituída pela pergunta 5"). */
+  cancelReason?: string | null;
+  /** Pergunta que substituiu esta numa nova rodada da análise — respondida: a resposta não vale mais. */
+  replacedBy?: number | null;
   createdBy: string;
   createdAt: string;
 }
