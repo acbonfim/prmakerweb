@@ -749,7 +749,7 @@
 
 <!-- Pergunta da skill (0024): aberta = responder aqui (opções ou texto livre); respondida = resposta e por onde. -->
 <ng-template #questionTpl let-q>
-  <div class="plan-q" [class.plan-q--open]="q.status === 'open'">
+  <div class="plan-q" [class.plan-q--open]="q.status === 'open'" [class.plan-q--replaced]="!!q.replacedBy || q.status === 'cancelled'">
     <div class="plan-q__text plan-md" [innerHTML]="q.text | planMarkdown"></div>
     @if (pendingAnswer(q); as sent) {
       <!-- 0036: feedback imediato enquanto o servidor confirma -->
@@ -796,8 +796,17 @@
           <span class="plan-q__who"> — {{ q.answeredBy }}, {{ q.answeredVia === 'claude' ? 'pelo Claude' : 'pelo PRMake' }}, {{ formatDateTime(q.answeredAt) }}</span>
         </span>
       </div>
+      @if (q.replacedBy) {
+        <div class="plan-q__answer plan-q__answer--cancelled">
+          <mat-icon>swap_horiz</mat-icon>
+          <span>Substituída pela pergunta {{ q.replacedBy }} — esta resposta não vale mais.</span>
+        </div>
+      }
     } @else {
-      <div class="plan-q__answer plan-q__answer--cancelled">Pergunta cancelada.</div>
+      <div class="plan-q__answer plan-q__answer--cancelled">
+        <mat-icon>{{ q.replacedBy ? 'swap_horiz' : 'block' }}</mat-icon>
+        <span>{{ q.cancelReason ? 'Cancelada: ' + q.cancelReason : 'Pergunta cancelada.' }}</span>
+      </div>
     }
   </div>
 </ng-template>

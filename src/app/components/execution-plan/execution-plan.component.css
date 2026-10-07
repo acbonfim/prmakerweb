@@ -842,6 +842,8 @@
 .plan-q__answer { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; font-size: 12.5px; }
 .plan-q__answer .mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--plan-ok); flex: none; }
 .plan-q__answer--cancelled { color: var(--plan-muted); }
+.plan-q__answer--cancelled .mat-icon { color: var(--plan-muted); }
+.plan-q--replaced > .plan-q__text { color: var(--plan-muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 .plan-q__answer--sending { animation: plan-q-in .15s ease-out; padding: 6px 8px; border-radius: 8px;
   background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent); }
 .plan-q__answer--sending .mat-icon { color: var(--mat-sys-primary); }
