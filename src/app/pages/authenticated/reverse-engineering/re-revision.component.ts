@@ -6,6 +6,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdown.pipe';
+import { LazyMarkdownComponent } from '../../../components/lazy-markdown/lazy-markdown.component';
 import { ReverseEngineeringService, ReverseRevision } from '../../../services/reverse-engineering.service';
 
 /**
@@ -16,7 +17,7 @@ import { ReverseEngineeringService, ReverseRevision } from '../../../services/re
 @Component({
   selector: 'app-re-revision',
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe],
+  imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, LazyMarkdownComponent],
   template: `
     @if (loading()) { <div class="state"><mat-spinner diameter="24"></mat-spinner></div> }
     @if (rev(); as r) {
@@ -99,22 +100,27 @@ import { ReverseEngineeringService, ReverseRevision } from '../../../services/re
               <span class="muted">{{ d.unchanged }} iguais{{ d.otherTextChanged ? ' · texto fora dos itens mudou' : '' }}</span>
             </div>
             @for (i of d.items; track i.id) {
-              <details class="diff__item" [class]="'diff__item diff__item--' + i.change">
+              <!-- o antes/depois só entra na página quando o item é aberto (centenas de itens × 8 mil caracteres) -->
+              <details class="diff__item" [class]="'diff__item diff__item--' + i.change" (toggle)="toggleDiff(i.id, $any($event.target).open)">
                 <summary><span class="id">{{ i.id }}</span> {{ i.title }} <span class="muted">({{ changeLabel(i.change) }})</span></summary>
-                <div class="diff__cols">
-                  @if (i.before) { <div><div class="muted">Publicado</div><pre>{{ i.before }}</pre></div> }
-                  @if (i.after) { <div><div class="muted">{{ i.change === 'removed' ? 'Agora' : 'Revisão' }}</div><pre>{{ i.after }}</pre></div> }
-                </div>
+                @if (openDiffs().has(i.id)) {
+                  <div class="diff__cols">
+                    @if (i.before) { <div><div class="muted">Publicado</div><pre>{{ i.before }}</pre></div> }
+                    @if (i.after) { <div><div class="muted">{{ i.change === 'removed' ? 'Agora' : 'Revisão' }}</div><pre>{{ i.after }}</pre></div> }
+                  </div>
+                }
               </details>
             }
           </div>
         }
 
         <div class="actions">
-          <button mat-stroked-button type="button" (click)="showDoc.set(!showDoc())"><mat-icon>article</mat-icon>{{ showDoc() ? 'Esconder' : 'Ver' }} o documento</button>
+          <button mat-stroked-button type="button" (click)="toggleDoc()" [disabled]="contentLoading()">
+            <mat-icon>article</mat-icon>{{ showDoc() ? 'Esconder' : 'Ver' }} o documento <span class="muted">({{ size(r.length) }})</span></button>
           @if (canEdit()) {
-            <button mat-stroked-button type="button" (click)="startEdit()"><mat-icon>edit</mat-icon>Editar</button>
+            <button mat-stroked-button type="button" (click)="startEdit()" [disabled]="contentLoading()"><mat-icon>edit</mat-icon>Editar</button>
           }
+          @if (contentLoading()) { <mat-spinner diameter="18"></mat-spinner> }
           <span class="spacer"></span>
           @if (r.canApprove && (r.status === 'review' || r.status === 'approved')) {
             <button mat-stroked-button type="button" (click)="mode.set(mode() === 'changes' ? null : 'changes')"><mat-icon>edit_note</mat-icon>Pedir ajustes</button>
@@ -151,7 +157,7 @@ import { ReverseEngineeringService, ReverseRevision } from '../../../services/re
             </div>
           </div>
         }
-        @if (showDoc() && !editing()) { <div class="md" [innerHTML]="r.content | planMarkdown"></div> }
+        @if (showDoc() && !editing() && content() !== null) { <div class="md"><app-lazy-markdown [content]="content()" /></div> }
       </section>
     }
   `,
@@ -223,6 +229,11 @@ export class ReRevisionComponent {
   showDoc = signal(false);
   editing = signal(false);
   mode = signal<'changes' | null>(null);
+  /** Texto do documento: buscado só ao ver/editar (o GET da revisão vem sem ele) e de novo quando a revisão muda. */
+  content = signal<string | null>(null);
+  contentLoading = signal(false);
+  private contentFor: string | null = null;
+  openDiffs = signal<Set<string>>(new Set());
   note = '';
   draft = '';
 
@@ -245,7 +256,12 @@ export class ReRevisionComponent {
   load(id: string) {
     this.loading.set(!this.rev());
     this.api.revision(id).subscribe({
-      next: r => { this.rev.set(r); this.loading.set(false); },
+      next: r => {
+        this.rev.set(r);
+        this.loading.set(false);
+        // revisão mudou com o documento aberto: busca o texto novo
+        if (this.contentFor !== this.contentKey(r)) { this.content.set(null); if (this.showDoc()) this.withContent(() => {}); }
+      },
       error: e => { this.loading.set(false); this.toast(e); }
     });
   }
@@ -269,7 +285,35 @@ export class ReRevisionComponent {
     });
   }
 
-  startEdit() { this.draft = this.rev()?.content ?? ''; this.editing.set(true); this.showDoc.set(false); }
+  toggleDoc() {
+    if (this.showDoc()) { this.showDoc.set(false); return; }
+    this.withContent(() => this.showDoc.set(true));
+  }
+
+  startEdit() { this.withContent(text => { this.draft = text; this.editing.set(true); this.showDoc.set(false); }); }
+
+  toggleDiff(id: string, open: boolean) {
+    this.openDiffs.update(s => { const n = new Set(s); if (open) n.add(id); else n.delete(id); return n; });
+  }
+
+  private contentKey(r: ReverseRevision) { return `${r.id}:${r.updatedAt}:${r.length}`; }
+
+  private withContent(then: (text: string) => void) {
+    const r = this.rev(); if (!r) return;
+    const key = this.contentKey(r);
+    const cached = this.content();
+    if (cached !== null && this.contentFor === key) { then(cached); return; }
+    this.contentLoading.set(true);
+    this.api.revisionContent(r.id).subscribe({
+      next: text => { this.contentFor = key; this.content.set(text); this.contentLoading.set(false); then(text); },
+      error: e => { this.contentLoading.set(false); this.toast(e); }
+    });
+  }
+
+  size(chars?: number | null) {
+    const n = chars ?? 0;
+    return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1).replace('.', ',')} mi caracteres` : n >= 1000 ? `${Math.round(n / 1000)} mil caracteres` : `${n} caracteres`;
+  }
 
   saveEdit() {
     const r = this.rev(); if (!r) return;
