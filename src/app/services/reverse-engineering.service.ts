@@ -202,7 +202,9 @@ export class ReverseEngineeringService {
     Object.entries(filter).forEach(([k, v]) => { if (v) params = params.set(k, v); });
     return this.http.get<ReverseRevisionHead[]>(`${this.api}/revisions`, { params });
   }
-  revision(id: string): Observable<ReverseRevision> { return this.http.get<ReverseRevision>(`${this.api}/revisions/${id}`); }
+  /** Sem o texto do documento (vem vazio): a tela busca em revisionContent só ao abrir ou editar. */
+  revision(id: string): Observable<ReverseRevision> { return this.http.get<ReverseRevision>(`${this.api}/revisions/${id}`, { params: { content: 'false' } }); }
+  revisionContent(id: string): Observable<string> { return this.http.get(`${this.api}/revisions/${id}/content`, { responseType: 'text' }); }
   saveRevision(id: string, body: { content?: string; summary?: string }): Observable<ReverseRevision> {
     return this.http.put<ReverseRevision>(`${this.api}/revisions/${id}`, body);
   }

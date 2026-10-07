@@ -305,7 +305,7 @@
                   }
                 }
               </aside>
-              <article #docContent class="md" [innerHTML]="d.content | planMarkdown"></article>
+              <article class="md"><app-lazy-markdown #docView [content]="d.content" /></article>
             </div>
           }
           @if (d.revisions.length) {

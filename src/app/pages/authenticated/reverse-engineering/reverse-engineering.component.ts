@@ -8,7 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Popover, PopoverModule } from 'primeng/popover';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdown.pipe';
-import { renderMermaidIn } from '../../../helpers/mermaid-loader';
+import { LazyMarkdownComponent } from '../../../components/lazy-markdown/lazy-markdown.component';
 import { WsService } from '../../../services/ws.service';
 import { TabStatus, TabsService } from '../../../services/tabs.service';
 import {
@@ -37,7 +37,8 @@ type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
   selector: 'app-reverse-engineering',
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PopoverModule, PlanMarkdownPipe,
-    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent, ReTrapsComponent, ReInfraComponent, ReCopyCommandComponent],
+    ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent, ReTrapsComponent, ReInfraComponent, ReCopyCommandComponent,
+    LazyMarkdownComponent],
   templateUrl: './reverse-engineering.component.html',
   styleUrls: ['./reverse-engineering.component.css']
 })
@@ -52,14 +53,18 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   /** Abas internas (0065): só a aba ativa dá nome/status à aba (a tela fica viva em segundo plano). */
   private tabScreen = this.tabs.bindScreen(inject(DestroyRef));
   /**
-   * 0053: o conteúdo do documento pode ser redesenhado a qualquer momento (app zoneless, tempo real, volta do Índice) —
-   * as âncoras dos itens são postas a cada mudança no DOM (MutationObserver), não uma vez só depois da carga.
+   * O documento publicado é desenhado sob demanda (LazyMarkdownComponent: âncoras, mermaid e rolagem até o item). O
+   * bloco pode ser recriado a qualquer momento (tempo real, volta do Índice): o item pedido antes fica pendente até ele
+   * aparecer.
    */
-  @ViewChild('docContent') set docContentRef(ref: ElementRef<HTMLElement> | undefined) { this.observeDoc(ref?.nativeElement); }
-  private docEl?: HTMLElement;
-  private docObserver?: MutationObserver;
-  private mermaidFor?: string;
-  private pendingScroll: { id: string; until: number } | null = null;
+  @ViewChild('docView') set docViewRef(view: LazyMarkdownComponent | undefined) {
+    this.docView = view;
+    const item = this.pendingItem;
+    // fora da detecção de mudanças (o setter roda no meio dela)
+    if (view && item) { this.pendingItem = null; queueMicrotask(() => view.reveal(item)); }
+  }
+  private docView?: LazyMarkdownComponent;
+  private pendingItem: string | null = null;
   @ViewChild(ReIndexComponent) indexRef?: ReIndexComponent;
   @ViewChild('srcPop') srcPop?: Popover;
 
@@ -213,7 +218,6 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.docObserver?.disconnect();
     this.ws.off(REVERSE_EVENT, this.onRealtime);
     this.ws.removeFromGroup(reverseGroup(null));
     this.joinModuleGroup(null);
@@ -296,52 +300,11 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     if (group) this.ws.addToGroup(group);
   }
 
-  /** Liga o observador no conteúdo do documento (o @ViewChild muda quando o bloco é redesenhado). */
-  private observeDoc(el: HTMLElement | undefined) {
-    if (el === this.docEl) return;
-    this.docObserver?.disconnect();
-    this.docEl = el;
-    if (!el) return;
-    this.decorate();
-    this.docObserver = new MutationObserver(() => this.decorate());
-    this.docObserver.observe(el, { childList: true, subtree: true });
-  }
-
-  /** Âncoras nos itens (### RN-012 — …) para o sumário e os links ?i=; diagramas mermaid uma vez por conteúdo. */
-  private decorate() {
-    const root = this.docEl; if (!root) return;
-    root.querySelectorAll('h2, h3, h4').forEach(h => {
-      if (h.id) return;
-      const m = /^\s*([A-Z]{2,4}-\d{1,4})\b/.exec(h.textContent ?? '');
-      if (m) h.id = `item-${m[1]}`;
-    });
-    const key = `${this.moduleKey()}|${this.docKey()}|${this.doc()?.published?.version}`;
-    if (this.mermaidFor !== key) {
-      this.mermaidFor = key;
-      // o diagrama muda a altura da página: depois de desenhar, rola de novo até o item pedido
-      renderMermaidIn(root).then(() => { const p = this.pendingScroll; if (p && Date.now() < p.until) this.reveal(p.id, false); });
-    }
-    const p = this.pendingScroll;
-    if (p && Date.now() < p.until && !document.getElementById(`item-${p.id}`)?.dataset['revealed']) this.reveal(p.id, true);
-  }
-
   scrollTo(id: string) {
     const kind = /^([A-Z]{2,4})-/.exec(id)?.[1];
     if (kind && this.isTocCollapsible(kind)) this.tocOpened.update(s => new Set(s).add(kind));
-    this.pendingScroll = { id, until: Date.now() + 4000 };
-    if (!document.getElementById(`item-${id}`)) this.decorate();
-    this.reveal(id, true);
-  }
-
-  private reveal(id: string, flash: boolean) {
-    const el = document.getElementById(`item-${id}`);
-    if (!el) return; // ainda não desenhado: o observador tenta de novo quando o conteúdo aparecer
-    el.dataset['revealed'] = '1';
-    el.scrollIntoView({ behavior: flash ? 'smooth' : 'auto', block: 'start' });
-    if (flash) {
-      el.classList.add('flash');
-      setTimeout(() => { el.classList.remove('flash'); delete el.dataset['revealed']; }, 1800);
-    }
+    if (this.docView) this.docView.reveal(id);
+    else this.pendingItem = id;
   }
 
   // ── Fontes e apelidos (aprovadores) ────────────────────────────────────────────────────────
