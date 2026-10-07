@@ -1,4 +1,5 @@
 import { Component, DestroyRef, ElementRef, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal, untracked } from '@angular/core';
+import { map } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -8,7 +9,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Popover, PopoverModule } from 'primeng/popover';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdown.pipe';
-import { LazyMarkdownComponent } from '../../../components/lazy-markdown/lazy-markdown.component';
+import { LazyMarkdownComponent, MarkdownPartsSource } from '../../../components/lazy-markdown/lazy-markdown.component';
+import { ArchitectureService } from '../../../services/architecture.service';
 import { WsService } from '../../../services/ws.service';
 import { TabStatus, TabsService } from '../../../services/tabs.service';
 import {
@@ -44,6 +46,7 @@ type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
 })
 export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   private api = inject(ReverseEngineeringService);
+  private architecture = inject(ArchitectureService);
   private ws = inject(WsService);
   private route = inject(ActivatedRoute);
   readonly router = inject(Router);
@@ -85,6 +88,27 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   moduleLoading = signal(false);
   docKey = signal<string>('funcional');
   doc = signal<ReverseDoc | null>(null);
+  /**
+   * 0070: o documento publicado vem em pedaços — o sumário chega com o documento (sem o texto) e cada pedaço é buscado
+   * quando chega perto da tela. Mesma marca = mesma fonte (recarregar o documento não redesenha tudo).
+   */
+  docSource = computed<MarkdownPartsSource | null>(() => {
+    const d = this.doc();
+    const outline = d?.outline;
+    if (!d || !outline) return null;
+    if (this.lastSource?.key === `${d.moduleKey}/${d.type.sectionKey}/${outline.hash}`) return this.lastSource;
+    const hash = outline.hash;
+    const source: MarkdownPartsSource = {
+      key: `${d.moduleKey}/${d.type.sectionKey}/${hash}`,
+      chunks: outline.chunks,
+      load: (from, to) => this.architecture.sectionParts(d.moduleKey, d.type.sectionKey, from, to, hash).pipe(map(r => {
+        if (r.hash !== hash) this.loadDoc();  // publicaram de novo no meio da leitura: relê o sumário
+        return r.parts;
+      }))
+    };
+    return this.lastSource = source;
+  });
+  private lastSource: MarkdownPartsSource | null = null;
   docLoading = signal(false);
   showHistory = signal(false);
   tocFilter = signal('');
@@ -176,8 +200,10 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
 
   private onRealtime = (head: ReverseRevisionHead) => {
     if (!head?.moduleKey) return;
-    // lista: recarrega no máximo a cada 4 s (vários eventos de andamento seguidos)
-    if (!this.listReload) this.listReload = setTimeout(() => { this.listReload = null; this.loadModules(false); if (this.view() === 'revisoes') this.loadPending(); }, 4000);
+    // 0070: o evento já traz a cabeça da revisão — aplica na lista em memória. A lista inteira só é relida quando o status
+    // muda (antes: a cada 4 s durante uma geração inteira, só por causa do andamento).
+    if (!this.patchList(head) && !this.listReload)
+      this.listReload = setTimeout(() => { this.listReload = null; this.loadModules(false); if (this.view() === 'revisoes') this.loadPending(); }, 4000);
     const m = this.module();
     if (!m || m.key !== head.moduleKey || !head.progress && !head.status) return;
     const doc = m.docs.find(d => d.type === head.docType);
@@ -192,9 +218,20 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     }
   };
 
+  /** Aplica a cabeça da revisão no módulo da lista. Devolve false quando é preciso reler a lista (status mudou ou não achou). */
+  private patchList(head: ReverseRevisionHead): boolean {
+    const list = this.modules();
+    const index = list.findIndex(x => x.key === head.moduleKey);
+    const doc = index < 0 ? null : list[index].docs.find(d => d.type === head.docType);
+    if (!doc || !doc.open || doc.open.id !== head.id || doc.open.status !== head.status) return false;
+    const updated = { ...list[index], docs: list[index].docs.map(d => d === doc ? { ...d, open: { ...d.open, ...head } as ReverseRevisionHead } : d) };
+    this.modules.set(list.map((x, i) => i === index ? updated : x));
+    return true;
+  }
+
   ngOnInit() {
     this.api.settings().subscribe({ next: s => this.settings.set(s) });
-    this.api.docTypes().subscribe({ next: t => this.docTypes.set(t) });
+    this.api.docTypes(false).subscribe({ next: t => this.docTypes.set(t) });
     this.loadModules(true);
     this.ws.startConnection();
     this.ws.on(REVERSE_EVENT, this.onRealtime);
@@ -266,7 +303,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     const key = this.moduleKey(); if (!key) return;
     if (this.docKey() === 'infra') { this.doc.set(null); this.docLoading.set(false); return; }  // 0059: aba Infra não é um documento
     this.docLoading.set(true);
-    this.api.doc(key, this.docKey()).subscribe({
+    this.api.doc(key, this.docKey(), false).subscribe({
       next: d => {
         this.doc.set(d);
         this.docLoading.set(false);

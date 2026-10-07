@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import {
   Component,
+  computed,
   ElementRef,
   EventEmitter,
   Input,
@@ -41,6 +42,9 @@ type Rect = { top: number; left: number; width: number; height: number };
  *
  * Estado reativo em signals (a app roda com change detection zoneless).
  */
+/** 0070: entradas da timeline desenhadas por vez (as mais recentes). */
+const TIMELINE_RENDERED = 80;
+
 @Component({
   selector: 'app-card-timeline',
   standalone: true,
@@ -58,6 +62,14 @@ type Rect = { top: number; left: number; width: number; height: number };
 })
 export class CardTimelineComponent implements OnDestroy {
   readonly entries = signal<TimelineEntry[]>([]);
+  /** 0070: só as últimas entradas ficam desenhadas (cada uma em markdown); as anteriores, num clique. */
+  private readonly renderLimit = signal(TIMELINE_RENDERED);
+  readonly visibleEntries = computed(() => {
+    const all = this.entries();
+    const limit = this.renderLimit();
+    return all.length > limit ? all.slice(-limit) : all;
+  });
+  readonly hiddenEntries = computed(() => Math.max(0, this.entries().length - this.renderLimit()));
   readonly isLoading = signal(false);
   /** Atualização discreta (via WebSocket) de um comentário NOVO: mostra um skeleton no fim. */
   readonly isRefreshing = signal(false);
@@ -261,6 +273,7 @@ export class CardTimelineComponent implements OnDestroy {
       return;
     }
 
+    if (card !== this._cardNumber) this.renderLimit.set(TIMELINE_RENDERED);
     this._cardNumber = card;
     this.switchTimelineGroup(card);
 
@@ -619,8 +632,20 @@ export class CardTimelineComponent implements OnDestroy {
     });
   }
 
+  /** 0070: desenha mais entradas antigas mantendo a posição de leitura. */
+  showOlder(): void {
+    const el = this.bodyRef?.nativeElement;
+    const before = el ? el.scrollHeight - el.scrollTop : 0;
+    this.renderLimit.update(l => l + TIMELINE_RENDERED);
+    setTimeout(() => { if (el) el.scrollTop = el.scrollHeight - before; });
+  }
+
   /** Rola o container até centralizar o comentário (ou seu skeleton) de um id específico. */
   private scrollToEntry(entryId: number): void {
+    // 0070: entrada antiga fora das desenhadas — desenha até ela antes de rolar
+    const all = this.entries();
+    const index = all.findIndex(e => e.id === entryId);
+    if (index >= 0 && index < all.length - this.renderLimit()) this.renderLimit.set(all.length - index + 10);
     // Aguarda o render (o comentário pode ter virado skeleton neste tick).
     setTimeout(() => {
       const container = this.bodyRef?.nativeElement;

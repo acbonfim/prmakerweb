@@ -583,7 +583,11 @@
               }
             </nav>
           }
-          <div class="kb__md" [innerHTML]="s.content | planMarkdown"></div>
+          @if (largeSection()) {
+            <div class="kb__md"><app-lazy-markdown #sectionView [content]="s.content" /></div>
+          } @else {
+            <div class="kb__md" [innerHTML]="s.content | planMarkdown"></div>
+          }
         } @else if (simple() && !guideTabs().length) {
           <div class="kb__guide-empty">
             <mat-icon>auto_stories</mat-icon>

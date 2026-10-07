@@ -93,7 +93,11 @@
         <span>Nenhum registro ainda.<br />Seja o primeiro a comentar.</span>
       </div>
     } @else {
-      @for (entry of entries(); track trackById($index, entry)) {
+      @if (hiddenEntries() > 0) {
+        <button type="button" class="timeline__older" (click)="showOlder()">
+          <mat-icon>expand_less</mat-icon>Mostrar registros anteriores ({{ hiddenEntries() }})</button>
+      }
+      @for (entry of visibleEntries(); track trackById($index, entry)) {
         @if (refreshingIds().has(entry.id)) {
           <!-- Comentário sendo editado/excluído por outro cliente: skeleton no próprio lugar. -->
           <ng-container
