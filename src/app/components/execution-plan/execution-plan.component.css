@@ -1188,3 +1188,9 @@
   margin: 0 0 8px; max-height: 260px; overflow: auto;
   white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 12.5px;
 }
+
+/* 0070: entradas anteriores do andamento sob demanda */
+.plan-logs__more { display: inline-flex; align-items: center; gap: 4px; margin: 2px 0 6px; padding: 2px 8px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--mat-sys-primary, #3b82f6); font: inherit; font-size: 12.5px; cursor: pointer; }
+.plan-logs__more:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
+.plan-logs__more mat-icon { font-size: 16px; width: 16px; height: 16px; }

@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { ArchitectureIncomingRelation, ArchitectureRelation, ArchitectureSuggestion } from './architecture.service';
+import { ArchitectureIncomingRelation, ArchitectureRelation, ArchitectureSectionOutline, ArchitectureSuggestion } from './architecture.service';
 
 /** Engenharia reversa por módulo (feature 0052): documentos com aprovação, índice por item, UI/UX e andamento ao vivo. */
 
@@ -124,6 +124,8 @@ export interface ReverseItemHead { id: string; kind: string; title: string; leve
 
 export interface ReverseDoc {
   moduleKey: string; type: ReverseDocType; content?: string | null; published?: ReversePublishedInfo | null; items: ReverseItemHead[];
+  /** 0070: com `content: false`, o sumário em pedaços (o texto vem pela seção da Base Solvace). */
+  outline?: ArchitectureSectionOutline | null;
   revisions: ReverseRevisionHead[]; suggestions: ArchitectureSuggestion[];
 }
 
@@ -175,7 +177,10 @@ export class ReverseEngineeringService {
   private api = `${environment.apiUrl}ReverseEngineering`;
 
   settings(): Observable<ReverseSettings> { return this.http.get<ReverseSettings>(`${this.api}/settings`); }
-  docTypes(): Observable<ReverseDocType[]> { return this.http.get<ReverseDocType[]>(`${this.api}/doc-types`); }
+  /** `template: false` (a tela): sem o modelo que a skill segue. */
+  docTypes(template = true): Observable<ReverseDocType[]> {
+    return this.http.get<ReverseDocType[]>(`${this.api}/doc-types`, { params: template ? {} : { template: 'false' } });
+  }
   modules(): Observable<ReverseModuleSummary[]> { return this.http.get<ReverseModuleSummary[]>(`${this.api}/modules`); }
   module(key: string): Observable<ReverseModule> { return this.http.get<ReverseModule>(`${this.api}/modules/${encodeURIComponent(key)}`); }
   saveModule(key: string, body: { sources?: ReverseSource[]; aliases?: string[]; notes?: string | null }): Observable<ReverseModule> {
@@ -194,8 +199,10 @@ export class ReverseEngineeringService {
   deleteTrap(id: string): Observable<void> { return this.http.delete<void>(`${this.api}/traps/${id}`); }
   suggestionToTrap(id: string, title?: string): Observable<ReverseTrap> { return this.http.post<ReverseTrap>(`${this.api}/suggestions/${id}/to-trap`, { title: title ?? '' , text: '' }); }
   kcDivergences(): Observable<ArchitectureSuggestion[]> { return this.http.get<ArchitectureSuggestion[]>(`${this.api}/kc-divergences`); }
-  doc(key: string, doc: string): Observable<ReverseDoc> {
-    return this.http.get<ReverseDoc>(`${this.api}/modules/${encodeURIComponent(key)}/docs/${encodeURIComponent(doc)}`);
+  /** `content: false` (0070): sem o texto, com o sumário em pedaços — a tela busca cada pedaço sob demanda. */
+  doc(key: string, doc: string, content = true): Observable<ReverseDoc> {
+    return this.http.get<ReverseDoc>(`${this.api}/modules/${encodeURIComponent(key)}/docs/${encodeURIComponent(doc)}`,
+      { params: content ? {} : { content: 'false' } });
   }
   revisions(filter: { module?: string; doc?: string; status?: string }): Observable<ReverseRevisionHead[]> {
     let params = new HttpParams();

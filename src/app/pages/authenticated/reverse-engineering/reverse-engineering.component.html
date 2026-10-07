@@ -286,7 +286,7 @@
               }
             </details>
           }
-          @if (d.content) {
+          @if (d.content || d.outline) {
             <div class="pub">
               <aside class="toc">
                 <input type="search" placeholder="Filtrar itens…" [ngModel]="tocFilter()" (ngModelChange)="tocFilter.set($event)">
@@ -305,7 +305,7 @@
                   }
                 }
               </aside>
-              <article class="md"><app-lazy-markdown #docView [content]="d.content" /></article>
+              <article class="md"><app-lazy-markdown #docView [content]="d.content" [source]="docSource()" /></article>
             </div>
           }
           @if (d.revisions.length) {

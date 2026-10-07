@@ -22,6 +22,17 @@ export interface ArchitectureSection extends ArchitectureSectionSummary {
   content: string;
 }
 
+/** 0070: sumário de uma seção grande em pedaços (sem o texto) — cada pedaço vem de `sectionParts`. */
+export interface ArchitectureSectionOutline extends ArchitectureSectionSummary {
+  hash: string;
+  chunks: { index: number; length: number; ids: string[]; estimate: number }[];
+}
+
+export interface ArchitectureSectionParts { hash: string; parts: { index: number; text: string }[]; }
+
+/** Seção a partir deste tamanho (caracteres) vem em pedaços sob demanda. */
+export const SECTION_PARTS_FROM = 120_000;
+
 /** Interdependência de um projeto (0034): evento SNS, fila SQS, tabela de outro módulo, HTTP, pacote, serviço externo. */
 export interface ArchitectureRelation {
   target: string;
@@ -370,6 +381,17 @@ export class ArchitectureService {
 
   section(projectKey: string, sectionKey: string): Observable<ArchitectureSection> {
     return this.http.get<ArchitectureSection>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}`);
+  }
+
+  /** 0070: sumário da seção em pedaços. */
+  sectionOutline(projectKey: string, sectionKey: string): Observable<ArchitectureSectionOutline> {
+    return this.http.get<ArchitectureSectionOutline>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}/outline`);
+  }
+
+  /** 0070: texto dos pedaços from..to (com a marca `v`, a resposta fica no cache do navegador). */
+  sectionParts(projectKey: string, sectionKey: string, from: number, to: number, hash: string): Observable<ArchitectureSectionParts> {
+    const params = new HttpParams().set('from', from).set('to', to).set('v', hash);
+    return this.http.get<ArchitectureSectionParts>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}/parts`, { params });
   }
 
   versions(projectKey: string, sectionKey: string): Observable<ArchitectureSectionVersion[]> {

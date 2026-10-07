@@ -508,7 +508,7 @@
           }
           @if (generalLogs().length) {
             <div class="plan__section-title">Andamento geral</div>
-            <ng-container *ngTemplateOutlet="logList; context: { $implicit: generalLogs() }"></ng-container>
+            <ng-container *ngTemplateOutlet="logList; context: { $implicit: generalLogs(), key: '' }"></ng-container>
           }
         }
       </div>
@@ -658,7 +658,7 @@
     @if (step.view === 'running') { <span class="plan__live">ao vivo</span> }
   </div>
   @if (logsFor(step.key).length) {
-    <ng-container *ngTemplateOutlet="logList; context: { $implicit: logsFor(step.key) }"></ng-container>
+    <ng-container *ngTemplateOutlet="logList; context: { $implicit: logsFor(step.key), key: step.key }"></ng-container>
   } @else {
     <p class="plan__hint">
       @switch (step.view) {
@@ -730,9 +730,14 @@
   }
 </ng-template>
 
-<ng-template #logList let-items>
+<ng-template #logList let-items let-key="key">
   <div class="plan-logs" data-follow data-keep-scroll>
-    @for (log of items; track trackLog($index, log)) {
+    <!-- 0070: só as últimas entradas ficam desenhadas (até 3.000 em memória, cada uma em markdown) -->
+    @if (items.length > logLimit(key)) {
+      <button type="button" class="plan-logs__more" (click)="showMoreLogs(key)">
+        <mat-icon>expand_less</mat-icon>Mostrar {{ moreLogsCount(items, key) }} anteriores ({{ items.length - logLimit(key) }} ocultas)</button>
+    }
+    @for (log of logTail(items, key); track trackLog($index, log)) {
       <div class="plan-log plan-log--{{ log.kind }}">
         <mat-icon class="plan-log__icon">{{ logIcon(log) }}</mat-icon>
         <div class="plan-log__body plan-md" [innerHTML]="log.message | planMarkdown"></div>

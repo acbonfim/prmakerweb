@@ -33,9 +33,14 @@ import {
   ArchitectureSuggestion,
   KnowledgeArticle,
   KnowledgeState,
+  SECTION_PARTS_FROM,
   relationKind
 } from '../../../services/architecture.service';
+import { LazyMarkdownComponent } from '../../../components/lazy-markdown/lazy-markdown.component';
 import { REVERSE_DOCS } from '../../../services/reverse-engineering.service';
+
+/** 0070: acima disso, o sumário da seção mostra só os cabeçalhos ##. */
+const TOC_MAX = 80;
 
 type Selection =
   | { type: 'overview' }
@@ -80,7 +85,7 @@ interface TreeGroup {
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, KbAdminPanelComponent, EcosystemMapComponent,
     KbByQuestionComponent,
-    KbFriendlyOverviewComponent, KbConnectionsComponent, KbGuideReviewComponent, KbLearnCardComponent, KbAskDeepComponent, KbQuestionsComponent],
+    KbFriendlyOverviewComponent, KbConnectionsComponent, KbGuideReviewComponent, KbLearnCardComponent, KbAskDeepComponent, KbQuestionsComponent, LazyMarkdownComponent],
   templateUrl: './architecture.component.html',
   styleUrls: ['./architecture.component.css']
 })
@@ -150,6 +155,9 @@ export class ArchitectureComponent implements OnInit {
   readonly filterIsQuestion = computed(() => isQuestion(this.filter()));
 
   @ViewChild('content') private contentRef?: ElementRef<HTMLElement>;
+  /** 0070: seção grande desenhada em janela (só os pedaços perto da tela ficam montados). */
+  @ViewChild('sectionView') private sectionView?: LazyMarkdownComponent;
+  readonly largeSection = computed(() => (this.section()?.content?.length ?? 0) >= SECTION_PARTS_FROM);
 
   readonly totals = computed(() => ({
     projects: this.projects().length,
@@ -196,7 +204,13 @@ export class ArchitectureComponent implements OnInit {
   /** A seção aberta é técnica (no modo Simples, abre o bloco de detalhes técnicos). */
   readonly sectionIsTech = computed(() => { const s = this.section(); return !!s && !this.guideTabs().some(g => g.key === s.key); });
   /** Sumário da seção aberta (## e ###) — só quando ajuda (seção longa). */
-  readonly toc = computed<TocItem[]>(() => { const items = headingsOf(this.section()?.content); return items.length >= 3 ? items : []; });
+  readonly toc = computed<TocItem[]>(() => {
+    const items = headingsOf(this.section()?.content);
+    // 0070: documento da engenharia reversa tem milhares de ### (um por item) — o sumário virava uma coluna de 70 mil px
+    // acima do texto; com muitos cabeçalhos, só os ## (os itens ficam no sumário da engenharia reversa e na busca)
+    const toc = items.length > TOC_MAX ? items.filter(i => i.level === 2).slice(0, TOC_MAX) : items;
+    return toc.length >= 3 ? toc : [];
+  });
 
   readonly mapFocus = computed(() => { const s = this.selection(); return s.type === 'map' ? s.focus ?? null : null; });
 
@@ -330,6 +344,7 @@ export class ArchitectureComponent implements OnInit {
 
   /** Rola até um título do sumário. */
   scrollToHeading(item: TocItem): void {
+    if (this.sectionView) { this.revealInLarge(item.text); return; }
     const root = this.contentRef?.nativeElement;
     if (!root) return;
     const el = findHeading(Array.from(root.querySelectorAll<HTMLElement>('.kb__md h2, .kb__md h3, .kb__md h4')), item.text);
@@ -507,6 +522,10 @@ export class ArchitectureComponent implements OnInit {
     const wanted = this.pendingHeading();
     const root = this.contentRef?.nativeElement;
     if (!wanted || !root || !this.section()) return;
+    if (this.sectionView) {
+      if (this.revealInLarge(wanted)) this.pendingHeading.set(null);
+      return;
+    }
     const headings = Array.from(root.querySelectorAll<HTMLElement>('.kb__md h1, .kb__md h2, .kb__md h3, .kb__md h4'));
     const el = findHeading(headings, wanted);
     if (!el) return;
@@ -514,6 +533,16 @@ export class ArchitectureComponent implements OnInit {
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     el.classList.add('kb-flash');
     setTimeout(() => el.classList.remove('kb-flash'), 2400);
+  }
+
+  /** 0070: na seção grande, monta o pedaço que tem o cabeçalho e rola até ele. */
+  private revealInLarge(text: string): boolean {
+    const target = normalize(cleanInline(text));
+    const id = /^\s*([A-Z]{2,4}-\d{1,4})\b/.exec(cleanInline(text))?.[1];
+    return !!this.sectionView?.revealText(
+      chunk => headingsOf(chunk).some(h => (id && h.text.startsWith(id)) || normalize(h.text) === target || normalize(h.text).includes(target)),
+      root => findHeading(Array.from(root.querySelectorAll<HTMLElement>('h1, h2, h3, h4')), text) ?? null,
+      'kb-flash');
   }
 
   // ── Navegação ─────────────────────────────────────────────────────────────────────────────────

@@ -82,6 +82,8 @@ const USER_IDLE_MS = 5000;
 /** Junta rajadas de eventos (a skill manda vários pedaços seguidos). */
 const REFRESH_DEBOUNCE_MS = 250;
 const MAX_LOGS_IN_MEMORY = 3000;
+/** 0070: entradas de andamento desenhadas por lista (as anteriores, num clique). */
+const LOGS_RENDERED = 200;
 /** Etapa da skill "em andamento" cujo último registro é um aviso, sem nada novo há este tempo: provável bloqueio (0037). */
 const STALLED_WARNING_MS = 2 * 60 * 1000;
 
@@ -1385,6 +1387,16 @@ export class ExecutionPlanComponent implements OnDestroy {
       .afterClosed()
       .subscribe(() => (this.filesDialogOpen = false));
   }
+
+  /** 0070: quantas entradas do fim de cada lista de andamento ficam desenhadas (chave '' = gerais do plano). */
+  private readonly logLimits = signal<Record<string, number>>({});
+  logLimit(key: string): number { return this.logLimits()[key] ?? LOGS_RENDERED; }
+  logTail(items: ExecutionLog[], key: string): ExecutionLog[] {
+    const limit = this.logLimit(key);
+    return items.length > limit ? items.slice(-limit) : items;
+  }
+  moreLogsCount(items: ExecutionLog[], key: string): number { return Math.min(LOGS_RENDERED, items.length - this.logLimit(key)); }
+  showMoreLogs(key: string): void { this.logLimits.update(l => ({ ...l, [key]: this.logLimit(key) + LOGS_RENDERED })); }
 
   logsFor(key: string): ExecutionLog[] {
     return this.logsByStep().get(key) ?? [];
