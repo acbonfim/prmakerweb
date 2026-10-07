@@ -39,6 +39,9 @@ import {
 import { LazyMarkdownComponent } from '../../../components/lazy-markdown/lazy-markdown.component';
 import { REVERSE_DOCS } from '../../../services/reverse-engineering.service';
 
+/** 0070: acima disso, o sumário da seção mostra só os cabeçalhos ##. */
+const TOC_MAX = 80;
+
 type Selection =
   | { type: 'overview' }
   | { type: 'map'; focus?: string }
@@ -201,7 +204,13 @@ export class ArchitectureComponent implements OnInit {
   /** A seção aberta é técnica (no modo Simples, abre o bloco de detalhes técnicos). */
   readonly sectionIsTech = computed(() => { const s = this.section(); return !!s && !this.guideTabs().some(g => g.key === s.key); });
   /** Sumário da seção aberta (## e ###) — só quando ajuda (seção longa). */
-  readonly toc = computed<TocItem[]>(() => { const items = headingsOf(this.section()?.content); return items.length >= 3 ? items : []; });
+  readonly toc = computed<TocItem[]>(() => {
+    const items = headingsOf(this.section()?.content);
+    // 0070: documento da engenharia reversa tem milhares de ### (um por item) — o sumário virava uma coluna de 70 mil px
+    // acima do texto; com muitos cabeçalhos, só os ## (os itens ficam no sumário da engenharia reversa e na busca)
+    const toc = items.length > TOC_MAX ? items.filter(i => i.level === 2).slice(0, TOC_MAX) : items;
+    return toc.length >= 3 ? toc : [];
+  });
 
   readonly mapFocus = computed(() => { const s = this.selection(); return s.type === 'map' ? s.focus ?? null : null; });
 

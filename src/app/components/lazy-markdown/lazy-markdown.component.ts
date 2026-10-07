@@ -154,16 +154,18 @@ export class LazyMarkdownComponent implements OnDestroy {
     this.forgetFarTexts();
   }
 
-  /** Busca no servidor os pedaços remotos que faltam (em lotes de pedaços seguidos). */
+  /**
+   * Busca no servidor os pedaços remotos que faltam, em blocos FIXOS de BATCH (0–3, 4–7…): a mesma URL se repete — o
+   * navegador reaproveita a resposta (imutável pela marca) e o preflight do CORS (em cache por URL).
+   */
   private request(indexes: number[]) {
     const source = this.source();
     if (!source) return;
-    const missing = [...new Set(indexes)].filter(i => i >= 0 && i < source.chunks.length && !this.texts().has(i) && !this.loading.has(i))
-      .sort((a, b) => a - b);
-    while (missing.length) {
-      const from = missing.shift()!;
-      let to = from;
-      while (missing.length && missing[0] === to + 1 && to - from + 1 < BATCH) to = missing.shift()!;
+    const blocks = [...new Set(indexes.filter(i => i >= 0 && i < source.chunks.length && !this.texts().has(i) && !this.loading.has(i))
+      .map(i => Math.floor(i / BATCH)))].sort((a, b) => a - b);
+    for (const block of blocks) {
+      const from = block * BATCH;
+      const to = Math.min(source.chunks.length - 1, from + BATCH - 1);
       for (let i = from; i <= to; i++) this.loading.add(i);
       const key = source.key;
       this.subs.push(source.load(from, to).subscribe({
