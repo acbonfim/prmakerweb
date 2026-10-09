@@ -17,6 +17,7 @@ import {
   ArchitectureSectionVersion,
   ArchitectureService,
   ArchitectureSuggestion,
+  ChatBlock,
   ChatMessage,
   ChatStatus,
   ECOSYSTEM_GUIDE_EXTRA,
@@ -99,6 +100,21 @@ export type KbAdminMode = 'edit' | 'new' | 'history' | 'chat' | 'project';
             }
             @if (thinking()) { <div class="ap__msg ap__msg--assistant"><mat-icon>smart_toy</mat-icon><mat-spinner diameter="18"></mat-spinner></div> }
           </div>
+          @if (blockProposal(); as bp) {
+            <div class="ap__proposal">
+              <div class="ap__bar"><mat-icon>auto_fix_high</mat-icon><strong>Proposta: {{ bp.blocks.length }} {{ bp.blocks.length === 1 ? 'bloco alterado' : 'blocos alterados' }}</strong><span class="ap__spacer"></span>
+                <button mat-button (click)="blockProposal.set(null)">Descartar</button>
+                <button mat-flat-button color="primary" (click)="applyBlocks()" [disabled]="saving()"><mat-icon>check</mat-icon>Aplicar</button>
+              </div>
+              <div class="ap__muted">Seção grande: só estes blocos mudam — o resto da seção fica como está.</div>
+              <div class="ap__preview" #preview>
+                @for (b of bp.blocks; track b.index) {
+                  <div class="ap__block-label">Bloco {{ b.index }}{{ b.heading ? ' — ' + b.heading : '' }}</div>
+                  <div [innerHTML]="b.proposed | planMarkdown"></div>
+                }
+              </div>
+            </div>
+          }
           @if (proposal(); as prop) {
             <div class="ap__proposal">
               <div class="ap__bar"><mat-icon>auto_fix_high</mat-icon><strong>Proposta de nova versão</strong><span class="ap__spacer"></span>
@@ -223,6 +239,7 @@ export type KbAdminMode = 'edit' | 'new' | 'history' | 'chat' | 'project';
     .ap__bubble { max-width: 85%; padding: 8px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.55; background: rgba(255,255,255,.06); overflow-wrap: anywhere; }
     .ap__msg--user .ap__bubble { background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent); }
     .ap__bubble ::ng-deep p:first-child { margin-top: 0; } .ap__bubble ::ng-deep p:last-child { margin-bottom: 0; }
+    .ap__block-label { margin: 10px 0 4px; font-size: 12px; font-weight: 600; color: var(--mat-sys-primary); }
     .ap__proposal { margin-top: 10px; padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--mat-sys-primary); }
     .ap__composer { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
     .ap__composer textarea { flex: 1; resize: vertical; }
@@ -258,6 +275,8 @@ export class KbAdminPanelComponent implements OnChanges {
   readonly messages = signal<ChatMessage[]>([]);
   readonly thinking = signal(false);
   readonly proposal = signal<string | null>(null);
+  /** Seção grande: só os blocos alterados pela IA (aplicados no servidor sobre a versão da proposta). */
+  readonly blockProposal = signal<{ version: number; blocks: ChatBlock[] } | null>(null);
   readonly chatStatus = signal<ChatStatus | null>(null);
   readonly fromSuggestion = signal<ArchitectureSuggestion | null>(null);
 
@@ -297,7 +316,7 @@ export class KbAdminPanelComponent implements OnChanges {
 
   constructor() {
     effect(() => {
-      this.proposal(); this.viewing(); this.showPreview();
+      this.proposal(); this.blockProposal(); this.viewing(); this.showPreview();
       setTimeout(() => renderMermaidIn(this.previewRef?.nativeElement), 0);
     });
   }
@@ -309,6 +328,7 @@ export class KbAdminPanelComponent implements OnChanges {
     this.showPreview.set(false);
     this.viewing.set(null);
     this.proposal.set(null);
+    this.blockProposal.set(null);
     this.note = '';
     switch (this.mode()) {
       case 'edit':
@@ -415,7 +435,8 @@ export class KbAdminPanelComponent implements OnChanges {
       next: r => {
         this.thinking.set(false);
         this.messages.update(m => [...m, { role: 'assistant', content: r.reply }]);
-        if (r.suggestion) this.proposal.set(r.suggestion);
+        if (r.suggestion) { this.proposal.set(r.suggestion); this.blockProposal.set(null); }
+        if (r.blocks?.length) { this.blockProposal.set({ version: r.version ?? 0, blocks: r.blocks }); this.proposal.set(null); }
         this.scrollChat();
       },
       error: err => {
@@ -429,22 +450,44 @@ export class KbAdminPanelComponent implements OnChanges {
     const s = this.section();
     const prop = this.proposal();
     if (!s || !prop) return;
+    this.write(s.key, { title: s.title, content: prop, source: 'ai', note: this.aiNote() }, () => this.afterAiApply());
+  }
+
+  /** Seção grande: o servidor troca só os blocos (confere que a seção não mudou desde a proposta). */
+  applyBlocks(): void {
+    const s = this.section();
+    const bp = this.blockProposal();
+    if (!s || !bp) return;
+    this.saving.set(true);
+    this.api.applyChatBlocks(this.project().key, s.key, { version: bp.version, note: this.aiNote(), blocks: bp.blocks }).subscribe({
+      next: saved => {
+        this.saving.set(false);
+        this.snackBar.open(`Seção salva — versão ${saved.version}`, 'Ok', { duration: 3500 });
+        Promise.resolve(this.afterAiApply()).finally(() => this.sectionSaved.emit(saved));
+      },
+      error: err => { this.saving.set(false); this.snackBar.open(err?.error?.error ?? 'Não foi possível aplicar os blocos.', 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  private aiNote(): string {
     const ask = this.messages().find(m => m.role === 'user')?.content ?? '';
     const sg = this.fromSuggestion();
-    this.write(s.key, { title: s.title, content: prop, source: 'ai',
-      note: (sg ? `sugestão ${sg.kind === 'divergence' ? 'de divergência' : 'de aprendizado'}${sg.cardNumber ? ' (card ' + sg.cardNumber + ')' : ''} aplicada com a IA` : `IA: ${ask.replace(/\s+/g, ' ').slice(0, 160)}`) },
-      async () => {
-        this.proposal.set(null);
-        if (!sg) return;
-        // 0037: resolve antes de avisar que salvou — ao salvar, a tela fecha este painel e o aviso se perderia.
-        try {
-          const resolved = await firstValueFrom(this.api.resolveSuggestion(sg.id, 'applied', 'aplicada pelo chat'));
-          this.fromSuggestion.set(null);
-          this.suggestionApplied.emit(resolved);
-        } catch {
-          this.snackBar.open('A seção foi salva, mas não consegui marcar a sugestão como aplicada — marque na lista.', 'Fechar', { duration: 8000 });
-        }
-      });
+    return sg ? `sugestão ${sg.kind === 'divergence' ? 'de divergência' : 'de aprendizado'}${sg.cardNumber ? ' (card ' + sg.cardNumber + ')' : ''} aplicada com a IA` : `IA: ${ask.replace(/\s+/g, ' ').slice(0, 160)}`;
+  }
+
+  private async afterAiApply(): Promise<void> {
+    this.proposal.set(null);
+    this.blockProposal.set(null);
+    const sg = this.fromSuggestion();
+    if (!sg) return;
+    // 0037: resolve antes de avisar que salvou — ao salvar, a tela fecha este painel e o aviso se perderia.
+    try {
+      const resolved = await firstValueFrom(this.api.resolveSuggestion(sg.id, 'applied', 'aplicada pelo chat'));
+      this.fromSuggestion.set(null);
+      this.suggestionApplied.emit(resolved);
+    } catch {
+      this.snackBar.open('A seção foi salva, mas não consegui marcar a sugestão como aplicada — marque na lista.', 'Fechar', { duration: 8000 });
+    }
   }
 
   private scrollChat(): void {

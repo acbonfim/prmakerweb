@@ -288,7 +288,9 @@ export interface LearnFromCardResponse {
 }
 
 export interface ChatMessage { role: 'user' | 'assistant'; content: string; }
-export interface ChatReply { reply: string; suggestion?: string | null; provider?: string | null; model?: string | null; tokensUsed?: number | null; }
+/** Seção grande: bloco que a IA propôs trocar (o original é conferido na posição ao aplicar). */
+export interface ChatBlock { index: number; start: number; heading?: string | null; original: string; proposed: string; }
+export interface ChatReply { reply: string; suggestion?: string | null; blocks?: ChatBlock[] | null; version?: number; provider?: string | null; model?: string | null; tokensUsed?: number | null; }
 export interface ChatStatus { available: boolean; provider?: string | null; reason?: string | null; }
 
 /** Seções padrão da engenharia reversa (mesmas do template da skill base-solvace). */
@@ -417,6 +419,11 @@ export class ArchitectureService {
 
   chat(projectKey: string, sectionKey: string, messages: ChatMessage[]): Observable<ChatReply> {
     return this.http.post<ChatReply>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}/chat`, { messages });
+  }
+
+  /** Seção grande: aplica os blocos propostos pelo chat sobre a versão atual (nova versão, fonte "ai"). */
+  applyChatBlocks(projectKey: string, sectionKey: string, body: { version: number; note: string; blocks: ChatBlock[] }): Observable<ArchitectureSection> {
+    return this.http.post<ArchitectureSection>(`${this.api}/projects/${encodeURIComponent(projectKey)}/sections/${encodeURIComponent(sectionKey)}/chat/apply`, body);
   }
 
   suggestions(status: 'pending' | 'all' = 'pending'): Observable<ArchitectureSuggestion[]> {
