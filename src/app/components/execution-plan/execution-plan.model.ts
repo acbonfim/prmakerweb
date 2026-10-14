@@ -182,6 +182,18 @@ export interface ExecutionLink {
   createdAt: string;
   statusChangedBy?: string | null;
   statusChangedAt?: string | null;
+  /** 0069: CI do PR aberto (null = sem CI ou ainda não lido). */
+  checksStatus?: 'pending' | 'success' | 'failure' | null;
+  /** 0069: checks que falharam; `preexisting` = a base já falha nele (não é do card). */
+  checksFailed?: ExecutionCheckItem[];
+  checksChangedAt?: string | null;
+}
+
+/** 0069: check do CI que falhou. */
+export interface ExecutionCheckItem {
+  name: string;
+  url?: string | null;
+  preexisting: boolean;
 }
 
 export interface ExecutionArtifact {

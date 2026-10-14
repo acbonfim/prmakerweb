@@ -897,6 +897,13 @@
 .plan-link--open { --plan-c: var(--plan-warn); }
 .plan-link--resolved, .plan-link--merged { --plan-c: var(--plan-ok); }
 .plan-link--closed { --plan-c: var(--plan-muted); opacity: 0.75; }
+.plan-link__ci--pending { --plan-c: var(--plan-warn); }
+.plan-link__ci--success { --plan-c: var(--plan-ok); }
+.plan-link__ci--failure { --plan-c: var(--plan-err); }
+.plan-link__checks { display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 10.5px; }
+.plan-link__check { color: var(--plan-err); text-decoration: none; }
+.plan-link__check:hover { text-decoration: underline; }
+.plan-link__check--base { color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent); }
 .plan-link__menu.mat-mdc-icon-button { width: 28px; height: 28px; padding: 0; --mdc-icon-button-state-layer-size: 28px; }
 .plan-link__menu .mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
