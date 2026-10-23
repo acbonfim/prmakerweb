@@ -17,6 +17,10 @@ import { KbConnectionsComponent } from './kb-connections.component';
 import { KbGuideReviewComponent } from './kb-guide-review.component';
 import { KbLearnCardComponent } from './kb-learn-card.component';
 import { KbAskDeepComponent } from './kb-ask-deep.component';
+import {
+  AskAttachmentLimits, DEFAULT_ATTACH_LIMITS, DEFAULT_ATTACH_QUESTION, Dictation, KbAttachChipsComponent, KbAttachDropDirective, KbAttachToolsComponent,
+  PendingAttachment, dictationSupported, prepareAttachments, releaseAttachment, toRequest
+} from './kb-ask-attach';
 import { KbQuestionsComponent } from './kb-questions.component';
 import {
   KbViewMode, TocItem, areaGroups, cleanInline, articleMarkdown, friendlyKind, friendlyName, friendlyTagline, guideSections, headingsOf, projectArea, techSections
@@ -55,6 +59,8 @@ interface AskState {
   loading: boolean;
   response: ArchitectureAskResponse | null;
   error?: string | null;
+  /** 0072: anexos desta pergunta (só nome e tipo — o conteúdo já foi enviado e descartado). */
+  attached?: { name: string; kind: string }[];
 }
 
 /** Palavras que indicam pergunta ("como saber se…?") — aí vale a busca com IA, não só a palavra exata. */
@@ -85,7 +91,8 @@ interface TreeGroup {
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PlanMarkdownPipe, KbAdminPanelComponent, EcosystemMapComponent,
     KbByQuestionComponent,
-    KbFriendlyOverviewComponent, KbConnectionsComponent, KbGuideReviewComponent, KbLearnCardComponent, KbAskDeepComponent, KbQuestionsComponent, LazyMarkdownComponent],
+    KbFriendlyOverviewComponent, KbConnectionsComponent, KbGuideReviewComponent, KbLearnCardComponent, KbAskDeepComponent, KbQuestionsComponent, LazyMarkdownComponent,
+    KbAttachDropDirective, KbAttachToolsComponent, KbAttachChipsComponent],
   templateUrl: './architecture.component.html',
   styleUrls: ['./architecture.component.css']
 })
@@ -138,6 +145,12 @@ export class ArchitectureComponent implements OnInit {
   readonly contentLoading = signal(false);
   readonly ask = signal<AskState | null>(null);
   askText = '';
+  // 0072: anexos (imagem, PDF, texto) e ditado por voz na pergunta
+  readonly askFiles = signal<PendingAttachment[]>([]);
+  readonly askAttachMessages = signal<string[]>([]);
+  readonly attachSupport = signal<{ supports: boolean; limits: AskAttachmentLimits }>({ supports: false, limits: DEFAULT_ATTACH_LIMITS });
+  readonly dictation = new Dictation();
+  readonly canDictate = dictationSupported();
   readonly askExamples = [
     'Como saber se o usuário fez login com sucesso?',
     'Onde fica a planta atual do usuário?',
@@ -291,6 +304,10 @@ export class ArchitectureComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.api.askStatus().subscribe({
+      next: st => this.attachSupport.set({ supports: !!st.available && !!st.supportsAttachments, limits: st.limits ?? DEFAULT_ATTACH_LIMITS }),
+      error: () => { /* sem status: o recurso de anexo fica escondido */ }
+    });
     this.route.queryParamMap.subscribe(q => {
       const modo = q.get('modo');
       if (modo === 'simples' || modo === 'tecnico') this.setMode(modo, false);
@@ -484,25 +501,65 @@ export class ArchitectureComponent implements OnInit {
   }
 
   askAi(question?: string): void {
-    const q = (question ?? this.askText).trim();
+    let q = (question ?? this.askText).trim();
+    // 0072: só o print/arquivo, sem texto — a pergunta padrão (a mesma da API)
+    if (q.length < 3 && this.askFiles().length && question === undefined) q = DEFAULT_ATTACH_QUESTION;
     if (q.length < 3) return;
     this.treeOpen.set(false);
+    // com anexo a mesma pergunta pode ser repetida (o anexo muda a resposta): a URL não muda, então dispara direto
+    if (this.askFiles().length && this.route.snapshot.queryParamMap.get('ask') === q) { this.showAsk(q); return; }
     this.router.navigate([], { queryParams: { ask: q } });
+  }
+
+  // ── 0072: anexos e ditado ─────────────────────────────────────────────────────────────────────
+
+  async addFiles(files: File[]): Promise<void> {
+    if (!this.attachSupport().supports) {
+      this.askAttachMessages.set(['A IA configurada não lê anexos (use o Claude em Minhas integrações). Escreva a pergunta com texto.']);
+      return;
+    }
+    const { added, errors } = await prepareAttachments(files, this.askFiles(), this.attachSupport().limits);
+    if (added.length) this.askFiles.update(list => [...list, ...added]);
+    this.askAttachMessages.set([...errors, ...added.filter(a => a.note).map(a => `"${a.name}": ${a.note}.`)]);
+  }
+
+  removeFile(id: string): void {
+    const gone = this.askFiles().find(f => f.id === id);
+    if (gone) releaseAttachment(gone);
+    this.askFiles.update(list => list.filter(f => f.id !== id));
+    this.askAttachMessages.set([]);
+  }
+
+  toggleDictation(): void {
+    if (this.dictation.listening()) { this.dictation.stop(); return; }
+    const base = this.askText.trim();
+    this.askAttachMessages.set([]);
+    this.dictation.start(
+      text => { this.askText = base ? `${base} ${text}` : text; },
+      message => this.askAttachMessages.set([message])
+    );
   }
 
   private showAsk(question: string): void {
     this.adminMode.set(null);
     this.selection.set({ type: 'ask', question });
     this.askText = question;
+    const files = this.askFiles();
     const current = this.ask();
-    if (current && current.question === question && (current.loading || current.response)) return;
+    if (!files.length && current && current.question === question && (current.loading || current.response)) return;
     const seq = ++this.askSeq;
-    this.ask.set({ question, loading: true, response: null });
-    this.api.ask(question).subscribe({
-      next: r => { if (seq === this.askSeq) this.ask.set({ question, loading: false, response: r }); },
+    // os anexos seguem só nesta pergunta: a tela fica com nome e tipo, o conteúdo é solto
+    const attached = files.map(f => ({ name: f.name, kind: f.kind }));
+    const body = files.map(toRequest);
+    files.forEach(releaseAttachment);
+    this.askFiles.set([]);
+    this.askAttachMessages.set([]);
+    this.ask.set({ question, loading: true, response: null, attached });
+    this.api.ask(question, body).subscribe({
+      next: r => { if (seq === this.askSeq) this.ask.set({ question, loading: false, response: r, attached }); },
       error: err => {
         if (seq === this.askSeq)
-          this.ask.set({ question, loading: false, response: null, error: err?.error?.error ?? 'Não foi possível consultar a base agora.' });
+          this.ask.set({ question, loading: false, response: null, attached, error: err?.error?.error ?? 'Não foi possível consultar a base agora.' });
       }
     });
   }

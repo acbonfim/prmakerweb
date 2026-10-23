@@ -229,12 +229,17 @@
     } @else if (selection().type === 'map') {
       <app-ecosystem-map [focus]="mapFocus()" [simple]="simple()" [names]="friendlyNames()" (openProject)="openProjectByKey($event)" (openItem)="openReverseRef($event)"></app-ecosystem-map>
     } @else if (selection().type === 'ask') {
-      <section class="ask" aria-live="polite">
+      <section class="ask" aria-live="polite" kbAttachDrop (filesDropped)="addFiles($event)">
         <form class="ask__box ask__box--top" (submit)="$event.preventDefault(); askAi()">
           <mat-icon>auto_awesome</mat-icon>
-          <input [(ngModel)]="askText" name="ask" placeholder="Pergunte à Base Solvace…" aria-label="Pergunta" />
-          <button mat-flat-button color="primary" type="submit" [disabled]="askText.trim().length < 3 || ask()?.loading">Perguntar</button>
+          <input [(ngModel)]="askText" name="ask" [placeholder]="attachSupport().supports ? 'Pergunte à Base Solvace… (cole um print ou arraste um arquivo)' : 'Pergunte à Base Solvace…'" aria-label="Pergunta" />
+          <app-kb-attach-tools [attachments]="attachSupport().supports" [dictation]="canDictate" [listening]="dictation.listening()" (pick)="addFiles($event)" (mic)="toggleDictation()"></app-kb-attach-tools>
+          <button mat-flat-button color="primary" type="submit" [disabled]="(askText.trim().length < 3 && !askFiles().length) || ask()?.loading">Perguntar</button>
         </form>
+        <app-kb-attach-chips [files]="askFiles()" [messages]="askAttachMessages()" (remove)="removeFile($event)"></app-kb-attach-chips>
+        @if (ask()?.attached?.length; as n) {
+          <div class="ask__sent"><mat-icon>attach_file</mat-icon>Enviado com: @for (f of ask()!.attached!; track $index) { <span class="kb__tag">{{ f.name }}</span> }</div>
+        }
         @if (ask(); as a) {
           @if (a.loading) {
             <div class="ask__thinking">
@@ -249,6 +254,10 @@
             <div class="kb__empty kb__empty--error"><mat-icon>error_outline</mat-icon>{{ a.error }}
               <button mat-stroked-button (click)="ask.set(null); askAi(a.question)">Tentar de novo</button></div>
           } @else if (a.response; as r) {
+            @if (r.attachmentSeen) {
+              <div class="ask__seen"><mat-icon>visibility</mat-icon><span><strong>O que a IA entendeu do anexo:</strong> {{ r.attachmentSeen }}</span></div>
+            }
+            @for (note of r.attachmentNotes ?? []; track $index) { <div class="ask__note"><mat-icon>info</mat-icon>{{ note }}</div> }
             @if (r.answer) {
               <div class="ask__answer">
                 <div class="ask__answer-head"><mat-icon>auto_awesome</mat-icon>Resposta da base
@@ -302,13 +311,17 @@
     } @else if (selection().type === 'overview') {
       <section class="kb__overview">
         <!-- 0037: pergunte com as suas palavras — a IA leva ao trecho certo -->
-        <div class="ask__hero">
+        <div class="ask__hero" kbAttachDrop (filesDropped)="addFiles($event)">
           <div class="ask__hero-title"><mat-icon>auto_awesome</mat-icon>Pergunte à Base Solvace</div>
-          <p>Escreva o que você precisa saber, com as suas palavras — a IA entende a pergunta e leva ao trecho que responde.</p>
+          <p>Escreva o que você precisa saber, com as suas palavras — a IA entende a pergunta e leva ao trecho que responde.
+            @if (attachSupport().supports) { Você também pode <strong>colar um print</strong>, arrastar um arquivo (imagem, PDF, log) ou usar o microfone. }
+            @else if (canDictate) { Você também pode usar o microfone. }</p>
           <form class="ask__box" (submit)="$event.preventDefault(); askAi()">
             <input [(ngModel)]="askText" name="askHero" placeholder="Ex.: como saber se o usuário fez login com sucesso?" aria-label="Pergunta" />
-            <button mat-flat-button color="primary" type="submit" [disabled]="askText.trim().length < 3"><mat-icon>send</mat-icon>Perguntar</button>
+            <app-kb-attach-tools [attachments]="attachSupport().supports" [dictation]="canDictate" [listening]="dictation.listening()" (pick)="addFiles($event)" (mic)="toggleDictation()"></app-kb-attach-tools>
+            <button mat-flat-button color="primary" type="submit" [disabled]="askText.trim().length < 3 && !askFiles().length"><mat-icon>send</mat-icon>Perguntar</button>
           </form>
+          <app-kb-attach-chips [files]="askFiles()" [messages]="askAttachMessages()" (remove)="removeFile($event)"></app-kb-attach-chips>
           <div class="ask__examples">
             @for (e of askExamples; track e) { <button type="button" class="ask__example" (click)="askAi(e)">{{ e }}</button> }
           </div>
