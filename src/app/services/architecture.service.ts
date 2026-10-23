@@ -221,7 +221,22 @@ export interface ArchitectureAskResponse {
   /** 0040: operacao | regra | tecnica | outra (null sem IA). */
   kind?: string | null;
   suggestedSection?: ArchitectureSuggestedSection | null;
+  /** 0072: o que a IA entendeu dos anexos (erro, tela, módulo) e avisos (ex.: arquivo de texto cortado). */
+  attachmentSeen?: string | null;
+  attachmentNotes?: string[];
 }
+
+/** 0072: a IA configurada lê anexos? e os limites (a tela não repete os números). */
+export interface ArchitectureAskStatus {
+  available: boolean;
+  provider?: string | null;
+  reason?: string | null;
+  supportsAttachments: boolean;
+  limits?: { maxFiles: number; maxImageBytes: number; maxPdfBytes: number; maxPdfPages: number; maxTextBytes: number; maxTotalBytes: number } | null;
+}
+
+/** Anexo enviado na pergunta (base64) — a API valida, lê e descarta. */
+export interface ArchitectureAskAttachment { name: string; mediaType: string; data: string; }
 
 /** Proposta de seção nova/atualizada (0038: guia, aprender com card, pergunte a fundo). */
 export interface ArchitectureSectionProposal {
@@ -469,8 +484,13 @@ export class ArchitectureService {
   }
 
   /** Pergunta à base com IA: entende o contexto e leva aos trechos que respondem (0037). */
-  ask(question: string): Observable<ArchitectureAskResponse> {
-    return this.http.post<ArchitectureAskResponse>(`${this.api}/ask`, { question });
+  ask(question: string, attachments: ArchitectureAskAttachment[] = []): Observable<ArchitectureAskResponse> {
+    return this.http.post<ArchitectureAskResponse>(`${this.api}/ask`, attachments.length ? { question, attachments } : { question });
+  }
+
+  /** 0072: a IA configurada aceita anexos? (e os limites). */
+  askStatus(): Observable<ArchitectureAskStatus> {
+    return this.http.get<ArchitectureAskStatus>(`${this.api}/ask/status`);
   }
 
   knowledgeState(): Observable<KnowledgeState> {
