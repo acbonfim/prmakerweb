@@ -51,6 +51,12 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadComponent: () => import('./reverse-engineering/reverse-engineering.component').then(m => m.ReverseEngineeringComponent)
       },
       {
+        path: 'promotions',
+        data: { tab: { title: 'Promoção de PRs', icon: 'rocket_launch' } },
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./promotion/promotion.component').then(m => m.PromotionComponent)
+      },
+      {
         path: 'architecture',
         data: { tab: { title: 'Base Solvace', icon: 'account_tree' } },
         canActivate: [AuthGuard],
