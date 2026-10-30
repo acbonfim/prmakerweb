@@ -76,25 +76,17 @@
       }
     }
     @if (history().length > 1) {
-      <button mat-icon-button class="plan__action plan__action--secondary" [matMenuTriggerFor]="historyMenu"
-              [matTooltip]="'Histórico (' + history().length + ' planos)'" aria-label="Histórico de planos">
+      <button mat-icon-button class="plan__action plan__action--secondary" cdkOverlayOrigin #historyOrigin="cdkOverlayOrigin"
+              (click)="historyPanel.toggle(historyOrigin)" aria-haspopup="dialog"
+              [matTooltip]="'Histórico de versões (' + history().length + ')'" aria-label="Histórico de versões do plano">
         <mat-icon>history</mat-icon>
       </button>
     }
-    <mat-menu #historyMenu="matMenu" class="plan-history-menu">
-      @for (h of history(); track h.id; let first = $first) {
-        <button mat-menu-item (click)="selectHistory(h)" [class.plan-history--current]="plan()?.id === h.id">
-          <span class="plan-history__dot plan-status--{{ h.status }}"></span>
-          <span class="plan-history__text">
-            <span class="plan-history__title">{{ h.title }}@if (first) { · mais recente }</span>
-            <span class="plan-history__meta">{{ statusLabel[h.status] }} · {{ h.stepsCompleted }}/{{ h.stepsTotal }} · {{ formatDateTime(h.createdAt) }}</span>
-          </span>
-        </button>
-      }
-    </mat-menu>
+    <app-plan-history #historyPanel [items]="history()" [currentId]="plan()?.id ?? null" [cardNumber]="loadedCard()"
+                      (picked)="selectHistory($event)"></app-plan-history>
     @if (plan(); as p) {
       <!-- 0043: painel estreito (celular) — as ações secundárias do cabeçalho vão para o "⋯". -->
-      <button mat-icon-button class="plan__action plan__more" [matMenuTriggerFor]="moreMenu" aria-label="Mais ações do plano">
+      <button mat-icon-button class="plan__action plan__more" [matMenuTriggerFor]="moreMenu" cdkOverlayOrigin #moreOrigin="cdkOverlayOrigin" aria-label="Mais ações do plano">
         <mat-icon>more_vert</mat-icon>
       </button>
       <mat-menu #moreMenu="matMenu" class="app-menu" xPosition="before">
@@ -107,8 +99,8 @@
           </button>
         }
         @if (history().length > 1) {
-          <button mat-menu-item [matMenuTriggerFor]="historyMenu">
-            <mat-icon>history</mat-icon><span>Histórico ({{ history().length }} planos)</span>
+          <button mat-menu-item (click)="historyPanel.open(moreOrigin)">
+            <mat-icon>history</mat-icon><span>Histórico de versões ({{ history().length }})</span>
           </button>
         }
       </mat-menu>
