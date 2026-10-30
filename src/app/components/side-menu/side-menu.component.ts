@@ -71,12 +71,10 @@ export class SideMenuComponent implements OnInit {
       link: 'auth/plugin-manager',
       allowedRoles: ['admin']
     },
-    {
-      label: 'Aprovar Férias',
-      icon: 'assignment_turned_in',
-      link: 'auth/vacation-approvals',
-      allowedRoles: ['admin', 'gestor']
-    },
+    // ── Férias (DESATIVADO) — itens e rotas escondidos. Para reativar, descomente aqui e as rotas em authenticated.routes.ts:
+    // { label: 'Férias', icon: 'beach_access', link: 'auth/vacations' },
+    // { label: 'Meus Períodos', icon: 'event_available', link: 'auth/vacation-balances' },
+    // { label: 'Aprovar Férias', icon: 'assignment_turned_in', link: 'auth/vacation-approvals', allowedRoles: ['admin', 'gestor'] },
   ]
 
   constructor() {

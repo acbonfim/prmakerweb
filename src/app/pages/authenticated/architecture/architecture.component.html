@@ -424,7 +424,7 @@
         }
         <app-kb-connections [project]="p" [projects]="projects()" (openProject)="openProjectByKey($event)" (openMap)="openMap(p.key)"></app-kb-connections>
         @if (isModule(p) && reverseCount(p)) {
-          <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)" [canOpenReverse]="isAdmin()"></app-kb-by-question>
+          @if (isAdmin()) { <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)" [canOpenReverse]="isAdmin()"></app-kb-by-question> }
         }
         } @else {
         <div class="kb__doc-kicker">
@@ -500,7 +500,7 @@
           </section>
         }
         @if (isModule(p) && reverseCount(p)) {
-          <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)" [canOpenReverse]="isAdmin()"></app-kb-by-question>
+          @if (isAdmin()) { <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)" [canOpenReverse]="isAdmin()"></app-kb-by-question> }
         }
         }
 

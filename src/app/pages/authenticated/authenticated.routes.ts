@@ -62,24 +62,26 @@ export const AUTHENTICATED_ROUTES: Routes = [
         canActivate: [AuthGuard],
         loadComponent: () => import('./architecture/architecture.component').then(m => m.ArchitectureComponent)
       },
-      {
-        path: 'vacations',
-        data: { tab: { title: 'Férias', icon: 'beach_access' } },
-        canActivate: [AuthGuard],
-        loadComponent: () => import('./vacations/vacations.component').then(m => m.VacationsComponent)
-      },
-      {
-        path: 'vacation-balances',
-        data: { tab: { title: 'Meus períodos', icon: 'event_available' } },
-        canActivate: [AuthGuard],
-        loadComponent: () => import('./vacations/vacation-balances.component').then(m => m.VacationBalancesComponent)
-      },
-      {
-        path: 'vacation-approvals',
-        data: { tab: { title: 'Aprovar férias', icon: 'assignment_turned_in' } },
-        canActivate: [AuthGuard],
-        loadComponent: () => import('./vacations/vacation-approvals.component').then(m => m.VacationApprovalsComponent)
-      },
+      // ── Férias (DESATIVADO): as telas e as rotas de férias estão escondidas — quem abrir a URL cai no redirecionamento padrão.
+      // Para reativar: descomente as três rotas abaixo e os itens "Férias", "Meus Períodos" e "Aprovar Férias" no side-menu.
+      // {
+      //   path: 'vacations',
+      //   data: { tab: { title: 'Férias', icon: 'beach_access' } },
+      //   canActivate: [AuthGuard],
+      //   loadComponent: () => import('./vacations/vacations.component').then(m => m.VacationsComponent)
+      // },
+      // {
+      //   path: 'vacation-balances',
+      //   data: { tab: { title: 'Meus períodos', icon: 'event_available' } },
+      //   canActivate: [AuthGuard],
+      //   loadComponent: () => import('./vacations/vacation-balances.component').then(m => m.VacationBalancesComponent)
+      // },
+      // {
+      //   path: 'vacation-approvals',
+      //   data: { tab: { title: 'Aprovar férias', icon: 'assignment_turned_in' } },
+      //   canActivate: [AuthGuard],
+      //   loadComponent: () => import('./vacations/vacation-approvals.component').then(m => m.VacationApprovalsComponent)
+      // },
       {
         path: '',
         redirectTo: 'dashboard',

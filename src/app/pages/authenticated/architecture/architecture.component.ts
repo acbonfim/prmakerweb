@@ -257,7 +257,8 @@ export class ArchitectureComponent implements OnInit {
       this.trapsKey = key;
       this.traps.set([]);
       this.showTraps.set(false);
-      if (key) this.reverse.traps(key).subscribe({ next: t => { if (this.trapsKey === key) this.traps.set(t); }, error: () => {} });
+      // 0074: as armadilhas vêm da engenharia reversa (só administrador): para os demais nem se pergunta ao backend.
+      if (key && this.isAdmin()) this.reverse.traps(key).subscribe({ next: t => { if (this.trapsKey === key) this.traps.set(t); }, error: () => {} });
     });
     // Diagramas: depois que o conteúdo da seção/artigo aparece na tela.
     effect(() => {
