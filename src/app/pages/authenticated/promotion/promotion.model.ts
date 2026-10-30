@@ -65,6 +65,8 @@ export interface PromotionPreviewRequest {
   kind?: string | null;
   cards: { card: string; repository?: string | null }[];
   profiles?: Record<string, PromotionTargetDto[]> | null;
+  /** Consulta o GitHub de novo, sem o cache de 5 min das branches. */
+  refresh?: boolean;
 }
 
 export interface PromotionCreateItem {

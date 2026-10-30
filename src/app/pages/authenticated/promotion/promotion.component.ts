@@ -362,7 +362,7 @@ export class PromotionComponent implements OnInit, OnDestroy {
   }
 
   refreshAll(): void {
-    this.runPreview(this.rows().map(r => ({ card: r.card, repository: r.repository })), true);
+    this.runPreview(this.rows().map(r => ({ card: r.card, repository: r.repository })), true, true);
   }
 
   changeRepository(row: Row, repository: string): void {
@@ -380,11 +380,11 @@ export class PromotionComponent implements OnInit, OnDestroy {
     });
   }
 
-  private runPreview(cards: { card: string; repository?: string | null }[], replaceAll: boolean): void {
+  private runPreview(cards: { card: string; repository?: string | null }[], replaceAll: boolean, refresh = false): void {
     if (!cards.length) return;
     this.error.set(null);
     this.loading.set(true);
-    this.api.preview(this.previewRequest(cards)).subscribe({
+    this.api.preview({ ...this.previewRequest(cards), refresh }).subscribe({
       next: p => {
         this.loading.set(false);
         this.executorOnline.set(p.executorOnline);
