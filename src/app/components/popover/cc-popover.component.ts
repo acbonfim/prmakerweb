@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, output, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, inject, input, output, signal, viewChild } from '@angular/core';
 import {
   CdkConnectedOverlay, CdkOverlayOrigin, ConnectedPosition, ConnectionPositionPair, OverlayModule,
 } from '@angular/cdk/overlay';
@@ -41,7 +41,7 @@ import {
       (overlayKeydown)="onKeydown($event)"
       (positionChange)="onPositionChange($event.connectionPair)"
     >
-      <div class="cc-popover-panel" [class.above]="above()" [class.align-start]="alignX() === 'start'" [class.align-end]="alignX() === 'end'" role="dialog">
+      <div class="cc-popover-panel" [style.max-width]="maxWidth()" [class.above]="above()" [class.align-start]="alignX() === 'start'" [class.align-end]="alignX() === 'end'" role="dialog">
         <span class="cc-popover-caret"></span>
         <div class="cc-popover-content"><ng-content /></div>
       </div>
@@ -75,6 +75,8 @@ import {
   `],
 })
 export class CcPopoverComponent {
+  /** Largura máxima do painel (0074: o histórico de versões precisa de mais que os 340 px padrão). */
+  readonly maxWidth = input<string>('min(340px, calc(100vw - 24px))');
   readonly closed = output<void>();
   /** Emitido quando o painel é ANEXADO/renderizado (mirror do `menuOpened` do mat-menu) — usar para
    *  carregar dados sob demanda (ex.: busca inicial do filtro), inclusive com fonte síncrona. */

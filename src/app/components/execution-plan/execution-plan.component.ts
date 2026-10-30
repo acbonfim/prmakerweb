@@ -12,6 +12,7 @@ import {
   inject,
   signal
 } from '@angular/core';
+import { OverlayModule } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -33,6 +34,7 @@ import { BackNavigationService } from '../../services/back-navigation.service';
 import { PlanMarkdownPipe } from './plan-markdown.pipe';
 import { PlanFilesDialogComponent, PlanFilesDialogData } from './plan-files-dialog.component';
 import { PlanNotesComponent } from './plan-notes.component';
+import { PlanHistoryComponent } from './plan-history.component';
 import { PlanChatDialogComponent, PlanChatDialogData } from './plan-chat-dialog.component';
 import { StorageService } from '../../services/storage.service';
 import { UserPendingService } from '../../services/user-pending.service';
@@ -127,7 +129,7 @@ interface LinkDraft {
 @Component({
   selector: 'app-execution-plan',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, TokenUsageComponent],
+  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent],
   templateUrl: './execution-plan.component.html',
   styleUrls: ['./execution-plan.component.css']
 })

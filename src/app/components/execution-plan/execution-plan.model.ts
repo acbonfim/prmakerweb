@@ -22,6 +22,8 @@ export interface ExecutionPlanSummary {
   statusReason?: string | null;
   statusChangedBy?: string | null;
   createdBy: string;
+  /** 0074: externalId de quem criou (foto do avatar). */
+  createdByUserId?: string | null;
   createdAt: string;
   updatedAt: string;
   startedAt?: string | null;
@@ -29,6 +31,8 @@ export interface ExecutionPlanSummary {
   lastActivityAt?: string | null;
   stepsTotal: number;
   stepsCompleted: number;
+  /** 0074: número da versão entre os planos do card na mesma fase (1 = o mais antigo); 0/ausente = API antiga. */
+  versionNumber?: number;
   /** Análise ou correção (0024). */
   phase: PlanPhase;
   parentPlanId?: string | null;
