@@ -9,7 +9,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { forkJoin } from 'rxjs';
+import { switchMap } from 'rxjs';
 import { AuthService } from '../../../../services/auth.service';
 import { GlobalService } from '../../../../services/global.service';
 
@@ -213,10 +213,11 @@ export class UserFormDialogComponent implements OnInit {
     });
 
     if (this.rolesChanged()) {
-      forkJoin([
-        profile$,
-        this._authService.updateUserRoles(this.id, this.selectedRoles())
-      ]).subscribe({
+      // Em sequência, nunca em paralelo: as duas chamadas gravam o MESMO usuário e, juntas, a segunda falhava com
+      // "Optimistic concurrency failure" (Erro ao remover cargos).
+      profile$.pipe(
+        switchMap(() => this._authService.updateUserRoles(this.id, this.selectedRoles()))
+      ).subscribe({
         next: () => this.done('Usuário atualizado'),
         error: (err) => this.fail(err)
       });
