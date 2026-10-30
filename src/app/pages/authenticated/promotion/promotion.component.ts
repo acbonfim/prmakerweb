@@ -1,13 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subscription, timer } from 'rxjs';
 import { PromotionService } from '../../../services/promotion.service';
+import { MOTION_CSS } from './promotion-motion';
 import { PromotionPasteDialogComponent } from './promotion-paste-dialog.component';
 import { PromotionResultComponent } from './promotion-result.component';
 import {
@@ -20,6 +22,9 @@ interface Row extends PromotionPreviewRow {
   busy?: boolean;
   adding?: boolean;
   newTarget?: string;
+  /** Branches do repositório que casam com o que foi digitado em "+ destino". */
+  suggestions?: string[];
+  searching?: boolean;
 }
 
 const POLL_MS = 3000;
@@ -33,7 +38,7 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
 @Component({
   selector: 'app-promotion',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, PromotionResultComponent],
+  imports: [CommonModule, FormsModule, MatAutocompleteModule, MatButtonModule, MatIconModule, MatTooltipModule, PromotionResultComponent],
   template: `
     <div class="pm">
       <header class="pm__head">
@@ -84,7 +89,12 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
           </div>
         }
         @if (error()) { <div class="pm__error" role="alert"><mat-icon>error_outline</mat-icon> {{ error() }}</div> }
-        @if (loading()) { <div class="pm__loading"><span class="pm__spin"></span> Consultando o GitHub e o Azure DevOps…</div> }
+        @if (loading()) {
+          <div class="pm__loading" role="status" aria-live="polite">
+            <span class="pm__loadbar"><i></i></span>
+            {{ loadingKind() === 'refresh' ? 'Atualizando com o GitHub e o Azure DevOps…' : 'Consultando os registros do PRMake, o GitHub e o Azure DevOps…' }}
+          </div>
+        }
 
         @if (rows().length === 0 && !loading()) {
           <div class="pm__empty">
@@ -94,7 +104,8 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
         }
 
         @for (row of rows(); track row.key) {
-          <article class="row" [class.row--bad]="!rowOk(row)" [class.row--busy]="row.busy">
+          <article class="row busy-sweep-host" [class.row--bad]="!rowOk(row)" [class.row--busy]="row.busy" [class.row--refreshing]="loading() && loadingKind() === 'refresh'"
+                   [style.--i]="$index" aria-live="polite" [attr.aria-busy]="row.busy || null">
             <header class="row__head">
               <div class="row__id">
                 <strong>AB#{{ row.card }}</strong>
@@ -117,22 +128,24 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
                 } @else if (row.repository) {
                   <span class="val">{{ row.repository }}</span>
                 } @else {
-                  <input type="text" placeholder="owner/repositório" (keydown.enter)="changeRepository(row, $any($event.target).value)"
-                         (blur)="$any($event.target).value && changeRepository(row, $any($event.target).value)" aria-label="Repositório" />
+                  <span class="row__muted">sem registro no PRMake</span>
                 }
                 @if (row.profileLabel) { <span class="row__muted">{{ row.profileLabel }}</span> }
               </div>
 
               <div class="row__cell">
-                <span class="lbl">Branch principal</span>
-                @if (row.sourceBranch) {
-                  <span class="val"><code>{{ row.sourceBranch }}</code>
-                    @if (row.sourceBase) { <span class="row__muted"> cortada de <code>{{ row.sourceBase }}</code></span> }
+                <span class="lbl" matTooltip="A branch que o PRMake registrou para tratar o card (os PRs -dev/-qa saem dela)">Branch do card (registrada no PRMake)</span>
+                @if (row.sourceBranch) { <span class="val"><code>{{ row.sourceBranch }}</code></span> }
+                @if (row.sourceBase) {
+                  <span class="base" [matTooltip]="baseTip(row)" matTooltipClass="pm-tip">
+                    <mat-icon>call_split</mat-icon>
+                    a partir de <code>{{ row.sourceBase }}</code>
+                    <mat-icon class="base__info">info_outline</mat-icon>
                   </span>
                 }
-                @if (row.sourceFound) {
+                @if (row.sourceFound && row.sourceBase) {
                   <span class="commits" [class.commits--zero]="row.commitCount === 0" [matTooltip]="commitsTip(row)" matTooltipClass="pm-tip">
-                    <mat-icon>commit</mat-icon>{{ row.commitCount }} commit{{ row.commitCount === 1 ? '' : 's' }}{{ row.commitsTruncated ? '+' : '' }}
+                    <mat-icon>commit</mat-icon>{{ row.commitCount }} commit{{ row.commitCount === 1 ? '' : 's' }} depois de {{ row.sourceBase }}{{ row.commitsTruncated ? '+' : '' }}
                   </span>
                 }
               </div>
@@ -141,15 +154,15 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
                 <span class="lbl">Destinos</span>
                 <div class="targets">
                   @for (t of row.targets; track $index) {
-                    <span class="target" [class.target--bad]="t.status !== 'resolved'" [class.target--open]="t.alreadyOpen">
+                    <span class="target" [class.target--bad]="t.status !== 'resolved'" [class.target--open]="t.alreadyOpen" [style.--i]="$index">
                       @if (t.status === 'ambiguous') {
                         <select [ngModel]="t.branch" (ngModelChange)="pickCandidate(t, $event)" aria-label="Escolha a branch de {{ t.template }}">
                           <option [ngValue]="null">escolha: {{ t.template }}</option>
                           @for (c of t.candidates; track c) { <option [value]="c">{{ c }}</option> }
                         </select>
                       } @else if (t.status === 'missing') {
-                        <span class="target__name" [matTooltip]="'Não existe no remoto: ' + t.template">{{ t.template }}</span>
-                        <mat-icon class="target__warn">error_outline</mat-icon>
+                        <span class="target__name target__name--missing" [matTooltip]="'Não existe no repositório: ' + (t.expected || t.template)">{{ t.expected || t.template }}</span>
+                        <span class="target__missing">não existe no repositório</span>
                       } @else {
                         <span class="target__name">{{ t.branch }}</span>
                       }
@@ -161,12 +174,24 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
                       <button type="button" class="target__x" (click)="removeTarget(row, $index)" aria-label="Remover destino"><mat-icon>close</mat-icon></button>
                     </span>
                   }
+                  @if (row.busy && !row.adding) { <span class="sk sk--pill" style="width: 128px" aria-hidden="true"></span> }
                   @if (row.adding) {
-                    <input class="target__input" type="text" [(ngModel)]="row.newTarget" placeholder="release-{version}, edge…"
-                           (keydown.enter)="addTarget(row)" (keydown.escape)="row.adding = false" aria-label="Novo destino" autofocus />
-                    <button mat-icon-button (click)="addTarget(row)" aria-label="Confirmar destino"><mat-icon>check</mat-icon></button>
+                    <span class="picker" [attr.data-picker]="row.key">
+                      <mat-icon class="picker__icon" [class.spin]="row.searching">{{ row.searching ? 'progress_activity' : 'search' }}</mat-icon>
+                      <input class="target__input" type="text" [matAutocomplete]="auto" [ngModel]="row.newTarget" (ngModelChange)="onTargetSearch(row, $event)"
+                             (focus)="loadBranches(row, row.newTarget ?? '')" (keydown.enter)="addTarget(row)" (keydown.escape)="row.adding = false"
+                             placeholder="Buscar branch de {{ shortRepo(row.repository) }}…" aria-label="Buscar a branch de destino no repositório" />
+                      <mat-autocomplete #auto="matAutocomplete" class="pm-branches" (optionSelected)="pickBranch(row, $event.option.value)">
+                        @if (row.searching && (row.suggestions?.length ?? 0) === 0) {
+                          @for (n of [0, 1, 2]; track n) { <mat-option disabled class="pm-opt-sk"><span class="sk sk--line" [style.width.px]="140 + n * 36"></span></mat-option> }
+                        }
+                        @for (b of row.suggestions ?? []; track b) { <mat-option [value]="b">{{ b }}</mat-option> }
+                        @if (!row.searching && (row.suggestions?.length ?? 0) === 0) { <mat-option disabled>Nenhuma branch encontrada</mat-option> }
+                      </mat-autocomplete>
+                    </span>
+                    <button mat-icon-button (click)="row.adding = false" aria-label="Cancelar"><mat-icon>close</mat-icon></button>
                   } @else {
-                    <button type="button" class="target__add" (click)="row.adding = true; row.newTarget = ''"><mat-icon>add</mat-icon> destino</button>
+                    <button type="button" class="target__add" (click)="openPicker(row)"><mat-icon>add</mat-icon> destino</button>
                   }
                 </div>
               </div>
@@ -180,24 +205,53 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
           </article>
         }
 
+        @if (loading() && loadingKind() === 'add') {
+          @for (n of skeletons(); track n) {
+            <article class="row row--sk" [style.--i]="n" aria-hidden="true">
+              <header class="row__head">
+                <div class="row__id"><span class="sk sk--text" style="width: 76px"></span><span class="sk sk--pill" style="width: 64px"></span><span class="sk sk--text" style="width: min(320px, 40vw)"></span></div>
+                <span class="sk sk--circle" style="width: 28px; height: 28px"></span>
+              </header>
+              <div class="row__grid">
+                <div class="row__cell"><span class="sk sk--line" style="width: 70px"></span><span class="sk sk--text" style="width: 150px"></span><span class="sk sk--line" style="width: 90px"></span></div>
+                <div class="row__cell"><span class="sk sk--line" style="width: 120px"></span><span class="sk sk--text" style="width: 130px"></span><span class="sk sk--line" style="width: 110px"></span></div>
+                <div class="row__cell">
+                  <span class="sk sk--line" style="width: 60px"></span>
+                  <div class="targets"><span class="sk sk--pill" style="width: 150px"></span><span class="sk sk--pill" style="width: 96px"></span><span class="sk sk--pill" style="width: 116px"></span></div>
+                </div>
+              </div>
+            </article>
+          }
+        }
+
         @if (rows().length) {
           <footer class="pm__bar">
             <div class="pm__count">
               <strong>{{ totalPrs() }}</strong> PR{{ totalPrs() === 1 ? '' : 's' }} em <strong>{{ rows().length }}</strong> linha{{ rows().length === 1 ? '' : 's' }}
               @if (blocker()) { <span class="pm__blocker"><mat-icon>block</mat-icon> {{ blocker() }}</span> }
             </div>
-            <button mat-button (click)="refreshAll()" [disabled]="loading()"><mat-icon>refresh</mat-icon> Atualizar</button>
-            <button mat-flat-button color="primary" (click)="dispatch()" [disabled]="!!blocker() || creating()">
-              <mat-icon>rocket_launch</mat-icon> {{ creating() ? 'Disparando…' : 'Disparar lote' }}
+            <button mat-button (click)="refreshAll()" [disabled]="loading() || creating()"><mat-icon [class.spin]="loading() && loadingKind() === 'refresh'">refresh</mat-icon> {{ loading() && loadingKind() === 'refresh' ? 'Atualizando…' : 'Atualizar' }}</button>
+            <button mat-flat-button color="primary" class="pm__go" [class.pm__go--busy]="creating()" (click)="dispatch()" [disabled]="!!blocker() || creating() || loading()" [attr.aria-busy]="creating()">
+              <mat-icon [class.pm__rocket]="creating()">rocket_launch</mat-icon> {{ creating() ? 'Disparando o lote…' : 'Disparar lote' }}
             </button>
           </footer>
         }
 
+        @if (historyLoading() && !history().length) {
+          <section class="hist" aria-busy="true" aria-label="Carregando os lotes anteriores">
+            <h3>Lotes anteriores</h3>
+            @for (n of [0, 1, 2]; track n) {
+              <div class="hist__row hist__row--sk" [style.--i]="n">
+                <span class="sk sk--text" style="width: 62px"></span><span class="sk sk--line" style="width: min(260px, 40vw)"></span><span class="sk sk--line hist__sk-end" style="width: 110px"></span>
+              </div>
+            }
+          </section>
+        }
         @if (history().length) {
           <section class="hist">
             <h3>Lotes anteriores</h3>
-            @for (h of history(); track h.id) {
-              <button type="button" class="hist__row" (click)="open(h)">
+            @for (h of history(); track h.id; let hi = $index) {
+              <button type="button" class="hist__row" [style.--i]="hi" (click)="open(h)">
                 <strong>{{ h.version }}</strong>
                 <span class="row__muted">{{ formatDateTime(h.createdAt) }} · {{ h.ownerName }}</span>
                 <span class="hist__sum">{{ h.summary.opened + h.summary.alreadyOpen }}/{{ h.summary.total }} PRs
@@ -211,7 +265,7 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
       }
     </div>
   `,
-  styles: [`
+  styles: [MOTION_CSS, `
     :host { display: block; }
     .pm { --ok: #3fb950; --warn: #d29922; --err: #f0716a; --run: var(--mat-sys-primary);
           --muted: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
@@ -234,13 +288,22 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
     .pm__note { background: color-mix(in srgb, var(--run) 10%, transparent); }
     .pm__error { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
     .pm__loading { color: var(--muted); }
-    .pm__spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--run); border-radius: 50%; animation: spin .8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .pm__loadbar { position: relative; width: 64px; height: 4px; border-radius: 2px; overflow: hidden; background: var(--line); flex: 0 0 auto; }
+    .pm__loadbar i { position: absolute; inset: 0; width: 45%; border-radius: 2px; background: var(--run); animation: pm-bar 1.1s ease-in-out infinite; }
+    @keyframes pm-bar { from { transform: translateX(-110%); } to { transform: translateX(240%); } }
     .pm__empty { text-align: center; padding: 40px 12px; color: var(--muted); }
     .pm__empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: .5; }
     .row { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
     .row--bad { border-color: color-mix(in srgb, var(--err) 55%, transparent); }
-    .row--busy { opacity: .6; pointer-events: none; }
+    .row { animation: mo-rise .3s ease both; animation-delay: calc(var(--i, 0) * 45ms); position: relative; overflow: hidden; }
+    .row--sk { animation-name: mo-fade; pointer-events: none; }
+    .row--busy { pointer-events: none; }
+    .row--busy::after, .row--refreshing::after {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--run) 14%, transparent) 50%, transparent 70%);
+      animation: mo-sweep 1.2s ease-in-out infinite;
+    }
+    .row--busy .row__grid { opacity: .7; }
     .row__head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
     .row__id { display: flex; gap: 8px; align-items: center; min-width: 0; }
     .row__title { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -258,7 +321,7 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
     .commits--zero { color: var(--warn); }
     .commits mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .targets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-    .target { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; }
+    .target { animation: mo-pop .28s ease both; animation-delay: calc(var(--i, 0) * 35ms); display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; }
     .target--bad { border-color: var(--err); }
     .target--open { border-color: var(--ok); }
     .target__name { font-weight: 600; }
@@ -271,7 +334,14 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
     .target__x:hover { color: var(--err); }
     .target__add { display: inline-flex; align-items: center; gap: 2px; font: inherit; font-size: 12px; border: 1px dashed var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 3px 10px 3px 6px; cursor: pointer; }
     .target__add mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    .target__input { width: 180px; padding: 4px 8px; }
+    .picker { position: relative; display: inline-flex; align-items: center; }
+    .picker__icon { position: absolute; left: 8px; font-size: 16px; width: 16px; height: 16px; color: var(--muted); pointer-events: none; }
+    .target__input { width: 260px; padding: 5px 8px 5px 28px; }
+    .target__name--missing { color: var(--err); text-decoration: line-through; text-decoration-thickness: 1px; }
+    .target__missing { font-size: 11px; color: var(--err); }
+    .base { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); cursor: help; width: fit-content; }
+    .base mat-icon { font-size: 15px; width: 15px; height: 15px; }
+    .base__info { opacity: .7; }
     .msg { display: flex; gap: 6px; align-items: flex-start; font-size: 12.5px; }
     .msg mat-icon { font-size: 16px; width: 16px; height: 16px; flex: 0 0 auto; }
     .msg--err { color: var(--err); } .msg--warn { color: var(--warn); } .msg--info { color: var(--muted); }
@@ -282,17 +352,25 @@ const VERSION_SHAPE = /^[vV]?\d+(\.\d+){1,3}([-.][0-9A-Za-z]+)*$/;
     .pm__blocker mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .hist { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
     .hist h3 { margin: 0 0 4px; font-size: 14px; color: var(--muted); font-weight: 600; }
-    .hist__row { display: flex; gap: 12px; align-items: center; text-align: left; font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+    .hist__row { animation: mo-rise .28s ease both; animation-delay: calc(var(--i, 0) * 50ms); display: flex; gap: 12px; align-items: center; text-align: left; font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
     .hist__row:hover { background: color-mix(in srgb, var(--mat-sys-on-surface) 6%, transparent); }
     .hist__sum { margin-left: auto; font-size: 12px; }
+    .hist__row--sk { pointer-events: none; cursor: default; }
+    .hist__sk-end { margin-left: auto; }
+    .pm__go--busy { background-image: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.18) 50%, transparent 70%); background-size: 220% 100%; animation: mo-shimmer 1.2s linear infinite; }
+    .pm__rocket { animation: mo-launch .8s ease-in-out infinite; }
+    .pm__empty { animation: mo-fade .35s ease both; }
     .hist__bad { color: var(--err); }
     ::ng-deep .pm-tip { white-space: pre-line; max-width: 420px; }
+    ::ng-deep .pm-branches { max-height: 280px; }
+    ::ng-deep .pm-opt-sk .mdc-list-item__primary-text { display: inline-flex; align-items: center; }
   `]
 })
 export class PromotionComponent implements OnInit, OnDestroy {
   private api = inject(PromotionService);
   private dialog = inject(MatDialog);
   private snack = inject(MatSnackBar);
+  private host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly version = signal('');
   readonly kind = signal<'hotfix' | 'release'>('hotfix');
@@ -302,6 +380,10 @@ export class PromotionComponent implements OnInit, OnDestroy {
   readonly overrides = signal<Record<string, PromotionTargetDto[]> | null>(null);
   readonly executorOnline = signal<boolean | null>(null);
   readonly loading = signal(false);
+  /** O que está carregando: cards novos (skeleton no fim da lista) ou a lista toda (varredura nas linhas). */
+  readonly loadingKind = signal<'add' | 'refresh'>('add');
+  readonly skeletons = signal<number[]>([]);
+  readonly historyLoading = signal(false);
   readonly creating = signal(false);
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
@@ -383,6 +465,8 @@ export class PromotionComponent implements OnInit, OnDestroy {
   private runPreview(cards: { card: string; repository?: string | null }[], replaceAll: boolean, refresh = false): void {
     if (!cards.length) return;
     this.error.set(null);
+    this.loadingKind.set(replaceAll && this.rows().length ? 'refresh' : 'add');
+    this.skeletons.set(Array.from({ length: Math.min(cards.length, 6) }, (_, i) => i));
     this.loading.set(true);
     this.api.preview({ ...this.previewRequest(cards), refresh }).subscribe({
       next: p => {
@@ -452,8 +536,57 @@ export class PromotionComponent implements OnInit, OnDestroy {
       && !row.errors.length && !row.busy;
   }
 
+  // ── Seletor de branches do repositório (+ destino) ──────────────────────────────────────────
+
+  private searchTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  shortRepo(repo?: string | null): string {
+    return (repo ?? '').includes('/') ? repo!.slice(repo!.lastIndexOf('/') + 1) : (repo ?? '');
+  }
+
+  openPicker(row: Row): void {
+    row.adding = true;
+    row.newTarget = '';
+    this.rows.update(r => [...r]);
+    this.loadBranches(row, '');
+    // O campo nasce agora: foca para o painel de opções abrir sozinho (e já dá para digitar).
+    setTimeout(() => this.host.nativeElement.querySelector<HTMLInputElement>(`[data-picker="${row.key}"] input`)?.focus());
+  }
+
+  /** Digitou: busca no repositório (com um pequeno atraso para não consultar a cada tecla). */
+  onTargetSearch(row: Row, text: string): void {
+    row.newTarget = text ?? '';
+    const previous = this.searchTimers.get(row.key);
+    if (previous) clearTimeout(previous);
+    this.searchTimers.set(row.key, setTimeout(() => this.loadBranches(row, row.newTarget ?? ''), 220));
+  }
+
+  loadBranches(row: Row, search: string): void {
+    if (!row.repository) return;
+    row.searching = true;
+    this.api.branches(row.repository, search.trim(), 40).subscribe({
+      next: list => {
+        const used = new Set(row.targets.map(t => (t.branch ?? t.template).toLowerCase()));
+        row.suggestions = list.filter(b => !used.has(b.toLowerCase()));
+        row.searching = false;
+        this.rows.update(r => [...r]);
+      },
+      error: () => { row.suggestions = []; row.searching = false; this.rows.update(r => [...r]); }
+    });
+  }
+
+  pickBranch(row: Row, branch: string): void {
+    row.newTarget = branch;
+    this.addTarget(row);
+  }
+
+  baseTip(row: Row): string {
+    return `A branch do card saiu de ${row.sourceBase}${row.baseNote ? ` (${row.baseNote})` : ''}.\n` +
+      `Só os commits feitos depois dela são levados para os destinos.`;
+  }
+
   commitsTip(row: Row): string {
-    if (!row.commits.length) return 'Nenhum commit da branch principal em relação à base.';
+    if (!row.commits.length) return `Nenhum commit de ${row.sourceBranch} depois de ${row.sourceBase}.`;
     const lines = row.commits.map(c => `${c.sha.slice(0, 7)}  ${c.title}`);
     if (row.commitCount > row.commits.length) lines.push(`… e mais ${row.commitCount - row.commits.length}`);
     return lines.join('\n');
@@ -561,7 +694,11 @@ export class PromotionComponent implements OnInit, OnDestroy {
   }
 
   private loadHistory(): void {
-    this.api.mine(8).subscribe({ next: h => this.history.set(h), error: () => {} });
+    this.historyLoading.set(true);
+    this.api.mine(8).subscribe({
+      next: h => { this.history.set(h); this.historyLoading.set(false); },
+      error: () => this.historyLoading.set(false)
+    });
   }
 
   private fail(e: any): void {

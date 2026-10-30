@@ -23,6 +23,12 @@ export class PromotionService {
     return this.http.post<PromotionPreviewTarget[]>(`${this.url}/resolve`, request);
   }
 
+  /** Branches do repositório (com busca por trecho) para o seletor de destinos. */
+  branches(repository: string, search = '', take = 30): Observable<string[]> {
+    const q = new URLSearchParams({ repository, search, take: String(take) });
+    return this.http.get<string[]>(`${this.url}/branches?${q.toString()}`);
+  }
+
   create(version: string, kind: string | null, items: PromotionCreateItem[]): Observable<PromotionBatch> {
     return this.http.post<PromotionBatch>(this.url, { version, kind, items });
   }

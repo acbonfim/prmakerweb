@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../../services/auth.service';
 import { CcPopoverComponent } from '../popover/cc-popover.component';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
+import { MOTION_CSS } from '../../pages/authenticated/promotion/promotion-motion';
 import { ExecutionPlanSummary, PLAN_STATUS_LABEL } from './execution-plan.model';
 
 type PhaseFilter = 'all' | 'analysis' | 'correction';
@@ -50,8 +51,8 @@ export interface HistoryRow {
 
         @if (rows().length) {
           <div class="ph-list" role="listbox" aria-label="Versões do plano" #list>
-            @for (r of rows(); track r.item.id) {
-              <button type="button" role="option" class="ph-row" [class.ph-row--current]="r.item.id === currentId()"
+            @for (r of rows(); track r.item.id; let ri = $index) {
+              <button type="button" role="option" class="ph-row" [style.--i]="ri" [class.ph-row--current]="r.item.id === currentId()"
                       [attr.aria-selected]="r.item.id === currentId()" (click)="pick(r.item)">
                 <span class="ph-ver ph-ver--{{ r.item.phase }}" [title]="r.phaseLabel + ' versão ' + r.version">
                   <span class="ph-ver__phase">{{ r.phaseLabel }}</span>
@@ -74,7 +75,9 @@ export interface HistoryRow {
                     @if (r.duration) { <span class="ph-dur" title="Duração"><mat-icon>schedule</mat-icon>{{ r.duration }}</span> }
                   </span>
                   <span class="ph-line3">
-                    <app-user-avatar [name]="r.item.createdBy" [imageUrl]="photoFor(r.item.createdByUserId)" [size]="22"></app-user-avatar>
+                    <span class="ph-av" [class.ph-av--loading]="photosLoading() && !!r.item.createdByUserId">
+                      <app-user-avatar [name]="r.item.createdBy" [imageUrl]="photoFor(r.item.createdByUserId)" [size]="22"></app-user-avatar>
+                    </span>
                     <span class="ph-who">
                       <strong>{{ r.item.createdBy || 'Desconhecido' }}</strong>
                       criou em {{ formatDateTime(r.item.createdAt) }}
@@ -104,7 +107,7 @@ export interface HistoryRow {
       </div>
     </cc-popover>
   `,
-  styles: [`
+  styles: [MOTION_CSS, `
     :host { display: contents; }
     .ph { width: 428px; max-width: calc(100vw - 56px); margin: -6px -8px; --ph-ok: #3fb950; --ph-warn: #d29922; --ph-err: #f0716a;
           --ph-run: var(--mat-sys-primary); --ph-muted: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent);
@@ -150,6 +153,15 @@ export interface HistoryRow {
     .ph-rel { color: var(--ph-muted); }
     .ph-line4 { display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--ph-muted); }
     .ph-line4 a { color: var(--ph-run); cursor: pointer; text-decoration: underline; }
+    .ph-row { animation: mo-rise .26s ease both; animation-delay: calc(var(--i, 0) * 40ms); }
+    .ph-head { animation: mo-fade .25s ease both; }
+    .ph-av { position: relative; display: inline-flex; border-radius: 50%; overflow: hidden; flex: 0 0 auto; }
+    .ph-av--loading::after { content: ''; position: absolute; inset: 0; border-radius: 50%;
+      background: linear-gradient(90deg, color-mix(in srgb, var(--mat-sys-on-surface) 10%, transparent) 25%, color-mix(in srgb, var(--mat-sys-on-surface) 26%, transparent) 37%, color-mix(in srgb, var(--mat-sys-on-surface) 10%, transparent) 63%);
+      background-size: 200% 100%; animation: mo-shimmer 1.2s linear infinite; }
+    .ph-bar__fill { transition: width .5s cubic-bezier(.2, .8, .2, 1); }
+    .ph-st--running .ph-dot { animation: ph-pulse 1.4s ease-in-out infinite; }
+    @keyframes ph-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .4; transform: scale(.7); } }
     .ph-empty { padding: 18px 8px; text-align: center; font-size: 13px; color: var(--ph-muted); }
     @media (max-width: 480px) { .ph-ver { min-width: 52px; } .ph-bar { display: none; } }
   `]
@@ -167,6 +179,8 @@ export class PlanHistoryComponent {
 
   readonly statusLabel = PLAN_STATUS_LABEL;
   readonly filter = signal<PhaseFilter>('all');
+  /** Fotos dos avatares ainda a caminho: o avatar mostra o brilho de skeleton até chegarem. */
+  readonly photosLoading = signal(false);
   private readonly photos = signal<Record<string, string>>({});
 
   /** Numeração: a do servidor; sem ela (API antiga), calcula igual — por fase, do mais antigo (1) ao mais novo. */
@@ -280,8 +294,10 @@ export class PlanHistoryComponent {
       this.items().map((i) => i.createdByUserId).filter((x): x is string => !!x).map((x) => x.toLowerCase())
     )).filter((id) => !(id in known));
     if (!ids.length) return;
+    this.photosLoading.set(true);
     this.auth.getPhotosByExternalIds(ids).subscribe({
       next: (res: any) => {
+        this.photosLoading.set(false);
         const list = res?.object ?? res?.Object ?? [];
         const map = { ...this.photos() };
         for (const u of list) {
@@ -292,7 +308,7 @@ export class PlanHistoryComponent {
         for (const id of ids) if (!(id in map)) map[id] = '';
         this.photos.set(map);
       },
-      error: () => {}
+      error: () => this.photosLoading.set(false)
     });
   }
 
