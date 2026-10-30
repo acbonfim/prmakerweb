@@ -53,7 +53,7 @@ export const AUTHENTICATED_ROUTES: Routes = [
       {
         path: 'promotions',
         data: { tab: { title: 'Promoção de PRs', icon: 'rocket_launch' } },
-        canActivate: [AuthGuard],
+        canActivate: [AuthGuard, AdminGuard],
         loadComponent: () => import('./promotion/promotion.component').then(m => m.PromotionComponent)
       },
       {

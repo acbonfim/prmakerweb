@@ -39,7 +39,8 @@ export class SideMenuComponent implements OnInit {
     {
       label: 'Promoção de PRs',
       icon: 'rocket_launch',
-      link: 'auth/promotions'
+      link: 'auth/promotions',
+      allowedRoles: ['admin']
     },
     {
       label: 'Base Solvace',
