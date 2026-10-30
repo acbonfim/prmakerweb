@@ -227,7 +227,7 @@
         <button mat-stroked-button (click)="load()">Tentar de novo</button>
       </div>
     } @else if (selection().type === 'map') {
-      <app-ecosystem-map [focus]="mapFocus()" [simple]="simple()" [names]="friendlyNames()" (openProject)="openProjectByKey($event)" (openItem)="openReverseRef($event)"></app-ecosystem-map>
+      <app-ecosystem-map [focus]="mapFocus()" [simple]="simple()" [names]="friendlyNames()" (openProject)="openProjectByKey($event)" (openItem)="openReverseRef($event)" [canOpenItem]="isAdmin()"></app-ecosystem-map>
     } @else if (selection().type === 'ask') {
       <section class="ask" aria-live="polite" kbAttachDrop (filesDropped)="addFiles($event)">
         <form class="ask__box ask__box--top" (submit)="$event.preventDefault(); askAi()">
@@ -419,12 +419,12 @@
           <span class="kb__fact"><mat-icon>{{ friendlyKindIcon(p.kind) }}</mat-icon>{{ friendlyKindLabel(p.kind) }}</span>
           @if (guideTabs().length) { <span class="kb__fact kb__fact--ok"><mat-icon>menu_book</mat-icon>guia em linguagem simples</span> }
         </div>
-        @if (isModule(p)) {
+        @if (isModule(p) && isAdmin()) {
           <a class="kb__re" (click)="openReverse(p.key)"><mat-icon>biotech</mat-icon>Documentação completa (engenharia reversa): {{ reverseCount(p) }}/{{ reverseTotal }} publicados<mat-icon>chevron_right</mat-icon></a>
         }
         <app-kb-connections [project]="p" [projects]="projects()" (openProject)="openProjectByKey($event)" (openMap)="openMap(p.key)"></app-kb-connections>
         @if (isModule(p) && reverseCount(p)) {
-          <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)"></app-kb-by-question>
+          <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)" [canOpenReverse]="isAdmin()"></app-kb-by-question>
         }
         } @else {
         <div class="kb__doc-kicker">
@@ -442,7 +442,7 @@
           }
           <span>atualizado por {{ p.updatedBy }} em {{ date(p.updatedAt) }}</span>
         </div>
-        @if (isModule(p)) {
+        @if (isModule(p) && isAdmin()) {
           <a class="kb__re" (click)="openReverse(p.key)" matTooltip="Documentos com cada regra, caso de uso, tela, endpoint e integração — aprovados e usados pelas análises">
             <mat-icon>biotech</mat-icon>Engenharia reversa: {{ reverseCount(p) }}/{{ reverseTotal }} documentos publicados{{ reverseCount(p) ? '' : ' — gerar' }}<mat-icon>chevron_right</mat-icon>
           </a>
@@ -480,8 +480,12 @@
                             <mat-icon [style.color]="rel(it.kind).color">{{ rel(it.kind).icon }}</mat-icon>
                             <span>{{ it.detail || rel(it.kind).label }}</span>
                             @if (reItem(it.evidence); as id) {
-                              <a class="kb__chip kb__chip--link" matTooltip="Item da engenharia reversa — abrir"
-                                 (click)="openReverse(col.title === 'Depende de' ? p.key : g.key, id)">{{ id }}</a>
+                              @if (isAdmin()) {
+                                <a class="kb__chip kb__chip--link" matTooltip="Item da engenharia reversa — abrir"
+                                   (click)="openReverse(col.title === 'Depende de' ? p.key : g.key, id)">{{ id }}</a>
+                              } @else {
+                                <span class="kb__chip" matTooltip="Item da engenharia reversa">{{ id }}</span>
+                              }
                             }
                           </div>
                         }
@@ -496,7 +500,7 @@
           </section>
         }
         @if (isModule(p) && reverseCount(p)) {
-          <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)"></app-kb-by-question>
+          <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)" [canOpenReverse]="isAdmin()"></app-kb-by-question>
         }
         }
 
@@ -563,7 +567,7 @@
         @if (!simple() && showTraps() && traps().length) {
           <div class="kb__traps">
             <p class="kb__muted">Geradas das armadilhas da engenharia reversa. Conferir, remover ou registrar novas:
-              <a (click)="openReverse(p.key)">Engenharia reversa</a>.</p>
+              @if (isAdmin()) { <a (click)="openReverse(p.key)">Engenharia reversa</a> } @else { Engenharia reversa }.</p>
             @for (t of traps(); track t.id) {
               <div class="kb__trap" [class.kb__trap--review]="t.needsReview">
                 <div class="kb__trap-head"><b>{{ t.title }}</b>

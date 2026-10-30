@@ -50,7 +50,8 @@ export class SideMenuComponent implements OnInit {
     {
       label: 'Engenharia reversa',
       icon: 'biotech',
-      link: 'auth/reverse-engineering'
+      link: 'auth/reverse-engineering',
+      allowedRoles: ['admin']
     },
     {
       label: 'Gestão de usuários',
@@ -69,16 +70,6 @@ export class SideMenuComponent implements OnInit {
       icon: 'hub',
       link: 'auth/plugin-manager',
       allowedRoles: ['admin']
-    },
-    {
-      label: 'Férias',
-      icon: 'beach_access',
-      link: 'auth/vacations'
-    },
-    {
-      label: 'Meus Períodos',
-      icon: 'event_available',
-      link: 'auth/vacation-balances'
     },
     {
       label: 'Aprovar Férias',

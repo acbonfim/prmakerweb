@@ -298,6 +298,8 @@ export class ArchitectureComponent implements OnInit {
     if (module && id) this.openReverse(module, id);
   }
   openReverse(key: string, item?: string) {
+    // A tela de engenharia reversa é só de administrador: para os demais os links nem aparecem (e isto é só uma trava).
+    if (!this.isAdmin()) return;
     this.router.navigate(['/auth/reverse-engineering'], { queryParams: { m: key, d: item ? reverseDocOfItem(item) : null, i: item ?? null } });
   }
   trapDate(at: string) { return new Date(at).toLocaleDateString('pt-BR'); }

@@ -47,7 +47,7 @@ export const AUTHENTICATED_ROUTES: Routes = [
       {
         path: 'reverse-engineering',
         data: { tab: { title: 'Engenharia reversa', icon: 'biotech' } },
-        canActivate: [AuthGuard],
+        canActivate: [AuthGuard, AdminGuard],
         loadComponent: () => import('./reverse-engineering/reverse-engineering.component').then(m => m.ReverseEngineeringComponent)
       },
       {
