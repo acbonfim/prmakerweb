@@ -7,6 +7,7 @@ import { CliipboardService } from '../../../services/cliipboard.service';
 import {
   PromotionCopyOptions, formatPromotionHtmlTable, formatPromotionMarkdownTable, formatPromotionText, selectCopyItems
 } from './promotion-copy';
+import { MOTION_CSS } from './promotion-motion';
 import { ITEM_STATUS_LABEL, PromotionBatch, PromotionItem, isItemRetryable, itemHasPr } from './promotion.model';
 
 /**
@@ -33,33 +34,33 @@ import { ITEM_STATUS_LABEL, PromotionBatch, PromotionItem, isItemRetryable, item
         </header>
 
         <div class="res__summary" role="status" aria-live="polite">
-          @for (c of chips(); track c.key) {
+          @for (c of chips(); track c.key + ':' + c.count) {
             <span class="chip chip--{{ c.key }}" [title]="c.title"><strong>{{ c.count }}</strong> {{ c.label }}</span>
           }
         </div>
 
         @if (b.active) {
-          <div class="res__bar"><div class="res__bar-fill" [style.width.%]="progress()"></div></div>
+          <div class="res__bar" role="progressbar" [attr.aria-valuenow]="progress()" aria-valuemin="0" aria-valuemax="100"><div class="res__bar-fill" [style.width.%]="progress()"></div></div>
         }
 
         <div class="res__toolbar">
-          <button mat-stroked-button (click)="copy('text')" [disabled]="!hasCopy()"
+          <button mat-stroked-button (click)="copy('text')" [disabled]="!hasCopy()" [class.res__copied]="copied() === 'text'"
                   matTooltip="Uma linha por PR: AB#card [destino] - link (o formato do registro de PR)">
-            <mat-icon>content_copy</mat-icon> Copiar como texto
+            <mat-icon [class.pop]="copied() === 'text'">{{ copied() === 'text' ? 'check' : 'content_copy' }}</mat-icon> {{ copied() === 'text' ? 'Copiado!' : 'Copiar como texto' }}
           </button>
-          <button mat-stroked-button (click)="copy('table')" [disabled]="!hasCopy()"
+          <button mat-stroked-button (click)="copy('table')" [disabled]="!hasCopy()" [class.res__copied]="copied() === 'table'"
                   matTooltip="Tabela com card, título, repositório, destino e link — cola formatada no Teams/Outlook/DevOps">
-            <mat-icon>table_chart</mat-icon> Copiar como tabela
+            <mat-icon [class.pop]="copied() === 'table'">{{ copied() === 'table' ? 'check' : 'table_chart' }}</mat-icon> {{ copied() === 'table' ? 'Copiado!' : 'Copiar como tabela' }}
           </button>
           <label class="res__check"><input type="checkbox" [checked]="includeFailures()" (change)="includeFailures.set($any($event.target).checked)" /> incluir conflitos e erros</label>
           <span class="res__spacer"></span>
           @if (retryable().length) {
-            <button mat-flat-button color="primary" (click)="retry.emit(retryableIds())" [disabled]="busy()">
-              <mat-icon>replay</mat-icon> Reenviar {{ retryable().length }} {{ retryable().length === 1 ? 'pendente' : 'pendentes' }}
+            <button mat-flat-button color="primary" (click)="retry.emit(retryableIds())" [disabled]="busy()" [attr.aria-busy]="busy()">
+              <mat-icon [class.spin]="busy()">{{ busy() ? 'progress_activity' : 'replay' }}</mat-icon> {{ busy() ? 'Reenviando…' : 'Reenviar ' + retryable().length + (retryable().length === 1 ? ' pendente' : ' pendentes') }}
             </button>
           }
           @if (b.summary.queued > 0) {
-            <button mat-button (click)="cancel.emit()" [disabled]="busy()"><mat-icon>block</mat-icon> Cancelar a fila</button>
+            <button mat-button (click)="cancel.emit()" [disabled]="busy()"><mat-icon [class.spin]="busy()">{{ busy() ? 'progress_activity' : 'block' }}</mat-icon> Cancelar a fila</button>
           }
         </div>
 
@@ -69,8 +70,8 @@ import { ITEM_STATUS_LABEL, PromotionBatch, PromotionItem, isItemRetryable, item
               <tr><th>Card</th><th>Repositório</th><th>Origem → Destino</th><th>Situação</th><th>PR</th></tr>
             </thead>
             <tbody>
-              @for (i of items(); track i.id) {
-                <tr [class.res__row--bad]="bad(i)">
+              @for (i of items(); track i.id; let ri = $index) {
+                <tr [class.res__row--bad]="bad(i)" [class.res__row--active]="isActive(i)" [style.--i]="ri">
                   <td class="res__card">
                     <strong>AB#{{ i.card }}</strong>
                     <span class="res__title" [title]="i.title">{{ i.title }}</span>
@@ -87,6 +88,7 @@ import { ITEM_STATUS_LABEL, PromotionBatch, PromotionItem, isItemRetryable, item
                       {{ statusLabel[i.status] }}
                     </span>
                     @if (i.commitCount > 0 && i.mode === 'cherry-pick') { <span class="res__muted"> · {{ i.commitCount }} commit(s)</span> }
+                    @if (i.status === 'queued') { <div class="res__msg">esperando o executor…</div> }
                     @if (i.message) { <div class="res__msg" [title]="i.message">{{ i.message }}</div> }
                     @if (i.conflictFiles.length) {
                       <div class="res__files"><mat-icon>warning_amber</mat-icon>
@@ -97,6 +99,8 @@ import { ITEM_STATUS_LABEL, PromotionBatch, PromotionItem, isItemRetryable, item
                   <td>
                     @if (hasPr(i)) {
                       <a [href]="i.pullRequestUrl" target="_blank" rel="noopener" class="res__pr">#{{ i.pullRequestNumber }} <mat-icon>open_in_new</mat-icon></a>
+                    } @else if (isActive(i)) {
+                      <span class="sk sk--pill" style="width: 64px" aria-label="Aguardando o PR"></span>
                     } @else { <span class="res__muted">—</span> }
                   </td>
                 </tr>
@@ -107,7 +111,7 @@ import { ITEM_STATUS_LABEL, PromotionBatch, PromotionItem, isItemRetryable, item
       </section>
     }
   `,
-  styles: [`
+  styles: [MOTION_CSS, `
     :host { display: block; }
     .res { --ok: #3fb950; --warn: #d29922; --err: #f0716a; --run: var(--mat-sys-primary);
            --muted: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
@@ -127,7 +131,17 @@ import { ITEM_STATUS_LABEL, PromotionBatch, PromotionItem, isItemRetryable, item
     .chip--draft { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
     .chip--muted { color: var(--muted); }
     .res__bar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-bottom: 10px; }
-    .res__bar-fill { height: 100%; background: var(--run); transition: width .4s ease; }
+    .res__bar { position: relative; }
+    .res__bar-fill { position: relative; height: 100%; background: var(--run); transition: width .6s cubic-bezier(.2, .8, .2, 1); overflow: hidden; }
+    .res__bar-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.45) 50%, transparent 70%); animation: mo-sweep 1.3s ease-in-out infinite; }
+    .res { animation: mo-fade .3s ease both; }
+    .res__table tbody tr { animation: mo-rise .28s ease both; animation-delay: calc(var(--i, 0) * 35ms); }
+    .res__row--active { background: color-mix(in srgb, var(--run) 5%, transparent); }
+    .status--opened, .status--already_open { animation: mo-pop .35s ease both; }
+    .status--conflict, .status--error, .status--missing_target { animation: mo-shake .4s ease both; }
+    .res__pr { animation: mo-pop .35s ease both; }
+    .res__copied { border-color: var(--ok) !important; color: var(--ok) !important; }
+    .res .pop { animation: mo-pop .3s ease both; }
     .res__toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0 12px; }
     .res__spacer { flex: 1; }
     .res__check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
@@ -168,6 +182,9 @@ export class PromotionResultComponent {
 
   readonly statusLabel = ITEM_STATUS_LABEL;
   readonly includeFailures = signal(false);
+  /** Qual cópia acabou de ser feita (mostra "Copiado!" por um instante). */
+  readonly copied = signal<'text' | 'table' | null>(null);
+  private copiedTimer?: ReturnType<typeof setTimeout>;
 
   readonly items = computed(() => [...(this.batch()?.items ?? [])].sort((a, b) => a.position - b.position));
   readonly retryable = computed(() => this.items().filter(i => isItemRetryable(i.status)));
@@ -198,17 +215,18 @@ export class PromotionResultComponent {
   });
 
   hasPr = itemHasPr;
+  isActive = (i: PromotionItem) => i.status === 'queued' || i.status === 'running';
   bad = (i: PromotionItem) => i.status === 'conflict' || i.status === 'error' || i.status === 'missing_target';
   shortRepo = (r: string) => r.includes('/') ? r.slice(r.lastIndexOf('/') + 1) : r;
 
   copy(format: 'text' | 'table'): void {
     const items = selectCopyItems(this.items(), this.copyOptions());
     if (!items.length) return;
-    if (format === 'text') {
-      this.clipboard.copyFullDescriptionToClipboard(formatPromotionText(items));
-      return;
-    }
-    void this.clipboard.copyRichToClipboard(formatPromotionHtmlTable(items), formatPromotionMarkdownTable(items));
+    if (format === 'text') this.clipboard.copyFullDescriptionToClipboard(formatPromotionText(items));
+    else void this.clipboard.copyRichToClipboard(formatPromotionHtmlTable(items), formatPromotionMarkdownTable(items));
+    this.copied.set(format);
+    clearTimeout(this.copiedTimer);
+    this.copiedTimer = setTimeout(() => this.copied.set(null), 1800);
   }
 
   formatDateTime(value?: string | null): string {

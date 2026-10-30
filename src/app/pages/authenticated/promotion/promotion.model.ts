@@ -19,6 +19,8 @@ export interface PromotionPreviewTarget {
   branch: string | null;
   status: TargetStatus;
   candidates: string[];
+  /** O nome esperado no remoto (com a versão no lugar, se o modelo a traz). */
+  expected?: string;
   draft: boolean;
   mode: PromotionMode;
   alreadyOpen: boolean;
@@ -39,6 +41,8 @@ export interface PromotionPreviewRow {
   sourceBranch?: string | null;
   sourceFound: boolean;
   sourceBase?: string | null;
+  /** Por que esta é a base (registro do PRMake ou base do fluxo). */
+  baseNote?: string | null;
   commitCount: number;
   commitsTruncated: boolean;
   commits: PromotionCommit[];
