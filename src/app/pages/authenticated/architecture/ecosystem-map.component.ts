@@ -161,7 +161,7 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
           @if (e.items?.length) {
             <div class="nb__items">
               @for (it of e.items!.slice(0, 6); track it.ref) {
-                <button type="button" class="nb__item" (click)="openItem.emit(it.ref)" matTooltipClass="kb-gloss-tip"
+                <button type="button" class="nb__item" [class.nb__item--static]="!canOpenItem()" (click)="canOpenItem() && openItem.emit(it.ref)" matTooltipClass="kb-gloss-tip"
                         [matTooltip]="(it.mechanism ? 'Como: ' + it.mechanism : '') + (it.contract ? '\nContrato: ' + it.contract : '') + (it.toConfirm ? '\n(a confirmar)' : '')">
                   <span class="nb__ref">{{ itemId(it.ref) }}</span><span class="nb__item-title">{{ it.title }}</span>
                   @if (it.toConfirm) { <mat-icon class="nb__warn">help_outline</mat-icon> }
@@ -197,6 +197,8 @@ interface Neighbor { key: string; name: string; kind: string; mapped: boolean; e
     .nb__item { display: flex; align-items: center; gap: 6px; border: none; background: transparent; padding: 1px 0; color: inherit; font: inherit;
       font-size: 12px; text-align: left; cursor: pointer; opacity: .9; }
     .nb__item:hover .nb__item-title { text-decoration: underline; }
+    .nb__item--static { cursor: default; }
+    .nb__item--static:hover .nb__item-title { text-decoration: none; }
     .nb__ref { flex: none; font-family: ui-monospace, monospace; font-size: 11px; padding: 0 5px; border-radius: 6px; background: rgba(255,255,255,.08);
       color: var(--mat-sys-primary); }
     .nb__item-title { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -255,6 +257,8 @@ export class EcosystemMapComponent implements OnDestroy {
   readonly openProject = output<string>();
   /** 0066: abre um item da engenharia reversa (modulo#INT-001). */
   readonly openItem = output<string>();
+  /** A tela de engenharia reversa é só de administrador: sem permissão, o item mostra o resumo (tooltip) mas não abre. */
+  readonly canOpenItem = input(true);
 
   readonly graph = signal<ArchitectureGraph | null>(null);
   readonly loading = signal(true);

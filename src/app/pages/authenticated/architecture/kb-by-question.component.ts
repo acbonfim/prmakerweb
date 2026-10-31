@@ -78,7 +78,9 @@ const QUESTIONS: Question[] = [
                       <div class="bq__md" [innerHTML]="it.body | planMarkdown"></div>
                       <div class="bq__item-foot">
                         <span class="bq__muted">{{ it.moduleName || it.moduleKey }} · {{ it.docType }} · v{{ it.sectionVersion }}</span>
-                        <button type="button" class="bq__link" (click)="openReverse.emit(it.ref)"><mat-icon>open_in_new</mat-icon>abrir na engenharia reversa</button>
+                        @if (canOpenReverse()) {
+                          <button type="button" class="bq__link" (click)="openReverse.emit(it.ref)"><mat-icon>open_in_new</mat-icon>abrir na engenharia reversa</button>
+                        }
                       </div>
                     } @else { <mat-spinner diameter="18"></mat-spinner> }
                   </div>
@@ -147,6 +149,8 @@ export class KbByQuestionComponent {
   readonly moduleKey = input<string | null>(null);
   /** Abre o item na tela da engenharia reversa (modulo#RN-012). */
   readonly openReverse = output<string>();
+  /** A tela de engenharia reversa é só de administrador: sem permissão, o link "abrir" não aparece. */
+  readonly canOpenReverse = input(true);
 
   readonly questions = QUESTIONS;
   readonly limit = 400;
