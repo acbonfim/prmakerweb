@@ -9,6 +9,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClient } from '@angular/common/http';
 import { marked } from 'marked';
+import { renderMarkdown } from '../../helpers/markdown-ext';
 import { firstValueFrom } from 'rxjs';
 import { SafeHtmlPipe } from 'primeng/menu';
 import { environment } from '../../../environments/environment';
@@ -123,7 +124,8 @@ export class HandoverDialogComponent implements OnInit, OnDestroy {
 
   private applyContent(markdown: string, at?: string | null) {
     this.contentMarkdown.set(markdown);
-    this.contentHtml.set(marked.parse(markdown) as string);
+    // 0075: sem links de código/anexos (o handover usa SafeHtmlPipe e não tem o popover)
+    this.contentHtml.set(renderMarkdown(markdown, { codeRefs: false }));
     this.generatedAt.set(at ?? null);
   }
 

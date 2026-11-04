@@ -515,3 +515,94 @@ html {
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
   .mat-mdc-menu-content { padding: 0; }
 }
+
+/* ──────────────────────────────────────────────────────────────
+   0075/F1: extensões do markdown (helpers/markdown-ext.ts). O HTML entra por [innerHTML], fora do
+   escopo dos componentes — por isso global. Seletores com classe repetida para vencer as regras
+   `.plan-md ::ng-deep a/img` dos componentes (cor do link, largura da imagem).
+   ────────────────────────────────────────────────────────────── */
+
+/* Callouts estilo GitHub: > [!SUMMARY] / [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION] */
+.md-callout {
+  --md-callout-color: #58a6ff;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--md-callout-color);
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--md-callout-color) 10%, transparent);
+  color: var(--mat-sys-on-surface);
+  > :last-child { margin-bottom: 0; }
+  p { margin: 0 0 6px; }
+}
+.md-callout .md-callout__title {
+  margin: 0 0 4px;
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--md-callout-color);
+}
+.md-callout--summary   { --md-callout-color: #79c0ff; }
+.md-callout--note      { --md-callout-color: #58a6ff; }
+.md-callout--tip       { --md-callout-color: #3fb950; }
+.md-callout--important { --md-callout-color: #bc8cff; }
+.md-callout--warning   { --md-callout-color: #d29922; }
+.md-callout--caution   { --md-callout-color: #f85149; }
+.md-callout--summary {
+  background: color-mix(in srgb, var(--md-callout-color) 13%, transparent);
+  border-left-width: 4px;
+}
+
+/* Links de código: [texto](ref:<id>) e citações caminho:linha (o clique abre o popover — F2) */
+a.code-ref.code-ref[href],
+a.code-cite.code-cite[href] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.92em;
+  color: #79c0ff;
+  text-decoration: underline dotted color-mix(in srgb, #79c0ff 70%, transparent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+  transition: background-color 0.12s ease;
+}
+a.code-ref.code-ref[href]:hover,
+a.code-cite.code-cite[href]:hover,
+a.code-ref.code-ref[href]:focus-visible,
+a.code-cite.code-cite[href]:focus-visible {
+  background: color-mix(in srgb, #79c0ff 14%, transparent);
+  text-decoration-style: solid;
+}
+a.code-ref code,
+a.code-cite code {
+  color: inherit;
+  font-size: 1em;
+}
+
+/* Imagens anexo:<nome> (carregadas pelo nome — F3) e galeria lado a lado (Antes × Depois) */
+img.md-attachment.md-attachment {
+  max-width: 100%;
+  min-height: 80px;
+  min-width: 120px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: zoom-in;
+  vertical-align: top;
+}
+.md-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 4px 0;
+}
+.md-gallery > img.md-attachment.md-attachment {
+  flex: 1 1 calc(50% - 5px);
+  max-width: calc(50% - 5px);
+  height: auto;
+  object-fit: contain;
+}
+@media (max-width: 600px) {
+  .md-gallery > img.md-attachment.md-attachment { flex-basis: 100%; max-width: 100%; }
+}

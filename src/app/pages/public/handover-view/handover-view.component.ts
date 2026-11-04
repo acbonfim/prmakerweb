@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import { marked } from 'marked';
+import { renderMarkdown } from '../../../helpers/markdown-ext';
 import { SafeHtmlPipe } from 'primeng/menu';
 import { environment } from '../../../../environments/environment';
 
@@ -57,7 +58,8 @@ export class HandoverViewComponent implements OnInit {
       .subscribe({
         next: (res) => {
           if (res && res.content) {
-            this.contentHtml.set(marked.parse(res.content) as string);
+            // 0075: visão pública sem links de código/anexos (link ref: vira <code>)
+            this.contentHtml.set(renderMarkdown(res.content, { codeRefs: false }));
             this.generatedAt.set(res.updatedAt || res.createdAt || null);
           }
           this.loading.set(false);
