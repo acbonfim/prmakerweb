@@ -11,6 +11,8 @@ import { PresenceReport, PresenceState, UsageBatch, UsageClientInfo, UsageEvent,
 export const AWAY_AFTER_MS = 5 * 60_000;
 const FLUSH_EVERY_MS = 5 * 60_000;
 const FLUSH_AT_EVENTS = 200;
+/** Ao ocultar a aba, só envia se o último lote foi há mais que isto (trocar de aba toda hora não vira requisição). */
+const HIDDEN_FLUSH_MIN_GAP_MS = 60_000;
 const MAX_BUFFER = 1000;
 /** `fetch` com keepalive aceita ~64 KB por página; cada parte fica abaixo disto. */
 const MAX_BODY_BYTES = 60_000;
@@ -61,6 +63,7 @@ export class UsageTrackerService {
   /** Última tela (fica depois do `closeView` do pagehide/logout, para a sessão gravar onde parou). */
   private lastScreen: { screen: string; route: string } | null = null;
   private flushing = false;
+  private lastFlushAt = 0;
 
   private foregroundMs = 0;
   private backgroundMs = 0;
@@ -129,7 +132,7 @@ export class UsageTrackerService {
     document.addEventListener('click', onClick, { capture: true });
     const onVisibility = () => this.safe(() => {
       this.refresh();
-      if (document.hidden) void this.flush(false);
+      if (document.hidden && Date.now() - this.lastFlushAt >= HIDDEN_FLUSH_MIN_GAP_MS) void this.flush(false);
     });
     document.addEventListener('visibilitychange', onVisibility);
     const onFocus = () => { this.focused = true; this.onInput(); };
@@ -384,6 +387,7 @@ export class UsageTrackerService {
     const events = this.buffer.splice(0, this.buffer.length);
     if (!events.length && !unloading && !ended) return;
     this.flushing = true;
+    this.lastFlushAt = Date.now();
     try {
       const parts = this.split(events);
       for (let i = 0; i < parts.length; i++) {
