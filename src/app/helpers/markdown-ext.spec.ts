@@ -1,5 +1,8 @@
 import { Marked } from 'marked';
-import { findCitations, hasCitation, parseAttachmentHref, parseCitation, parseRefHref, renderMarkdown } from './markdown-ext';
+import {
+  badgeKind, findCitations, findReRefs, hasCitation, hasReRef, normalizeLegacyEmojis, parseAttachmentHref, parseCitation,
+  parseReHref, parseRefHref, renderMarkdown,
+} from './markdown-ext';
 
 const on = (t: string) => renderMarkdown(t, { codeRefs: true });
 const off = (t: string) => renderMarkdown(t, { codeRefs: false });
@@ -216,8 +219,11 @@ describe('markdown-ext (0075/F1)', () => {
         '---',
         'Fim às 10:30 de 04/11.',
       ].join('\n');
-      expect(on(antigo)).toBe(plain.parse(antigo) as string);
-      expect(off(antigo)).toBe(plain.parse(antigo) as string);
+      // 0076: a tabela vai num contêiner (.md-table) — o resto é igual ao marked puro
+      const unwrap = (h: string) => h.replace(/<div class="md-table[^"]*">/g, '').replace(/<\/table><\/div>/g, '</table>');
+      expect(on(antigo)).toContain('<div class="md-table md-table--num"><table>');
+      expect(unwrap(on(antigo))).toBe(plain.parse(antigo) as string);
+      expect(unwrap(off(antigo))).toBe(plain.parse(antigo) as string);
     });
 
     it('não altera as opções globais do marked', async () => {
@@ -232,6 +238,111 @@ describe('markdown-ext (0075/F1)', () => {
     it('texto vazio', () => {
       expect(on('')).toBe('');
       expect(off(null as unknown as string)).toBe('');
+    });
+  });
+});
+
+describe('markdown-ext (0076: selos, tabelas, itens da engenharia reversa)', () => {
+  const card = (t: string) => renderMarkdown(t, { codeRefs: true, reRefs: true });
+  const doc = (html: string) => { const d = document.createElement('div'); d.innerHTML = html; return d; };
+
+  describe('selos', () => {
+    it('rótulos em negrito viram selos (com e sem ":")', () => {
+      const d = doc(on('**Alterar** a função · **Criar** · **Remover** · **Suspeito** · **Só leitura** · **Leitura** · '
+        + '**Confirmado:** sim · **Hipótese:** talvez · **Descartado** · **Recomendada**'));
+      const badges = [...d.querySelectorAll('.md-badge')].map(b => [b.className.replace('md-badge md-badge--', ''), b.textContent]);
+      expect(badges).toEqual([
+        ['change', 'Alterar'], ['create', 'Criar'], ['remove', 'Remover'], ['suspect', 'Suspeito'], ['read', 'Só leitura'],
+        ['read', 'Leitura'], ['confirmed', 'Confirmado'], ['hypothesis', 'Hipótese'], ['discarded', 'Descartado'],
+        ['recommended', 'Recomendada'],
+      ]);
+      expect(d.querySelector('strong')).toBeNull();
+    });
+
+    it('negrito comum continua negrito', () => {
+      expect(on('**Problema:** x')).toContain('<strong>Problema:</strong>');
+      expect(on('**alterar o filtro**')).toContain('<strong>alterar o filtro</strong>');
+      expect(badgeKind(' Confirmado: ')).toBe('confirmed');
+      expect(badgeKind('Só  leitura')).toBe('read');
+      expect(badgeKind('Problema')).toBeNull();
+    });
+
+    it('emojis antigos no começo da célula viram o mesmo selo (com e sem rótulo)', () => {
+      const md = [
+        '| # | Onde | Mudança | Por quê |',
+        '|---|---|---|---|',
+        '| 1 | `a/b.js:10` | ✏️ alterar | x |',
+        '| 2 | `a/c.js:3` | ➕ criar | y |',
+        '| 3 | `a/d.js:5` | 🗑️ | z |',
+        '| 4 | `a/e.js:7` | 👁️ só leitura | w |',
+        '| 5 | `a/f.js:9` | ⚠️ | v |',
+      ].join('\n');
+      const d = doc(on(md));
+      const cells = [...d.querySelectorAll('tbody tr td:nth-child(3)')];
+      expect(cells.map(c => c.querySelector('.md-badge')?.className.replace('md-badge md-badge--', ''))).toEqual(
+        ['change', 'create', 'remove', 'read', 'suspect']);
+      expect(cells.map(c => c.querySelector('.md-badge')!.textContent)).toEqual(['Alterar', 'Criar', 'Remover', 'Só leitura', 'Suspeito']);
+      expect(d.textContent).not.toMatch(/[\u270F\u2795\u26A0]|\u{1F5D1}|\u{1F441}/u);
+    });
+
+    it('emoji antes do rótulo (Causa raiz): ✅ **Confirmado:** / ❓ Hipótese: / **✅ Confirmado:**', () => {
+      const d = doc(on('- ✅ **Confirmado:** o filtro zera\n- ❓ Hipótese: cache antigo\n- **✅ Confirmado:** outro'));
+      const badges = [...d.querySelectorAll('li .md-badge')].map(b => b.textContent);
+      expect(badges).toEqual(['Confirmado', 'Hipótese', 'Confirmado']);
+      expect(d.textContent).not.toContain('✅');
+      expect(d.textContent).not.toContain('❓');
+      expect(d.querySelectorAll('li')[1].textContent).toBe('Hipótese cache antigo');
+    });
+
+    it('não mexe em emoji dentro de código', () => {
+      expect(normalizeLegacyEmojis('<pre><code>✏️ alterar</code></pre>')).toBe('<pre><code>✏️ alterar</code></pre>');
+      expect(on('`✅ Confirmado`')).toContain('<code>✅ Confirmado</code>');
+      expect(on('⚠️ atenção ao deploy')).toContain('⚠️ atenção');
+    });
+  });
+
+  describe('tabelas', () => {
+    it('contêiner .md-table; coluna numérica só quando a 1ª coluna é só número', () => {
+      expect(on('| # | A |\n|---|---|\n| 1 | x |\n| 2 | y |')).toContain('<div class="md-table md-table--num"><table>');
+      expect(on('| A | B |\n|---|---|\n| x | 1 |')).toContain('<div class="md-table"><table>');
+    });
+  });
+
+  describe('itens da engenharia reversa', () => {
+    it('UC-121 e modulo#RN-012 viram link #re/ (o # do módulo codificado)', () => {
+      const d = doc(card('Ver UC-121 e revamp-kaizen#RN-012, também `API-004`.'));
+      const links = [...d.querySelectorAll<HTMLAnchorElement>('a.re-ref')];
+      expect(links.map(a => a.getAttribute('href'))).toEqual(['#re/UC-121', '#re/revamp-kaizen%23RN-012', '#re/API-004']);
+      expect(links.map(a => a.textContent)).toEqual(['UC-121', 'revamp-kaizen#RN-012', 'API-004']);
+      expect(links[2].querySelector('code')).not.toBeNull();
+      expect(parseReHref('#re/revamp-kaizen%23RN-012')).toBe('revamp-kaizen#RN-012');
+      expect(parseReHref('#re/UC-121')).toBe('UC-121');
+      expect(parseReHref('#ref/x')).toBeNull();
+    });
+
+    it('não linka em URL, bloco de código, link existente, palavra maior nem sem a opção', () => {
+      const md = [
+        'https://dev.azure.com/x/UC-121 e www.x.com/a?q=RN-012',
+        '[UC-121](https://x.com) e XUC-121 e UC-12345 e uc-121 e #UC-121',
+        '```',
+        'UC-121',
+        '```',
+      ].join('\n');
+      const d = doc(card(md));
+      expect(d.querySelectorAll('a.re-ref').length).toBe(0);
+      expect(on('UC-121')).not.toContain('re-ref');
+      expect(card('**UC-121**')).toContain('<strong><a class="re-ref" href="#re/UC-121"');
+    });
+
+    it('linka dentro de tabelas e no meio do texto', () => {
+      const d = doc(card('| Regra | Nota |\n|---|---|\n| RN-012 | ver TELA-3 |'));
+      expect([...d.querySelectorAll('a.re-ref')].map(a => a.textContent)).toEqual(['RN-012', 'TELA-3']);
+    });
+
+    it('findReRefs/hasReRef', () => {
+      expect(findReRefs('UC-1, revamp-x#RN-2 e https://a/UC-3')).toEqual(['UC-1', 'revamp-x#RN-2']);
+      expect(hasReRef('ver GAP-7')).toBeTrue();
+      expect(hasReRef('sem item')).toBeFalse();
     });
   });
 });

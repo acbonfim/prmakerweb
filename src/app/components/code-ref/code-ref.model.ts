@@ -46,14 +46,15 @@ export type CodeRefTarget =
   | { kind: 'ref'; id: string }
   | { kind: 'cite'; path: string; start: number; end: number };
 
+/** Rótulo do selo e ícone (`mat-icon`) de cada tipo de mudança — 0076: sem emoji. */
 export interface ChangeMeta { icon: string; label: string; }
 
 export const CHANGE_META: Record<string, ChangeMeta> = {
-  change: { icon: '✏️', label: 'Alterar' },
-  create: { icon: '➕', label: 'Criar' },
-  remove: { icon: '🗑️', label: 'Remover' },
-  suspect: { icon: '⚠️', label: 'Suspeito' },
-  read: { icon: '👁️', label: 'Leitura' },
+  change: { icon: 'edit', label: 'Alterar' },
+  create: { icon: 'add', label: 'Criar' },
+  remove: { icon: 'delete_outline', label: 'Remover' },
+  suspect: { icon: 'report_problem', label: 'Suspeito' },
+  read: { icon: 'visibility', label: 'Só leitura' },
 };
 
 export const changeMeta = (change: string | null | undefined): ChangeMeta =>

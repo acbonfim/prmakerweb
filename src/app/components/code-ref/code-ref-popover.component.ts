@@ -73,11 +73,9 @@ const TAB_LABEL: Record<CodeRefTab, string> = { proposal: 'Proposta', current: '
   template: `
     <header class="cr__head">
       @if (ref(); as r) {
-        <span class="cr__badge cr__badge--{{ r.change }}" [title]="meta().label">
-          <span aria-hidden="true">{{ meta().icon }}</span> {{ meta().label }}
-        </span>
+        <span class="cr__badge cr__badge--{{ r.change }}" [title]="meta().label">{{ meta().label }}</span>
       } @else {
-        <span class="cr__badge cr__badge--none"><span aria-hidden="true">📄</span> Código</span>
+        <span class="cr__badge cr__badge--none">Código</span>
       }
       <div class="cr__titles">
         @if (ref()?.title; as t) { <span class="cr__title">{{ t }}</span> }
@@ -211,14 +209,17 @@ const TAB_LABEL: Record<CodeRefTab, string> = { proposal: 'Proposta', current: '
     @media (prefers-reduced-motion: reduce) { .cr.cr--popover, .cr.cr--sheet { animation: none; } }
 
     .cr__head { flex: none; display: flex; align-items: flex-start; gap: 10px; padding: 10px 6px 8px 12px; border-bottom: 1px solid #30363d; background: #1c2128; }
-    .cr__badge { flex: none; margin-top: 2px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap;
-      --cr-badge: #8b949e; color: var(--cr-badge); background: color-mix(in srgb, var(--cr-badge) 16%, transparent);
-      border: 1px solid color-mix(in srgb, var(--cr-badge) 40%, transparent); }
+    /* Selo da mudança: o mesmo .md-badge do markdown (0076) — texto + ponto na cor do tipo, sem emoji */
+    .cr__badge { flex: none; margin-top: 1px; display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px 0 7px;
+      border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 1; white-space: nowrap;
+      --cr-badge: #8b949e; color: color-mix(in srgb, var(--cr-badge) 82%, white); background: color-mix(in srgb, var(--cr-badge) 13%, transparent);
+      border: 1px solid color-mix(in srgb, var(--cr-badge) 34%, transparent); }
+    .cr__badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--cr-badge); }
     .cr__badge--change { --cr-badge: #d29922; }
     .cr__badge--create { --cr-badge: #3fb950; }
     .cr__badge--remove { --cr-badge: #f85149; }
-    .cr__badge--suspect { --cr-badge: #db6d28; }
-    .cr__badge--read { --cr-badge: #58a6ff; }
+    .cr__badge--suspect { --cr-badge: #f0883e; }
+    .cr__badge--read { --cr-badge: #8b9bb4; }
     .cr__titles { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
     .cr__title { font-weight: 600; font-size: 13.5px; line-height: 1.3; }
     .cr__where { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; color: #8b949e; min-width: 0; }

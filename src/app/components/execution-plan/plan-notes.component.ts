@@ -262,7 +262,7 @@ type ReadState = 'sent' | 'analyzing' | 'read' | 'replied';
           <button mat-flat-button color="primary" (click)="saveEdit(note)" [disabled]="!editText.trim()">Salvar</button>
         </div>
       } @else if (savingEdits()[note.id] ?? note.text; as shown) {
-        <div class="note__text plan-md" [innerHTML]="shown | planMarkdown"></div>
+        <div class="note__text plan-md" [innerHTML]="shown | planMarkdown:'card'"></div>
       }
       @if (note.attachments.length) {
         <div class="note__files">
@@ -285,7 +285,7 @@ type ReadState = 'sent' | 'analyzing' | 'read' | 'replied';
     </ng-template>
 
     <ng-template #outgoingBody let-o>
-      @if (o.text) { <div class="note__text plan-md" [innerHTML]="o.text | planMarkdown"></div> }
+      @if (o.text) { <div class="note__text plan-md" [innerHTML]="o.text | planMarkdown:'card'"></div> }
       @if (o.files.length) {
         <div class="note__files">
           @for (f of o.files; track f.id) {

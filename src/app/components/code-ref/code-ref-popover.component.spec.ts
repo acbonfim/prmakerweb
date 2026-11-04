@@ -187,6 +187,6 @@ describe('CodeRefPopoverComponent (0075/F2)', () => {
     await settle(f);
     expect(el(f).querySelector('.cr__tabs')).toBeNull(); // só uma visão: sem abas
     expect(rows(f).length).toBe(7);
-    expect(el(f).querySelector('.cr__badge')!.textContent).toContain('Leitura');
+    expect(el(f).querySelector('.cr__badge')!.textContent).toContain('Só leitura');
   });
 });

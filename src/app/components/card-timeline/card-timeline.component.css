@@ -504,20 +504,7 @@
   color: color-mix(in srgb, var(--mat-sys-on-surface) 80%, transparent);
 }
 
-.comment__content--md ::ng-deep table{
-  display: block;
-  max-width: 100%;
-  overflow-x: auto;
-  border-collapse: collapse;
-  margin: 6px 0 8px;
-  font-size: 12px;
-}
-.comment__content--md ::ng-deep th,
-.comment__content--md ::ng-deep td{
-  padding: 4px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  text-align: left;
-}
+/* Tabelas, selos e callouts: design system global do markdown (styles.scss, 0076). */
 
 .comment__content--md ::ng-deep hr{
   border: none;

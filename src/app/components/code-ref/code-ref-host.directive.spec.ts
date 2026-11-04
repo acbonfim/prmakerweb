@@ -4,6 +4,8 @@ import { renderMarkdown } from '../../helpers/markdown-ext';
 import { CodeRefHostDirective } from './code-ref-host.directive';
 import { CodeRefHead } from './code-ref.model';
 import { CodeRefService } from './code-ref.service';
+import { ReItemService } from './re-item.service';
+import { fakeReItem } from './re-item-popover.component.spec';
 
 const head = (ref: string, path: string, startLine: number, endLine: number, change: string): CodeRefHead => ({
   id: ref, planId: 'p', ref, repository: 'solvace-asp', path, startLine, endLine, change, title: null, commitSha: null,
@@ -54,7 +56,8 @@ describe('CodeRefHostDirective (0075/F2, F3)', () => {
     svc = new FakeService();
     TestBed.configureTestingModule({
       imports: [HostComponent],
-      providers: [provideZonelessChangeDetection(), { provide: CodeRefService, useValue: svc }],
+      providers: [provideZonelessChangeDetection(), { provide: CodeRefService, useValue: svc },
+        { provide: ReItemService, useValue: { get: async () => ({ status: 'ok', item: fakeReItem() }) } }],
     });
     f = TestBed.createComponent(HostComponent);
   });
@@ -109,6 +112,24 @@ describe('CodeRefHostDirective (0075/F2, F3)', () => {
     expect(ok.classList).toContain('md-attachment--ok');
     expect(figures[0].querySelector('.md-figure__caption')!.textContent).toBe('Antes — filtro vazio');
     expect(figures[1].classList).toContain('md-figure--missing');
-    expect(figures[1].querySelector('.md-figure__missing')!.textContent).toContain('imagem não encontrada · falta.png');
+    expect(figures[1].querySelector('.md-figure__missing')!.textContent).toContain('Imagem não encontrada · falta.png');
+  });
+
+  it('0076: clique em UC-121 abre o popover do item da engenharia reversa; de novo fecha', async () => {
+    f.componentInstance.html.set(renderMarkdown('regra UC-121', { codeRefs: true, reRefs: true }));
+    await settle(f);
+    const a = root().querySelector<HTMLAnchorElement>('a.re-ref')!;
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+    a.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBeTrue();
+    await settle(f);
+    await settle(f);
+    const pop = document.querySelector('.cdk-overlay-container app-re-item-popover');
+    expect(pop).not.toBeNull();
+    expect(pop!.querySelector('.rei__title')!.textContent).toContain('Registrar melhoria');
+    a.click();
+    await settle(f);
+    expect(document.querySelector('.cdk-overlay-container app-re-item-popover')).toBeNull();
+    document.querySelectorAll('.cdk-overlay-container').forEach(c => c.remove());
   });
 });
