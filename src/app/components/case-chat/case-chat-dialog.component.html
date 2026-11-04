@@ -281,7 +281,7 @@
                 </div>
               }
               <textarea #box [(ngModel)]="draft" (keydown)="onKey($event)" (input)="onInput()" rows="1"
-                        placeholder="Mensagem para o especialista e para quem está no caso — @ menciona, cole ou arraste imagens e arquivos"
+                        [placeholder]="compact ? 'Mensagem — @ menciona, cole imagens' : 'Mensagem para o especialista e para quem está no caso — @ menciona, cole ou arraste imagens e arquivos'"
                         aria-label="Mensagem"></textarea>
             </div>
             @if (canRecord) {

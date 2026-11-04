@@ -1,5 +1,6 @@
 import { Injectable, Signal, inject, signal } from '@angular/core';
 import { WsService } from './ws.service';
+import { StorageService } from './storage.service';
 import { CaseChatService } from './case-chat.service';
 import { CASE_CHAT_EVENT, CaseChatRealtimePayload, CaseMessage, isRunActive } from '../components/case-chat/case-chat.model';
 import { executionPlanGroup } from '../components/execution-plan/execution-plan.model';
@@ -26,6 +27,7 @@ const SEEN_KEY = (card: string) => `prmake.case-seen.${card}`;
 export class CaseChatStatusService {
   private api = inject(CaseChatService);
   private ws = inject(WsService);
+  private readonly me = (inject(StorageService).getAccess()?.user?.externalId ?? '').toLowerCase();
   private readonly states = new Map<string, ReturnType<typeof signal<CaseChatStatus>>>();
   private readonly watched = new Map<string, number>();
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -68,13 +70,16 @@ export class CaseChatStatusService {
       next: (c) => {
         const lastNumber = c.messages.at(-1)?.number ?? 0;
         const seen = this.seen(card);
-        const fromOthers = c.messages.filter((m) => m.number > seen && m.authorKind !== 'system').length;
+        // Novas = de outras pessoas ou do especialista (as minhas e os avisos do PRMake não contam).
+        const fromOthers = c.messages.filter((m) => m.number > seen && m.authorKind !== 'system'
+          && !(m.authorKind === 'person' && !!this.me && (m.authorUserId ?? '').toLowerCase() === this.me)).length;
         const run = c.run;
         this.state(card).set({
           last: c.messages.filter((m) => m.authorKind !== 'system').slice(-2),
           lastNumber,
           seenNumber: seen,
-          unread: Math.min(fromOthers + Math.max(0, lastNumber - seen - c.messages.length), 99),
+          // + as mais antigas que a prévia não trouxe (entre a última vista e a primeira das 3), sem saber o autor.
+          unread: Math.min(fromOthers + Math.max(0, (c.messages[0]?.number ?? 1) - 1 - seen), 99),
           working: isRunActive(run),
           activity: run && isRunActive(run) ? (run.status === 'queued' ? 'na fila' : run.currentActivity?.label ?? 'pensando…') : null,
           people: c.participants.length

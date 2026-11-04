@@ -41,7 +41,7 @@ export interface CaseProposalDialogData {
       <div class="pd__body">
         <div class="pd__cols">
           <section>
-            <h4><mat-icon>history</mat-icon>{{ current() ? 'v' + (current()!.versionNumber ?? '?') + ' · ' + planStatus() : 'Versão atual' }}</h4>
+            <h4><mat-icon>history</mat-icon>{{ current() ? (version() ? 'v' + version() + ' · ' : '') + planStatus() : 'Versão atual' }}</h4>
             @if (loading()) {
               <p class="pd__hint">Carregando a versão atual…</p>
             } @else if (!current()) {
@@ -131,6 +131,8 @@ export class CaseProposalDialogComponent {
 
   readonly p = this.data.proposal;
   readonly current = signal<ExecutionPlan | null>(null);
+  /** Número da versão vem do histórico (o plano lido sozinho não traz). */
+  readonly version = signal<number | null>(null);
   readonly loading = signal(true);
   readonly busy = signal(false);
   readonly rejecting = signal(false);
@@ -146,6 +148,7 @@ export class CaseProposalDialogComponent {
       next: (list) => {
         const latest = (list ?? []).find((s) => (s.phase ?? 'analysis') === this.p.phase);
         if (!latest) { this.loading.set(false); return; }
+        this.version.set(latest.versionNumber || null);
         this.plans.get(latest.id).subscribe({
           next: (plan) => { this.current.set(plan); this.loading.set(false); },
           error: () => this.loading.set(false)

@@ -1225,16 +1225,20 @@
 @keyframes spec-live { 50% { box-shadow: 0 0 0 6px rgba(63,185,80,0); } }
 .plan__spec-badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; font-size: 10.5px; font-weight: 700;
   display: inline-flex; align-items: center; justify-content: center; background: #f47067; color: #fff; border: 2px solid var(--surface-2, #323232); }
-.plan__btn.mat-mdc-button { height: 32px; min-width: 0; padding: 0 10px; font-size: 13px; color: color-mix(in srgb, var(--mat-sys-on-surface) 85%, transparent);
+.plan__btn.mat-mdc-button { white-space: nowrap; height: 32px; min-width: 0; padding: 0 10px; font-size: 13px; color: color-mix(in srgb, var(--mat-sys-on-surface) 85%, transparent);
   border-radius: 16px; --mdc-text-button-container-height: 32px; }
 .plan__btn .mat-icon { font-size: 18px; width: 18px; height: 18px; margin-right: 4px; }
 .plan__btn--go.mat-mdc-button { color: var(--mat-sys-primary); }
 .plan__btn-count { margin-left: 5px; font-size: 11px; padding: 0 6px; border-radius: 9px; background: color-mix(in srgb, var(--mat-sys-primary) 18%, transparent); color: var(--mat-sys-primary); }
-@container (max-width: 760px) {
-  .plan__btn-label, .plan__spec-label { display: none; }
+/* Painel médio: os rótulos dos botões secundários saem antes do "Especialista do caso". */
+@container (max-width: 1080px) {
+  .plan__btn-label { display: none; }
   .plan__btn .mat-icon { margin-right: 0; }
-  .plan__spec { padding: 0 4px; }
   .plan__btn-count { margin-left: 2px; }
+}
+@container (max-width: 640px) {
+  .plan__spec-label { display: none; }
+  .plan__spec { padding: 0 4px; }
 }
 
 .journey { flex: none; display: flex; align-items: center; gap: 0; padding: 10px 14px 4px; overflow-x: auto; scrollbar-width: none; }
@@ -1299,7 +1303,8 @@
 .steps__done b { color: var(--mat-sys-on-surface); font-weight: 500; }
 .steps__done .mat-icon:first-child { color: #3fb950; }
 
-.plan__spec-fab { position: sticky; bottom: 10px; z-index: 3; margin: 6px 12px 10px; height: 44px; border: 0; border-radius: 22px; cursor: pointer; font: inherit;
+/* No celular a página tem o rodapé fixo (Ações GitHub, Salvar): o botão fica logo acima dele. */
+.plan__spec-fab { position: sticky; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 7; margin: 6px 12px 10px; height: 44px; border: 0; border-radius: 22px; cursor: pointer; font: inherit;
   font-size: 14px; font-weight: 600; color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px;
   background: linear-gradient(135deg, #8e6cf0, #6a4fd0); box-shadow: 0 6px 18px rgba(106, 79, 208, .45); }
 .plan__spec-fab .plan__spec-badge { position: static; border: 0; height: 20px; padding: 0 8px; border-radius: 10px; }

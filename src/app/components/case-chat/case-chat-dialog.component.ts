@@ -119,6 +119,8 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   readonly voiceReview = signal<VoiceResult | null>(null);
   voiceTranscript = '';
   readonly canRecord = VoiceRecorder.supported();
+  /** Celular: textos de ajuda mais curtos. */
+  readonly compact = window.matchMedia('(max-width: 640px)').matches;
 
   /** Blob URLs dos arquivos (imagens e áudios) carregados sob demanda. */
   readonly blobs = signal<Record<string, string>>({});
@@ -291,7 +293,12 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
       event.preventDefault();
       this.send();
     }
-    if (event.key === 'Escape' && this.mentionQuery() !== null) this.mentionQuery.set(null);
+    if (event.key === 'Escape' && this.mentionQuery() !== null) {
+      // Esc fecha só a lista de menções, não a conversa.
+      event.preventDefault();
+      event.stopPropagation();
+      this.mentionQuery.set(null);
+    }
   }
 
   onInput(): void {
@@ -308,11 +315,18 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
 
   pickMention(name: string): void {
     const box = this.boxRef?.nativeElement;
-    const caret = box?.selectionStart ?? this.draft.length;
-    const before = this.draft.slice(0, caret).replace(/@([\p{L}\p{N}._-]*)$/u, `@${name} `);
-    this.draft = before + this.draft.slice(caret);
+    const current = box?.value ?? this.draft;
+    const caret = box?.selectionStart ?? current.length;
+    const before = current.slice(0, caret).replace(/@([\p{L}\p{N}._-]*)$/u, `@${name} `);
+    const next = before + current.slice(caret);
+    // Na hora (não no próximo ciclo): quem digita rápido não embaralha o texto.
+    this.draft = next;
+    if (box) {
+      box.value = next;
+      box.focus();
+      box.setSelectionRange(before.length, before.length);
+    }
     this.mentionQuery.set(null);
-    setTimeout(() => { box?.focus(); box?.setSelectionRange(before.length, before.length); });
   }
 
   reply(m: CaseMessage): void {
@@ -553,7 +567,7 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   }
 
   duration(ms?: number | null): string {
-    if (!ms) return '';
+    if (!ms || ms < 1000) return '';
     const s = Math.round(ms / 1000);
     return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
   }
