@@ -222,6 +222,29 @@ export class RegisterComponent implements OnInit, OnDestroy {
   }
   private queryCardSub?: Subscription;
 
+  /** Último card em que a lista de PRs veio com algo — rebuscar o mesmo card não esconde o painel (0077). */
+  private prsSeenCard: string | null = null;
+
+  /**
+   * Painel de Pull Requests só quando o card tem PR (0077): sem PRs ele some e o plano ocupa o espaço. Durante a
+   * rebusca do mesmo card a lista zera por um instante — o painel fica, para o layout não pular.
+   */
+  showPrsPanel(): boolean {
+    const card = this.prState.cardNumber();
+    if (this.prState.githubPrs().length) {
+      this.prsSeenCard = card;
+      return true;
+    }
+    const loading = this.isPullRequestLoading || this.prState.githubPrsLoading();
+    return loading && !!card && this.prsSeenCard === card;
+  }
+
+  /** Aba aberta no celular: sem o painel de PRs, a aba "PRs" some e vale o plano (0077). */
+  visibleTab(): MobileTab {
+    const tab = this.mobileTab();
+    return tab === 'prs' && !this.showPrsPanel() ? 'plan' : tab;
+  }
+
   /**
    * Resumo do card em etiquetas no cartão do topo (0026): o que antes ficava escondido nos modais —
    * estado/coluna no DevOps, ambiente do cliente, módulo, produção/release, prioridade/severidade,
@@ -282,6 +305,13 @@ export class RegisterComponent implements OnInit, OnDestroy {
         icon: 'merge', label: 'Pull requests', value: `${merged}/${prs.length} mesclados`,
         tone: merged === prs.length ? 'ok' : open ? 'warn' : undefined,
         tooltip: prs.map((p) => `#${p.number ?? '?'} ${p.repositoryId} → ${p.targetBranch}: ${p.status === 'MERGED' ? 'mesclado' : p.status === 'OPEN' ? 'aberto' : 'fechado'}`).join('\n')
+      });
+    } else if (this.prInfo && !this.prLoadError && !this.isPullRequestLoading && !this.prState.githubPrsLoading()
+               && !this.prState.githubPrs().length) {
+      // 0077: sem PRs o painel some — a etiqueta avisa.
+      facts.push({
+        icon: 'merge', label: 'Pull requests', value: 'Sem pull requests', tone: 'muted',
+        tooltip: 'Nenhum pull request aberto para este card. Use Ações GitHub › Abrir PR — a seção de Pull Requests aparece quando houver um.'
       });
     }
 
