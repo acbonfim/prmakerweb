@@ -51,7 +51,7 @@
               [class.plan__run--running]="rq && rq.status !== 'queued'" [class.plan__run--queued]="rq?.status === 'queued'"
               cdkOverlayOrigin #runOrigin="cdkOverlayOrigin" (click)="runOpen.set(!runOpen())"
               [attr.aria-expanded]="runOpen()" [attr.aria-label]="runTooltip()" [matTooltip]="runOpen() ? '' : runTooltip()">
-        <span class="plan__run-ring" aria-hidden="true"></span>
+        <span class="plan__run-glow" aria-hidden="true"></span>
         <mat-icon>{{ rq?.status === 'queued' ? 'hourglass_top' : 'smart_toy' }}</mat-icon>
       </button>
       <ng-template cdkConnectedOverlay [cdkConnectedOverlayOrigin]="runOrigin" [cdkConnectedOverlayOpen]="runOpen()"
