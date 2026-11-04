@@ -90,7 +90,7 @@
         </div>
 
         <button type="button" class="presence-row" (click)="openSession(user)" matTooltip="Ver sessão e histórico de uso">
-          <app-presence-badge [presence]="presenceOf(user)" [lastSeen]="lastSeenOf(user)"></app-presence-badge>
+          <app-presence-badge [presence]="presenceOf(user)" [lastSeen]="lastSeenOf(user)" [lastSeenWhat]="lastSeenWhatOf(user)"></app-presence-badge>
           <mat-icon class="presence-row__go">chevron_right</mat-icon>
         </button>
 

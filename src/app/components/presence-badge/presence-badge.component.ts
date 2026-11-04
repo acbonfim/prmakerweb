@@ -43,6 +43,8 @@ export class PresenceBadgeComponent {
   readonly presence = input<UserPresence | null>(null);
   /** Último registro conhecido (lote/login) para o "visto há". */
   readonly lastSeen = input<string | null>(null);
+  /** De onde veio o "visto há" (ex.: "linha do tempo · card 75349"). */
+  readonly lastSeenWhat = input<string | null>(null);
   readonly compact = input(false);
 
   readonly stateKey = computed(() => this.presence()?.state ?? 'offline');
@@ -51,6 +53,8 @@ export class PresenceBadgeComponent {
     const p = this.presence();
     if (p) return this.presenceService.describe(p);
     const seen = this.lastSeen();
-    return seen ? `Offline · visto ${formatAgo(seen, this.presenceService.now())}` : 'Offline';
+    if (!seen) return 'Offline';
+    const what = this.lastSeenWhat();
+    return `Offline · visto ${formatAgo(seen, this.presenceService.now())}${what ? ' · ' + what : ''}`;
   });
 }

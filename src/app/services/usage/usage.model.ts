@@ -247,6 +247,37 @@ export interface UsageLastSeen {
   lastScreen: string | null;
   lastIp: string | null;
   lastLoginAt: string | null;
+  /** O mais recente de todas as fontes (app, login, linha do tempo, plano, comentário, pedido ao executor, IA). */
+  lastActivityAt?: string | null;
+  lastActivitySource?: 'app' | 'login' | 'timeline' | 'plan' | 'note' | 'request' | 'ai' | string | null;
+  /** Tela (app), card (linha do tempo/plano/comentário/pedido) ou ação (IA). */
+  lastActivityDetail?: string | null;
+}
+
+const ACTIVITY_SOURCE: Record<string, string> = {
+  app: 'no app',
+  login: 'login',
+  timeline: 'linha do tempo',
+  plan: 'plano de execução',
+  note: 'comentário no plano',
+  request: 'pedido ao executor',
+  ai: 'IA',
+};
+
+/** "linha do tempo · card 75349", "no app · Pull Request", "IA · base-solvace:ask". */
+export function describeLastActivity(x: UsageLastSeen | null | undefined): string | null {
+  if (!x?.lastActivitySource) return null;
+  const what = ACTIVITY_SOURCE[x.lastActivitySource] ?? x.lastActivitySource;
+  const detail = x.lastActivityDetail?.trim();
+  if (!detail) return what;
+  const isCard = ['timeline', 'plan', 'note', 'request'].includes(x.lastActivitySource) && /^\d+$/.test(detail);
+  return `${what} · ${isCard ? 'card ' + detail : detail}`;
+}
+
+/** Data sem fuso vinda da auth (DateTime.Now no Cloud Run = UTC) passa a ser lida como UTC. */
+export function asUtcIso(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return /([zZ]|[+-]\d{2}:?\d{2})$/.test(value) ? value : value + 'Z';
 }
 
 export interface UsageUserDetail {
