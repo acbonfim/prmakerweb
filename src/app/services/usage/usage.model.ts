@@ -231,10 +231,10 @@ export interface UsageLastSeen {
 }
 
 export interface UsageUserDetail {
-  logins: UsageLoginItem[];
-  sessions: UsageSessionItem[];
-  events: UsageEventItem[];
-  totals: { sessions: number; logins: number; foregroundMs: number; views: number; actions: number; errors: number };
+  logins?: UsageLoginItem[] | null;
+  sessions?: UsageSessionItem[] | null;
+  events?: UsageEventItem[] | null;
+  totals?: { sessions: number; logins: number; foregroundMs: number; views: number; actions: number; errors: number } | null;
 }
 
 // ---- rótulos e formatação ----

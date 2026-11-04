@@ -1,4 +1,5 @@
-import { Component, ElementRef, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, computed, inject, signal, ViewChild } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { AuthService } from '../../../../services/auth.service';
 import { GlobalService } from '../../../../services/global.service';
@@ -16,6 +17,11 @@ import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserFormDialogComponent } from '../dialogs/user-form-dialog.component';
 import { UserServicesDialogComponent } from '../dialogs/user-services-dialog.component';
 import { UserAvatarComponent } from '../../../../components/user-avatar/user-avatar.component';
+import { PresenceBadgeComponent } from '../../../../components/presence-badge/presence-badge.component';
+import { PresenceService, UserPresence } from '../../../../services/usage/presence.service';
+import { UsageApiService } from '../../../../services/usage/usage-api.service';
+import { UsageLastSeen } from '../../../../services/usage/usage.model';
+import { UserSessionDialogComponent } from '../dialogs/user-session-dialog.component';
 
 @Component({
   selector: 'app-manager',
@@ -31,10 +37,26 @@ import { UserAvatarComponent } from '../../../../components/user-avatar/user-ava
     MatTooltipModule,
     MatInputModule,
     MatButtonModule,
-    UserAvatarComponent
+    UserAvatarComponent,
+    PresenceBadgeComponent,
+    RouterLink
   ]
 })
-export class ManagerComponent implements OnInit {
+export class ManagerComponent implements OnInit, OnDestroy {
+  // 0079: quem está online agora (hub, ao vivo) e o "visto por último" dos demais (API, sob demanda).
+  readonly presence = inject(PresenceService);
+  private readonly usageApi = inject(UsageApiService);
+  private readonly unwatchPresence = this.presence.watch();
+  readonly lastSeen = signal<Map<string, UsageLastSeen>>(new Map());
+  readonly onlyOnline = signal(false);
+  readonly visibleUsers = computed(() => {
+    const list = this.users();
+    if (!this.onlyOnline()) return list;
+    return list.filter((u) => !!this.presence.for(u.externalId));
+  });
+  /** Foto dos usuários já carregados, para a faixa "Online agora". */
+  private readonly photos = computed(() => new Map(this.users().map((u) => [`${u.externalId}`.toLowerCase(), u])));
+
   users = signal<any[]>([]);
   stillFetchable = signal(false);
   total = signal(0);
@@ -67,6 +89,50 @@ export class ManagerComponent implements OnInit {
   ngOnInit() {
     this.loadRoles();
     this.fetch(0);
+    this.usageApi.lastSeen().subscribe({
+      next: (list) => this.lastSeen.set(new Map((list ?? []).map((x) => [`${x.userExternalId}`.toLowerCase(), x]))),
+      error: () => undefined,
+    });
+  }
+
+  ngOnDestroy() {
+    this.unwatchPresence();
+  }
+
+  presenceOf(user: any): UserPresence | null {
+    return this.presence.for(user?.externalId);
+  }
+
+  lastSeenOf(user: any): string | null {
+    const id = `${user?.externalId ?? ''}`.toLowerCase();
+    const x = this.lastSeen().get(id);
+    return x?.lastSeenAt ?? x?.lastLoginAt ?? user?.lastLoginAt ?? null;
+  }
+
+  photoOf(p: UserPresence): any {
+    return this.photos().get(p.userId) ?? null;
+  }
+
+  toggleOnlyOnline() {
+    this.onlyOnline.update((v) => !v);
+    // Só online: carrega a lista inteira (até 100) para não esconder quem está numa página não carregada.
+    this.fetch(0);
+  }
+
+  openSession(user: any) {
+    if (!user?.externalId) return;
+    this.dialog.open(UserSessionDialogComponent, {
+      width: '960px',
+      maxWidth: '96vw',
+      maxHeight: '92vh',
+      autoFocus: false,
+      data: { user, lastSeen: this.lastSeenOf(user) }
+    });
+  }
+
+  openSessionFromPresence(p: UserPresence) {
+    const known = this.photoOf(p);
+    this.openSession(known ?? { externalId: p.userId, fullName: p.name, userName: p.primary.userName });
   }
 
   getDisplayName(fullName: string): string {
@@ -118,7 +184,7 @@ export class ManagerComponent implements OnInit {
       this.loadingMore.set(true);
     }
 
-    this._authService.getAllUsers(page, 10, this.filterName()).subscribe({
+    this._authService.getAllUsers(page, this.onlyOnline() ? 100 : 10, this.filterName()).subscribe({
       next: (res: any) => {
         const data = res?.object ?? res?.Object ?? {};
         const elements = data.elements ?? [];

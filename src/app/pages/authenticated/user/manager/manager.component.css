@@ -179,6 +179,114 @@
   100% { background-position: 0 0; }
 }
 
+/* ── 0079: alternância de visões, presença e "Online agora" ── */
+.view-switch {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent);
+}
+.view-switch__item {
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  color: var(--cc-text-2);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.view-switch__item:hover { color: var(--cc-text-1); }
+.view-switch__item.active {
+  background: color-mix(in srgb, var(--mat-sys-primary) 22%, transparent);
+  color: var(--cc-text-1);
+}
+
+.online-filter { white-space: nowrap; }
+.online-filter__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  border: 1.5px solid #3fb950;
+  box-sizing: border-box;
+}
+.online-filter.on { background: color-mix(in srgb, #3fb950 16%, transparent); }
+.online-filter.on .online-filter__dot { background: #3fb950; }
+
+.online-now {
+  background: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+.online-now__head { display: flex; align-items: center; gap: 8px; }
+.online-now__title { font-weight: 600; }
+.online-now__count {
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #3fb950 22%, transparent);
+}
+.online-now__note, .online-now__empty { font-size: 12px; color: var(--cc-text-3); margin: 0; }
+.online-now__empty { margin-top: 6px; }
+.online-now__list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 0 2px;
+}
+.online-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 200px;
+  max-width: 320px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 22px;
+  border: 1px solid var(--cc-surface-border);
+  background: var(--surface-2);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.online-chip:hover { border-color: var(--cc-surface-border-strong); }
+.online-chip__text { display: flex; flex-direction: column; min-width: 0; font-size: 13px; }
+.online-chip__tabs {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 10%, transparent);
+}
+
+.presence-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin: -4px 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 4%, transparent);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  min-width: 0;
+}
+.presence-row:hover { background: color-mix(in srgb, var(--mat-sys-on-surface) 9%, transparent); }
+.presence-row app-presence-badge { flex: 1; min-width: 0; }
+.presence-row__go { font-size: 18px; width: 18px; height: 18px; opacity: 0.6; }
+
 /* Celular (0043): título e ações sem quebrar o botão em duas linhas. */
 @media (max-width: 576px) {
   .page-header { flex-wrap: wrap; row-gap: 8px; padding: 10px 12px; }
