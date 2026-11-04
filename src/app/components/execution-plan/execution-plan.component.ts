@@ -14,7 +14,7 @@ import {
   untracked
 } from '@angular/core';
 import { UsageTrackerService } from '../../services/usage/usage-tracker.service';
-import { OverlayModule } from '@angular/cdk/overlay';
+import { ConnectedPosition, OverlayModule } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -68,6 +68,7 @@ import {
   ExecutionRequest,
   ExecutionWorker,
   REQUEST_SOURCE_LABEL,
+  REQUEST_STATUS_LABEL,
   isRequestActive
 } from './execution-queue.model';
 import { ExecutorsDialogComponent } from '../executors-dialog/executors-dialog.component';
@@ -741,7 +742,32 @@ export class ExecutionPlanComponent implements OnDestroy {
     const r = this.activeRequest();
     return r && r.status !== 'queued' ? r.recentActivities ?? [] : [];
   });
-  readonly showActivityLog = signal(false);
+  /** 0081: popover do ícone do Claude no cabeçalho (substitui a faixa "Claude rodando" do corpo do plano). */
+  readonly runOpen = signal(false);
+  readonly runPositions: ConnectedPosition[] = [
+    { originX: 'center', originY: 'bottom', overlayX: 'center', overlayY: 'top', offsetY: 6 },
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
+    { originX: 'center', originY: 'top', overlayX: 'center', overlayY: 'bottom', offsetY: -6 }
+  ];
+  readonly runTooltip = computed(() => {
+    const r = this.activeRequest();
+    if (!r) return 'O Claude não está rodando agora neste card';
+    if (r.status === 'queued') return `Na fila do Claude — ${r.waitReason || 'começa em instantes'}`;
+    const a = this.liveActivity();
+    return `Claude rodando em ${r.workerName || 'sua máquina'}${a ? ' — ' + a.label : ''} (clique para ver)`;
+  });
+
+  onRunKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.runOpen.set(false);
+    }
+  }
+
+  requestStatusLabel(status: string): string {
+    return ((REQUEST_STATUS_LABEL as Record<string, string>)[status] ?? status).toLowerCase();
+  }
   /** Minutos sem atividade nova com o processo vivo (a partir de 3) — "pode estar pensando". */
   readonly activityQuietMinutes = computed(() => {
     const a = this.liveActivity();

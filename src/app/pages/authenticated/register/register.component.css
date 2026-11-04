@@ -51,6 +51,8 @@
 
 .header-icon { color: var(--mat-sys-primary); }
 .header-title { font-size: 20px; font-weight: 500; min-width: 0; }
+/* 0081: ajuda (tour guiado + guia completo) */
+.header-help.mat-mdc-icon-button { color: var(--mat-sys-primary); flex: none; }
 
 /* Celular: título menor e alertas quebrando linha abaixo do título (0021) */
 @media (max-width: 600px) {
@@ -137,13 +139,20 @@
   grid-area: timeline;
   min-width: 0;
   min-height: 0;
-  /* 0080: prévia do Especialista do caso em cima, a linha do tempo ocupa o resto. */
+  /* 0081: o Especialista do caso em versão compacta ocupa a coluna toda (a linha do tempo foi para o topo). */
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
-.pr-case-preview { flex: none; }
-:host ::ng-deep .pr-timeline > app-card-timeline { flex: 1 1 auto; min-height: 0; }
+.pr-case-compact { flex: 1 1 auto; min-height: 0; }
+.pr-case-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center;
+  border-radius: 10px; border: 1px dashed rgba(255, 255, 255, 0.12); color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent); font-size: 13px; }
+.pr-case-empty mat-icon { color: #c4a7ff; font-size: 32px; width: 32px; height: 32px; }
+
+/* 0081: a linha do tempo fica montada fora da tela (carga, rascunho, tempo real) e só aparece em tela cheia. */
+.pr-timeline-host { display: none; }
+.pr-timeline-btn { white-space: nowrap; }
+.pr-timeline-btn__count { margin-left: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; line-height: 18px;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 14%, transparent); }
 
 /* Botão de ícone no cabeçalho do painel (Descrição montada / Root Cause) */
 .panel-action.mat-mdc-icon-button {
@@ -261,7 +270,10 @@
 
   .pr-tab__count--you { background: #d29922; color: #1f1f1f; }
 
-  .pr-case-preview { display: none; }
+  /* 0081: a aba "Especialista" tem altura fixa e rola por dentro (o campo de escrever fica sempre à vista). */
+  .pr-timeline.pr-tab-panel--on .pr-case-compact {
+    height: calc(100dvh - var(--cime-topbar-total) - var(--cime-tabs-h) - var(--pr-tabs-h) - 96px);
+  }
 
   .pr-fields,
   .pr-plan,

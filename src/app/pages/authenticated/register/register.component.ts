@@ -36,7 +36,12 @@ import {WsService} from '../../../services/ws.service';
 import {JsonPipe} from '@angular/common';
 import {AuthService} from '../../../services/auth.service';
 import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
-import { CasePreviewComponent } from '../../../components/case-chat/case-preview.component';
+import { CaseCompactComponent } from '../../../components/case-chat/case-compact.component';
+import { CaseChatStore } from '../../../services/case-chat-store.service';
+import { GuidedTourService } from '../../../components/guided-tour/guided-tour.service';
+import { PR_SCREEN_TOUR } from '../../../components/guided-tour/pr-screen.tour';
+import { TourHost } from '../../../components/guided-tour/tour.model';
+import { TourHelpDialogComponent, TourHelpData, TourHelpResult } from '../../../components/guided-tour/tour-help-dialog.component';
 import {ExecutionPlanComponent, PlanHeadline} from '../../../components/execution-plan/execution-plan.component';
 import {InfoFact} from '../../../components/pr-info-card/pr-info-card.component';
 import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
@@ -118,7 +123,7 @@ function loadMobileTab(): MobileTab {
     AutoCompleteModule,
     MatFormFieldModule,
     CardTimelineComponent,
-    CasePreviewComponent,
+    CaseCompactComponent,
     ExecutionPlanComponent,
     CardAlertBarComponent,
     CardPanelComponent,
@@ -552,6 +557,10 @@ export class RegisterComponent implements OnInit, OnDestroy {
         if (!card || this.integrationsBlocked || card === `${this.cardNumber ?? ''}`.trim()) return;
         this.autoSearchFromQueryParams();
       });
+      // 0081: tour guiado na primeira vez que a pessoa entra na tela (com card na URL, espera o card abrir).
+      if (!this.integrationsBlocked && !this.route.snapshot.queryParamMap.get('card')) {
+        setTimeout(() => { if (this.tabActive()) this.tours.autoStart(PR_SCREEN_TOUR, this.tourHost); }, 700);
+      }
     }
 
 
@@ -714,9 +723,51 @@ export class RegisterComponent implements OnInit, OnDestroy {
     // antes de disparar a busca — o mesmo caminho do botão "Buscar".
     setTimeout(() => this.getPullRequestByCardNumber());
 
-    // Atalho da home (0051): ?focus=plan|timeline|prs abre direto naquele painel.
+    // Atalho da home (0051): ?focus=plan|timeline|prs abre direto naquele painel. 0081: "timeline" abre a linha do
+    // tempo em tela cheia (ela saiu da coluna da direita).
     const focus = params.get('focus');
-    if (focus === 'prs' || focus === 'plan' || focus === 'timeline') this.focusPanel(focus);
+    if (focus === 'timeline') setTimeout(() => this.openTimeline(document.querySelector<HTMLElement>('[data-tour="timeline"]')), 600);
+    else if (focus === 'prs' || focus === 'plan') this.focusPanel(focus);
+  }
+
+  // ── 0081: tour guiado e "Como usar esta tela" ─────────────────────────────────────────────────
+
+  private readonly tours = inject(GuidedTourService);
+  readonly tourHost: TourHost = {
+    hasCard: () => !!this.prState.cardNumber() && !!document.querySelector('[data-tour="case-compact"]'),
+    showMobileTab: (tab) => {
+      this.selectMobileTab(tab);
+      this.cdr.detectChanges();
+    }
+  };
+  /** Card aberto (buscado ou vindo da Home): o tour continua/começa com os passos do card. */
+  private readonly tourOnCard = effect(() => {
+    const card = this.prState.cardNumber();
+    if (card && this.tabActive()) untracked(() => this.tours.cardReady(PR_SCREEN_TOUR, this.tourHost));
+  });
+
+  openHelp(): void {
+    const data: TourHelpData = { tour: PR_SCREEN_TOUR, hasCard: this.tourHost.hasCard() };
+    this.dialog.open<TourHelpDialogComponent, TourHelpData, TourHelpResult>(TourHelpDialogComponent, {
+      data, width: '760px', maxWidth: '96vw', autoFocus: false
+    }).afterClosed().subscribe((r) => {
+      if (!r) return;
+      // Depois de o diálogo sair da tela (o tour não abre com diálogo aberto).
+      setTimeout(() => this.tours.start(PR_SCREEN_TOUR, this.tourHost, 'from' in r ? r.from : undefined), 250);
+    });
+  }
+
+  /** 0081: a linha do tempo abre em tela cheia a partir do botão ao lado do Root Cause. */
+  openTimeline(origin: HTMLElement | null): void {
+    this.timeline?.openFrom(origin);
+  }
+
+  private readonly caseStore = inject(CaseChatStore);
+
+  /** Mensagens novas do Especialista do caso (contador da aba no celular). */
+  caseUnread(): number {
+    const card = this.prState.cardNumber();
+    return card ? this.caseStore.status(card)().unread : 0;
   }
 
   /** Painel destacado por um atalho (0051): no celular vira a aba aberta; no desktop rola até ele e pisca a borda. */

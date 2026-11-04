@@ -1,0 +1,173 @@
+@if (card(); as c) {
+  <section class="ck" aria-label="Especialista do caso" data-tour="case-compact"
+           (paste)="onPaste($event)" (dragover)="onDragOver($event)" (dragleave)="dropping.set(false)" (drop)="onDrop($event)">
+    @if (dropping()) { <div class="ck__drop"><mat-icon>upload_file</mat-icon>Solte para anexar</div> }
+
+    <header class="ck__head">
+      <span class="sp-av" aria-hidden="true"><mat-icon>psychology</mat-icon></span>
+      <div class="ck__titles">
+        <b>Especialista do caso</b>
+        <small>
+          @if (runLabel(); as label) { <span class="ck__live"><span class="ck__dot"></span>{{ label }}</span> }
+          @else if (people().length) { {{ people().length }} {{ people().length === 1 ? 'pessoa' : 'pessoas' }} na conversa · não altera o plano sem você }
+          @else { conhece o caso inteiro · não altera o plano sem você }
+        </small>
+      </div>
+      <span class="ck__people" aria-hidden="true">
+        @for (p of people().slice(0, 3); track p.name) {
+          <app-user-avatar [name]="p.name" [imageUrl]="photos.photo(p.userId)" [size]="22" [matTooltip]="p.name"></app-user-avatar>
+        }
+      </span>
+      <button mat-icon-button class="ck__expand" (click)="expand()" matTooltip="Abrir a conversa grande (voz, contexto, ferramentas)" aria-label="Abrir a conversa grande">
+        <mat-icon>open_in_full</mat-icon>
+      </button>
+    </header>
+
+    @if (chat(); as ch) {
+      @if (agreed().length || files().length || ch.knows.length) {
+        <div class="ck__strip">
+          @if (agreed().length) {
+            <button type="button" class="ck__chip" (click)="expand()" [matTooltip]="agreedText()" matTooltipClass="ck-tooltip">
+              <mat-icon>check_circle</mat-icon>{{ agreed().length }} {{ agreed().length === 1 ? 'ponto combinado' : 'pontos combinados' }}
+            </button>
+          }
+          @if (files().length) {
+            <button type="button" class="ck__chip" (click)="expand()" matTooltip="Arquivos da conversa (abre a conversa grande)">
+              <mat-icon>attach_file</mat-icon>{{ files().length }} {{ files().length === 1 ? 'arquivo' : 'arquivos' }}
+            </button>
+          }
+          @if (ch.knows.length) {
+            <span class="ck__chip ck__chip--plain" [matTooltip]="'O especialista já conhece: ' + ch.knows.join(' · ')" matTooltipClass="ck-tooltip">
+              <mat-icon>menu_book</mat-icon>conhece {{ ch.knows.length }} {{ ch.knows.length === 1 ? 'fonte' : 'fontes' }}
+            </span>
+          }
+        </div>
+      }
+
+      @if (pendingProposal(); as p) {
+        <button type="button" class="ck__banner" (click)="openProposal(p)" data-tour="case-proposal">
+          <mat-icon>auto_awesome</mat-icon>
+          <span><b>Proposta #{{ p.number }}: {{ p.title }}</b><small>{{ ch.canDecide ? 'Nada mudou no plano ainda — veja o que muda e decida' : 'Aguardando o dono do plano, um admin ou um gestor' }}</small></span>
+          <mat-icon class="ck__banner-go">chevron_right</mat-icon>
+        </button>
+      }
+      @for (a of pendingActions(); track a.id) {
+        <div class="ck__banner ck__banner--act">
+          <mat-icon>bolt</mat-icon>
+          <span><b>Ação #{{ a.number }}: {{ a.title }}</b><small>Tem efeito fora da conversa — só roda se você confirmar</small></span>
+          <span class="ck__banner-acts">
+            <button mat-flat-button color="primary" (click)="decideAction(a, true)">Confirmar</button>
+            <button mat-button (click)="decideAction(a, false)">Não</button>
+          </span>
+        </div>
+      }
+    }
+
+    <div class="ck__scroll" #scroll (scroll)="onScroll()" [appCodeRefHost]="c">
+      @if (loading() && !chat()) {
+        <div class="ck__state"><span class="ck__spin"></span>Abrindo a conversa…</div>
+      } @else if (loadError()) {
+        <div class="ck__state"><mat-icon>error_outline</mat-icon>Não foi possível abrir a conversa.<button mat-button (click)="expand()">Abrir</button></div>
+      } @else if (!messages().length) {
+        <div class="ck__empty">
+          <span class="sp-av sp-av--xl"><mat-icon>psychology</mat-icon></span>
+          <b>Tem alguma dúvida sobre este card?</b>
+          <span>Pergunte aqui em vez de comentar no plano. O especialista já conhece o card, a análise e as decisões, e responde sem mexer no plano.</span>
+          <div class="ck__suggest">
+            <button type="button" (click)="send('Em que pé está este card? O que falta para fechar?')">Em que pé está?</button>
+            <button type="button" (click)="send('Me explique a causa raiz como se eu não fosse desenvolvedor.')">Explique a causa raiz</button>
+            <button type="button" (click)="send('O que deu errado na última versão do plano e o que você mudaria?')">O que deu errado?</button>
+          </div>
+        </div>
+      } @else {
+        @if (chat()?.hasMore) { <button type="button" class="ck__more" (click)="expand()">Mensagens anteriores na conversa grande</button> }
+        @for (m of messages(); track m.id; let i = $index) {
+          @if (newDay(i)) { <div class="ck__day">{{ m.createdAt | date: 'dd/MM' }}</div> }
+          @if (m.authorKind === 'system') {
+            <div class="ck__sys"><mat-icon>info</mat-icon><span class="plan-md" [innerHTML]="m.text | planMarkdown:'card'"></span></div>
+          } @else {
+            <article class="km" [class.km--mine]="isMine(m)" [class.km--spec]="m.authorKind === 'specialist'">
+              @if (m.authorKind === 'specialist') { <span class="sp-av sp-av--sm"><mat-icon>psychology</mat-icon></span> }
+              @else { <app-user-avatar [name]="m.authorName" [imageUrl]="photos.photo(m.authorUserId)" [size]="24"></app-user-avatar> }
+              <div class="km__col">
+                <div class="km__who">
+                  <b>{{ who(m) }}</b> · {{ m.createdAt | date: 'HH:mm' }}
+                  @if (m.kind === 'voice') { · voz }
+                  @if (m.peopleOnly) { · <span class="km__tag">só pessoas</span> }
+                  @if (m.deep) { · <span class="km__tag">a fundo</span> }
+                </div>
+                <div class="km__bubble">
+                  @if (m.replyToNumber) { <div class="km__quote">{{ quoted(m.replyToNumber) }}</div> }
+                  @if (m.steps.length) {
+                    <button type="button" class="km__steps" (click)="toggleSteps(m)" [attr.aria-expanded]="openSteps().has(m.id)">
+                      <mat-icon>{{ openSteps().has(m.id) ? 'expand_less' : 'checklist' }}</mat-icon>{{ m.steps.length }} {{ m.steps.length === 1 ? 'passo' : 'passos' }} para responder
+                    </button>
+                    @if (openSteps().has(m.id)) {
+                      <ul class="km__steplist">@for (s of m.steps; track $index) { <li><mat-icon>check</mat-icon>{{ s }}</li> }</ul>
+                    }
+                  }
+                  @if (m.kind === 'voice') { <div class="km__transcript">“{{ m.transcript || 'áudio sem transcrição' }}”</div> }
+                  @if (m.text) { <div class="plan-md km__text" [innerHTML]="m.text | planMarkdown:'card'"></div> }
+                  @if (m.files.length && m.kind !== 'voice') {
+                    <div class="km__files">
+                      @for (f of m.files; track f.id) {
+                        @if (f.kind === 'image') {
+                          <button type="button" class="km__img" (click)="openImage(f)" [matTooltip]="f.name">
+                            @if (blob(f); as url) { <img [src]="url" [alt]="f.name"> } @else { <span class="ck__spin"></span> }
+                          </button>
+                        } @else {
+                          <button type="button" class="km__file" (click)="expand()" [matTooltip]="f.name"><mat-icon>{{ fileIcon(f) }}</mat-icon><span>{{ f.name }}</span></button>
+                        }
+                      }
+                    </div>
+                  }
+                  @if (proposalOf(m); as p) {
+                    <button type="button" class="km__card" (click)="openProposal(p)">
+                      <mat-icon>auto_awesome</mat-icon><span><b>Proposta #{{ p.number }}</b> · {{ p.title }}<small>{{ p.changes.length }} mudanças · {{ proposalState(p) }}</small></span>
+                    </button>
+                  }
+                  @if (actionOf(m); as a) {
+                    <div class="km__card km__card--act"><mat-icon>bolt</mat-icon><span><b>Ação #{{ a.number }}</b> · {{ a.title }}<small>{{ a.status === 'pending' ? 'aguardando confirmação' : a.status === 'done' ? 'feita' : a.status === 'failed' ? 'falhou' : a.status === 'confirmed' ? 'executando' : 'não autorizada' }}</small></span></div>
+                  }
+                </div>
+                <button type="button" class="km__reply" (click)="reply(m)" matTooltip="Responder a esta mensagem" aria-label="Responder"><mat-icon>reply</mat-icon></button>
+              </div>
+            </article>
+          }
+        }
+      }
+      @if (runLabel(); as label) {
+        <div class="ck__work" role="status" aria-live="polite"><span class="sp-av sp-av--sm"><mat-icon>psychology</mat-icon></span><span class="ck__spin"></span>{{ label }}</div>
+      }
+      @if (typingNames().length) {
+        <div class="ck__typing">{{ typingNames().join(', ') }} {{ typingNames().length === 1 ? 'está' : 'estão' }} digitando<span class="ck__dots"><i></i><i></i><i></i></span></div>
+      }
+    </div>
+
+    <div class="ck__composer" data-tour="case-composer">
+      @if (replyTo(); as r) {
+        <div class="ck__replying"><mat-icon>reply</mat-icon><span>{{ quoted(r.number) }}</span><button mat-icon-button (click)="clearReply()" aria-label="Cancelar resposta"><mat-icon>close</mat-icon></button></div>
+      }
+      @if (pending().length) {
+        <div class="ck__pending">
+          @for (p of pending(); track p.id) {
+            <span class="ck__pfile">
+              @if (p.preview) { <img [src]="p.preview" alt=""> } @else { <mat-icon>description</mat-icon> }
+              <span>{{ p.file.name }}</span>
+              <button type="button" (click)="removePending(p)" aria-label="Tirar o arquivo"><mat-icon>close</mat-icon></button>
+            </span>
+          }
+        </div>
+      }
+      <div class="ck__row">
+        <button mat-icon-button (click)="pick()" matTooltip="Anexar arquivo ou imagem (também dá para colar ou arrastar)" aria-label="Anexar"><mat-icon>attach_file</mat-icon></button>
+        <input #picker type="file" multiple hidden (change)="onPick($event)">
+        <textarea #box class="ck__box" rows="1" [(ngModel)]="draft" (keydown)="onKey($event)" (input)="onInput()"
+                  [placeholder]="working() ? 'Escreva — ele lê quando terminar' : 'Pergunte ao especialista…'" aria-label="Mensagem para o especialista"></textarea>
+        <button mat-icon-button class="ck__send" (click)="send()" [disabled]="sending() || (!draft.trim() && !pending().length)" matTooltip="Enviar (Enter)" aria-label="Enviar">
+          <mat-icon>send</mat-icon>
+        </button>
+      </div>
+    </div>
+  </section>
+}

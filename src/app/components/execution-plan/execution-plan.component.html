@@ -12,14 +12,14 @@
       <span>Solte para mandar ao Especialista do caso</span>
     </div>
   }
-  <div class="plan__header">
+  <div class="plan__header" data-tour="plan-header">
     <mat-icon class="plan__header-icon">account_tree</mat-icon>
     <span class="plan__title">Plano de execução</span>
     @if (expanded() && loadedCard()) {
       <span class="plan__card">#{{ loadedCard() }}</span>
     }
     @if (plan(); as p) {
-      <span class="plan-status plan-status--{{ p.status }}"
+      <span class="plan-status plan-status--{{ p.status }}" data-tour="plan-status"
             [matTooltip]="p.statusChangedBy ? statusLabel[p.status] + ' por ' + p.statusChangedBy + (p.statusReason ? ': ' + p.statusReason : '') : ''"
             matTooltipPosition="above" role="status" aria-live="polite">
         <span class="plan-status__dot" aria-hidden="true"></span>
@@ -43,6 +43,92 @@
         </mat-menu>
       }
     }
+    @if (loadedCard() && (plan() || activeRequest())) {
+      <!-- 0081: o pedido do Claude (na fila / rodando) virou um ícone no cabeçalho; anima enquanto trabalha e o popover
+           mostra tudo o que a faixa mostrava (máquina, atividade ao vivo, últimas atividades e as ações). -->
+      @let rq = activeRequest();
+      <button mat-icon-button type="button" class="plan__action plan__run" data-tour="plan-run"
+              [class.plan__run--running]="rq && rq.status !== 'queued'" [class.plan__run--queued]="rq?.status === 'queued'"
+              cdkOverlayOrigin #runOrigin="cdkOverlayOrigin" (click)="runOpen.set(!runOpen())"
+              [attr.aria-expanded]="runOpen()" [attr.aria-label]="runTooltip()" [matTooltip]="runOpen() ? '' : runTooltip()">
+        <span class="plan__run-ring" aria-hidden="true"></span>
+        <mat-icon>{{ rq?.status === 'queued' ? 'hourglass_top' : 'smart_toy' }}</mat-icon>
+      </button>
+      <ng-template cdkConnectedOverlay [cdkConnectedOverlayOrigin]="runOrigin" [cdkConnectedOverlayOpen]="runOpen()"
+                   [cdkConnectedOverlayPositions]="runPositions" [cdkConnectedOverlayHasBackdrop]="true"
+                   cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop" [cdkConnectedOverlayPush]="true"
+                   (backdropClick)="runOpen.set(false)" (detach)="runOpen.set(false)" (overlayKeydown)="onRunKey($event)">
+        <div class="run-pop" role="dialog" aria-label="O que o Claude está fazendo" aria-live="polite">
+          @if (activeRequest(); as r) {
+            <div class="run-pop__head run-pop__head--{{ r.status }}">
+              <mat-icon [class.plan-req__spin]="r.status !== 'queued'">{{ r.status === 'queued' ? 'hourglass_top' : 'smart_toy' }}</mat-icon>
+              <b>{{ r.status === 'queued' ? 'Na fila do Claude' : 'Claude rodando' }}</b>
+              <span class="run-pop__spacer"></span>
+              <button mat-icon-button class="run-pop__close" (click)="runOpen.set(false)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+            </div>
+            <dl class="run-pop__facts">
+              @if (r.status === 'queued') {
+                <dt>Desde</dt><dd>{{ formatTime(r.createdAt) }} · {{ r.waitReason || 'começa em instantes' }}
+                  @if (r.waitCode === 'offline' && requestWorker(r)?.lastSeenAt) { (último sinal {{ relativeTime(requestWorker(r)!.lastSeenAt) }}) }</dd>
+              } @else {
+                <dt>Máquina</dt><dd>{{ r.workerName || 'sua máquina' }}</dd>
+                <dt>Desde</dt><dd>{{ relativeTime(r.startedAt || r.claimedAt) }}</dd>
+              }
+              @if (r.attempts > 0) { <dt>Tentativa</dt><dd>{{ r.status === 'queued' ? r.attempts + 1 : r.attempts }}/{{ r.maxAttempts }}</dd> }
+              <dt>Pedido</dt><dd>{{ sourceLabel[r.source] || r.source }} — {{ r.requestedBy }}</dd>
+              @if (r.newSession) { <dt>Sessão</dt><dd>correção numa sessão nova (só o resumo da análise)</dd> }
+            </dl>
+            @if (liveActivity(); as a) {
+              <div class="run-pop__now">
+                <mat-icon>{{ activityIcon(a.tool) }}</mat-icon>
+                <span><b>Agora:</b> {{ a.label }} <small>{{ activityAge(a.at) }}</small></span>
+              </div>
+              @if (activityQuietMinutes(); as m) {
+                <p class="run-pop__quiet">Sem novidade há {{ m }} min — o Claude pode estar pensando ou esperando um comando terminar.</p>
+              }
+            } @else if (r.status !== 'queued') {
+              <div class="run-pop__now"><mat-icon>psychology</mat-icon><span>Pensando…</span></div>
+            }
+            @if (recentActivities().length) {
+              <h5 class="run-pop__sub">Últimas atividades</h5>
+              <ol class="plan-act__log run-pop__log" aria-label="Últimas atividades do Claude">
+                @for (a of recentActivities(); track a.at + a.label) {
+                  <li><mat-icon>{{ activityIcon(a.tool) }}</mat-icon><span>{{ a.label }}</span><time>{{ formatTime(a.at) }}</time></li>
+                }
+              </ol>
+            }
+            <div class="run-pop__actions">
+              @if (r.waitCode === 'budget') { <button mat-button (click)="forceRequest(r)" [disabled]="!!busy()">Rodar mesmo assim</button> }
+              @if (r.waitCode === 'gathering') { <button mat-button (click)="startNow()" [disabled]="!!busy()">Começar agora</button> }
+              @if (r.waitCode === 'no-worker' || r.waitCode === 'offline' || r.waitCode === 'paused') {
+                <button mat-button (click)="runOpen.set(false); openExecutors()">Meus executores</button>
+              }
+              <span class="run-pop__spacer"></span>
+              <button mat-stroked-button class="run-pop__stop" (click)="cancelRequest(r)" [disabled]="!!busy()">
+                <mat-icon>{{ r.status === 'queued' ? 'close' : 'stop' }}</mat-icon>{{ r.status === 'queued' ? 'Cancelar' : 'Parar' }}
+              </button>
+            </div>
+          } @else {
+            <div class="run-pop__head">
+              <mat-icon>smart_toy</mat-icon><b>O Claude não está rodando agora</b>
+              <span class="run-pop__spacer"></span>
+              <button mat-icon-button class="run-pop__close" (click)="runOpen.set(false)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+            </div>
+            @if (queue()?.recent?.[0]; as last) {
+              <p class="run-pop__text">Última execução: {{ requestStatusLabel(last.status) }} {{ relativeTime(last.finishedAt || last.createdAt) }}{{ last.workerName ? ' em ' + last.workerName : '' }}.</p>
+            }
+            <p class="run-pop__text">Quando o Claude estiver trabalhando neste card, este ícone se mexe — clique nele para ver o que ele está fazendo.</p>
+            <div class="run-pop__actions">
+              @if (!hasWorkers()) { <button mat-button (click)="runOpen.set(false); openExecutors()">Meus executores</button> }
+              <span class="run-pop__spacer"></span>
+              @if (canAskClaude()) {
+                <button mat-flat-button color="primary" (click)="runOpen.set(false); openAsk()"><mat-icon>rocket_launch</mat-icon>{{ askLabel() }}</button>
+              }
+            </div>
+          }
+        </div>
+      </ng-template>
+    }
     <span class="plan__spacer"></span>
 
     @if (plan(); as p) {
@@ -57,7 +143,7 @@
     }
     @if (loadedCard()) {
       <!-- 0080: o chat virou o Especialista do caso (agente próprio, não altera o plano) -->
-      <button type="button" class="plan__spec" (click)="openChat()"
+      <button type="button" class="plan__spec" data-tour="plan-spec" (click)="openChat()"
               [matTooltip]="caseStatus()?.working ? 'O especialista está trabalhando: ' + (caseStatus()?.activity ?? '') : 'Converse com o especialista deste caso — ele não altera o plano sem você pedir'"
               aria-label="Especialista do caso">
         <span class="plan__spec-av" aria-hidden="true"><mat-icon>psychology</mat-icon></span>
@@ -68,19 +154,19 @@
     }
     @if (plan(); as p) {
       @if (p.status === 'running' || p.status === 'pending') {
-        <button mat-button class="plan__btn" (click)="pause()" [disabled]="!!busy()" matTooltip="Pausar — a skill para na próxima checagem e espera">
+        <button mat-button class="plan__btn" data-tour="plan-control" (click)="pause()" [disabled]="!!busy()" matTooltip="Pausar — a skill para na próxima checagem e espera">
           <mat-icon>pause</mat-icon><span class="plan__btn-label">Pausar</span>
         </button>
       }
       @if (p.status === 'paused' || p.status === 'failed') {
-        <button mat-button class="plan__btn plan__btn--go" (click)="resume()" [disabled]="!!busy()" matTooltip="Continuar de onde parou">
+        <button mat-button class="plan__btn plan__btn--go" data-tour="plan-control" (click)="resume()" [disabled]="!!busy()" matTooltip="Continuar de onde parou">
           <mat-icon>play_arrow</mat-icon><span class="plan__btn-label">Continuar</span>
         </button>
       }
     }
     @if (loadedCard() && canAskClaude()) {
       <!-- 0039: o executor da máquina do usuário roda a skill, sem terminal -->
-      <button mat-button class="plan__btn plan__btn--go" (click)="openAsk()" [disabled]="!!busy()"
+      <button mat-button class="plan__btn plan__btn--go" data-tour="plan-control" (click)="openAsk()" [disabled]="!!busy()"
               [matTooltip]="askLabel() + ' — o executor da sua máquina roda a skill, sem abrir o terminal'">
         <mat-icon>rocket_launch</mat-icon><span class="plan__btn-label">{{ askLabel() }}</span>
       </button>
@@ -92,7 +178,7 @@
         </span>
       }
       <!-- 0080 (M7): arquivos e textos num botão só -->
-      <button mat-button class="plan__btn" [matMenuTriggerFor]="filesMenu" matTooltip="Arquivos do plano e textos gerados">
+      <button mat-button class="plan__btn" data-tour="plan-files" [matMenuTriggerFor]="filesMenu" matTooltip="Arquivos do plano e textos gerados">
         <mat-icon>folder_open</mat-icon><span class="plan__btn-label">Arquivos e textos</span>
         @if (artifactTotal()) { <span class="plan__btn-count">{{ artifactTotal() }}</span> }
       </button>
@@ -113,7 +199,7 @@
     <app-plan-history #historyPanel [items]="history()" [currentId]="plan()?.id ?? null" [cardNumber]="loadedCard()"
                       (picked)="selectHistory($event)"></app-plan-history>
     @if (plan(); as p) {
-      <button mat-icon-button class="plan__action plan__more" [matMenuTriggerFor]="moreMenu" cdkOverlayOrigin #moreOrigin="cdkOverlayOrigin" aria-label="Mais ações do plano"
+      <button mat-icon-button class="plan__action plan__more" data-tour="plan-more" [matMenuTriggerFor]="moreMenu" cdkOverlayOrigin #moreOrigin="cdkOverlayOrigin" aria-label="Mais ações do plano"
               matTooltip="Mais ações">
         <mat-icon>more_vert</mat-icon>
       </button>
@@ -154,7 +240,7 @@
 
   @if (plan() && journey().length) {
     <!-- 0080 (M2): a jornada do card no lugar das abas Análise/Correção -->
-    <nav class="journey" aria-label="Em que etapa do tratamento o card está">
+    <nav class="journey" data-tour="plan-journey" aria-label="Em que etapa do tratamento o card está">
       @for (n of journey(); track n.key; let last = $last) {
         <button type="button" class="journey__node journey__node--{{ n.state }}" [class.journey__node--current]="n.current"
                 [disabled]="!n.phase" (click)="n.phase && selectPhase(n.phase)" [attr.aria-current]="n.current ? 'step' : null">
@@ -184,55 +270,7 @@
     </div>
   }
 
-  @if (activeRequest(); as r) {
-    <!-- 0039: o pedido do executor sempre evidente — na fila (e por quê), rodando, ou falhou -->
-    <div class="plan__bar plan-req plan-req--{{ r.status }}" role="status" aria-live="polite">
-      <mat-icon [class.plan-req__spin]="r.status !== 'queued'">{{ r.status === 'queued' ? 'hourglass_top' : 'smart_toy' }}</mat-icon>
-      <span class="plan__bar-text">
-        @if (r.status === 'queued') {
-          <strong>Na fila do Claude</strong> desde {{ formatTime(r.createdAt) }} · {{ r.waitReason || 'começa em instantes' }}
-          @if (r.attempts > 0) { · tentativa {{ r.attempts + 1 }}/{{ r.maxAttempts }} }
-          @if (r.waitCode === 'offline' && requestWorker(r)?.lastSeenAt) {
-            (último sinal {{ relativeTime(requestWorker(r)!.lastSeenAt) }})
-          }
-        } @else {
-          <strong>Claude rodando</strong> em {{ r.workerName || 'sua máquina' }} desde {{ relativeTime(r.startedAt || r.claimedAt) }}
-          @if (r.attempts > 1) { · tentativa {{ r.attempts }}/{{ r.maxAttempts }} }
-          @if (r.newSession) { · correção numa sessão nova (só o resumo da análise) }
-        }
-        <span class="plan-req__meta"> · {{ sourceLabel[r.source] || r.source }} — {{ r.requestedBy }}</span>
-        @if (liveActivity(); as a) {
-          <!-- 0050: o que o Claude está fazendo agora (rótulo do executor, nunca o comando) -->
-          <button type="button" class="plan-act" (click)="showActivityLog.set(!showActivityLog())"
-                  [attr.aria-expanded]="showActivityLog()" matTooltip="Ver as últimas atividades">
-            <mat-icon class="plan-act__icon">{{ activityIcon(a.tool) }}</mat-icon>
-            <span class="plan-act__label">{{ a.label }}</span>
-            <span class="plan-act__age">{{ activityAge(a.at) }}</span>
-            @if (activityQuietMinutes(); as m) {
-              <span class="plan-act__quiet">· sem novidade há {{ m }} min — o Claude pode estar pensando ou esperando um comando terminar</span>
-            }
-          </button>
-        }
-      </span>
-      @if (r.waitCode === 'budget') {
-        <button mat-button (click)="forceRequest(r)" [disabled]="!!busy()">Rodar mesmo assim</button>
-      }
-      @if (r.waitCode === 'gathering') {
-        <button mat-button (click)="startNow()" [disabled]="!!busy()">Começar agora</button>
-      }
-      @if (r.waitCode === 'no-worker' || r.waitCode === 'offline' || r.waitCode === 'paused') {
-        <button mat-button (click)="openExecutors()">Meus executores</button>
-      }
-      <button mat-button (click)="cancelRequest(r)" [disabled]="!!busy()">{{ r.status === 'queued' ? 'Cancelar' : 'Parar' }}</button>
-    </div>
-    @if (showActivityLog() && recentActivities().length) {
-      <ol class="plan-act__log" aria-label="Últimas atividades do Claude">
-        @for (a of recentActivities(); track a.at + a.label) {
-          <li><mat-icon>{{ activityIcon(a.tool) }}</mat-icon><span>{{ a.label }}</span><time>{{ formatTime(a.at) }}</time></li>
-        }
-      </ol>
-    }
-  } @else if (failedRequest(); as r) {
+  @if (failedRequest(); as r) {
     <div class="plan__bar plan__bar--danger plan-req" role="alert">
       <mat-icon>error_outline</mat-icon>
       <span class="plan__bar-text">
@@ -253,7 +291,7 @@
   }
 
   <div class="plan__body">
-    <div class="plan__steps" #stepsBody data-keep-scroll>
+    <div class="plan__steps" #stepsBody data-keep-scroll data-tour="plan-steps">
       @if (isLoading()) {
         @for (w of ['70%', '55%', '80%', '45%', '65%']; track $index) {
           <div class="step step--skeleton" aria-hidden="true">
@@ -301,7 +339,7 @@
         @let p = plan()!;
         <!-- 0080 (M3): em que pé está — uma frase e o próximo passo (situação, assistente e textos ficam em "detalhes") -->
         @if (headlineText(); as h) {
-          <div class="hero hero--{{ h.tone }}" role="status">
+          <div class="hero hero--{{ h.tone }}" role="status" data-tour="plan-headline">
             <span class="hero__kicker">Em que pé está</span>
             <div class="hero__text plan-md" [innerHTML]="h.text | planMarkdown:'card'"></div>
             <div class="hero__acts">
@@ -347,7 +385,7 @@
         }
         @if (decisions().length) {
           <!-- 0080 (M4): as respostas viram decisões; mudar uma decisão = conversar com o especialista -->
-          <section class="decisions" aria-label="Decisões">
+          <section class="decisions" aria-label="Decisões" data-tour="plan-decisions">
             <div class="decisions__head">
               <mat-icon>how_to_reg</mat-icon>Decisões que valem para a próxima versão
               <span class="plan__spacer"></span>

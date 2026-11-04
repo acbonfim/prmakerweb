@@ -668,6 +668,27 @@ export class CardTimelineComponent implements OnDestroy {
     this.enqueue(() => (this.expanded() ? this.collapse() : this.expand()));
   }
 
+  /**
+   * 0081: a linha do tempo saiu da coluna da direita — fica montada fora da tela (rascunho e tempo real continuam) e
+   * abre direto em tela cheia a partir de um botão do topo; cresce a partir do botão e volta para ele ao fechar.
+   */
+  openFrom(origin: HTMLElement | null): void {
+    this.origin = origin;
+    this.enqueue(() => this.expand());
+  }
+
+  private origin: HTMLElement | null = null;
+
+  /** Ponto de partida/chegada da animação: o botão que abriu, quando a linha do tempo não está visível na página. */
+  private originRect(fallback: HTMLElement): Rect {
+    const r = this.origin?.getBoundingClientRect();
+    return r && r.width ? { top: r.top, left: r.left, width: r.width, height: r.height } : this.rectOf(fallback);
+  }
+
+  private get launcherOnly(): boolean {
+    return !!this.origin && !this.hostRef.nativeElement.offsetParent;
+  }
+
   private enqueue(step: () => Promise<void>): void {
     const run = () => (this.destroyed ? undefined : step());
     this.transition = this.transition.then(run, run);
@@ -679,12 +700,13 @@ export class CardTimelineComponent implements OnDestroy {
     if (!el || this.expanded()) return;
 
     const host = this.hostRef.nativeElement;
-    const from = this.rectOf(el);
+    const launcher = this.launcherOnly;
+    const from = launcher ? this.originRect(el) : this.rectOf(el);
     const scroll = this.saveScroll();
     const focused = this.focusedInside(el);
 
     // Reserva o lugar na página (nada "pula" atrás do modal).
-    host.style.height = `${from.height}px`;
+    if (!launcher) host.style.height = `${from.height}px`;
 
     this.backdrop = document.createElement('div');
     this.backdrop.className = 'timeline-backdrop';
@@ -740,8 +762,8 @@ export class CardTimelineComponent implements OnDestroy {
 
     if (!this.reducedMotion()) {
       this.animating = true;
-      // Destino: onde o host está AGORA (a página pode ter mudado de tamanho enquanto aberta).
-      const to = this.rectOf(host);
+      // Destino: onde o host está AGORA (a página pode ter mudado de tamanho enquanto aberta) — ou o botão que abriu.
+      const to = this.launcherOnly ? this.originRect(host) : this.rectOf(host);
       const anim = el.animate(
         [this.keyframe(this.rectOf(el), 14), this.keyframe(to, 10)],
         { ...EXPAND_ANIMATION, fill: 'forwards' }

@@ -1,6 +1,11 @@
 <div class="page-header" [class.page-header--alert]="hasCardNonConformity">
   <mat-icon class="header-icon">merge</mat-icon>
   <span class="header-title">Gerenciamento de tratamento do card</span>
+  <!-- 0081: tour guiado e guia completo da tela -->
+  <button mat-icon-button type="button" class="header-help" data-tour="tour-help" (click)="openHelp()"
+          matTooltip="Como usar esta tela (tour guiado e guia completo)" aria-label="Como usar esta tela">
+    <mat-icon>help_outline</mat-icon>
+  </button>
   @if (cardFull) {
     <app-card-alert-bar class="ms-auto"
       [inline]="true"
@@ -31,7 +36,7 @@
     <div class="pr-toolbar">
       <!-- Número do card -->
       <mat-form-field appearance="outline" subscriptSizing="dynamic"
-                      class="pr-field pr-field--card">
+                      class="pr-field pr-field--card" data-tour="card-search">
         <mat-label>Número do card</mat-label>
         <input matInput type="number"
                [(ngModel)]="cardNumber"
@@ -60,10 +65,17 @@
         <!-- 0026: sem o botão Descrição — a descrição fica no "Abrir PR" e em cada PR. -->
         <ng-container ngProjectAs="[info-actions]">
           @if (cardType !== 'us') {
-            <app-panel-popover-button kind="rootCause" label="Root Cause"
+            <app-panel-popover-button kind="rootCause" label="Root Cause" data-tour="root-cause"
                                       [disabled]="!prInfo || isPullRequestLoading"
                                       tooltip="Escrever/editar o root cause (um para todos os repositórios)"></app-panel-popover-button>
           }
+          <!-- 0081: a linha do tempo saiu da coluna da direita (agora é do Especialista do caso) e abre em tela cheia -->
+          <button mat-stroked-button type="button" class="pr-timeline-btn" data-tour="timeline"
+                  [disabled]="!cardNumber" (click)="openTimeline($any($event.currentTarget))"
+                  matTooltip="Linha do tempo do card (comentários, Teams, publicações) — abre em tela cheia" matTooltipPosition="above">
+            <mat-icon>forum</mat-icon>Linha do tempo
+            @if (timeline?.entries()?.length; as n) { <span class="pr-timeline-btn__count">{{ n }}</span> }
+          </button>
         </ng-container>
       </app-pr-info-card>
     </div>
@@ -98,8 +110,9 @@
               }
             </button>
             <button type="button" role="tab" class="pr-tab" [class.pr-tab--on]="tab === 'timeline'"
-                    [attr.aria-selected]="tab === 'timeline'" (click)="selectMobileTab('timeline')">
-              <mat-icon>forum</mat-icon><span>Linha do tempo</span>
+                    [attr.aria-selected]="tab === 'timeline'" (click)="selectMobileTab('timeline')" data-tour="case-tab">
+              <mat-icon>psychology</mat-icon><span>Especialista</span>
+              @if (caseUnread(); as u) { <span class="pr-tab__count">{{ u }}</span> }
             </button>
           </div>
 
@@ -132,17 +145,26 @@
             <app-execution-plan [cardNumber]="cardNumber" (headline)="planHeadline = $event"></app-execution-plan>
           </div>
 
+          <!-- 0081: a coluna da direita é o Especialista do caso em versão compacta (a aba "timeline" do celular também) -->
           <div class="pr-timeline" [class.pr-tab-panel--on]="tab === 'timeline'" [class.pr-focus]="focusedPanel() === 'timeline'">
-            <!-- 0080: prévia ao vivo do Especialista do caso (no celular, o botão fica fixo no plano) -->
-            @if (cardNumber) { <app-case-preview class="pr-case-preview" [card]="'' + cardNumber"></app-case-preview> }
-            <app-card-timeline [cardNumber]="cardNumber"></app-card-timeline>
+            <!-- O card buscado (e não o que está sendo digitado): a conversa não troca a cada tecla. -->
+            @if (prState.cardNumber(); as loaded) {
+              <app-case-compact class="pr-case-compact" [card]="loaded"></app-case-compact>
+            } @else {
+              <div class="pr-case-empty"><mat-icon>psychology</mat-icon><span>Busque um card para conversar com o Especialista do caso.</span></div>
+            }
           </div>
+        </div>
+
+        <!-- 0081: montada fora da tela (carrega, rascunho e tempo real continuam); só aparece em tela cheia pelo botão do topo -->
+        <div class="pr-timeline-host" aria-hidden="true">
+          <app-card-timeline [cardNumber]="cardNumber"></app-card-timeline>
         </div>
 
       <!-- Rodapé (0021): o que não cabe na largura vai para o "⋯". Copiar saiu (fica nos painéis de
            Descrição/Root Cause), Detalhes do card foi para Ações DevOps e Gerar com IA/Handover para
            Ações inteligentes. -->
-      <div class="page-footer">
+      <div class="page-footer" data-tour="footer-actions">
         <app-action-toolbar>
           <!-- 0062: "Abrir PR" virou o menu "Ações GitHub" (Abrir PR + Copiar PR) -->
           <span appToolbarItem="github" toolbarLabel="Ações GitHub" toolbarSvgIcon="github" [toolbarSubmenu]="true"

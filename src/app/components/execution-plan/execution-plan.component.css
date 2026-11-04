@@ -1316,3 +1316,47 @@
 .plan__signal-text { padding: 8px 16px 6px; font-size: 12.5px; line-height: 1.45; max-width: 280px; color: color-mix(in srgb, var(--mat-sys-on-surface) 75%, transparent); }
 .plan__signal-text b { color: var(--mat-sys-on-surface); }
 @media (prefers-reduced-motion: reduce) { .plan__signal.mat-mdc-icon-button { animation: none; } }
+
+/* 0081: o pedido do Claude (na fila / rodando) como ícone no cabeçalho — se mexe enquanto ele trabalha. */
+.plan__run.mat-mdc-icon-button { position: relative; color: var(--plan-muted); }
+.plan__run-ring { position: absolute; inset: 5px; border-radius: 50%; border: 2px solid transparent; pointer-events: none; }
+.plan__run--running.mat-mdc-icon-button { color: var(--plan-run); }
+.plan__run--running .plan__run-ring { border-top-color: var(--plan-run); border-right-color: color-mix(in srgb, var(--plan-run) 45%, transparent);
+  animation: plan-run-spin 1.1s linear infinite; }
+.plan__run--running mat-icon { animation: plan-run-bob 1.4s ease-in-out infinite; }
+.plan__run--queued.mat-mdc-icon-button { color: var(--plan-warn); }
+.plan__run--queued mat-icon { animation: plan-run-tilt 2.2s ease-in-out infinite; }
+@keyframes plan-run-spin { to { transform: rotate(360deg); } }
+@keyframes plan-run-bob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-2px) rotate(-6deg); } 75% { transform: translateY(1px) rotate(6deg); } }
+@keyframes plan-run-tilt { 0%, 40% { transform: rotate(0); } 50% { transform: rotate(180deg); } 90%, 100% { transform: rotate(180deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .plan__run--running .plan__run-ring, .plan__run--running mat-icon, .plan__run--queued mat-icon { animation: none; }
+}
+
+.run-pop {
+  --plan-run: var(--mat-sys-primary); --plan-warn: #d29922;
+  --plan-muted: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+  width: min(380px, calc(100vw - 24px)); max-height: min(70vh, 560px); overflow-y: auto; border-radius: 12px; padding: 4px 0 8px;
+  background: var(--surface-2, #323232); color: var(--mat-sys-on-surface); box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  border: 1px solid rgba(255, 255, 255, .08); font-size: 12.5px;
+}
+.run-pop__head { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 14px; font-size: 13.5px; }
+.run-pop__head > mat-icon { color: var(--plan-muted); }
+.run-pop__head--running > mat-icon, .run-pop__head--claimed > mat-icon { color: var(--plan-run); }
+.run-pop__head--queued > mat-icon { color: var(--plan-warn); }
+.run-pop__spacer { flex: 1; }
+.run-pop__close.mat-mdc-icon-button { width: 32px; height: 32px; padding: 4px; }
+.run-pop__close mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.run-pop__facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 2px 14px 8px; }
+.run-pop__facts dt { color: var(--plan-muted); }
+.run-pop__facts dd { margin: 0; overflow-wrap: anywhere; }
+.run-pop__now { display: flex; gap: 8px; align-items: flex-start; margin: 0 10px 6px; padding: 8px 10px; border-radius: 10px;
+  background: color-mix(in srgb, var(--plan-run) 12%, transparent); }
+.run-pop__now mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--plan-run); flex: none; }
+.run-pop__now small { color: var(--plan-muted); }
+.run-pop__quiet { margin: 0 14px 6px; color: var(--plan-warn); }
+.run-pop__sub { margin: 8px 14px 2px; font-size: 11.5px; font-weight: 600; color: var(--plan-muted); text-transform: uppercase; letter-spacing: .04em; }
+.run-pop__log { margin: 0 14px; max-height: 220px; overflow-y: auto; }
+.run-pop__text { margin: 2px 14px 8px; line-height: 1.45; color: color-mix(in srgb, var(--mat-sys-on-surface) 80%, transparent); }
+.run-pop__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px 0; }
+.run-pop__stop mat-icon { margin-right: 4px; }

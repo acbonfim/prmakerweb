@@ -17,21 +17,16 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { WsService } from '../../services/ws.service';
 import { StorageService } from '../../services/storage.service';
 import { CaseChatService } from '../../services/case-chat.service';
 import { UserPhotoService } from '../../services/user-photo.service';
-import { CaseChatStatusService } from '../../services/case-chat-status.service';
+import { CaseChatStore, CaseRoom, PendingFile } from '../../services/case-chat-store.service';
 import { planApiError, saveBlob } from '../../services/execution-plan.service';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
-import { executionPlanGroup } from '../execution-plan/execution-plan.model';
 import {
-  CASE_CHAT_EVENT,
   CaseAction,
-  CaseChat,
-  CaseChatRealtimePayload,
   CaseFile,
   CaseMessage,
   CasePoint,
@@ -46,12 +41,6 @@ export interface CaseChatDialogData {
   card: string;
 }
 
-interface PendingFile {
-  id: number;
-  file: File;
-  preview: string | null;
-}
-
 /** Mesmos limites da API (10 MB por arquivo, 20 por mensagem). */
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_FILES = 20;
@@ -59,7 +48,6 @@ const MAX_FILES = 20;
 const TYPING_TTL_MS = 6000;
 /** Sinal de digitando no máximo a cada... */
 const TYPING_EVERY_MS = 4000;
-const REFRESH_DEBOUNCE_MS = 200;
 
 /** Atalhos do compositor: preenchem o texto (a pessoa ainda pode ajustar) ou mandam direto. */
 const QUICK = [
@@ -88,32 +76,36 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   readonly data = inject<CaseChatDialogData>(MAT_DIALOG_DATA);
   private ref = inject(MatDialogRef<CaseChatDialogComponent>);
   private api = inject(CaseChatService);
-  private ws = inject(WsService);
   private dialog = inject(MatDialog);
   private snack = inject(MatSnackBar);
   readonly photos = inject(UserPhotoService);
-  private status = inject(CaseChatStatusService);
+  private store = inject(CaseChatStore);
+  /** 0081: a conversa fica em memória (CaseChatStore) — fechar e abrir de novo não recarrega nem perde o rascunho. */
+  private readonly room: CaseRoom = this.store.room(this.data.card);
   private readonly me = inject(StorageService).getAccess()?.user ?? null;
 
   readonly specialistName = SPECIALIST_NAME;
   readonly quick = QUICK;
   readonly myId = (this.me?.externalId ?? '').toLowerCase();
 
-  readonly chat = signal<CaseChat | null>(null);
-  readonly loading = signal(true);
-  readonly loadError = signal(false);
+  readonly chat = this.room.chat;
+  readonly loading = this.room.loading;
+  readonly loadError = this.room.loadError;
   readonly sending = signal(false);
   readonly showHistory = signal(false);
   readonly showAside = signal(window.matchMedia('(min-width: 1000px)').matches);
-  readonly typing = signal<Record<string, number>>({});
+  readonly typing = this.room.typing;
   readonly now = signal(Date.now());
-  readonly replyTo = signal<CaseMessage | null>(null);
-  readonly pending = signal<PendingFile[]>([]);
+  readonly replyTo = this.room.replyTo;
+  readonly pending = this.room.pending;
   readonly dropping = signal(false);
   readonly mentionQuery = signal<string | null>(null);
-  draft = '';
-  peopleOnly = false;
-  deep = false;
+  get draft(): string { return this.room.draft.text; }
+  set draft(v: string) { this.room.draft.text = v; }
+  get peopleOnly(): boolean { return this.room.draft.peopleOnly; }
+  set peopleOnly(v: boolean) { this.room.draft.peopleOnly = v; }
+  get deep(): boolean { return this.room.draft.deep; }
+  set deep(v: boolean) { this.room.draft.deep = v; }
 
   readonly voice = new VoiceRecorder();
   readonly voiceReview = signal<VoiceResult | null>(null);
@@ -122,9 +114,6 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   /** Celular: textos de ajuda mais curtos. */
   readonly compact = window.matchMedia('(max-width: 640px)').matches;
 
-  /** Blob URLs dos arquivos (imagens e áudios) carregados sob demanda. */
-  readonly blobs = signal<Record<string, string>>({});
-  private loadingBlobs = new Set<string>();
 
   @ViewChild('scroll') private scrollRef?: ElementRef<HTMLDivElement>;
   @ViewChild('box') private boxRef?: ElementRef<HTMLTextAreaElement>;
@@ -162,38 +151,41 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
     return total >= 1_000_000 ? `${(total / 1_000_000).toFixed(1)} M` : total >= 1000 ? `${Math.round(total / 1000)} k` : `${total}`;
   });
 
-  private refreshTimer?: ReturnType<typeof setTimeout>;
   private clock?: ReturnType<typeof setInterval>;
   private lastTypingSent = 0;
-  private fileSeq = 0;
-  private stickToBottom = true;
-  private readonly group = executionPlanGroup(this.data.card);
+  private stickToBottom = this.room.scrollTop === null;
+  private viewReady = false;
 
   constructor() {
-    this.ws.startConnection();
-    this.ws.addToGroup(this.group);
-    this.ws.on(CASE_CHAT_EVENT, this.onRealtime);
+    // A tela do card já acompanha o card; o modal também (aberto de outro lugar, ou se a tela fechar por baixo).
+    this.store.watch(this.data.card);
     this.clock = setInterval(() => this.now.set(Date.now()), 1000);
-    this.load();
     effect(() => {
       const c = this.chat();
       if (!c) return;
       this.photos.ensure([...c.participants.map((p) => p.userId), ...c.messages.map((m) => m.authorUserId), this.me?.externalId]);
+      // Mensagem nova ou atividade do especialista: acompanha o fim se a pessoa estava lá, e marca como vista.
+      this.store.markSeen(this.data.card, c.messages.at(-1)?.number ?? 0);
+      if (this.viewReady && this.stickToBottom) this.scrollToEnd();
     });
   }
 
   ngAfterViewInit(): void {
-    setTimeout(() => this.boxRef?.nativeElement.focus(), 50);
+    // Volta para onde estava (ou para o fim) sem animação — reabrir parece que nunca fechou.
+    setTimeout(() => {
+      const el = this.scrollRef?.nativeElement;
+      if (el) el.scrollTop = this.room.scrollTop ?? el.scrollHeight;
+      this.viewReady = true;
+      this.boxRef?.nativeElement.focus();
+    }, 0);
   }
 
   ngOnDestroy(): void {
-    this.ws.off(CASE_CHAT_EVENT, this.onRealtime);
-    this.ws.removeFromGroup(this.group);
+    const el = this.scrollRef?.nativeElement;
+    this.room.scrollTop = el && !this.isAtBottom() ? el.scrollTop : null;
+    this.store.unwatch(this.data.card);
     clearInterval(this.clock);
-    clearTimeout(this.refreshTimer);
     if (this.voice.recording()) this.voice.cancel();
-    for (const url of Object.values(this.blobs())) URL.revokeObjectURL(url);
-    for (const p of this.pending()) if (p.preview) URL.revokeObjectURL(p.preview);
   }
 
   close(): void {
@@ -203,75 +195,27 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   // ── Carga e tempo real ─────────────────────────────────────────────────────────────────────────
 
   load(): void {
-    this.api.get(this.data.card).subscribe({
-      next: (c) => {
-        this.loading.set(false);
-        this.loadError.set(false);
-        this.stickToBottom = this.isAtBottom();
-        this.chat.set(c);
-        this.status.markSeen(this.data.card, c.messages.at(-1)?.number ?? 0);
-        if (this.stickToBottom) this.scrollToEnd();
-      },
-      error: () => {
-        this.loading.set(false);
-        this.loadError.set(true);
-      }
-    });
+    this.store.reload(this.data.card, 0);
   }
-
-  private onRealtime = (p: CaseChatRealtimePayload): void => {
-    if (!p || `${p.cardNumber}` !== this.data.card) return;
-    if (p.action === 'typing') {
-      if (p.userId && p.userId.toLowerCase() === this.myId) return;
-      if (p.by) this.typing.update((t) => ({ ...t, [p.by!]: Date.now() }));
-      return;
-    }
-    if (p.action === 'activity') {
-      const c = this.chat();
-      if (c?.run && c.run.id === p.requestId) {
-        this.chat.set({ ...c, run: { ...c.run, status: (p.status as any) ?? c.run.status, currentActivity: p.activity ?? null, recentActivities: p.recent ?? [] } });
-        this.scrollIfNear();
-        return;
-      }
-    }
-    if (p.action === 'message') {
-      // A mensagem chegou: quem escreveu parou de digitar.
-      this.typing.set({});
-    }
-    clearTimeout(this.refreshTimer);
-    this.refreshTimer = setTimeout(() => this.load(), REFRESH_DEBOUNCE_MS);
-  };
 
   // ── Envio ──────────────────────────────────────────────────────────────────────────────────────
 
   send(textOverride?: string): void {
-    const text = (textOverride ?? this.draft).trim();
-    const files = this.pending().map((p) => p.file);
-    if ((!text && !files.length) || this.sending()) return;
+    if (this.sending()) return;
+    const request = this.store.send(this.data.card, textOverride);
+    if (!request) return;
     this.sending.set(true);
-    const replyTo = this.replyTo()?.number ?? null;
-    this.api.post(this.data.card, { text, files, peopleOnly: this.peopleOnly, deep: this.deep, replyTo }).subscribe({
-      next: (m) => {
+    this.stickToBottom = true;
+    request.subscribe({
+      next: () => {
         this.sending.set(false);
-        if (textOverride === undefined) this.draft = '';
-        this.clearPending();
-        this.replyTo.set(null);
-        this.deep = false;
-        this.appendMine(m);
+        this.scrollToEnd();
       },
       error: (err) => {
         this.sending.set(false);
         this.snack.open(planApiError(err, 'Não foi possível enviar a mensagem.'), 'Fechar', { duration: 8000 });
       }
     });
-  }
-
-  private appendMine(m: CaseMessage): void {
-    const c = this.chat();
-    if (c && !c.messages.some((x) => x.id === m.id)) this.chat.set({ ...c, messages: [...c.messages, m] });
-    this.scrollToEnd();
-    clearTimeout(this.refreshTimer);
-    this.refreshTimer = setTimeout(() => this.load(), 600);
   }
 
   quickSend(text: string): void {
@@ -367,40 +311,16 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   }
 
   addFiles(list: FileList | File[] | null | undefined, pasted = false): void {
-    const files = Array.from(list ?? []);
-    const next = [...this.pending()];
-    for (const raw of files) {
-      if (next.length >= MAX_FILES) { this.snack.open(`No máximo ${MAX_FILES} arquivos por mensagem.`, 'Ok', { duration: 4000 }); break; }
-      if (raw.size > MAX_FILE_BYTES) { this.snack.open(`${raw.name} passa de 10 MB.`, 'Ok', { duration: 5000 }); continue; }
-      const file = pasted && raw.type.startsWith('image/')
-        ? new File([raw], `colado-${new Date().toISOString().slice(11, 19).replace(/:/g, '')}-${++this.fileSeq}.${raw.type.split('/')[1] || 'png'}`, { type: raw.type })
-        : raw;
-      next.push({ id: ++this.fileSeq, file, preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null });
-    }
-    this.pending.set(next);
+    this.store.addFiles(this.data.card, Array.from(list ?? []), pasted, MAX_FILES, MAX_FILE_BYTES,
+      (m) => this.snack.open(m, 'Ok', { duration: 5000 }));
   }
 
   removePending(p: PendingFile): void {
-    if (p.preview) URL.revokeObjectURL(p.preview);
-    this.pending.set(this.pending().filter((x) => x.id !== p.id));
-  }
-
-  private clearPending(): void {
-    for (const p of this.pending()) if (p.preview) URL.revokeObjectURL(p.preview);
-    this.pending.set([]);
+    this.store.removePending(this.data.card, p);
   }
 
   blob(file: CaseFile): string | null {
-    const url = this.blobs()[file.id];
-    if (url) return url;
-    if (!this.loadingBlobs.has(file.id) && (file.kind === 'image' || file.kind === 'audio')) {
-      this.loadingBlobs.add(file.id);
-      this.api.content(this.data.card, file).subscribe({
-        next: (b) => this.blobs.update((m) => ({ ...m, [file.id]: URL.createObjectURL(b) })),
-        error: () => {}
-      });
-    }
-    return null;
+    return this.store.blob(this.data.card, file);
   }
 
   download(file: CaseFile): void {
@@ -448,7 +368,9 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
         this.voiceReview.set(null);
         this.voiceTranscript = '';
         this.replyTo.set(null);
-        this.appendMine(m);
+        this.stickToBottom = true;
+        this.store.appendMine(this.data.card, m);
+        this.scrollToEnd();
       },
       error: (err) => {
         this.sending.set(false);
@@ -607,10 +529,6 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   private isAtBottom(): boolean {
     const el = this.scrollRef?.nativeElement;
     return !el || el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  }
-
-  private scrollIfNear(): void {
-    if (this.isAtBottom()) this.scrollToEnd();
   }
 
   private scrollToEnd(): void {
