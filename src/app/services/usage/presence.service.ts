@@ -37,8 +37,15 @@ export class PresenceService {
   readonly now = signal(Date.now());
 
   readonly users = computed<UserPresence[]>(() => {
-    const byUser = new Map<string, PresenceEntry[]>();
+    // Recarregar a aba abre uma conexão nova com o mesmo sessionId; a antiga pode demorar a cair no servidor.
+    const bySession = new Map<string, PresenceEntry>();
     for (const e of this.entries().values()) {
+      const key = e.sessionId || e.connectionId;
+      const prev = bySession.get(key);
+      if (!prev || (parseApiDate(e.connectedAt) ?? 0) >= (parseApiDate(prev.connectedAt) ?? 0)) bySession.set(key, e);
+    }
+    const byUser = new Map<string, PresenceEntry[]>();
+    for (const e of bySession.values()) {
       const id = (e.userId ?? e.connectionId).toLowerCase();
       const list = byUser.get(id) ?? [];
       list.push(e);

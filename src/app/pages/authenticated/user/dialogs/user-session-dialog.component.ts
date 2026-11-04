@@ -79,12 +79,12 @@ export interface UserSessionDialogData {
         <section>
           <h3>Últimos 30 dias</h3>
           <div class="totals">
-            <div><b>{{ d.totals?.sessions ?? 0 }}</b><span>sessões</span></div>
-            <div><b>{{ d.totals?.logins ?? 0 }}</b><span>logins</span></div>
+            <div><b>{{ d.totals?.sessions ?? (d.sessions?.length ?? 0) }}</b><span>sessões</span></div>
+            <div><b>{{ d.totals?.logins ?? (d.logins?.length ?? 0) }}</b><span>{{ d.totals?.logins == null ? 'logins recentes' : 'logins' }}</span></div>
             <div><b>{{ dur(d.totals?.foregroundMs) }}</b><span>em primeiro plano</span></div>
             <div><b>{{ d.totals?.views ?? 0 }}</b><span>telas</span></div>
             <div><b>{{ d.totals?.actions ?? 0 }}</b><span>ações</span></div>
-            <div><b>{{ d.totals?.errors ?? 0 }}</b><span>erros</span></div>
+            <div><b>{{ d.totals?.errors ?? errorCount() }}</b><span>erros{{ d.totals?.errors == null ? ' recentes' : '' }}</span></div>
           </div>
         </section>
 
@@ -209,6 +209,8 @@ export class UserSessionDialogComponent implements OnDestroy {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
   readonly selectedSession = signal<string | null>(null);
+
+  readonly errorCount = computed(() => (this.detail()?.events ?? []).filter((e) => e.kind === 'error').length);
 
   readonly pathEvents = computed(() => {
     const events = this.detail()?.events ?? [];

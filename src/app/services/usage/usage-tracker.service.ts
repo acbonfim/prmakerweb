@@ -58,6 +58,8 @@ export class UsageTrackerService {
 
   private buffer: UsageEvent[] = [];
   private current: CurrentView | null = null;
+  /** Última tela (fica depois do `closeView` do pagehide/logout, para a sessão gravar onde parou). */
+  private lastScreen: { screen: string; route: string } | null = null;
   private flushing = false;
 
   private foregroundMs = 0;
@@ -223,6 +225,7 @@ export class UsageTrackerService {
     this.accumulate(Date.now());
     this.closeView();
     this.current = { screen, route, card, enteredAt: Date.now(), foregroundMs: 0 };
+    this.lastScreen = { screen, route };
     this.schedulePresence();
   }
 
@@ -421,8 +424,8 @@ export class UsageTrackerService {
       session: {
         id: this.sessionId,
         startedAt: this.startedAt,
-        screen: this.current?.screen ?? null,
-        route: this.current?.route ?? null,
+        screen: this.current?.screen ?? this.lastScreen?.screen ?? null,
+        route: this.current?.route ?? this.lastScreen?.route ?? null,
         foregroundMs: Math.round(this.foregroundMs),
         backgroundMs: Math.round(this.backgroundMs),
         awayMs: Math.round(this.awayMs),

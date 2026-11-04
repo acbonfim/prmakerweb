@@ -89,9 +89,9 @@
 <div class="tiles">
   <div class="tile"><span class="tile__label">Usuários ativos</span><span class="tile__value">{{ num(kpis()?.activeUsers) }}</span></div>
   <div class="tile"><span class="tile__label">Sessões</span><span class="tile__value">{{ num(kpis()?.sessions) }}</span></div>
-  <div class="tile"><span class="tile__label">Logins</span><span class="tile__value">{{ num(kpis()?.logins) }}</span>
+  <div class="tile"><span class="tile__label">Logins com sucesso</span><span class="tile__value">{{ num(kpis()?.logins) }}</span>
     <span class="tile__sub" [class.tile__sub--bad]="(kpis()?.failedLogins ?? 0) > 0">{{ num(kpis()?.failedLogins) }} com falha</span></div>
-  <div class="tile"><span class="tile__label">Sessão média</span><span class="tile__value">{{ dur(kpis()?.avgSessionMs) }}</span></div>
+  <div class="tile"><span class="tile__label">Sessão média</span><span class="tile__value">{{ dur(avgSessionMs()) }}</span></div>
   <div class="tile"><span class="tile__label">Tempo em primeiro plano</span><span class="tile__value">{{ dur(kpis()?.foregroundMs) }}</span></div>
   <div class="tile"><span class="tile__label">Telas vistas</span><span class="tile__value">{{ num(kpis()?.views) }}</span></div>
   <div class="tile"><span class="tile__label">Ações</span><span class="tile__value">{{ num(kpis()?.actions) }}</span></div>

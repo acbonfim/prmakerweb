@@ -1,4 +1,4 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, afterNextRender, computed, inject, input, signal } from '@angular/core';
 
 /**
  * Gráficos da análise de uso (0079), em SVG próprio (o app não tem biblioteca de gráficos). Seguem a skill de dataviz:
@@ -21,12 +21,17 @@ export interface BarDatum {
   values: number[];
 }
 
-function niceMax(v: number): number {
-  if (v <= 4) return Math.max(1, Math.ceil(v));
-  const pow = Math.pow(10, Math.floor(Math.log10(v)));
-  const n = v / pow;
-  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
-  return step * pow;
+/** Escala com passo "redondo" (1, 2, 5 × 10ⁿ) e no máximo 4 intervalos: rótulos inteiros e sem repetição. */
+function niceScale(v: number): { max: number; step: number } {
+  if (v <= 4) {
+    const max = Math.max(1, Math.ceil(v));
+    return { max, step: 1 };
+  }
+  const raw = v / 4;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / pow;
+  const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * pow;
+  return { max: Math.ceil(v / step) * step, step };
 }
 
 const fmt = new Intl.NumberFormat('pt-BR');
@@ -44,12 +49,12 @@ const fmt = new Intl.NumberFormat('pt-BR');
           }
         </div>
       }
-      <svg [attr.viewBox]="'0 0 ' + W + ' ' + H" preserveAspectRatio="none" class="uc-svg" role="img" [attr.aria-label]="ariaLabel()">
+      <svg [attr.viewBox]="'0 0 ' + W() + ' ' + H" class="uc-svg" role="img" [attr.aria-label]="ariaLabel()">
         @for (t of ticks(); track t.v) {
-          <line [attr.x1]="padL" [attr.x2]="W" [attr.y1]="t.y" [attr.y2]="t.y" class="uc-grid" />
+          <line [attr.x1]="padL" [attr.x2]="W()" [attr.y1]="t.y" [attr.y2]="t.y" class="uc-grid" />
           <text [attr.x]="padL - 6" [attr.y]="t.y + 3" class="uc-tick" text-anchor="end">{{ t.label }}</text>
         }
-        <line [attr.x1]="padL" [attr.x2]="W" [attr.y1]="H - padB" [attr.y2]="H - padB" class="uc-base" />
+        <line [attr.x1]="padL" [attr.x2]="W()" [attr.y1]="H - padB" [attr.y2]="H - padB" class="uc-base" />
         @for (c of columns(); track $index) {
           <g>
             @for (seg of c.segs; track $index) {
@@ -67,7 +72,7 @@ const fmt = new Intl.NumberFormat('pt-BR');
         }
       </svg>
       @if (hover() !== null && columns()[hover()!]; as c) {
-        <div class="uc-tip" [style.left.%]="(c.cx / W) * 100">
+        <div class="uc-tip" [style.left.%]="(c.cx / W()) * 100">
           <div class="uc-tip__title">{{ c.title }}</div>
           @for (s of series(); track s.name; let i = $index) {
             <div class="uc-tip__row"><i [style.background]="s.color"></i>{{ s.name }}<b>{{ fmt(c.values[i] || 0) }}</b></div>
@@ -84,29 +89,43 @@ export class UsageBarsComponent {
   readonly series = input<BarSeries[]>([{ name: 'Valor', color: '#3987e5' }]);
   readonly ariaLabel = input('Gráfico de barras');
 
-  readonly W = 640;
+  /** Largura real do gráfico (sem esticar o SVG: texto e cantos ficam no tamanho certo). */
+  readonly W = signal(640);
   readonly H = 200;
+
+  constructor() {
+    const host = inject(ElementRef<HTMLElement>).nativeElement as HTMLElement;
+    const destroyRef = inject(DestroyRef);
+    afterNextRender(() => {
+      const ro = new ResizeObserver(([entry]) => {
+        const w = Math.round(entry.contentRect.width);
+        if (w > 0 && w !== this.W()) this.W.set(w);
+      });
+      ro.observe(host);
+      destroyRef.onDestroy(() => ro.disconnect());
+    });
+  }
   readonly padL = 34;
   readonly padB = 22;
   readonly hover = signal<number | null>(null);
   fmt = (v: number) => fmt.format(v);
 
-  private readonly max = computed(() => niceMax(Math.max(0, ...this.data().map((d) => d.values.reduce((a, b) => a + (b || 0), 0)))));
+  private readonly scale = computed(() => niceScale(Math.max(0, ...this.data().map((d) => d.values.reduce((a, b) => a + (b || 0), 0)))));
+  private readonly max = computed(() => this.scale().max);
 
   readonly ticks = computed(() => {
-    const max = this.max();
-    const steps = max <= 4 ? max : 4;
+    const { max, step } = this.scale();
     const plotH = this.H - this.padB - 8;
-    return Array.from({ length: steps + 1 }, (_, i) => {
-      const v = (max / steps) * i;
-      return { v, y: this.H - this.padB - (v / max) * plotH, label: fmt.format(Math.round(v)) };
+    return Array.from({ length: Math.round(max / step) + 1 }, (_, i) => {
+      const v = step * i;
+      return { v, y: this.H - this.padB - (v / max) * plotH, label: fmt.format(v) };
     });
   });
 
   readonly columns = computed(() => {
     const data = this.data();
     const n = data.length || 1;
-    const plotW = this.W - this.padL;
+    const plotW = this.W() - this.padL;
     const slot = plotW / n;
     const gap = Math.min(8, Math.max(2, slot * 0.25));
     const w = Math.max(2, Math.min(28, slot - gap));

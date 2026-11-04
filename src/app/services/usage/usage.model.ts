@@ -94,8 +94,14 @@ export interface UsageKpis {
   sessions: number;
   logins: number;
   failedLogins: number;
-  avgSessionMs: number;
+  /** A API manda em minutos (`avgSessionMinutes`); `avgSessionMs` fica como alternativa. */
+  avgSessionMs?: number;
+  avgSessionMinutes?: number;
   foregroundMs: number;
+  backgroundMs?: number;
+  awayMs?: number;
+  clicks?: number;
+  events?: number;
   views: number;
   actions: number;
   errors: number;
@@ -109,6 +115,9 @@ export interface UsageDay {
   failedLogins: number;
   views: number;
   actions: number;
+  clicks?: number;
+  errors?: number;
+  events?: number;
 }
 
 export interface UsageHeatCell {
@@ -121,7 +130,9 @@ export interface UsageHeatCell {
 export interface UsageScreenStat {
   screen: string;
   views: number;
-  foregroundMs: number;
+  /** Tempo em primeiro plano somado (a API manda `durationMs`). */
+  durationMs?: number;
+  foregroundMs?: number;
   users: number;
 }
 
@@ -140,7 +151,10 @@ export interface UsageErrorStat {
 
 export interface UsageNamedCount {
   name: string;
-  count: number;
+  /** A API manda `sessions` (e `users`); `count` fica como alternativa. */
+  sessions?: number;
+  users?: number;
+  count?: number;
 }
 
 export interface UsageUserStat {
@@ -152,6 +166,9 @@ export interface UsageUserStat {
   views: number;
   actions: number;
   errors: number;
+  failedLogins?: number;
+  activeDays?: number;
+  clicks?: number;
   lastSeenAt: string | null;
 }
 
@@ -194,6 +211,8 @@ export interface UsageSessionItem {
   timeZone: string | null;
   appVersion: string | null;
   lastScreen: string | null;
+  lastRoute?: string | null;
+  events?: number;
   foregroundMs: number;
   backgroundMs: number;
   awayMs: number;
@@ -234,7 +253,7 @@ export interface UsageUserDetail {
   logins?: UsageLoginItem[] | null;
   sessions?: UsageSessionItem[] | null;
   events?: UsageEventItem[] | null;
-  totals?: { sessions: number; logins: number; foregroundMs: number; views: number; actions: number; errors: number } | null;
+  totals?: { sessions?: number; logins?: number; foregroundMs?: number; views?: number; actions?: number; errors?: number } | null;
 }
 
 // ---- rótulos e formatação ----

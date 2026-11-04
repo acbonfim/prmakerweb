@@ -11,6 +11,8 @@ const BUSY_AFTER_MS = 1_500;
 const SLOW_READ_MS = 3_000;
 const IGNORE = /\/(Usage|RealTime)\/|oauth\/login|RefreshToken|refresh-token/i;
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+/** POSTs que só leem (listagens/buscas): contam como leitura, não como ação. */
+const READ_ONLY_POST = /user\/GetAll|PhotosByExternalIds|\/search\b|\/query\b/i;
 
 /**
  * Dados de uso (0079): ações (chamadas que alteram dados), erros e leituras lentas para a API e para a auth viram
@@ -53,7 +55,7 @@ export class UsageInterceptor implements HttpInterceptor {
         try {
           if (failed || (status != null && status >= 400)) {
             this.tracker.record('error', name, area, status, duration);
-          } else if (MUTATING.has(method)) {
+          } else if (MUTATING.has(method) && !READ_ONLY_POST.test(req.url)) {
             this.tracker.record('action', name, area, status, duration);
           } else if (duration >= SLOW_READ_MS) {
             this.tracker.record('slow', name, area, status, duration);

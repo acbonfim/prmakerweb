@@ -14,7 +14,7 @@ import { UserAvatarComponent } from '../../../../components/user-avatar/user-ava
 import { PresenceService, UserPresence } from '../../../../services/usage/presence.service';
 import { UsageApiService, UsageFilter } from '../../../../services/usage/usage-api.service';
 import {
-  EVENT_KIND_LABEL, LOGIN_REASON_LABEL, PRESENCE_LABEL, UsageEventItem, UsageEventKind, UsageLoginItem, UsageSessionItem,
+  EVENT_KIND_LABEL, LOGIN_REASON_LABEL, PRESENCE_LABEL, UsageEventItem, UsageEventKind, UsageLoginItem, UsageNamedCount, UsageSessionItem,
   UsageSummary, UsageUserStat, formatAgo, formatDateTime, formatDuration,
 } from '../../../../services/usage/usage.model';
 import { UserSessionDialogComponent } from '../dialogs/user-session-dialog.component';
@@ -84,6 +84,10 @@ export class UsageAnalyticsComponent implements OnInit, OnDestroy {
 
   // ---- derivados ----
   readonly kpis = computed(() => this.summary()?.kpis ?? null);
+  readonly avgSessionMs = computed(() => {
+    const k = this.kpis();
+    return k ? (k.avgSessionMs ?? (k.avgSessionMinutes != null ? k.avgSessionMinutes * 60_000 : 0)) : 0;
+  });
 
   readonly dayKeys = computed(() => {
     const { from, to } = this.range();
@@ -107,27 +111,38 @@ export class UsageAnalyticsComponent implements OnInit, OnDestroy {
   readonly loginBars = computed<BarDatum[]>(() =>
     this.dayKeys().map((k) => {
       const d = this.daysByKey().get(k);
-      const fail = d?.failedLogins ?? 0;
-      return { label: this.shortDay(k), title: this.longDay(k), values: [Math.max(0, (d?.logins ?? 0) - fail), fail] };
+      // `logins` = com sucesso; `failedLogins` à parte.
+      return { label: this.shortDay(k), title: this.longDay(k), values: [d?.logins ?? 0, d?.failedLogins ?? 0] };
     }));
   readonly loginSeries: BarSeries[] = [{ name: 'Sucesso', color: SERIES_BLUE }, { name: 'Falha', color: STATUS_FAIL }];
 
-  readonly screenBars = computed(() => (this.summary()?.screens ?? []).map((s) => ({
-    label: s.screen || '—', value: s.views, text: `${s.views} · ${formatDuration(s.foregroundMs)}`,
-    tip: `${s.views} visitas · ${formatDuration(s.foregroundMs)} em primeiro plano · ${s.users} usuários`,
-  })));
-  readonly screenTimeBars = computed(() => (this.summary()?.screens ?? []).map((s) => ({
-    label: s.screen || '—', value: s.foregroundMs, text: formatDuration(s.foregroundMs),
-  })));
+  readonly screenBars = computed(() => (this.summary()?.screens ?? []).map((s) => {
+    const ms = s.durationMs ?? s.foregroundMs ?? 0;
+    return {
+      label: s.screen || '—', value: s.views, text: `${s.views} · ${formatDuration(ms)}`,
+      tip: `${s.views} visitas · ${formatDuration(ms)} em primeiro plano · ${s.users} usuários`,
+    };
+  }));
+  readonly screenTimeBars = computed(() => (this.summary()?.screens ?? []).map((s) => {
+    const ms = s.durationMs ?? s.foregroundMs ?? 0;
+    return { label: s.screen || '—', value: ms, text: formatDuration(ms) };
+  }));
   readonly actionBars = computed(() => (this.summary()?.actions ?? []).map((a) => ({
     label: a.name, value: a.count, text: `${a.count}`, tip: `${a.count} vezes · ${a.users} usuários${a.screen ? ' · ' + a.screen : ''}`,
   })));
   readonly errorBars = computed(() => (this.summary()?.errors ?? []).map((e) => ({
     label: `${e.name}${e.status ? ` (${e.status})` : ''}`, value: e.count,
   })));
-  readonly browserBars = computed(() => (this.summary()?.clients?.browsers ?? []).map((c) => ({ label: c.name || '—', value: c.count })));
-  readonly osBars = computed(() => (this.summary()?.clients?.os ?? []).map((c) => ({ label: c.name || '—', value: c.count })));
-  readonly deviceBars = computed(() => (this.summary()?.clients?.devices ?? []).map((c) => ({ label: c.name || '—', value: c.count })));
+  readonly browserBars = computed(() => this.clientBars(this.summary()?.clients?.browsers));
+  readonly osBars = computed(() => this.clientBars(this.summary()?.clients?.os));
+  readonly deviceBars = computed(() => this.clientBars(this.summary()?.clients?.devices));
+
+  private clientBars(list: UsageNamedCount[] | null | undefined) {
+    return (list ?? []).map((c) => {
+      const value = c.sessions ?? c.count ?? 0;
+      return { label: c.name || '—', value, tip: `${value} sessões${c.users != null ? ` · ${c.users} usuários` : ''}` };
+    });
+  }
 
   readonly sortedUsers = computed(() => {
     const { key, dir } = this.userSort();
