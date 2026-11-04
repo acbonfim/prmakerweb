@@ -11,6 +11,7 @@ import Aura from '@primeuix/themes/aura';
 import {AuthInterceptor} from './auth/auth.interceptor';
 import {PersonalIntegrationInterceptor} from './auth/personal-integration.interceptor';
 import {AiUsageInterceptor} from './auth/ai-usage.interceptor';
+import {UsageInterceptor} from './auth/usage.interceptor';
 import {provideServiceWorker} from '@angular/service-worker';
 import {MAT_TOOLTIP_DEFAULT_OPTIONS, MatTooltipDefaultOptions} from '@angular/material/tooltip';
 import {MAT_DIALOG_DEFAULT_OPTIONS, MatDialogConfig} from '@angular/material/dialog';
@@ -43,6 +44,12 @@ export const appConfig: ApplicationConfig = {
       // Resposta com X-AI-Usage → aviso com os tokens e o custo estimado da ação de IA (0042).
       provide: HTTP_INTERCEPTORS,
       useClass: AiUsageInterceptor,
+      multi: true
+    },
+    {
+      // Dados de uso (0079): ações, erros e leituras lentas viram eventos do lote; requisição longa = "executando".
+      provide: HTTP_INTERCEPTORS,
+      useClass: UsageInterceptor,
       multi: true
     },
     {

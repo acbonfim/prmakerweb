@@ -171,6 +171,12 @@ export class WsService {
     }
   }
 
+  /** Chama um método do hub (ex.: presença — 0079). Falha se a conexão não estiver aberta. */
+  public invoke<T = unknown>(method: string, ...args: unknown[]): Promise<T> {
+    if (!this.isConnected()) return Promise.reject(new Error('Tempo real desconectado'));
+    return this.hubConnection!.invoke<T>(method, ...args);
+  }
+
   /** Registra um handler para um evento do servidor. Persiste através de reconexões. */
   public on(event: string, handler: (...args: any[]) => void): void {
     this.handlers.push({ event, handler });

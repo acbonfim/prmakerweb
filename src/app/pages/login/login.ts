@@ -10,6 +10,7 @@ import { GlobalService } from '../../services/global.service';
 import { AuthService } from '../../services/auth.service';
 import { StorageService } from '../../services/storage.service';
 import { WsService } from '../../services/ws.service';
+import { UsageTrackerService } from '../../services/usage/usage-tracker.service';
 import {JwtHelperService} from '@auth0/angular-jwt';
 import { login } from '../../interfaces/login';
 import {MatSliderModule} from '@angular/material/slider';
@@ -104,6 +105,8 @@ export class Login implements OnInit {
                 this._authService.generateApiKey().subscribe(
                   (retApiKey: any) => {
                     this._storageService.setItem("apiKey", retApiKey.object.apiKey);
+                    // 0079: sessão de uso nova nesta aba, com o evento de login.
+                    UsageTrackerService.markLogin();
 
                     this._globalService.navigateTo('/auth/dashboard');
                     this._wsService.startConnection();

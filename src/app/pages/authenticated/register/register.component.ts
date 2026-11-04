@@ -1,3 +1,4 @@
+import { UsageTrackerService } from '../../../services/usage/usage-tracker.service';
 import { TeamsService } from '../../../services/teams.service';
 import {ChangeDetectorRef, Component, DestroyRef, effect, ElementRef, inject, OnDestroy, OnInit, signal, untracked, ViewChild} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -431,6 +432,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private tabs = inject(TabsService);
+  private usage = inject(UsageTrackerService);
 
   /**
    * Abas internas (0065): o estado do card é um singleton, então só a aba ativa pode lê-lo/escrevê-lo. A aba que
@@ -1257,6 +1259,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
     getPullRequestByCardNumber()
     {
+      this.usage.track('Buscar card', this.cardNumber?.toString() ?? null);
       this.isPullRequestLoading = true;
       this.loadingBar.start();
       // Zera o conteúdo do PR anterior: se o novo card não tiver registro salvo,
