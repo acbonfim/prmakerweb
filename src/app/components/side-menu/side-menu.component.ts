@@ -60,6 +60,12 @@ export class SideMenuComponent implements OnInit {
       allowedRoles: ['admin']
     },
     {
+      label: 'Análise de uso',
+      icon: 'insights',
+      link: 'auth/user/usage',
+      allowedRoles: ['admin']
+    },
+    {
       label: 'Serviços',
       icon: 'lan',
       link: 'auth/services',

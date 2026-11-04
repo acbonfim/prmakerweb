@@ -1,0 +1,75 @@
+/* Gráficos da análise de uso (0079) — tema escuro do app. */
+:host {
+  display: block;
+  --uc-ink-2: var(--cc-text-2);
+  --uc-ink-3: var(--cc-text-3);
+  --uc-grid: #2c2c2a;
+  --uc-base: #383835;
+  --hm-empty: color-mix(in srgb, var(--mat-sys-on-surface) 5%, transparent);
+}
+
+.uc { position: relative; }
+.uc-svg { width: 100%; height: 200px; display: block; overflow: visible; }
+.uc-grid { stroke: var(--uc-grid); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.uc-base { stroke: var(--uc-base); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.uc-tick { fill: var(--uc-ink-3); font-size: 10px; font-variant-numeric: tabular-nums; }
+.uc-hit { fill: transparent; cursor: default; }
+.uc-hover { fill: color-mix(in srgb, var(--mat-sys-on-surface) 6%, transparent); pointer-events: none; }
+
+.uc-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; font-size: 12px; color: var(--uc-ink-2); }
+.uc-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+.uc-legend__item i, .uc-tip__row i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.uc-tip {
+  position: absolute;
+  top: 18px;
+  transform: translateX(-50%);
+  min-width: 140px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #1a1a19;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 2;
+  white-space: nowrap;
+}
+.uc-tip__title { font-weight: 600; margin-bottom: 4px; }
+.uc-tip__row { display: flex; align-items: center; gap: 6px; color: var(--uc-ink-2); }
+.uc-tip__row b { margin-left: auto; padding-left: 12px; color: var(--cc-text-1); font-variant-numeric: tabular-nums; }
+
+.uc-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--uc-ink-3);
+}
+.uc-empty--static { position: static; padding: 18px 0; }
+
+/* Barras horizontais */
+.uh { display: flex; flex-direction: column; gap: 6px; }
+.uh-row { display: grid; grid-template-columns: minmax(90px, 38%) 1fr auto; align-items: center; gap: 10px; font-size: 12.5px; }
+.uh-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cc-text-1); }
+.uh-track { height: 10px; border-radius: 0 4px 4px 0; }
+.uh-bar { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.uh-value { font-variant-numeric: tabular-nums; color: var(--uc-ink-2); min-width: 44px; text-align: right; }
+
+/* Mapa de calor */
+.hm-grid {
+  display: grid;
+  grid-template-columns: 30px repeat(24, minmax(8px, 1fr));
+  gap: 2px;
+  align-items: center;
+}
+.hm-hour { font-size: 10px; color: var(--uc-ink-3); text-align: left; height: 14px; }
+.hm-day { font-size: 11px; color: var(--uc-ink-3); }
+.hm-cell { aspect-ratio: 1.6; border-radius: 3px; min-height: 10px; }
+.hm-cell--on { outline: 2px solid var(--cc-text-1); outline-offset: -1px; }
+.hm-foot { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; color: var(--uc-ink-2); }
+.hm-hint { color: var(--uc-ink-3); }
+.hm-scale { display: inline-flex; align-items: center; gap: 3px; color: var(--uc-ink-3); font-size: 11px; }
+.hm-scale i { width: 12px; height: 10px; border-radius: 2px; display: inline-block; }
