@@ -36,6 +36,7 @@ import {WsService} from '../../../services/ws.service';
 import {JsonPipe} from '@angular/common';
 import {AuthService} from '../../../services/auth.service';
 import {CardTimelineComponent} from '../../../components/card-timeline/card-timeline.component';
+import { CasePreviewComponent } from '../../../components/case-chat/case-preview.component';
 import {ExecutionPlanComponent, PlanHeadline} from '../../../components/execution-plan/execution-plan.component';
 import {InfoFact} from '../../../components/pr-info-card/pr-info-card.component';
 import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
@@ -117,6 +118,7 @@ function loadMobileTab(): MobileTab {
     AutoCompleteModule,
     MatFormFieldModule,
     CardTimelineComponent,
+    CasePreviewComponent,
     ExecutionPlanComponent,
     CardAlertBarComponent,
     CardPanelComponent,

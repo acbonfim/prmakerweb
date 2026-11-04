@@ -50,6 +50,11 @@ export class ExecutionPlanService {
     return this.http.post<ExecutionPlan>(`${this.apiUrl}/${planId}/status`, { status, reason: reason || null });
   }
 
+  /** 0080: confirma a divergência entre a análise e a base real (a etapa de PR pode começar). */
+  confirmDivergence(planId: string): Observable<ExecutionPlan> {
+    return this.http.post<ExecutionPlan>(`${this.apiUrl}/${planId}/divergence/confirm`, {});
+  }
+
   cancelStep(planId: string, stepKey: string, reason: string): Observable<ExecutionStep> {
     return this.http.post<ExecutionStep>(`${this.apiUrl}/${planId}/steps/${encodeURIComponent(stepKey)}/cancel`, { reason });
   }

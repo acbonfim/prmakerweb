@@ -5,7 +5,8 @@ export type PlanPhase = 'analysis' | 'correction';
 export type StepExecutor = 'claude' | 'user';
 export type StepKind = 'task' | 'code' | 'pr' | 'ticket' | 'question' | 'validation';
 export type LinkKind = 'ticket' | 'pr' | 'doc' | 'other';
-export type LogKind = 'info' | 'progress' | 'finding' | 'decision' | 'warning' | 'error';
+/** 0080: `divergence` = a base real difere da análise (alerta + a etapa de PR espera a confirmação). */
+export type LogKind = 'info' | 'progress' | 'finding' | 'decision' | 'warning' | 'error' | 'divergence';
 /** 0050: `ticket` = texto do chamado (`chamado-<nome>.md`), só no plano de correção. */
 export type ArtifactKind = 'script' | 'analysis' | 'data' | 'image' | 'attachment' | 'ticket';
 /** Etapa "aguardando": de quem depende (0037). `user` = ação do usuário (o motivo diz qual). */
@@ -248,6 +249,17 @@ export interface ExecutionPlan extends ExecutionPlanSummary {
   notes?: ExecutionNote[];
   lastLogId: number;
   serverTime: string;
+  /** 0080: divergência entre a análise e a base real; pendente = a etapa de PR espera alguém confirmar. */
+  divergence?: ExecutionDivergence | null;
+}
+
+export interface ExecutionDivergence {
+  text: string;
+  stepKey?: string | null;
+  at: string;
+  pending: boolean;
+  confirmedBy?: string | null;
+  confirmedAt?: string | null;
 }
 
 export interface ExecutionLog {

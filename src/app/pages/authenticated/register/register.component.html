@@ -133,6 +133,8 @@
           </div>
 
           <div class="pr-timeline" [class.pr-tab-panel--on]="tab === 'timeline'" [class.pr-focus]="focusedPanel() === 'timeline'">
+            <!-- 0080: prévia ao vivo do Especialista do caso (no celular, o botão fica fixo no plano) -->
+            @if (cardNumber) { <app-case-preview class="pr-case-preview" [card]="'' + cardNumber"></app-case-preview> }
             <app-card-timeline [cardNumber]="cardNumber"></app-card-timeline>
           </div>
         </div>
