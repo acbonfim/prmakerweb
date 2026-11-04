@@ -299,15 +299,15 @@ export class RegisterComponent implements OnInit, OnDestroy {
       });
     }
 
-    // 0075/F4: "Situação: 🔀 aguardando aprovação e merge · há 2 d" (mesma fonte do cartão do plano).
+    // 0075/F4: "Situação: aguardando aprovação e merge · há 2 d" (mesma fonte do cartão do plano; 0076: ícone do tipo, sem emoji).
     const card = `${this.cardNumber ?? ''}`.trim();
     const situation = card ? this.situationService.situationOf(card)() : null;
     const meta = situationMeta(situation?.kind);
     if (situation && meta) {
       const ago = situationAgo(situation.since);
       facts.push({
-        icon: 'pending_actions', label: 'Situação atual',
-        value: `${situation.icon || meta.icon} ${lowerFirst(situation.title || meta.short)}${ago ? ` · ${ago}` : ''}`,
+        icon: meta.icon, label: 'Situação atual',
+        value: `${lowerFirst(situation.title || meta.short)}${ago ? ` · ${ago}` : ''}`,
         tone: meta.tone === 'pending' ? 'warn' : 'info',
         tooltip: [situation.stepTitle && `Etapa: ${situation.stepTitle}`, situation.since && `Desde ${situationDate(situation.since)}`,
           'Detalhes no cartão "Situação atual" do plano de execução'].filter(Boolean).join('\n')

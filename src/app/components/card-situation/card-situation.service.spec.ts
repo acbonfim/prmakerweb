@@ -99,13 +99,48 @@ describe('CardSituationService (0075/F4)', () => {
     expect(ws.groups).not.toContain('execplan:75812');
   });
 
-  it('publish envia o html', async () => {
-    const p = svc.publish('75812', '<p>oi</p>');
+  it('publish envia corpo vazio (0076: o servidor monta o HTML)', async () => {
+    const p = svc.publish('75812');
     const req = http.expectOne(r => r.url.endsWith('ExecutionPlan/card/75812/situation/publish'));
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ html: '<p>oi</p>' });
+    expect(req.request.body).toEqual({});
     req.flush({ commentId: 7 });
     expect((await p).commentId).toBe(7);
+  });
+
+  it('0076: campos de publicação normalizados (autoPost, publishPending, publicado)', async () => {
+    const p = svc.load('75812', { devops: true });
+    http.expectOne(url(true)).flush(base({ autoPost: true, publishPending: true, publishedAt: '2026-11-04T11:58:00Z',
+      publishedBy: 'Fulano', publishedMarkdown: '**x**' }));
+    const s = await p;
+    expect(s).toEqual(jasmine.objectContaining({ autoPost: true, publishPending: true, publishedBy: 'Fulano', publishedMarkdown: '**x**' }));
+    const q = svc.load('75812', { force: true });
+    http.expectOne(url(false)).flush(base());
+    const s2 = await q;
+    expect(s2).toEqual(jasmine.objectContaining({ autoPost: false, publishPending: false, publishedAt: null }));
+  });
+
+  it('0076: preferência de publicação automática — GET uma vez, PUT grava (null = padrão)', async () => {
+    const g = svc.loadPostSettings();
+    http.expectOne(r => r.method === 'GET' && r.url.endsWith('ExecutionPlan/settings/situation-post'))
+      .flush({ autoPost: null, globalDefault: true, effective: true });
+    expect(await g).toEqual({ autoPost: null, globalDefault: true, effective: true });
+    expect(svc.postSettings()?.effective).toBeTrue();
+    await svc.loadPostSettings();
+    http.expectNone(r => r.method === 'GET');
+
+    const put = svc.savePostSettings(false);
+    const req = http.expectOne(r => r.method === 'PUT' && r.url.endsWith('ExecutionPlan/settings/situation-post'));
+    expect(req.request.body).toEqual({ autoPost: false });
+    req.flush({ autoPost: false, globalDefault: true, effective: false });
+    expect((await put).effective).toBeFalse();
+    expect(svc.postSettings()).toEqual({ autoPost: false, globalDefault: true, effective: false });
+
+    const reset = svc.savePostSettings(null);
+    const req2 = http.expectOne(r => r.method === 'PUT');
+    expect(req2.request.body).toEqual({ autoPost: null });
+    req2.flush({ autoPost: null, globalDefault: true, effective: true });
+    expect((await reset).autoPost).toBeNull();
   });
 
   it('"há X" e chip da Home', () => {
@@ -115,11 +150,11 @@ describe('CardSituationService (0075/F4)', () => {
     expect(situationAgo('2026-11-04T09:00:00Z', now)).toBe('há 3 h');
     expect(situationAgo('2026-11-02T10:00:00Z', now)).toBe('há 2 d');
 
-    expect(situationChip('ticket', '2026-11-01T12:00:00Z', now)?.label).toBe('🎫 chamado · há 3 d');
-    expect(situationChip('pr-review', null, now)?.label).toBe('🔀 aprovação/merge');
-    expect(situationChip('qa-validation', '2026-11-04T11:00:00Z', now)).toEqual(jasmine.objectContaining({ label: '🧪 validar em QA · há 1 h', tone: 'pending' }));
-    expect(situationChip('answer', null, now)?.label).toBe('❓ resposta');
-    expect(situationChip('user', null, now)?.label).toBe('⚠️ com você');
+    expect(situationChip('ticket', '2026-11-01T12:00:00Z', now)).toEqual(jasmine.objectContaining({ icon: 'confirmation_number', label: 'chamado · há 3 d' }));
+    expect(situationChip('pr-review', null, now)).toEqual(jasmine.objectContaining({ icon: 'call_merge', label: 'aprovação/merge' }));
+    expect(situationChip('qa-validation', '2026-11-04T11:00:00Z', now)).toEqual(jasmine.objectContaining({ icon: 'science', label: 'validar em QA · há 1 h', tone: 'pending' }));
+    expect(situationChip('answer', null, now)).toEqual(jasmine.objectContaining({ icon: 'help_outline', label: 'resposta' }));
+    expect(situationChip('user', null, now)).toEqual(jasmine.objectContaining({ icon: 'person', label: 'com você' }));
     expect(situationChip('qa-validation', null, now)?.tooltip).toContain('Validar em QA');
     expect(situationChip('none', null, now)).toBeNull();
     expect(situationChip(null, null, now)).toBeNull();

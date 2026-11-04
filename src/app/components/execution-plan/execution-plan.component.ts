@@ -70,6 +70,7 @@ import { ExecutorsDialogComponent } from '../executors-dialog/executors-dialog.c
 import { TokenUsageComponent } from '../token-usage/token-usage.component';
 import { TokenUsage } from '../../services/token-pricing.service';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
+import { GeneratedTextsComponent } from '../generated-texts/generated-texts.component';
 import { CardSituationComponent } from '../card-situation/card-situation.component';
 import {
   QaCompleteDialogComponent,
@@ -137,7 +138,7 @@ interface LinkDraft {
 @Component({
   selector: 'app-execution-plan',
   standalone: true,
-  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent, CodeRefHostDirective, CardSituationComponent],
+  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent, CodeRefHostDirective, CardSituationComponent, GeneratedTextsComponent],
   templateUrl: './execution-plan.component.html',
   styleUrls: ['./execution-plan.component.css']
 })
