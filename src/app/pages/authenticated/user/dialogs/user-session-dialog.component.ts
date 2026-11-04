@@ -16,6 +16,7 @@ import {
 export interface UserSessionDialogData {
   user: { externalId: string; fullName?: string; userName?: string; imagemUrlUser?: string | null; email?: string };
   lastSeen?: string | null;
+  lastSeenWhat?: string | null;
 }
 
 /** Sessão do usuário (0079): abas abertas ao vivo + últimos logins, sessões e o caminho recente. */
@@ -28,7 +29,7 @@ export interface UserSessionDialogData {
       <app-user-avatar [name]="data.user.fullName || data.user.userName || ''" [imageUrl]="data.user.imagemUrlUser" [size]="36"></app-user-avatar>
       <span class="sd-title__text">
         <span>{{ data.user.fullName || data.user.userName }}</span>
-        <app-presence-badge [presence]="presence()" [lastSeen]="data.lastSeen ?? null"></app-presence-badge>
+        <app-presence-badge [presence]="presence()" [lastSeen]="data.lastSeen ?? null" [lastSeenWhat]="data.lastSeenWhat ?? null"></app-presence-badge>
       </span>
     </h2>
 
@@ -36,7 +37,7 @@ export interface UserSessionDialogData {
       <section>
         <h3>Agora <span class="muted">· ao vivo</span></h3>
         @if (!presence()) {
-          <p class="muted">Sem abas abertas no momento{{ data.lastSeen ? ' · visto ' + ago(data.lastSeen) : '' }}.</p>
+          <p class="muted">Sem abas abertas no momento{{ data.lastSeen ? ' · visto ' + ago(data.lastSeen) + (data.lastSeenWhat ? ' (' + data.lastSeenWhat + ')' : '') : '' }}.</p>
         } @else {
           <div class="tabs">
             @for (e of presence()!.entries; track e.connectionId; let i = $index) {

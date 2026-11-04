@@ -20,7 +20,7 @@ import { UserAvatarComponent } from '../../../../components/user-avatar/user-ava
 import { PresenceBadgeComponent } from '../../../../components/presence-badge/presence-badge.component';
 import { PresenceService, UserPresence } from '../../../../services/usage/presence.service';
 import { UsageApiService } from '../../../../services/usage/usage-api.service';
-import { UsageLastSeen } from '../../../../services/usage/usage.model';
+import { UsageLastSeen, asUtcIso, describeLastActivity } from '../../../../services/usage/usage.model';
 import { UserSessionDialogComponent } from '../dialogs/user-session-dialog.component';
 
 @Component({
@@ -103,10 +103,30 @@ export class ManagerComponent implements OnInit, OnDestroy {
     return this.presence.for(user?.externalId);
   }
 
+  /** "Visto há": o sinal mais recente de qualquer fonte (aba, login, linha do tempo, plano, executor, IA). */
   lastSeenOf(user: any): string | null {
-    const id = `${user?.externalId ?? ''}`.toLowerCase();
-    const x = this.lastSeen().get(id);
-    return x?.lastSeenAt ?? x?.lastLoginAt ?? user?.lastLoginAt ?? null;
+    const x = this.lastSeenEntry(user);
+    const candidates = [x?.lastActivityAt, x?.lastSeenAt, x?.lastLoginAt, asUtcIso(user?.lastLoginAt)]
+      .filter((v): v is string => !!v && !Number.isNaN(Date.parse(v)));
+    if (!candidates.length) return null;
+    return candidates.reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
+  }
+
+  /**
+   * De onde veio o "visto há", só quando é certo: a aba do app ("no app · Pull Request") ou a fonte informada pela API.
+   * O DataUltimoLogin pode ter sido atualizado com outra atividade (script da 0079), então fica sem rótulo.
+   */
+  lastSeenWhatOf(user: any): string | null {
+    const x = this.lastSeenEntry(user);
+    const seen = this.lastSeenOf(user);
+    if (!x || !seen) return null;
+    if (x.lastActivityAt && Date.parse(x.lastActivityAt) >= Date.parse(seen)) return describeLastActivity(x);
+    if (x.lastSeenAt && Date.parse(x.lastSeenAt) >= Date.parse(seen)) return describeLastActivity({ ...x, lastActivitySource: 'app', lastActivityDetail: x.lastScreen });
+    return null;
+  }
+
+  private lastSeenEntry(user: any): UsageLastSeen | undefined {
+    return this.lastSeen().get(`${user?.externalId ?? ''}`.toLowerCase());
   }
 
   photoOf(p: UserPresence): any {
@@ -126,7 +146,7 @@ export class ManagerComponent implements OnInit, OnDestroy {
       maxWidth: '96vw',
       maxHeight: '92vh',
       autoFocus: false,
-      data: { user, lastSeen: this.lastSeenOf(user) }
+      data: { user, lastSeen: this.lastSeenOf(user), lastSeenWhat: this.lastSeenWhatOf(user) }
     });
   }
 
