@@ -112,6 +112,20 @@
   }
 }
 
+/* 0077: card sem PR — o painel de PRs some e o plano ocupa a área dele (volta ao normal quando houver PR). */
+.pr-content-row.pr-content-row--no-prs {
+  grid-template-columns: minmax(0, 2.05fr) minmax(0, 1fr);
+  grid-template-areas: "plan timeline";
+}
+
+@media (max-width: 1280px) and (min-width: 901px) {
+  .pr-content-row.pr-content-row--no-prs {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: "plan timeline";
+  }
+}
+
 /* Cada painel (Descrição / Root Cause) divide a largura da linha */
 .pr-panel {
   flex: 1 1 0;
