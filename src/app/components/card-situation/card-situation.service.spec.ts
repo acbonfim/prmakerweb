@@ -143,7 +143,7 @@ describe('CardSituationService (0075/F4)', () => {
     expect((await reset).autoPost).toBeNull();
   });
 
-  it('0077: publish com o texto editado manda { markdown }; auto-post só do card (PUT) atualiza o cache', async () => {
+  it('0078: publish com o texto editado manda { markdown }; auto-post só do card (PUT) atualiza o cache', async () => {
     const pub = svc.publish('75812', '**editado**');
     const req = http.expectOne(r => r.url.endsWith('ExecutionPlan/card/75812/situation/publish'));
     expect(req.request.body).toEqual({ markdown: '**editado**' });

@@ -41,7 +41,7 @@ function situation(extra: Partial<CardSituation> = {}): CardSituation {
   };
 }
 
-describe('text-center.model (0077)', () => {
+describe('text-center.model (0078)', () => {
   it('agrupa só o que existe, na ordem dos grupos, com onde está e o estado de envio', () => {
     const items = buildTextItems({
       artifacts: [
@@ -98,7 +98,7 @@ describe('text-center.model (0077)', () => {
   });
 });
 
-describe('TextCenterDialogComponent (0077)', () => {
+describe('TextCenterDialogComponent (0078)', () => {
   let f: ComponentFixture<TextCenterDialogComponent>;
   let http: HttpTestingController;
   let sit: WritableSignal<CardSituation | null>;

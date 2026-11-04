@@ -4,7 +4,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { CardAssistantService, formatHours, serverMessage } from '../../services/card-assistant.service';
 
 /**
- * Horas do card no DevOps (0077), numa linha: "Original 6h · Completed 2h · Remaining 4h · média do time 3h",
+ * Horas do card no DevOps (0078), numa linha: "Original 6h · Completed 2h · Remaining 4h · média do time 3h",
  * barra Completed/Original (com a marca da média) e **+1h** (confirmação curta → `log-hours`). Sem estimativa:
  * "Registrar estimativa inicial". Sem integração/DevOps fora: "Horas indisponíveis" — nunca trava a tela.
  */

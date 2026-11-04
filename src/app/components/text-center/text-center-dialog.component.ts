@@ -36,7 +36,7 @@ type Load<T> = { status: 'loading' | 'ready' | 'error'; value: T | null; error?:
 const QUICK_ASKS = ['Deixe mais curto', 'Foque no cliente, sem termos técnicos', 'Escreva em inglês', 'Mais técnico e objetivo', 'Organize em tópicos'];
 
 /**
- * Central de textos do card (0077) — "Textos": tudo o que o Claude/PRMake escreveu no card num lugar só,
+ * Central de textos do card (0078) — "Textos": tudo o que o Claude/PRMake escreveu no card num lugar só,
  * agrupado (Para o cliente · DevOps · Análise · Correção · Handover), com origem, quando, **onde está**
  * (Timeline, discussion, campo Root Cause, só no PRMake) e o estado de envio (Não enviado · Enviado em X por
  * Y · Editado depois do envio). Editar e salvar no PRMake, **gerar de novo com a IA da pessoa** (instruções +

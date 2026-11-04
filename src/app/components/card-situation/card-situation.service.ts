@@ -76,11 +76,11 @@ export interface CardSituation {
   publishedMarkdown?: string | null;
   /** 0076: há um resumo diferente do publicado, pronto para publicar. */
   publishPending: boolean;
-  /** 0077: de onde vem o `autoPost` deste card — escolhido neste card, preferência do dono do plano ou o padrão. */
+  /** 0078: de onde vem o `autoPost` deste card — escolhido neste card, preferência do dono do plano ou o padrão. */
   autoPostSource?: 'card' | 'user' | 'global' | string;
 }
 
-/** 0077: modo de publicação deste card (o seletor "Neste card"). */
+/** 0078: modo de publicação deste card (o seletor "Neste card"). */
 export type CardPostMode = 'auto' | 'manual' | 'follow';
 
 /** Modo do card a partir da situação: só é "automático/manual" quando foi escolhido neste card. */
@@ -229,12 +229,12 @@ export class CardSituationService {
 
   /** Publica (ou atualiza) o resumo na discussion do card no DevOps — 0076: o servidor monta o HTML. */
   publish(card: string | number, markdown?: string | null): Promise<{ commentId: number | string | null }> {
-    // 0077: com `markdown`, publica o texto editado pela pessoa (o servidor converte e atualiza o mesmo comentário).
+    // 0078: com `markdown`, publica o texto editado pela pessoa (o servidor converte e atualiza o mesmo comentário).
     return firstValueFrom(this.http.post<{ commentId: number | string | null }>(
       `${this.apiUrl}/card/${encodeURIComponent(norm(card))}/situation/publish`, markdown ? { markdown } : {}));
   }
 
-  /** 0077: publicação automática só deste card (`null` = volta a seguir a preferência do dono / o padrão). */
+  /** 0078: publicação automática só deste card (`null` = volta a seguir a preferência do dono / o padrão). */
   async setCardAutoPost(card: string | number, autoPost: boolean | null): Promise<CardSituation> {
     const key = norm(card);
     const res = await firstValueFrom(this.http.put<CardSituation>(

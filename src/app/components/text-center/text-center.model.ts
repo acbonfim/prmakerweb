@@ -300,7 +300,7 @@ const AUDIENCE: Partial<Record<TextGroup, string>> = {
 };
 
 /**
- * Prompt de "Gerar de novo com IA" (0077): instruções da pessoa + o contexto que ela marcou. Claro e em
+ * Prompt de "Gerar de novo com IA" (0078): instruções da pessoa + o contexto que ela marcou. Claro e em
  * português; pede só o texto novo, em markdown, sem inventar nada fora do contexto.
  */
 export function buildRegeneratePrompt(card: string, item: Pick<TextItem, 'label' | 'where' | 'group'>, instructions: string,

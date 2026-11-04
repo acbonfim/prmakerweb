@@ -44,7 +44,7 @@ const isSuggestions = (r: { url: string; method: string }) => r.method === 'GET'
 const isEffort = (r: { url: string; method: string }) => r.method === 'GET' && r.url.endsWith('Azure/card/75999/effort');
 const isConfig = (r: { url: string }) => r.url.endsWith('Skills/config');
 
-describe('CardAssistantComponent (0077)', () => {
+describe('CardAssistantComponent (0078)', () => {
   let f: ComponentFixture<CardAssistantComponent>;
   let http: HttpTestingController;
   let ws: FakeWs;
@@ -199,7 +199,7 @@ describe('CardAssistantComponent (0077)', () => {
   });
 });
 
-describe('CardHoursComponent (0077)', () => {
+describe('CardHoursComponent (0078)', () => {
   let f: ComponentFixture<CardHoursComponent>;
   let http: HttpTestingController;
   const el = () => f.nativeElement as HTMLElement;

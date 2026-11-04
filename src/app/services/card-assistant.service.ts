@@ -6,7 +6,7 @@ import { EXECUTION_PLAN_EVENT, executionPlanGroup } from '../components/executio
 import { DevOpsActionResult, DevOpsActionsService, apiErrorMessage } from './devops-actions.service';
 import { WsService } from './ws.service';
 
-/** Tipos de sugestão do assistente (0077). */
+/** Tipos de sugestão do assistente (0078). */
 export type CardSuggestionKind = 'initial-estimate' | 'log-hours' | 'situation-auto-post' | string;
 export type CardSuggestionStatus = 'open' | 'done' | 'dismissed' | 'failed' | string;
 
@@ -16,7 +16,7 @@ export interface CardSuggestionAction {
   primary: boolean;
 }
 
-/** `GET ExecutionPlan/card/{card}/suggestions` (0077) — o PRMake "conversa" com quem trata o card. */
+/** `GET ExecutionPlan/card/{card}/suggestions` (0078) — o PRMake "conversa" com quem trata o card. */
 export interface CardSuggestion {
   id: string;
   planId: string;
@@ -34,7 +34,7 @@ export interface CardSuggestion {
   resolvedAt: string | null;
 }
 
-/** `GET Azure/card/{id}/effort` (0077). */
+/** `GET Azure/card/{id}/effort` (0078). */
 export interface CardEffort {
   originalEstimate: number | null;
   completedWork: number | null;
@@ -60,7 +60,7 @@ const EFFORT_KINDS = new Set(['initial-estimate', 'log-hours']);
 const SUGGESTION_ACTION = 'suggestion';
 
 /**
- * Assistente do card (0077): sugestões que **não travam** nada (estimativa inicial, publicar os resumos de
+ * Assistente do card (0078): sugestões que **não travam** nada (estimativa inicial, publicar os resumos de
  * espera, lançar horas), as horas do card no DevOps e a média do time. Cache por card em signals; o tempo
  * real (`executionPlanUpdated` com `action: 'suggestion'`) recarrega com debounce e avisa das sugestões
  * novas (`fresh$`) — a tela mostra um aviso discreto, nunca um modal.

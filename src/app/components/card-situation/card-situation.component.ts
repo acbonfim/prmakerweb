@@ -81,7 +81,7 @@ export class CardSituationComponent {
     const s = this.situation();
     return !!st && !!s && st.effective !== s.autoPost;
   });
-  // ── 0077: modo de publicação deste card ─────────────────────────────────────────────────────────
+  // ── 0078: modo de publicação deste card ─────────────────────────────────────────────────────────
 
   readonly cardModes: { id: CardPostMode; label: string; hint: string }[] = [
     { id: 'auto', label: 'Automático', hint: 'Neste card o PRMake publica e atualiza o resumo sozinho' },
@@ -288,7 +288,7 @@ export class CardSituationComponent {
     }
   }
 
-  /** 0077: publicação só deste card — Automático, Manual ou volta a seguir a preferência (null). */
+  /** 0078: publicação só deste card — Automático, Manual ou volta a seguir a preferência (null). */
   async setCardMode(mode: CardPostMode): Promise<void> {
     const card = this.card();
     if (!card || this.savingMode() || mode === this.cardMode()) return;

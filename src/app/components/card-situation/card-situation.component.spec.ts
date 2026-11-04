@@ -289,7 +289,7 @@ describe('CardSituationComponent (0075/F4)', () => {
     expect(svc.saved).toEqual([false, null]);
   });
 
-  it('0077: modo deste card — Automático/Manual/Seguir, com a origem; PUT auto-post só do card', async () => {
+  it('0078: modo deste card — Automático/Manual/Seguir, com a origem; PUT auto-post só do card', async () => {
     await render(situation({ kind: 'ticket', title: 'Aguardando chamado', markdown: '**S**', autoPost: true, autoPostSource: 'global' }));
     const seg = () => [...el.querySelectorAll<HTMLButtonElement>('.sit__seg-btn')];
     expect(seg().map(b => b.textContent!.trim())).toEqual(['Automático', 'Manual', 'Seguir minha preferência']);

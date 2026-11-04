@@ -246,7 +246,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   @ViewChild('panel') private panelRef?: ElementRef<HTMLDivElement>;
   @ViewChild('assistant') private assistantRef?: CardAssistantComponent;
 
-  // ── 0077: o PRMake conversa (assistente) e a central de textos ────────────────────────────────
+  // ── 0078: o PRMake conversa (assistente) e a central de textos ────────────────────────────────
 
   private readonly assistant = inject(CardAssistantService);
   /** Sugestões abertas do assistente neste card (contador do cabeçalho). */
@@ -260,7 +260,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.assistantRef?.reveal();
   }
 
-  /** "Textos" (0077): todos os textos gerados do card — editar, gerar de novo com IA, enviar. */
+  /** "Textos" (0078): todos os textos gerados do card — editar, gerar de novo com IA, enviar. */
   openTexts(selectKey?: string | null): void {
     const card = this.loadedCard();
     if (!card || !this.plan()) return;
@@ -867,7 +867,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     if (!card || card !== this.loadedCard()) return;
     // 0075: só a situação mudou (handoff, sincronização) — o cartão "Situação atual" recarrega sozinho.
     if (payload.action === 'situation') return;
-    // 0077: sugestão do assistente — o próprio assistente recarrega (não refaz o GET do plano).
+    // 0078: sugestão do assistente — o próprio assistente recarrega (não refaz o GET do plano).
     if (payload.action === 'suggestion') return;
     // 0050: atividade nova do Claude — atualiza a linha "agora" sem refazer o GET do plano.
     if (payload.action === 'activity') {

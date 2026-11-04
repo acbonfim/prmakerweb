@@ -22,7 +22,7 @@
 
     @if (plan(); as p) {
       @if (assistantOpen(); as n) {
-        <!-- 0077: sugestões abertas do PRMake neste card -->
+        <!-- 0078: sugestões abertas do PRMake neste card -->
         <button type="button" class="plan__assist" (click)="revealAssistant()"
                 [matTooltip]="n === 1 ? 'O PRMake tem 1 sugestão para este card' : 'O PRMake tem ' + n + ' sugestões para este card'"
                 [attr.aria-label]="n + ' sugestões do PRMake'">
@@ -301,7 +301,7 @@
         @let p = plan()!;
         <!-- 0075/F4: em que pé o card está (o que é aguardado, desde quando, handoff, próximo passo) -->
         <app-card-situation [cardNumber]="loadedCard()"></app-card-situation>
-        <!-- 0077: o PRMake conversa — sugestões que não travam (estimativa, publicação, horas) e as horas do card -->
+        <!-- 0078: o PRMake conversa — sugestões que não travam (estimativa, publicação, horas) e as horas do card -->
         <app-card-assistant #assistant [cardNumber]="loadedCard()"></app-card-assistant>
         <!-- 0076: o que o Claude/PRMake escreveu no card (análise, soluções, PR, chamado, resumo) — Ver -->
         <app-generated-texts [cardNumber]="loadedCard()" [plan]="p" [pair]="pair()" (openTexts)="openTexts($event)"></app-generated-texts>
@@ -533,7 +533,7 @@
         }
       </button>
     }
-    <!-- 0077: central de textos (editar, gerar de novo com IA, enviar ao DevOps) -->
+    <!-- 0078: central de textos (editar, gerar de novo com IA, enviar ao DevOps) -->
     <button mat-stroked-button class="plan__file-btn plan__texts-btn" (click)="openTexts()" [disabled]="!plan()"
             matTooltip="Textos do card — análise, resumos, root cause, chamado, handover: editar, gerar de novo com IA e enviar">
       <mat-icon>edit_note</mat-icon>

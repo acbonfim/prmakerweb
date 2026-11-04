@@ -21,7 +21,7 @@ const KIND_ICON: Record<string, string> = {
 };
 
 /**
- * "O PRMake conversa" (0077) — assistente no topo do plano: mensagens do sistema com o que o PRMake sugere
+ * "O PRMake conversa" (0078) — assistente no topo do plano: mensagens do sistema com o que o PRMake sugere
  * fazer no card (estimativa inicial, publicar os resumos de espera, lançar horas), com as ações (a primária em
  * destaque) e "Dispensar". **Nunca bloqueia**: o plano e a skill seguem; ninguém espera a resposta. Respondidas
  * viram uma linha no histórico (recolhido); falhou → a mensagem do DevOps e "Tentar de novo". Sugestão nova pelo

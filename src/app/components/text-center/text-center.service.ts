@@ -17,7 +17,7 @@ const DRAFT_KEY = (card: string) => `prmake.situation-draft:${card}`;
 const SENT_KEY = (card: string) => `prmake.root-cause-sent:${card}`;
 
 /**
- * Dados e gravações da central de textos (0077) — tudo pelos endpoints do PRMake: arquivos do plano
+ * Dados e gravações da central de textos (0078) — tudo pelos endpoints do PRMake: arquivos do plano
  * (PUT text), resumo não técnico (summary), registro do card (root cause / descrição), Root Cause no
  * DevOps, Timeline, handover e a IA da própria pessoa (`AI/generate`).
  */

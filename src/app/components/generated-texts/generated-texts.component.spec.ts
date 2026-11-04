@@ -105,7 +105,7 @@ describe('GeneratedTextsComponent (0076)', () => {
     expect(el().textContent).toContain('pronto para publicar');
   });
 
-  it('0077: Ver abre a central de textos com o texto selecionado (arquivo pela chave; resumo = situação)', async () => {
+  it('0078: Ver abre a central de textos com o texto selecionado (arquivo pela chave; resumo = situação)', async () => {
     situation.set({ kind: 'ticket', markdown: '**Situação**', since: ago(0), publishPending: false, publishedAt: null } as CardSituation);
     await settle();
     const items = [...el().querySelectorAll<HTMLElement>('.gt-item')];

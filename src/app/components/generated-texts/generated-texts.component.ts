@@ -24,7 +24,7 @@ const MAX_SHOWN = 5;
  * fase, quando, quem e **Ver** (diálogo com o texto renderizado, links de código/itens e copiar). Texto
  * novo pelo tempo real (`artifact`) → aviso discreto "O Claude gerou: X · Ver", que some sozinho.
  *
- * 0077: é o atalho da central de textos — "Ver" abre a central (`openTexts`) com o texto selecionado, onde dá
+ * 0078: é o atalho da central de textos — "Ver" abre a central (`openTexts`) com o texto selecionado, onde dá
  * para editar, gerar de novo com IA e enviar ao DevOps.
  */
 @Component({
@@ -153,7 +153,7 @@ export class GeneratedTextsComponent {
   /** Dupla análise ↔ correção (o outro plano é carregado aqui). */
   readonly pair = input<{ analysisId: string | null; correctionId: string | null } | null>(null);
 
-  /** 0077: abre a central de textos com o texto selecionado (null = o primeiro). */
+  /** 0078: abre a central de textos com o texto selecionado (null = o primeiro). */
   readonly openTexts = output<string | null>();
 
   private api = inject(ExecutionPlanService);
@@ -274,7 +274,7 @@ export class GeneratedTextsComponent {
     this.fresh.set(null);
   }
 
-  /** Abre o texto na central (0077) — o resumo (atual ou o publicado) é o "Resumo da situação" de lá. */
+  /** Abre o texto na central (0078) — o resumo (atual ou o publicado) é o "Resumo da situação" de lá. */
   view(t: GeneratedText): void {
     if (this.fresh()?.key === t.key) this.dismissFresh();
     this.openTexts.emit(t.source === 'artifact' ? t.key : 'situation');
