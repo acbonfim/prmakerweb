@@ -109,8 +109,8 @@
     <app-usage-bars [data]="loginBars()" [series]="loginSeries" ariaLabel="Logins por dia, sucesso e falha"></app-usage-bars>
   </section>
   <section class="panel panel--wide">
-    <div class="panel__head"><h2>Quando usam</h2><span class="muted">eventos por dia da semana e hora</span></div>
-    <app-usage-heatmap [cells]="summary()?.heatmap ?? []"></app-usage-heatmap>
+    <div class="panel__head"><h2>Quando usam</h2><span class="muted">usuários ativos por dia da semana e hora, somados no período</span></div>
+    <app-usage-heatmap [cells]="summary()?.heatmap ?? []" unit="usuários ativos"></app-usage-heatmap>
   </section>
   <section class="panel">
     <div class="panel__head"><h2>Telas mais visitadas</h2><span class="muted">visitas · tempo em primeiro plano</span></div>
