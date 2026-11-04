@@ -77,28 +77,34 @@
                   style="margin-bottom: 10px"><mat-icon>article_shortcut</mat-icon>Template carregado</button>
         }-->
 
-        <div class="pr-content-row" #contentRow>
+        <!-- 0077: sem PR no card o painel de PRs some e o plano ocupa o espaço dele. -->
+        @let showPrs = showPrsPanel();
+        @let tab = visibleTab();
+        <div class="pr-content-row" [class.pr-content-row--no-prs]="!showPrs" #contentRow>
           <!-- Celular (0043): uma seção por vez; no desktop as três ficam lado a lado e isto some. -->
           <div class="pr-tabs" role="tablist" aria-label="Seções do card">
-            <button type="button" role="tab" class="pr-tab" [class.pr-tab--on]="mobileTab() === 'prs'"
-                    [attr.aria-selected]="mobileTab() === 'prs'" (click)="selectMobileTab('prs')">
-              <mat-icon>merge</mat-icon><span>PRs</span>
-              @if (prState.githubPrs().length) { <span class="pr-tab__count">{{ prState.githubPrs().length }}</span> }
-            </button>
-            <button type="button" role="tab" class="pr-tab" [class.pr-tab--on]="mobileTab() === 'plan'"
-                    [attr.aria-selected]="mobileTab() === 'plan'" (click)="selectMobileTab('plan')">
+            @if (showPrs) {
+              <button type="button" role="tab" class="pr-tab" [class.pr-tab--on]="tab === 'prs'"
+                      [attr.aria-selected]="tab === 'prs'" (click)="selectMobileTab('prs')">
+                <mat-icon>merge</mat-icon><span>PRs</span>
+                @if (prState.githubPrs().length) { <span class="pr-tab__count">{{ prState.githubPrs().length }}</span> }
+              </button>
+            }
+            <button type="button" role="tab" class="pr-tab" [class.pr-tab--on]="tab === 'plan'"
+                    [attr.aria-selected]="tab === 'plan'" (click)="selectMobileTab('plan')">
               <mat-icon>account_tree</mat-icon><span>Plano</span>
               @if (planHeadline?.userPending) {
                 <span class="pr-tab__count pr-tab__count--you" [attr.aria-label]="planHeadline!.userPending + ' aguardando você'">{{ planHeadline!.userPending }}</span>
               }
             </button>
-            <button type="button" role="tab" class="pr-tab" [class.pr-tab--on]="mobileTab() === 'timeline'"
-                    [attr.aria-selected]="mobileTab() === 'timeline'" (click)="selectMobileTab('timeline')">
+            <button type="button" role="tab" class="pr-tab" [class.pr-tab--on]="tab === 'timeline'"
+                    [attr.aria-selected]="tab === 'timeline'" (click)="selectMobileTab('timeline')">
               <mat-icon>forum</mat-icon><span>Linha do tempo</span>
             </button>
           </div>
 
-          <div class="pr-fields" [class.pr-tab-panel--on]="mobileTab() === 'prs'" [class.pr-focus]="focusedPanel() === 'prs'">
+          @if (showPrs) {
+          <div class="pr-fields" [class.pr-tab-panel--on]="tab === 'prs'" [class.pr-focus]="focusedPanel() === 'prs'">
             <!-- PRs abertos no GitHub para o card, com status atual (spec 1.4/3); clique abre o modal (3.1) -->
             <app-card-panel class="pr-panel" title="Pull Requests" icon="merge">
               @if (prInfo) {
@@ -119,13 +125,14 @@
                                   (select)="openPrDialog($event)"></app-github-pr-list>
             </app-card-panel>
           </div>
+          }
 
           <!-- Plano de execução da skill analisar-bug, ao vivo (feature 0023) -->
-          <div class="pr-plan" [class.pr-tab-panel--on]="mobileTab() === 'plan'" [class.pr-focus]="focusedPanel() === 'plan'">
+          <div class="pr-plan" [class.pr-tab-panel--on]="tab === 'plan'" [class.pr-focus]="focusedPanel() === 'plan'">
             <app-execution-plan [cardNumber]="cardNumber" (headline)="planHeadline = $event"></app-execution-plan>
           </div>
 
-          <div class="pr-timeline" [class.pr-tab-panel--on]="mobileTab() === 'timeline'" [class.pr-focus]="focusedPanel() === 'timeline'">
+          <div class="pr-timeline" [class.pr-tab-panel--on]="tab === 'timeline'" [class.pr-focus]="focusedPanel() === 'timeline'">
             <app-card-timeline [cardNumber]="cardNumber"></app-card-timeline>
           </div>
         </div>
