@@ -460,8 +460,20 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly showDetails = signal(false);
   /** Etapas concluídas do começo do plano aparecem agrupadas até a pessoa abrir. */
   readonly showAllDone = signal(false);
-  /** Plano de análise do par quando a tela mostra a correção (as decisões vêm dele). */
-  readonly analysisPlan = signal<ExecutionPlan | null>(null);
+  /**
+   * O outro plano do par (análise ↔ correção): vendo a correção, as decisões vêm da análise; vendo a análise, Validar em
+   * QA e Fechamento vêm da correção. A jornada é montada do histórico do card — cada card tem a sua.
+   */
+  readonly pairPlan = signal<ExecutionPlan | null>(null);
+  private pairStamp: string | null | undefined;
+  readonly analysisPlan = computed(() => {
+    const plan = this.plan();
+    return plan && (plan.phase ?? 'analysis') === 'analysis' ? plan : this.pairPlan()?.phase === 'analysis' ? this.pairPlan() : null;
+  });
+  readonly correctionPlan = computed(() => {
+    const plan = this.plan();
+    return plan && plan.phase === 'correction' ? plan : this.pairPlan()?.phase === 'correction' ? this.pairPlan() : null;
+  });
 
   versionOf(planId: string | null | undefined): number | null {
     return (planId && this.history().find((h) => h.id === planId)?.versionNumber) || null;
@@ -477,7 +489,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly decisions = computed(() => {
     const plan = this.plan();
     if (!plan) return [];
-    const source = (plan.phase ?? 'analysis') === 'analysis' ? plan : this.analysisPlan();
+    const source = this.analysisPlan();
     return (source?.questions ?? [])
       .filter((q) => q.status === 'answered' && !q.replacedBy && q.answer)
       .map((q) => ({ id: q.id, question: this.shortText(q.text, 90), answer: q.answer!, by: q.answeredBy ?? '' }));
@@ -489,7 +501,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     const analysis = this.latestOf('analysis');
     const correction = this.latestOf('correction');
     const phase = plan.phase ?? 'analysis';
-    const open = phase === 'analysis' ? this.openQuestions().length : (this.analysisPlan()?.questions ?? []).filter((q) => q.status === 'open').length;
+    const open = (this.analysisPlan()?.questions ?? []).filter((q) => q.status === 'open').length;
     const decisions = this.decisions().length;
     const nodes: JourneyNode[] = [];
     const v = (s: ExecutionPlanSummary | null) => (s?.versionNumber ? ` · v${s.versionNumber}` : '');
@@ -516,9 +528,9 @@ export class ExecutionPlanComponent implements OnDestroy {
     } else {
       nodes.push({ key: 'correction', label: 'Correção', state: 'todo', icon: 'build', sub: 'a montar' });
     }
+    const correctionSteps = this.correctionPlan()?.steps ?? [];
     const stepState = (key: string): JourneyNode['state'] => {
-      if (phase !== 'correction') return 'todo';
-      const s = plan.steps.find((x) => x.key === key);
+      const s = correctionSteps.find((x) => x.key === key);
       return !s ? 'todo' : s.status === 'completed' ? 'ok' : s.status === 'running' || s.status === 'waiting' ? 'run' : s.status === 'cancelled' ? 'bad' : 'todo';
     };
     const qa = stepState('validar-qa');
@@ -872,14 +884,18 @@ export class ExecutionPlanComponent implements OnDestroy {
         if (card) this.caseStatusApi.watch(card);
       });
     });
-    // 0080: vendo a correção, as decisões vêm do plano de análise do par.
+    // 0080: o outro plano do par (decisões da análise / QA e fechamento da correção) para a jornada.
     effect(() => {
       const plan = this.plan();
-      const id = plan && (plan.phase ?? 'analysis') === 'correction' ? this.pair()?.analysisId ?? null : null;
+      const pair = this.pair();
+      const id = !plan || !pair ? null : plan.id === pair.analysisId ? pair.correctionId : pair.analysisId;
+      // Só relê quando o OUTRO plano mudou (o histórico traz o updatedAt dele) — nada de GET a cada evento (0070).
+      const stamp = id ? this.history().find((h) => h.id === id)?.updatedAt ?? null : null;
       untracked(() => {
-        if (!id) { if (this.analysisPlan()) this.analysisPlan.set(null); return; }
-        if (this.analysisPlan()?.id === id) return;
-        this.api.get(id).subscribe({ next: (p) => this.analysisPlan.set(p), error: () => {} });
+        if (!id) { if (this.pairPlan()) this.pairPlan.set(null); return; }
+        if (this.pairPlan()?.id === id && this.pairStamp === stamp) return;
+        this.pairStamp = stamp;
+        this.api.get(id).subscribe({ next: (p) => this.pairPlan.set(p), error: () => {} });
       });
     });
     this.ws.startConnection();

@@ -25,6 +25,23 @@
         <span class="plan-status__dot" aria-hidden="true"></span>
         {{ statusLabel[p.status] }}
       </span>
+      @if (!activeRequest() && staleMinutes(); as minutes) {
+        <!-- 0080: o aviso de "sem sinal do Claude" saiu do corpo do plano e virou um ícone no cabeçalho -->
+        <button mat-icon-button class="plan__action plan__signal" [matMenuTriggerFor]="signalMenu"
+                [matTooltip]="'Sem sinal do Claude há ' + minutes + ' min — a sessão pode ter caído. Clique para retomar.'"
+                [attr.aria-label]="'Sem sinal do Claude há ' + minutes + ' minutos'">
+          <mat-icon>wifi_off</mat-icon>
+        </button>
+        <mat-menu #signalMenu="matMenu" class="app-menu">
+          <div class="plan__signal-text" (click)="$event.stopPropagation()">
+            <b>Sem sinal do Claude há {{ minutes }} min.</b><br>Se a sessão caiu, retome de onde parou.
+          </div>
+          @if (canAskClaude()) {
+            <button mat-menu-item (click)="openAsk()"><mat-icon>rocket_launch</mat-icon><span>{{ askLabel() }}</span></button>
+          }
+          <button mat-menu-item (click)="copyTerminalCommand()"><mat-icon>terminal</mat-icon><span>Copiar o comando do terminal</span></button>
+        </mat-menu>
+      }
     }
     <span class="plan__spacer"></span>
 
@@ -233,20 +250,6 @@
     @if (showRequestDetail() && r.stderrTail) {
       <pre class="plan-req__detail">{{ r.stderrTail }}</pre>
     }
-  }
-
-  @if (!activeRequest() && staleMinutes(); as minutes) {
-    <div class="plan__bar plan__bar--warn">
-      <mat-icon>wifi_off</mat-icon>
-      <span class="plan__bar-text">
-        Sem sinal da skill há {{ minutes }} min. Se a sessão caiu, retome de onde parou
-        @if (hasWorkers()) { com o botão <strong>{{ askLabel() }}</strong> ou }
-        no terminal: <code>{{ terminalCommand() }}</code>
-      </span>
-      <button mat-icon-button (click)="copyTerminalCommand()" matTooltip="Copiar o comando" aria-label="Copiar o comando">
-        <mat-icon>content_copy</mat-icon>
-      </button>
-    </div>
   }
 
   <div class="plan__body">

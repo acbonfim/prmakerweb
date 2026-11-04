@@ -1309,3 +1309,10 @@
   background: linear-gradient(135deg, #8e6cf0, #6a4fd0); box-shadow: 0 6px 18px rgba(106, 79, 208, .45); }
 .plan__spec-fab .plan__spec-badge { position: static; border: 0; height: 20px; padding: 0 8px; border-radius: 10px; }
 @media (prefers-reduced-motion: reduce) { .plan__spec-live { animation: none; } }
+
+/* 0080: "sem sinal do Claude" como ícone no cabeçalho (antes era uma faixa no corpo do plano). */
+.plan__signal.mat-mdc-icon-button { color: #e3b341; animation: plan-signal 2.4s ease-in-out infinite; }
+@keyframes plan-signal { 50% { opacity: .45; } }
+.plan__signal-text { padding: 8px 16px 6px; font-size: 12.5px; line-height: 1.45; max-width: 280px; color: color-mix(in srgb, var(--mat-sys-on-surface) 75%, transparent); }
+.plan__signal-text b { color: var(--mat-sys-on-surface); }
+@media (prefers-reduced-motion: reduce) { .plan__signal.mat-mdc-icon-button { animation: none; } }
