@@ -10,7 +10,8 @@ import {
   computed,
   effect,
   inject,
-  signal
+  signal,
+  untracked
 } from '@angular/core';
 import { UsageTrackerService } from '../../services/usage/usage-tracker.service';
 import { OverlayModule } from '@angular/cdk/overlay';
@@ -152,6 +153,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   private usage = inject(UsageTrackerService);
   /** 0079: plano rodando nesta tela = "executando" na presença do usuário. */
   private releaseBusy: (() => void) | null = null;
+  private busyKey: string | null = null;
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private clipboard = inject(CliipboardService);
@@ -700,8 +702,14 @@ export class ExecutionPlanComponent implements OnDestroy {
     effect(() => {
       const active = this.isActive();
       const card = this.plan()?.cardNumber ?? this.cardNumber;
-      this.releaseBusy?.();
-      this.releaseBusy = active ? this.usage.busy(`Plano de execução em andamento${card ? ` (card ${card})` : ''}`) : null;
+      const key = active ? `${card ?? ''}` : null;
+      // Só muda o "executando" quando ativo/card mudam; o rastreador fica fora do rastreio do efeito.
+      if (key === this.busyKey) return;
+      this.busyKey = key;
+      untracked(() => {
+        this.releaseBusy?.();
+        this.releaseBusy = key !== null ? this.usage.busy(`Plano de execução em andamento${card ? ` (card ${card})` : ''}`) : null;
+      });
     });
     this.ws.startConnection();
     this.ws.on(EXECUTION_PLAN_EVENT, this.onRealtime);
@@ -1573,6 +1581,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   ngOnDestroy(): void {
     this.releaseBusy?.();
     this.releaseBusy = null;
+    this.busyKey = null;
     this.narrowMedia.removeEventListener('change', this.onNarrowChange);
     this.closeMobileDetail();
     this.fullscreen.destroy();
