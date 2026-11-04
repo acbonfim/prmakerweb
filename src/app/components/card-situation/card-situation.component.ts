@@ -1,13 +1,18 @@
 import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { renderMarkdown } from '../../helpers/markdown-ext';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { apiErrorMessage } from '../../services/devops-actions.service';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import {
-  CardSituation, CardSituationPullRequest, CardSituationService, situationAgo, situationDate,
+  MARKDOWN_VIEW_DIALOG, MarkdownViewDialogComponent, MarkdownViewDialogData,
+} from '../markdown-view/markdown-view-dialog.component';
+import {
+  CardPostMode, CardSituation, CardSituationPullRequest, CardSituationService, cardPostMode, shortDateTime, situationAgo, situationDate, situationMeta,
 } from './card-situation.service';
 
 const COLLAPSED_KEY = 'prmake.situation-collapsed';
@@ -18,11 +23,15 @@ const COLLAPSED_KEY = 'prmake.situation-collapsed';
  * contexto da passagem (handoff da skill, com links de código) e o próximo passo. Some quando nada é
  * aguardado (`kind === 'none'`). Copiar resumo (markdown + HTML) e Publicar no DevOps (manual, com
  * confirmação — a discussion é lida pelo cliente). Tempo real pelo `CardSituationService`.
+ *
+ * 0076: linha da discussion (publicado quando/por quem · ver o que foi publicado), faixa "o resumo mudou
+ * e está pronto" (ver · publicar) e a preferência "Publicar automaticamente" do usuário; ícones `mat-icon`
+ * pelo tipo (o emoji que vem do back é ignorado).
  */
 @Component({
   selector: 'app-card-situation',
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatTooltipModule, CodeRefHostDirective],
+  imports: [MatButtonModule, MatIconModule, MatSlideToggleModule, MatTooltipModule, CodeRefHostDirective],
   templateUrl: './card-situation.component.html',
   styleUrl: './card-situation.component.css',
 })
@@ -31,6 +40,7 @@ export class CardSituationComponent {
 
   private svc = inject(CardSituationService);
   private clipboard = inject(CliipboardService);
+  private dialog = inject(MatDialog);
 
   readonly card = computed(() => {
     const c = this.cardNumber();
@@ -55,6 +65,46 @@ export class CardSituationComponent {
   readonly publishResult = signal<{ ok: boolean; text: string } | null>(null);
   /** Relógio dos "há X" (1 min). */
   readonly now = signal(Date.now());
+
+  /** Ícone do tipo (mat-icon). */
+  readonly kindIcon = computed(() => situationMeta(this.situation()?.kind)?.icon ?? 'pending_actions');
+
+  /** Preferência de publicação automática do usuário logado (0076). */
+  readonly postSettings = this.svc.postSettings;
+  readonly savingAuto = signal(false);
+  readonly autoError = signal<string | null>(null);
+  /** O toggle: a preferência efetiva do usuário (a dele ou o padrão). */
+  readonly autoChecked = computed(() => this.postSettings()?.effective ?? this.situation()?.autoPost ?? false);
+  /** Neste card vale outra preferência (a do dono do plano). */
+  readonly autoDiffers = computed(() => {
+    const st = this.postSettings();
+    const s = this.situation();
+    return !!st && !!s && st.effective !== s.autoPost;
+  });
+  // ── 0078: modo de publicação deste card ─────────────────────────────────────────────────────────
+
+  readonly cardModes: { id: CardPostMode; label: string; hint: string }[] = [
+    { id: 'auto', label: 'Automático', hint: 'Neste card o PRMake publica e atualiza o resumo sozinho' },
+    { id: 'manual', label: 'Manual', hint: 'Neste card só publica quando você clicar em Publicar' },
+    { id: 'follow', label: 'Seguir minha preferência', hint: 'Usa o "Publicar automaticamente" (ou o padrão do PRMake)' },
+  ];
+  readonly cardMode = computed<CardPostMode>(() => cardPostMode(this.situation()));
+  readonly savingMode = signal<CardPostMode | null>(null);
+  readonly modeError = signal<string | null>(null);
+  /** "Vale: automático — escolhido neste card" / "— sua preferência" / "— padrão do PRMake". */
+  readonly modeSource = computed(() => {
+    const s = this.situation();
+    if (!s) return '';
+    const on = s.autoPost ? 'automático' : 'manual';
+    switch (s.autoPostSource) {
+      case 'card': return `Vale: ${on} — escolhido neste card`;
+      case 'user': return `Vale: ${on} — ${this.autoDiffers() ? 'preferência do dono do plano' : 'sua preferência'}`;
+      default: return `Vale: ${on} — padrão do PRMake`;
+    }
+  });
+
+  /** "em 04/11 às 11:58". */
+  readonly publishedWhen = computed(() => shortDateTime(this.situation()?.publishedAt));
 
   readonly handoffHtml = computed(() => md(this.situation()?.handoff));
   readonly checklistHtml = computed(() => md(this.situation()?.qaChecklist));
@@ -103,6 +153,7 @@ export class CardSituationComponent {
     if (!card) return;
     this.svc.watch(card);
     this.reload(card);
+    this.svc.loadPostSettings().catch(() => undefined);
   }
 
   /** 1ª carga do cartão: com o DevOps (estado/coluna); mostra o que já estava em cache enquanto isso. */
@@ -139,11 +190,12 @@ export class CardSituationComponent {
     return [pr.repository, pr.targetBranch].filter(Boolean).join(' → ');
   }
 
+  /** Ícone (mat-icon) do CI do PR. */
   ciIcon(checks: string | null | undefined): string {
     switch ((checks ?? '').toLowerCase()) {
-      case 'success': return '✅';
-      case 'failure': return '❌';
-      case 'pending': return '⏳';
+      case 'success': return 'check_circle';
+      case 'failure': return 'cancel';
+      case 'pending': return 'schedule';
       default: return '';
     }
   }
@@ -174,19 +226,92 @@ export class CardSituationComponent {
     if (!s?.markdown || !card || this.publishing()) return;
     this.publishing.set(true);
     try {
-      await this.svc.publish(card, renderMarkdown(s.markdown, { codeRefs: false }));
+      // 0076: o servidor monta o HTML (o mesmo da publicação automática).
+      await this.svc.publish(card);
       this.publishResult.set({ ok: true, text: 'Resumo publicado na discussion do card no DevOps.' });
       this.confirmPublish.set(false);
+      this.svc.load(card, { force: true }).catch(() => undefined);
     } catch (err) {
       this.publishResult.set({ ok: false, text: apiErrorMessage(err, 'Não foi possível publicar no DevOps.') });
     } finally {
       this.publishing.set(false);
     }
   }
+
+  // ── 0076: o que foi publicado, o que está pronto e a publicação automática ────────────────────
+
+  /** Diálogo com o último texto publicado na discussion. */
+  viewPublished(): void {
+    const s = this.situation();
+    if (!s?.publishedMarkdown) return;
+    this.openText({
+      title: 'Publicado na discussion',
+      subtitle: ['Discussion do card no DevOps', this.publishedWhen() && `em ${this.publishedWhen()}`, s.publishedBy && `por ${s.publishedBy}`]
+        .filter(Boolean).join(' · '),
+      icon: 'forum',
+      markdown: s.publishedMarkdown,
+      codeRefs: false,
+      reRefs: false,
+      note: 'É este o texto que o cliente lê na discussion do card.',
+    });
+  }
+
+  /** Diálogo com o resumo atual (pronto para publicar); "Publicar" pede a confirmação. */
+  viewPending(): void {
+    const s = this.situation();
+    if (!s?.markdown) return;
+    const ref = this.openText({
+      title: 'Resumo da situação',
+      subtitle: s.publishPending ? 'Mudou desde a última publicação — ainda não está na discussion' : 'Igual ao publicado na discussion',
+      icon: 'summarize',
+      markdown: s.markdown,
+      codeRefs: false,
+      reRefs: false,
+      primaryAction: s.publishPending ? 'Publicar…' : null,
+    });
+    ref.afterClosed().subscribe(r => { if (r === 'primary') this.askPublish(); });
+  }
+
+  /** Liga/desliga a publicação automática (preferência do usuário) e recarrega a situação. */
+  async setAutoPost(value: boolean | null): Promise<void> {
+    if (this.savingAuto()) return;
+    this.savingAuto.set(true);
+    this.autoError.set(null);
+    try {
+      await this.svc.savePostSettings(value);
+      const card = this.card();
+      if (card) await this.svc.load(card, { force: true }).catch(() => undefined);
+    } catch (err) {
+      this.autoError.set(apiErrorMessage(err, 'Não foi possível salvar a preferência.'));
+    } finally {
+      this.savingAuto.set(false);
+    }
+  }
+
+  /** 0078: publicação só deste card — Automático, Manual ou volta a seguir a preferência (null). */
+  async setCardMode(mode: CardPostMode): Promise<void> {
+    const card = this.card();
+    if (!card || this.savingMode() || mode === this.cardMode()) return;
+    this.savingMode.set(mode);
+    this.modeError.set(null);
+    try {
+      await this.svc.setCardAutoPost(card, mode === 'follow' ? null : mode === 'auto');
+    } catch (err) {
+      this.modeError.set(apiErrorMessage(err, 'Não foi possível mudar a publicação deste card.'));
+    } finally {
+      this.savingMode.set(null);
+    }
+  }
+
+  private openText(data: MarkdownViewDialogData) {
+    return this.dialog.open<MarkdownViewDialogComponent, MarkdownViewDialogData, 'primary' | undefined>(
+      MarkdownViewDialogComponent, { ...MARKDOWN_VIEW_DIALOG, data: { card: this.card(), ...data } });
+  }
 }
 
+
 function md(text: string | null | undefined): string {
-  return text?.trim() ? renderMarkdown(text, { codeRefs: true }) : '';
+  return text?.trim() ? renderMarkdown(text, { codeRefs: true, reRefs: true }) : '';
 }
 
 function loadCollapsed(): boolean {

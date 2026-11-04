@@ -12,7 +12,8 @@ import { WsService } from '../../services/ws.service';
 import { CodeRefService } from '../code-ref/code-ref.service';
 import { HomeCardsComponent } from '../home-cards/home-cards.component';
 import { CardSituationComponent } from './card-situation.component';
-import { CardSituation, CardSituationService } from './card-situation.service';
+import { CardSituation, CardSituationService, SituationPostSettings } from './card-situation.service';
+import { MatDialog } from '@angular/material/dialog';
 
 const NOW = Date.now();
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -23,7 +24,8 @@ function situation(extra: Partial<CardSituation>): CardSituation {
     cardNumber: '75812', kind: 'none', title: '', icon: '', since: null, alsoWaiting: [], planId: 'p1', phase: 'correction',
     planTitle: 'Corrigir SA3', planStatus: 'running', stepKey: null, stepTitle: null, done: [], pullRequests: [], tickets: [],
     questions: [], userSteps: [], devTestInQaAt: null, devTestInQaError: null, qaChecklist: null, devOpsState: null,
-    devOpsColumn: null, handoff: null, handoffAt: null, handoffBy: null, next: null, markdown: '', ...extra,
+    devOpsColumn: null, handoff: null, handoffAt: null, handoffBy: null, next: null, markdown: '', autoPost: false,
+    publishedAt: null, publishedBy: null, publishedMarkdown: null, publishPending: false, ...extra,
   };
 }
 
@@ -33,7 +35,10 @@ class FakeSituations {
   fail = false;
   loads: { card: string; opts: any }[] = [];
   watched: string[] = [];
-  published: { card: string; html: string }[] = [];
+  published: string[] = [];
+  readonly postSettings = signal<SituationPostSettings | null>(null);
+  saved: (boolean | null)[] = [];
+  settings: SituationPostSettings = { autoPost: null, globalDefault: true, effective: true };
   situationOf(card: string) {
     if (!this.state.has(card)) this.state.set(card, signal<CardSituation | null>(null));
     return this.state.get(card)!;
@@ -46,7 +51,21 @@ class FakeSituations {
   }
   watch(card: string) { this.watched.push(card); }
   unwatch(card: string) { this.watched = this.watched.filter(c => c !== card); }
-  async publish(card: string, html: string) { this.published.push({ card, html }); return { commentId: 1 }; }
+  async publish(card: string) { this.published.push(card); return { commentId: 1 }; }
+  cardModes: (boolean | null)[] = [];
+  async setCardAutoPost(card: string, autoPost: boolean | null) {
+    this.cardModes.push(autoPost);
+    const next = { ...this.situationOf(card)()!, autoPost: autoPost ?? this.settings.effective, autoPostSource: autoPost === null ? 'user' : 'card' };
+    this.situationOf(card).set(next);
+    return next;
+  }
+  async loadPostSettings() { this.postSettings.set(this.settings); return this.settings; }
+  async savePostSettings(autoPost: boolean | null) {
+    this.saved.push(autoPost);
+    this.settings = { autoPost, globalDefault: this.settings.globalDefault, effective: autoPost ?? this.settings.globalDefault };
+    this.postSettings.set(this.settings);
+    return this.settings;
+  }
 }
 
 class FakeCodeRefs {
@@ -70,6 +89,7 @@ describe('CardSituationComponent (0075/F4)', () => {
   let clip: jasmine.SpyObj<CliipboardService>;
   let f: ComponentFixture<CardSituationComponent>;
   let el: HTMLElement;
+  let dialog: jasmine.SpyObj<MatDialog>;
 
   async function render(s: CardSituation | null): Promise<void> {
     svc.next = s;
@@ -84,6 +104,8 @@ describe('CardSituationComponent (0075/F4)', () => {
     svc = new FakeSituations();
     clip = jasmine.createSpyObj<CliipboardService>('CliipboardService', ['copyRichToClipboard']);
     clip.copyRichToClipboard.and.resolveTo();
+    dialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
+    dialog.open.and.returnValue({ afterClosed: () => of(undefined) } as never);
     TestBed.configureTestingModule({
       imports: [CardSituationComponent],
       providers: [
@@ -91,6 +113,7 @@ describe('CardSituationComponent (0075/F4)', () => {
         { provide: CardSituationService, useValue: svc },
         { provide: CodeRefService, useValue: new FakeCodeRefs() },
         { provide: CliipboardService, useValue: clip },
+        { provide: MatDialog, useValue: dialog },
       ],
     });
   });
@@ -139,13 +162,14 @@ describe('CardSituationComponent (0075/F4)', () => {
     expect(rows.length).toBe(2);
     expect(rows[0].querySelector('a')!.textContent).toBe('#101');
     expect(rows[0].textContent).toContain('edv-solvace → development');
-    expect(rows[0].textContent).toContain('✔ 1 aprovação');
-    expect(rows[0].textContent).toContain('✋ 2 alterações pedidas');
+    expect(rows[0].textContent).toContain('1 aprovação');
+    expect(rows[0].textContent).toContain('2 alterações pedidas');
+    expect(rows[0].textContent).not.toMatch(/[✔✋⏳✅❌]/);
     expect(rows[0].textContent).toContain('revisores: ana');
-    expect(rows[0].querySelector('.sit-pr__ci')!.textContent).toBe('✅');
+    expect(rows[0].querySelector('.sit-pr__ci--success')!.textContent).toBe('check_circle');
     expect(rows[1].querySelector('.sit__badge--qa')).not.toBeNull();
     expect(rows[1].textContent).toContain('sem aprovação');
-    expect(rows[1].querySelector('.sit-pr__ci')!.textContent).toBe('❌');
+    expect(rows[1].querySelector('.sit-pr__ci--failure')!.textContent).toBe('cancel');
     expect(el.querySelector('.sit__chip')!.textContent).toContain('Aguardando resposta');
   });
 
@@ -181,7 +205,7 @@ describe('CardSituationComponent (0075/F4)', () => {
     expect(el.querySelector('.sit__line--ok')!.textContent).toContain('há 2 d');
   });
 
-  it('copiar resumo grava HTML + markdown; publicar pede confirmação e envia o HTML sem links de código', async () => {
+  it('copiar resumo grava HTML + markdown; publicar pede confirmação e envia sem HTML (o servidor monta)', async () => {
     await render(situation({ kind: 'pr-review', title: 'Aguardando aprovação e merge', icon: '🔀',
       markdown: '🔀 **Situação** ver [x](ref:sa3-init)' }));
     const buttons = el.querySelectorAll<HTMLButtonElement>('.sit__head button');
@@ -197,10 +221,95 @@ describe('CardSituationComponent (0075/F4)', () => {
     expect(svc.published.length).toBe(0);
     el.querySelector<HTMLButtonElement>('.sit__confirm-actions button[color="primary"]')!.click();
     await settle(f);
-    expect(svc.published.length).toBe(1);
-    expect(svc.published[0].html).toContain('<strong>Situação</strong>');
-    expect(svc.published[0].html).not.toContain('code-ref');
+    expect(svc.published).toEqual(['75812']);
     expect(el.querySelector('.sit__result')!.textContent).toContain('publicado');
+    // depois de publicar, recarrega a situação (o status "publicado em" vem do servidor)
+    expect(svc.loads.at(-1)).toEqual({ card: '75812', opts: { force: true } });
+  });
+
+  it('0076: ícone mat-icon pelo tipo (ignora o emoji do back)', async () => {
+    await render(situation({ kind: 'ticket', title: 'Aguardando chamado', icon: '🎫', markdown: 'x' }));
+    expect(el.querySelector('.sit__icon mat-icon')!.textContent).toBe('confirmation_number');
+    expect(el.querySelector('.sit__head')!.textContent).not.toContain('🎫');
+  });
+
+  it('0076: publicado — quando, por quem e "Ver o que foi publicado" abre o texto publicado', async () => {
+    dialog.open.calls.reset();
+    await render(situation({ kind: 'pr-review', title: 'Aguardando aprovação e merge', markdown: 'atual',
+      publishedAt: '2026-11-04T11:58:00', publishedBy: 'Fulano', publishedMarkdown: '**Publicado** antes', autoPost: true }));
+    const status = el.querySelector('.sit__post-status')!.textContent!;
+    expect(status).toContain('Publicado na discussion em 04/11 às 11:58');
+    expect(status).toContain('por Fulano');
+    expect(el.querySelector('.sit__pending')).toBeNull();
+    el.querySelector<HTMLButtonElement>('.sit__post-view')!.click();
+    expect(dialog.open).toHaveBeenCalled();
+    const data = dialog.open.calls.mostRecent().args[1]!.data as { markdown: string; title: string };
+    expect(data.markdown).toBe('**Publicado** antes');
+    expect(data.title).toContain('Publicado');
+  });
+
+  it('0076: sem publicação e resumo pronto (manual) — faixa "pronto para a discussion" com Ver e Publicar', async () => {
+    dialog.open.calls.reset();
+    await render(situation({ kind: 'ticket', title: 'Aguardando chamado', markdown: 'novo resumo', publishPending: true, autoPost: false }));
+    expect(el.querySelector('.sit__post-status--none')!.textContent).toContain('Ainda não publicado na discussion');
+    const strip = el.querySelector('.sit__pending')!;
+    expect(strip.textContent).toContain('O resumo mudou e está pronto para a discussion');
+    const [ver, publicar] = [...strip.querySelectorAll<HTMLButtonElement>('button')];
+    ver.click();
+    expect((dialog.open.calls.mostRecent().args[1]!.data as { markdown: string }).markdown).toBe('novo resumo');
+    publicar.click();
+    await settle(f);
+    expect(el.querySelector('.sit__confirm')!.textContent).toContain('lida pelo cliente');
+    expect(el.querySelector('.sit__pending')).toBeNull();
+  });
+
+  it('0076: pendente com publicação automática — sem faixa, "a atualização sai sozinha"', async () => {
+    await render(situation({ kind: 'ticket', title: 'Aguardando chamado', markdown: 'x', publishPending: true, autoPost: true,
+      publishedAt: '2026-11-04T11:58:00', publishedMarkdown: 'y' }));
+    expect(el.querySelector('.sit__pending')).toBeNull();
+    expect(el.querySelector('.sit__post-soon')!.textContent).toContain('sai sozinha');
+  });
+
+  it('0076: toggle "Publicar automaticamente" grava a preferência (PUT) e recarrega a situação', async () => {
+    svc.settings = { autoPost: null, globalDefault: true, effective: true };
+    await render(situation({ kind: 'ticket', title: 'Aguardando chamado', markdown: 'x', autoPost: true }));
+    expect(el.querySelector('.sit__post-help')!.textContent).toContain('Seguindo o padrão (ligado)');
+    const input = el.querySelector<HTMLButtonElement>('.sit__auto button[role="switch"]')!;
+    expect(input.getAttribute('aria-checked')).toBe('true');
+    const loadsBefore = svc.loads.length;
+    input.click();
+    await settle(f);
+    expect(svc.saved).toEqual([false]);
+    expect(svc.loads.length).toBe(loadsBefore + 1);
+    expect(svc.loads.at(-1)!.opts).toEqual({ force: true });
+    expect(el.querySelector('.sit__post-help')!.textContent).toContain('Sua preferência');
+    // "Usar o padrão" volta a seguir o padrão (null)
+    [...el.querySelectorAll<HTMLButtonElement>('.sit__post-help .sit__link')].find(b => b.textContent!.includes('Usar o padrão'))!.click();
+    await settle(f);
+    expect(svc.saved).toEqual([false, null]);
+  });
+
+  it('0078: modo deste card — Automático/Manual/Seguir, com a origem; PUT auto-post só do card', async () => {
+    await render(situation({ kind: 'ticket', title: 'Aguardando chamado', markdown: '**S**', autoPost: true, autoPostSource: 'global' }));
+    const seg = () => [...el.querySelectorAll<HTMLButtonElement>('.sit__seg-btn')];
+    expect(seg().map(b => b.textContent!.trim())).toEqual(['Automático', 'Manual', 'Seguir minha preferência']);
+    expect(seg()[2].getAttribute('aria-checked')).toBe('true');
+    expect(el.querySelector('.sit__mode-src')!.textContent).toContain('Vale: automático — padrão do PRMake');
+
+    seg()[1].click();
+    await settle(f);
+    expect(svc.cardModes).toEqual([false]);
+    expect(seg()[1].getAttribute('aria-checked')).toBe('true');
+    expect(el.querySelector('.sit__mode-src')!.textContent).toContain('Vale: manual — escolhido neste card');
+
+    seg()[2].click();
+    await settle(f);
+    expect(svc.cardModes).toEqual([false, null]);
+    expect(seg()[2].getAttribute('aria-checked')).toBe('true');
+    // clicar no modo atual não grava de novo
+    seg()[2].click();
+    await settle(f);
+    expect(svc.cardModes.length).toBe(2);
   });
 
   it('erro na carga: aviso discreto com "Tentar de novo"', async () => {
@@ -228,7 +337,7 @@ describe('HomeCardsComponent — chip da situação (0075/F4)', () => {
     };
   }
 
-  async function renderHome(cards: HomeCard[]): Promise<string | null> {
+  async function renderHome(cards: HomeCard[]): Promise<{ icon: string; text: string } | null> {
     TestBed.configureTestingModule({
       imports: [HomeCardsComponent],
       providers: [
@@ -245,13 +354,14 @@ describe('HomeCardsComponent — chip da situação (0075/F4)', () => {
     const f = TestBed.createComponent(HomeCardsComponent);
     await settle(f);
     const chip = (f.nativeElement as HTMLElement).querySelector('.chip-situation');
-    const text = chip ? chip.textContent!.trim() : null;
+    const icon = chip?.querySelector('mat-icon')?.textContent?.trim() ?? '';
+    const text = chip ? chip.textContent!.replace(icon, '').trim() : null;
     f.destroy();
-    return text;
+    return text === null ? null : { icon, text };
   }
 
-  it('mostra ícone + rótulo curto + "há X" e some sem situação', async () => {
-    expect(await renderHome([card('ticket', ago(3 * DAY + 60_000))])).toBe('🎫 chamado · há 3 d');
+  it('mostra ícone (mat-icon, sem emoji) + rótulo curto + "há X" e some sem situação', async () => {
+    expect(await renderHome([card('ticket', ago(3 * DAY + 60_000))])).toEqual({ icon: 'confirmation_number', text: 'chamado · há 3 d' });
   });
 
   it('sem espera (none/null): sem chip', async () => {

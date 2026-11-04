@@ -2,7 +2,7 @@
   @let s = situation()!;
   <section class="sit sit--{{ s.kind }}" role="region" aria-label="Situação atual do card" [appCodeRefHost]="card()">
     <header class="sit__head">
-      <span class="sit__icon" aria-hidden="true">{{ s.icon }}</span>
+      <span class="sit__icon" aria-hidden="true"><mat-icon>{{ kindIcon() }}</mat-icon></span>
       <div class="sit__heading">
         <span class="sit__kicker">Situação atual</span>
         <span class="sit__title">
@@ -49,6 +49,80 @@
       </div>
     }
 
+    <!-- 0076: discussion do DevOps — o que foi publicado, o que está pronto e a publicação automática -->
+    <div class="sit__post" role="group" aria-label="Discussion do card no DevOps">
+      <div class="sit__post-row">
+        <mat-icon class="sit__post-icon">forum</mat-icon>
+        <span class="sit__post-text">
+          @if (s.publishedAt) {
+            <span class="sit__post-status">Publicado na discussion em {{ publishedWhen() }}@if (s.publishedBy) { por {{ s.publishedBy }}}</span>
+            @if (s.publishedMarkdown) {
+              <span class="sit__dot" aria-hidden="true">·</span>
+              <button type="button" class="sit__link sit__post-view" (click)="viewPublished()">Ver o que foi publicado</button>
+            }
+          } @else {
+            <span class="sit__post-status sit__post-status--none">Ainda não publicado na discussion</span>
+          }
+          @if (s.publishPending && s.autoPost) {
+            <span class="sit__dot" aria-hidden="true">·</span>
+            <span class="sit__post-soon" matTooltip="A publicação automática está ligada para este card">a atualização sai sozinha</span>
+          }
+        </span>
+        <mat-slide-toggle class="sit__auto" [checked]="autoChecked()" [disabled]="savingAuto()"
+                          (change)="setAutoPost($event.checked)" labelPosition="before"
+                          matTooltip="O PRMake atualiza o mesmo comentário a cada mudança: chamado, PR, QA ou etapa sua">
+          Publicar automaticamente
+        </mat-slide-toggle>
+      </div>
+      <!-- 0078: modo deste card (acima da preferência do usuário e do padrão) e de onde vem -->
+      <div class="sit__mode" role="radiogroup" aria-label="Publicação do resumo neste card">
+        <span class="sit__mode-label">Neste card</span>
+        <span class="sit__seg">
+          @for (m of cardModes; track m.id) {
+            <button type="button" role="radio" class="sit__seg-btn" [class.sit__seg-btn--on]="cardMode() === m.id"
+                    [attr.aria-checked]="cardMode() === m.id" [disabled]="!!savingMode()" (click)="setCardMode(m.id)"
+                    [matTooltip]="m.hint">{{ savingMode() === m.id ? 'Salvando…' : m.label }}</button>
+          }
+        </span>
+        <span class="sit__mode-src">{{ modeSource() }}</span>
+      </div>
+      @if (modeError()) {
+        <div class="sit__post-error" role="alert"><mat-icon>error_outline</mat-icon>{{ modeError() }}</div>
+      }
+      @if (!collapsed()) {
+        <div class="sit__post-help">
+          O PRMake atualiza o mesmo comentário a cada mudança: chamado, PR, QA ou etapa sua.
+          @if (postSettings(); as st) {
+            @if (st.autoPost === null) {
+              Seguindo o padrão ({{ st.globalDefault ? 'ligado' : 'desligado' }}).
+            } @else {
+              Sua preferência.
+              @if (st.autoPost !== st.globalDefault) {
+                <button type="button" class="sit__link" (click)="setAutoPost(null)" [disabled]="savingAuto()">Usar o padrão</button>
+              }
+            }
+          }
+          @if (autoDiffers()) {
+            <span class="sit__post-owner">Neste card vale a preferência do dono do plano ({{ s.autoPost ? 'ligada' : 'desligada' }}).</span>
+          }
+        </div>
+      }
+      @if (autoError()) {
+        <div class="sit__post-error" role="alert"><mat-icon>error_outline</mat-icon>{{ autoError() }}</div>
+      }
+    </div>
+
+    @if (s.publishPending && !s.autoPost && s.markdown && !confirmPublish()) {
+      <div class="sit__pending" role="status">
+        <mat-icon>edit_note</mat-icon>
+        <span class="sit__pending-text">O resumo mudou e está pronto para a discussion</span>
+        <span class="sit__pending-actions">
+          <button mat-button type="button" (click)="viewPending()">Ver</button>
+          <button mat-flat-button type="button" class="sit__pending-publish" (click)="askPublish()" [disabled]="publishing()">Publicar</button>
+        </span>
+      </div>
+    }
+
     @if (error()) {
       <div class="sit__error" role="alert">
         <mat-icon>error_outline</mat-icon><span>{{ error() }}</span>
@@ -61,7 +135,8 @@
         <mat-icon>campaign</mat-icon>
         <span class="sit__confirm-text">
           Publicar este resumo na <strong>discussion do card no DevOps</strong>? Ela é lida pelo cliente.
-          Se já houver um resumo publicado, ele é atualizado.
+          Se já houver um resumo publicado, o mesmo comentário é atualizado.
+          <button type="button" class="sit__link" (click)="viewPending()">Ver o texto</button>
         </span>
         <span class="sit__confirm-actions">
           <button mat-button (click)="confirmPublish.set(false)" [disabled]="publishing()">Cancelar</button>
@@ -97,19 +172,19 @@
                   } @else {
                     <span class="sit-pr__state" [title]="'Aberto em ' + date(pr.openedAt)">aberto {{ ago(pr.openedAt) }}</span>
                     @if (pr.approvals) {
-                      <span class="sit-pr__fact sit-pr__fact--ok">✔ {{ pr.approvals }} aprovaç{{ pr.approvals === 1 ? 'ão' : 'ões' }}</span>
+                      <span class="sit-pr__fact sit-pr__fact--ok"><mat-icon>done</mat-icon>{{ pr.approvals }} aprovaç{{ pr.approvals === 1 ? 'ão' : 'ões' }}</span>
                     } @else if (pr.approvals === 0) {
                       <span class="sit-pr__fact">sem aprovação</span>
                     }
                     @if (pr.changesRequested) {
-                      <span class="sit-pr__fact sit-pr__fact--warn">✋ {{ pr.changesRequested }} alteraç{{ pr.changesRequested === 1 ? 'ão pedida' : 'ões pedidas' }}</span>
+                      <span class="sit-pr__fact sit-pr__fact--warn"><mat-icon>pan_tool</mat-icon>{{ pr.changesRequested }} alteraç{{ pr.changesRequested === 1 ? 'ão pedida' : 'ões pedidas' }}</span>
                     }
                     @if (pr.reviewersPending) {
-                      <span class="sit-pr__fact" [title]="'Revisores pendentes: ' + pr.reviewersPending">⏳ revisores: {{ pr.reviewersPending }}</span>
+                      <span class="sit-pr__fact" [title]="'Revisores pendentes: ' + pr.reviewersPending"><mat-icon>hourglass_empty</mat-icon>revisores: {{ pr.reviewersPending }}</span>
                     }
                   }
                   @if (ciIcon(pr.checks); as ci) {
-                    <span class="sit-pr__ci" [title]="ciLabel(pr.checks)" [attr.aria-label]="ciLabel(pr.checks)">{{ ci }}</span>
+                    <mat-icon class="sit-pr__ci sit-pr__ci--{{ pr.checks }}" [title]="ciLabel(pr.checks)" [attr.aria-label]="ciLabel(pr.checks)">{{ ci }}</mat-icon>
                   }
                 </li>
               }

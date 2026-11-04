@@ -68,15 +68,43 @@ export interface CardSituation {
   next: string | null;
   /** Resumo completo pronto para copiar (markdown). */
   markdown: string;
+  /** 0076: publicação automática efetiva para este card (preferência do dono do plano ou a padrão). */
+  autoPost: boolean;
+  /** 0076: último resumo publicado na discussion do DevOps (quando, por quem e o texto). */
+  publishedAt?: string | null;
+  publishedBy?: string | null;
+  publishedMarkdown?: string | null;
+  /** 0076: há um resumo diferente do publicado, pronto para publicar. */
+  publishPending: boolean;
+  /** 0078: de onde vem o `autoPost` deste card — escolhido neste card, preferência do dono do plano ou o padrão. */
+  autoPostSource?: 'card' | 'user' | 'global' | string;
 }
 
-/** Ícone e rótulo curto de cada tipo (chip da Home, fato do topo do card). */
+/** 0078: modo de publicação deste card (o seletor "Neste card"). */
+export type CardPostMode = 'auto' | 'manual' | 'follow';
+
+/** Modo do card a partir da situação: só é "automático/manual" quando foi escolhido neste card. */
+export function cardPostMode(s: Pick<CardSituation, 'autoPost' | 'autoPostSource'> | null | undefined): CardPostMode {
+  if (!s || s.autoPostSource !== 'card') return 'follow';
+  return s.autoPost ? 'auto' : 'manual';
+}
+
+/** `GET/PUT ExecutionPlan/settings/situation-post` (0076): publicar a situação sozinho na discussion. */
+export interface SituationPostSettings {
+  /** Preferência do usuário logado; null = segue o padrão. */
+  autoPost: boolean | null;
+  globalDefault: boolean;
+  effective: boolean;
+}
+
+/** Ícone (`mat-icon` — 0076: o `icon` com emoji que vem do back é ignorado) e rótulo curto de cada
+ *  tipo (cartão, chip da Home, fato do topo do card). */
 export const SITUATION_META: Record<string, { icon: string; short: string; tone: 'info' | 'pending' | 'ok' }> = {
-  ticket: { icon: '🎫', short: 'chamado', tone: 'info' },
-  'pr-review': { icon: '🔀', short: 'aprovação/merge', tone: 'info' },
-  'qa-validation': { icon: '🧪', short: 'validar em QA', tone: 'pending' },
-  answer: { icon: '❓', short: 'resposta', tone: 'pending' },
-  user: { icon: '⚠️', short: 'com você', tone: 'pending' },
+  ticket: { icon: 'confirmation_number', short: 'chamado', tone: 'info' },
+  'pr-review': { icon: 'call_merge', short: 'aprovação/merge', tone: 'info' },
+  'qa-validation': { icon: 'science', short: 'validar em QA', tone: 'pending' },
+  answer: { icon: 'help_outline', short: 'resposta', tone: 'pending' },
+  user: { icon: 'person', short: 'com você', tone: 'pending' },
 };
 
 /** Título de cada tipo (o mesmo do back, `CardSituationKind.Title`). */
@@ -92,15 +120,16 @@ export function situationMeta(kind: string | null | undefined): { icon: string; 
   return kind && kind !== 'none' ? SITUATION_META[kind] ?? null : null;
 }
 
-/** Chip da situação (Home): "🎫 chamado · há 3 d", tom e tooltip; null quando nada é aguardado. */
+/** Chip da situação (Home): ícone (`mat-icon`) + "chamado · há 3 d", tom e tooltip; null quando nada é aguardado. */
 export function situationChip(kind: string | null | undefined, at: string | null | undefined, now = Date.now()):
-  { label: string; tone: 'info' | 'pending' | 'ok'; tooltip: string } | null {
+  { icon: string; label: string; tone: 'info' | 'pending' | 'ok'; tooltip: string } | null {
   const meta = situationMeta(kind);
   if (!meta) return null;
   const ago = situationAgo(at, now);
   const date = situationDate(at);
   return {
-    label: `${meta.icon} ${meta.short}${ago ? ' · ' + ago : ''}`,
+    icon: meta.icon,
+    label: `${meta.short}${ago ? ' · ' + ago : ''}`,
     tone: meta.tone,
     tooltip: `Situação atual: ${SITUATION_TITLES[kind!] ?? meta.short}${date ? ' desde ' + date : ''}`,
   };
@@ -121,6 +150,16 @@ export function situationAgo(iso: string | null | undefined, now = Date.now()): 
   if (s < 3600) return `há ${Math.floor(s / 60)} min`;
   if (s < 86400) return `há ${Math.floor(s / 3600)} h`;
   return `há ${Math.floor(s / 86400)} d`;
+}
+
+/** "04/11 às 11:58" (data curta + hora — 0076: quando foi publicado). */
+export function shortDateTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return '';
+  const date = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `${date} às ${time}`;
 }
 
 /** Data/hora completa (title dos "há X"). */
@@ -188,10 +227,50 @@ export class CardSituationService {
     return p;
   }
 
-  /** Publica (ou atualiza) o resumo na discussion do card no DevOps. */
-  publish(card: string | number, html: string): Promise<{ commentId: number | string | null }> {
+  /** Publica (ou atualiza) o resumo na discussion do card no DevOps — 0076: o servidor monta o HTML. */
+  publish(card: string | number, markdown?: string | null): Promise<{ commentId: number | string | null }> {
+    // 0078: com `markdown`, publica o texto editado pela pessoa (o servidor converte e atualiza o mesmo comentário).
     return firstValueFrom(this.http.post<{ commentId: number | string | null }>(
-      `${this.apiUrl}/card/${encodeURIComponent(norm(card))}/situation/publish`, { html }));
+      `${this.apiUrl}/card/${encodeURIComponent(norm(card))}/situation/publish`, markdown ? { markdown } : {}));
+  }
+
+  /** 0078: publicação automática só deste card (`null` = volta a seguir a preferência do dono / o padrão). */
+  async setCardAutoPost(card: string | number, autoPost: boolean | null): Promise<CardSituation> {
+    const key = norm(card);
+    const res = await firstValueFrom(this.http.put<CardSituation>(
+      `${this.apiUrl}/card/${encodeURIComponent(key)}/situation/auto-post`, { autoPost }));
+    const next = normalize(res, key);
+    const prev = this.stateOf(key)();
+    next.devOpsState ??= prev?.devOpsState ?? null;
+    next.devOpsColumn ??= prev?.devOpsColumn ?? null;
+    this.stateOf(key).set(next);
+    return next;
+  }
+
+  // ── Preferência de publicação automática (0076) ───────────────────────────────────────────────
+
+  private readonly postSettingsState = signal<SituationPostSettings | null>(null);
+  private postSettingsLoad: Promise<SituationPostSettings> | null = null;
+
+  /** Preferência do usuário logado (null = ainda não carregou). */
+  readonly postSettings = this.postSettingsState.asReadonly();
+
+  loadPostSettings(force = false): Promise<SituationPostSettings> {
+    if (!force && this.postSettingsLoad) return this.postSettingsLoad;
+    const p = firstValueFrom(this.http.get<SituationPostSettings>(`${this.apiUrl}/settings/situation-post`))
+      .then(res => { const v = normalizeSettings(res); this.postSettingsState.set(v); return v; })
+      .catch(err => { if (this.postSettingsLoad === p) this.postSettingsLoad = null; throw err; });
+    this.postSettingsLoad = p;
+    return p;
+  }
+
+  /** Grava a preferência (`null` = volta a seguir o padrão). */
+  async savePostSettings(autoPost: boolean | null): Promise<SituationPostSettings> {
+    const res = await firstValueFrom(this.http.put<SituationPostSettings>(`${this.apiUrl}/settings/situation-post`, { autoPost }));
+    const v = normalizeSettings(res);
+    this.postSettingsState.set(v);
+    this.postSettingsLoad = Promise.resolve(v);
+    return v;
   }
 
   // ── Tempo real ────────────────────────────────────────────────────────────────────────────────
@@ -274,5 +353,18 @@ function normalize(res: CardSituation | null, card: string): CardSituation {
     devOpsState: r.devOpsState ?? null,
     devOpsColumn: r.devOpsColumn ?? null,
     markdown: r.markdown ?? '',
+    autoPost: !!r.autoPost,
+    publishedAt: r.publishedAt ?? null,
+    publishedBy: r.publishedBy ?? null,
+    publishedMarkdown: r.publishedMarkdown ?? null,
+    publishPending: !!r.publishPending,
+    autoPostSource: r.autoPostSource ?? 'global',
   };
+}
+
+function normalizeSettings(res: Partial<SituationPostSettings> | null): SituationPostSettings {
+  const r = res ?? {};
+  const globalDefault = !!r.globalDefault;
+  const autoPost = r.autoPost === true || r.autoPost === false ? r.autoPost : null;
+  return { autoPost, globalDefault, effective: r.effective ?? (autoPost ?? globalDefault) };
 }

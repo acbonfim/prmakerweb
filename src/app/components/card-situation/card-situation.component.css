@@ -28,7 +28,11 @@
 
 /* ── Cabeçalho ── */
 .sit__head { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.sit__icon { font-size: 20px; line-height: 1; flex: none; }
+.sit__icon {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px;
+  color: color-mix(in srgb, var(--sit-c) 85%, white); background: color-mix(in srgb, var(--sit-c) 16%, transparent);
+}
+.sit__icon .mat-icon { font-size: 19px; width: 19px; height: 19px; }
 .sit__heading { display: flex; flex-direction: column; min-width: 0; }
 .sit__kicker {
   font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
@@ -89,10 +93,14 @@
 .sit-pr__route { font-family: 'Courier New', monospace; font-size: 12px; overflow-wrap: anywhere; }
 .sit-pr__state { color: var(--sit-muted); }
 .sit-pr__state--merged { color: #c297ff; }
-.sit-pr__fact { color: var(--sit-muted); white-space: nowrap; }
+.sit-pr__fact { display: inline-flex; align-items: center; gap: 3px; color: var(--sit-muted); white-space: nowrap; }
+.sit-pr__fact .mat-icon { font-size: 14px; width: 14px; height: 14px; }
 .sit-pr__fact--ok { color: color-mix(in srgb, var(--sit-ok) 80%, white); }
 .sit-pr__fact--warn { color: color-mix(in srgb, var(--sit-warn) 90%, white); }
-.sit-pr__ci { cursor: help; }
+.sit-pr__ci { cursor: help; font-size: 16px; width: 16px; height: 16px; color: var(--sit-muted); }
+.sit-pr__ci--success { color: var(--sit-ok); }
+.sit-pr__ci--failure { color: var(--sit-err); }
+.sit-pr__ci--pending { color: var(--sit-warn); }
 
 /* Chamado */
 .sit-ticket { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
@@ -166,6 +174,53 @@
 .sit__confirm-text { flex: 1 1 220px; min-width: 0; }
 .sit__confirm-actions { display: flex; gap: 6px; margin-left: auto; }
 
+/* 0076: discussion do DevOps (publicado · ver · publicação automática) */
+.sit__post {
+  margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+  background: rgba(0, 0, 0, 0.16); border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.sit__post-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.sit__post-icon { flex: none; font-size: 16px; width: 16px; height: 16px; color: var(--sit-muted); }
+.sit__post-text { flex: 1 1 260px; min-width: 0; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; font-size: 12.5px; }
+.sit__post-status--none { color: var(--sit-muted); }
+.sit__dot { color: var(--sit-muted); }
+.sit__post-soon { color: color-mix(in srgb, var(--sit-ok) 80%, white); font-size: 12px; cursor: help; }
+.sit__post-view { font-size: 12.5px; }
+.sit__auto { flex: none; margin-left: auto; font-size: 12px; --mat-slide-toggle-label-text-size: 12px; }
+.sit__auto ::ng-deep .mdc-switch { transform: scale(0.72); transform-origin: right center; margin-left: -12px; }
+.sit__auto ::ng-deep .mdc-label { font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 80%, transparent); padding-right: 2px; }
+.sit__post-help { margin: 4px 0 0 22px; font-size: 11.5px; line-height: 1.45; color: var(--sit-muted); }
+.sit__post-help .sit__link { font-size: 11.5px; }
+.sit__post-owner { display: block; color: color-mix(in srgb, var(--sit-warn) 80%, white); }
+.sit__post-error { display: flex; align-items: center; gap: 4px; margin: 4px 0 0 22px; font-size: 12px; color: var(--sit-err); }
+.sit__post-error .mat-icon { font-size: 14px; width: 14px; height: 14px; }
+
+/* 0078: modo de publicação deste card */
+.sit__mode { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 6px 0 0 22px; font-size: 12px; }
+.sit__mode-label { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--sit-muted); }
+.sit__seg { display: inline-flex; padding: 2px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); }
+.sit__seg-btn { height: 24px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: color-mix(in srgb, var(--mat-sys-on-surface) 72%, transparent);
+  font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; transition: background-color .15s ease, color .15s ease; }
+.sit__seg-btn:hover:not(:disabled):not(.sit__seg-btn--on) { background: rgba(255, 255, 255, 0.06); color: var(--mat-sys-on-surface); }
+.sit__seg-btn--on { background: color-mix(in srgb, #58a6ff 24%, transparent); color: var(--mat-sys-on-surface); font-weight: 600; }
+.sit__seg-btn:disabled { cursor: default; }
+.sit__seg-btn:focus-visible { outline: 2px solid #58a6ff; outline-offset: 1px; }
+.sit__mode-src { color: var(--sit-muted); font-size: 11.5px; }
+
+/* 0076: o resumo mudou e está pronto para a discussion */
+.sit__pending {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: 8px; padding: 6px 6px 6px 10px; border-radius: 8px;
+  font-size: 12.5px; color: var(--mat-sys-on-surface);
+  background: color-mix(in srgb, var(--sit-warn) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sit-warn) 45%, transparent);
+}
+.sit__pending > .mat-icon { flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--sit-warn); }
+.sit__pending-text { flex: 1 1 200px; min-width: 0; font-weight: 500; }
+.sit__pending-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.sit__pending-actions .mat-mdc-button, .sit__pending-actions .mat-mdc-unelevated-button { height: 30px; font-size: 12.5px; }
+.sit__pending-publish.mat-mdc-unelevated-button { --mdc-filled-button-container-color: #d29922; --mat-button-filled-container-color: #d29922;
+  --mdc-filled-button-label-text-color: #1b1404; --mat-button-filled-label-text-color: #1b1404; }
+
 /* Celular */
 @media (max-width: 768px) {
   .sit { font-size: 14px; padding: 10px; }
@@ -173,6 +228,11 @@
   .sit__md, .sit-pr, .sit-ticket, .sit__bullets { font-size: 13.5px; }
   .sit__meta { font-size: 12.5px; }
   .sit__confirm-actions { width: 100%; justify-content: flex-end; }
+  .sit__auto { margin-left: 22px; }
+  .sit__post-text, .sit__post-view { font-size: 13.5px; }
+  .sit__mode { margin-left: 0; }
+  .sit__seg { flex: 1 1 100%; }
+  .sit__seg-btn { flex: 1 1 auto; height: 30px; padding: 0 6px; white-space: normal; line-height: 1.15; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -142,7 +142,7 @@ const SQL_KEYWORDS = new Set((
                   @if (showSource()) {
                     <pre class="pf__code">@for (line of lines(); track $index) {<span class="pf__line">{{ line }}</span>}</pre>
                   } @else {
-                    <div class="pf__md" [appCodeRefHost]="data.cardNumber" [innerHTML]="p.text | planMarkdown"></div>
+                    <div class="pf__md" [appCodeRefHost]="data.cardNumber" [innerHTML]="p.text | planMarkdown:'card'"></div>
                   }
                 }
                 @case ('code') {
@@ -218,8 +218,6 @@ const SQL_KEYWORDS = new Set((
     .pf__md ::ng-deep pre { padding: 8px 10px; border-radius: 6px; background: rgba(0,0,0,.3); overflow-x: auto; }
     .pf__md ::ng-deep code { color: inherit; font-family: 'Courier New', monospace; font-size: 12.5px; }
     .pf__code { color: var(--mat-sys-on-surface); }
-    .pf__md ::ng-deep table { border-collapse: collapse; }
-    .pf__md ::ng-deep th, .pf__md ::ng-deep td { border: 1px solid rgba(255,255,255,.12); padding: 4px 8px; }
     .pf__md ::ng-deep a { color: var(--mat-sys-primary); }
     .pf__image { min-height: 100%; display: flex; align-items: flex-start; justify-content: center; padding: 12px;
       background: repeating-conic-gradient(rgba(255,255,255,.04) 0% 25%, transparent 0% 50%) 50% / 20px 20px; }

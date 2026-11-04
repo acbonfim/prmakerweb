@@ -70,7 +70,11 @@ import { ExecutorsDialogComponent } from '../executors-dialog/executors-dialog.c
 import { TokenUsageComponent } from '../token-usage/token-usage.component';
 import { TokenUsage } from '../../services/token-pricing.service';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
+import { GeneratedTextsComponent } from '../generated-texts/generated-texts.component';
 import { CardSituationComponent } from '../card-situation/card-situation.component';
+import { CardAssistantComponent } from '../card-assistant/card-assistant.component';
+import { CardAssistantService, isPending } from '../../services/card-assistant.service';
+import { openTextCenter } from '../text-center/text-center-dialog.component';
 import {
   QaCompleteDialogComponent,
   QaCompleteDialogData,
@@ -137,7 +141,7 @@ interface LinkDraft {
 @Component({
   selector: 'app-execution-plan',
   standalone: true,
-  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent, CodeRefHostDirective, CardSituationComponent],
+  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent, CodeRefHostDirective, CardSituationComponent, CardAssistantComponent, GeneratedTextsComponent],
   templateUrl: './execution-plan.component.html',
   styleUrls: ['./execution-plan.component.css']
 })
@@ -240,6 +244,28 @@ export class ExecutionPlanComponent implements OnDestroy {
   }
 
   @ViewChild('panel') private panelRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('assistant') private assistantRef?: CardAssistantComponent;
+
+  // ── 0078: o PRMake conversa (assistente) e a central de textos ────────────────────────────────
+
+  private readonly assistant = inject(CardAssistantService);
+  /** Sugestões abertas do assistente neste card (contador do cabeçalho). */
+  readonly assistantOpen = computed(() => {
+    const card = this.loadedCard();
+    return card ? (this.assistant.suggestionsOf(card)() ?? []).filter(isPending).length : 0;
+  });
+
+  /** O contador do cabeçalho leva às sugestões (abre o bloco, se recolhido). */
+  revealAssistant(): void {
+    this.assistantRef?.reveal();
+  }
+
+  /** "Textos" (0078): todos os textos gerados do card — editar, gerar de novo com IA, enviar. */
+  openTexts(selectKey?: string | null): void {
+    const card = this.loadedCard();
+    if (!card || !this.plan()) return;
+    openTextCenter(this.dialog, { card, plan: this.plan, pair: this.pair, selectKey: selectKey ?? null });
+  }
   @ViewChild('notes') private notesRef?: PlanNotesComponent;
 
   // ── 0031: comentários e anexos do usuário ─────────────────────────────────────────────────────
@@ -841,6 +867,8 @@ export class ExecutionPlanComponent implements OnDestroy {
     if (!card || card !== this.loadedCard()) return;
     // 0075: só a situação mudou (handoff, sincronização) — o cartão "Situação atual" recarrega sozinho.
     if (payload.action === 'situation') return;
+    // 0078: sugestão do assistente — o próprio assistente recarrega (não refaz o GET do plano).
+    if (payload.action === 'suggestion') return;
     // 0050: atividade nova do Claude — atualiza a linha "agora" sem refazer o GET do plano.
     if (payload.action === 'activity') {
       const q = this.queue();

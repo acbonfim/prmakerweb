@@ -287,7 +287,7 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
   }
 
   /** 0075: chip "🎫 chamado · há 3 d" da situação do plano (some quando nada é aguardado). */
-  situationChip(card: HomeCard): { label: string; tone: string; tooltip: string } | null {
+  situationChip(card: HomeCard): { icon: string; label: string; tone: string; tooltip: string } | null {
     return card.plan ? situationChip(card.plan.situationKind, card.plan.situationAt) : null;
   }
 
