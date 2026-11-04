@@ -48,6 +48,9 @@ export interface HomeCardPlan {
   openQuestions: number;
   phases: string[];
   updatedAt: string;
+  /** 0075: o que está sendo aguardado agora (ticket | pr-review | qa-validation | answer | user | none) e desde quando. */
+  situationKind?: string | null;
+  situationAt?: string | null;
 }
 
 export interface HomeCardEntry {

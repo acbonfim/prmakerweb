@@ -262,7 +262,7 @@ export interface ExecutionLog {
 export interface ExecutionPlanRealtimePayload {
   cardNumber: string;
   planId: string;
-  action: 'created' | 'steps' | 'step' | 'log' | 'status' | 'artifact' | 'question' | 'link' | 'note' | 'request' | 'activity' | 'codeRef';
+  action: 'created' | 'steps' | 'step' | 'log' | 'status' | 'artifact' | 'question' | 'link' | 'note' | 'request' | 'activity' | 'codeRef' | 'situation';
   stepKey?: string | null;
   status?: PlanStatus | string;
   /** 0050 (`activity`): o pedido e a atividade nova — a tela atualiza sem refazer o GET. */

@@ -291,6 +291,8 @@
         </div>
       } @else {
         @let p = plan()!;
+        <!-- 0075/F4: em que pé o card está (o que é aguardado, desde quando, handoff, próximo passo) -->
+        <app-card-situation [cardNumber]="loadedCard()"></app-card-situation>
         @if (openQuestions().length || stepActions().length) {
           <!-- 0037: tudo o que depende do usuário num lugar só, com o botão certo em cada item. -->
           <div class="plan-questions plan-you" role="region" aria-label="Aguardando você">

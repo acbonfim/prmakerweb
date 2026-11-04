@@ -1,0 +1,225 @@
+@if (visible()) {
+  @let s = situation()!;
+  <section class="sit sit--{{ s.kind }}" role="region" aria-label="Situação atual do card" [appCodeRefHost]="card()">
+    <header class="sit__head">
+      <span class="sit__icon" aria-hidden="true">{{ s.icon }}</span>
+      <div class="sit__heading">
+        <span class="sit__kicker">Situação atual</span>
+        <span class="sit__title">
+          {{ s.title }}
+          @if (since()) {
+            <span class="sit__since" [title]="sinceTitle()">· {{ since() }}</span>
+          }
+        </span>
+      </div>
+      @if (loading()) {
+        <span class="sit__sync" role="status" aria-label="Atualizando a situação"></span>
+      }
+      <span class="sit__spacer"></span>
+      <button mat-icon-button class="sit__btn" (click)="copy()" [disabled]="!s.markdown"
+              matTooltip="Copiar resumo (texto e formatado)" aria-label="Copiar o resumo da situação">
+        <mat-icon>content_copy</mat-icon>
+      </button>
+      <button mat-icon-button class="sit__btn" (click)="askPublish()" [disabled]="!s.markdown || publishing()"
+              matTooltip="Publicar no DevOps (discussion do card)" aria-label="Publicar o resumo no DevOps">
+        <mat-icon>campaign</mat-icon>
+      </button>
+      <button mat-icon-button class="sit__btn" (click)="toggleCollapsed()"
+              [matTooltip]="collapsed() ? 'Mostrar detalhes' : 'Recolher'"
+              [attr.aria-expanded]="!collapsed()" aria-label="Mostrar ou recolher os detalhes da situação">
+        <mat-icon>{{ collapsed() ? 'expand_more' : 'expand_less' }}</mat-icon>
+      </button>
+    </header>
+
+    @if (s.stepTitle || s.alsoWaiting.length || devOps()) {
+      <div class="sit__meta">
+        @if (s.stepTitle) {
+          <span class="sit__meta-item" [title]="s.planTitle || ''">
+            <mat-icon>flag</mat-icon>Etapa <strong>{{ s.stepTitle }}</strong>
+          </span>
+        }
+        @if (devOps()) {
+          <span class="sit__meta-item" title="Estado · coluna do card no DevOps">
+            <mat-icon>view_kanban</mat-icon>DevOps <strong>{{ devOps() }}</strong>
+          </span>
+        }
+        @for (w of s.alsoWaiting; track w) {
+          <span class="sit__chip" title="Também aguardando">+ {{ w }}</span>
+        }
+      </div>
+    }
+
+    @if (error()) {
+      <div class="sit__error" role="alert">
+        <mat-icon>error_outline</mat-icon><span>{{ error() }}</span>
+        <button type="button" class="sit__link" (click)="reload()">Tentar de novo</button>
+      </div>
+    }
+
+    @if (confirmPublish()) {
+      <div class="sit__confirm" role="alertdialog" aria-label="Confirmar publicação no DevOps">
+        <mat-icon>campaign</mat-icon>
+        <span class="sit__confirm-text">
+          Publicar este resumo na <strong>discussion do card no DevOps</strong>? Ela é lida pelo cliente.
+          Se já houver um resumo publicado, ele é atualizado.
+        </span>
+        <span class="sit__confirm-actions">
+          <button mat-button (click)="confirmPublish.set(false)" [disabled]="publishing()">Cancelar</button>
+          <button mat-flat-button color="primary" (click)="publish()" [disabled]="publishing()">
+            {{ publishing() ? 'Publicando…' : 'Publicar' }}
+          </button>
+        </span>
+      </div>
+    }
+    @if (publishResult(); as r) {
+      <div class="sit__result" [class.sit__result--error]="!r.ok" role="status">
+        <mat-icon>{{ r.ok ? 'check_circle' : 'error_outline' }}</mat-icon><span>{{ r.text }}</span>
+        <button type="button" class="sit__x" (click)="publishResult.set(null)" aria-label="Fechar o aviso">
+          <mat-icon>close</mat-icon>
+        </button>
+      </div>
+    }
+
+    @if (!collapsed()) {
+      <div class="sit__body">
+        <!-- Pull requests -->
+        @if (s.pullRequests.length) {
+          <div class="sit__block">
+            <div class="sit__block-title"><mat-icon>merge</mat-icon>Pull requests</div>
+            <ul class="sit__list">
+              @for (pr of s.pullRequests; track pr.url) {
+                <li class="sit-pr" [class.sit-pr--merged]="pr.status === 'merged'">
+                  <a class="sit-pr__num" [href]="pr.url" target="_blank" rel="noopener" [title]="pr.title || pr.url">#{{ pr.number ?? '?' }}</a>
+                  <span class="sit-pr__route">{{ prRoute(pr) }}</span>
+                  @if (pr.isQa) { <span class="sit__badge sit__badge--qa" title="PR para a branch de QA">QA</span> }
+                  @if (pr.status === 'merged') {
+                    <span class="sit-pr__state sit-pr__state--merged" [title]="date(pr.mergedAt)">mesclado {{ ago(pr.mergedAt) }}</span>
+                  } @else {
+                    <span class="sit-pr__state" [title]="'Aberto em ' + date(pr.openedAt)">aberto {{ ago(pr.openedAt) }}</span>
+                    @if (pr.approvals) {
+                      <span class="sit-pr__fact sit-pr__fact--ok">✔ {{ pr.approvals }} aprovaç{{ pr.approvals === 1 ? 'ão' : 'ões' }}</span>
+                    } @else if (pr.approvals === 0) {
+                      <span class="sit-pr__fact">sem aprovação</span>
+                    }
+                    @if (pr.changesRequested) {
+                      <span class="sit-pr__fact sit-pr__fact--warn">✋ {{ pr.changesRequested }} alteraç{{ pr.changesRequested === 1 ? 'ão pedida' : 'ões pedidas' }}</span>
+                    }
+                    @if (pr.reviewersPending) {
+                      <span class="sit-pr__fact" [title]="'Revisores pendentes: ' + pr.reviewersPending">⏳ revisores: {{ pr.reviewersPending }}</span>
+                    }
+                  }
+                  @if (ciIcon(pr.checks); as ci) {
+                    <span class="sit-pr__ci" [title]="ciLabel(pr.checks)" [attr.aria-label]="ciLabel(pr.checks)">{{ ci }}</span>
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- Chamados -->
+        @if (s.tickets.length) {
+          <div class="sit__block">
+            <div class="sit__block-title"><mat-icon>confirmation_number</mat-icon>Chamados</div>
+            <ul class="sit__list">
+              @for (t of s.tickets; track t.url) {
+                <li class="sit-ticket">
+                  <a [href]="t.url" target="_blank" rel="noopener" class="sit-ticket__link">{{ t.title || t.url }}</a>
+                  <span class="sit-ticket__meta" [title]="'Aberto em ' + date(t.openedAt)">
+                    aberto{{ t.openedBy ? ' por ' + t.openedBy : '' }} {{ ago(t.openedAt) }}
+                    @if (t.stepTitle) { · {{ t.stepTitle }} }
+                  </span>
+                  @if (t.files.length) {
+                    <span class="sit-ticket__files">
+                      @for (f of t.files; track f) { <code class="sit__file">{{ f }}</code> }
+                    </span>
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- Validação em QA -->
+        @if (showQa()) {
+          <div class="sit__block">
+            <div class="sit__block-title"><mat-icon>science</mat-icon>Validação em QA</div>
+            @if (s.devTestInQaAt) {
+              <div class="sit__line sit__line--ok" [title]="date(s.devTestInQaAt)">
+                Card em <strong>Dev Test in QA</strong> desde {{ date(s.devTestInQaAt) }} ({{ ago(s.devTestInQaAt) }})
+              </div>
+            } @else if (s.devTestInQaError) {
+              <div class="sit__line sit__line--warn">
+                <mat-icon>warning_amber</mat-icon>
+                <span>Não deu para mover para <strong>Dev Test in QA</strong>: {{ s.devTestInQaError }}</span>
+              </div>
+            }
+            @if (checklistHtml()) {
+              <div class="sit__sub">Roteiro (o que mais usa os pontos alterados)</div>
+              <div class="sit__md" [innerHTML]="checklistHtml()"></div>
+            }
+          </div>
+        }
+
+        <!-- Perguntas / com você -->
+        @if (s.questions.length) {
+          <div class="sit__block">
+            <div class="sit__block-title"><mat-icon>help_outline</mat-icon>Perguntas abertas</div>
+            <ul class="sit__bullets">
+              @for (q of s.questions; track $index) { <li>{{ q }}</li> }
+            </ul>
+          </div>
+        }
+        @if (s.userSteps.length) {
+          <div class="sit__block">
+            <div class="sit__block-title"><mat-icon>front_hand</mat-icon>Com você</div>
+            <ul class="sit__bullets">
+              @for (u of s.userSteps; track $index) { <li>{{ u }}</li> }
+            </ul>
+          </div>
+        }
+
+        <!-- Contexto da passagem (handoff) -->
+        @if (handoffHtml()) {
+          <div class="sit__block sit__handoff">
+            <div class="sit__block-title">
+              <mat-icon>swap_horiz</mat-icon>Contexto da passagem
+              @if (s.handoffBy || s.handoffAt) {
+                <span class="sit__by" [title]="date(s.handoffAt)">— {{ s.handoffBy }}{{ s.handoffBy && s.handoffAt ? ', ' : '' }}{{ ago(s.handoffAt) }}</span>
+              }
+            </div>
+            <div class="sit__md" [innerHTML]="handoffHtml()"></div>
+          </div>
+        }
+
+        @if (s.done.length) {
+          <div class="sit__done">
+            <button type="button" class="sit__link" (click)="showDone.set(!showDone())" [attr.aria-expanded]="showDone()">
+              <mat-icon>{{ showDone() ? 'expand_less' : 'chevron_right' }}</mat-icon>Já feito ({{ s.done.length }})
+            </button>
+            @if (showDone()) {
+              <ul class="sit__done-list">
+                @for (d of s.done; track $index) { <li><mat-icon>check</mat-icon>{{ d }}</li> }
+              </ul>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    @if (nextHtml()) {
+      <div class="sit__next">
+        <mat-icon>arrow_forward</mat-icon>
+        <div class="sit__next-body">
+          <span class="sit__next-label">Próximo passo</span>
+          <div class="sit__md" [innerHTML]="nextHtml()"></div>
+        </div>
+      </div>
+    }
+  </section>
+} @else if (error() && !situation()) {
+  <div class="sit-error-line" role="alert">
+    <mat-icon>error_outline</mat-icon><span>{{ error() }}</span>
+    <button type="button" class="sit__link" (click)="reload()">Tentar de novo</button>
+  </div>
+}

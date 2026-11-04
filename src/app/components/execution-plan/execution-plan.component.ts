@@ -70,6 +70,13 @@ import { ExecutorsDialogComponent } from '../executors-dialog/executors-dialog.c
 import { TokenUsageComponent } from '../token-usage/token-usage.component';
 import { TokenUsage } from '../../services/token-pricing.service';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
+import { CardSituationComponent } from '../card-situation/card-situation.component';
+import {
+  QaCompleteDialogComponent,
+  QaCompleteDialogData,
+  QaCompleteDialogResult,
+  isQaValidationStep
+} from './qa-complete-dialog.component';
 
 /** Evento do card quando os PRs mudam (status sincronizado com o GitHub, PR aberto) — o plano reage na hora (0025). */
 const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
@@ -130,7 +137,7 @@ interface LinkDraft {
 @Component({
   selector: 'app-execution-plan',
   standalone: true,
-  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent, CodeRefHostDirective],
+  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent, CodeRefHostDirective, CardSituationComponent],
   templateUrl: './execution-plan.component.html',
   styleUrls: ['./execution-plan.component.css']
 })
@@ -832,6 +839,8 @@ export class ExecutionPlanComponent implements OnDestroy {
   private onRealtime = (payload: ExecutionPlanRealtimePayload): void => {
     const card = payload?.cardNumber != null ? `${payload.cardNumber}`.trim() : null;
     if (!card || card !== this.loadedCard()) return;
+    // 0075: só a situação mudou (handoff, sincronização) — o cartão "Situação atual" recarrega sozinho.
+    if (payload.action === 'situation') return;
     // 0050: atividade nova do Claude — atualiza a linha "agora" sem refazer o GET do plano.
     if (payload.action === 'activity') {
       const q = this.queue();
@@ -960,6 +969,14 @@ export class ExecutionPlanComponent implements OnDestroy {
   completeStep(step: StepView): void {
     const plan = this.plan();
     if (!plan || this.busy()) return;
+    // 0075/F5: "Validar em QA" pergunta se já move o card para Ready for QA (o diálogo conclui e move).
+    if (isQaValidationStep(step.key)) {
+      this.dialog.open<QaCompleteDialogComponent, QaCompleteDialogData, QaCompleteDialogResult | undefined>(QaCompleteDialogComponent, {
+        data: { planId: plan.id, stepKey: step.key, stepTitle: step.title, cardNumber: plan.cardNumber || this.loadedCard() || '' },
+        width: '520px', maxWidth: '96vw', panelClass: 'custom-dialog-container', autoFocus: false
+      }).afterClosed().subscribe(() => { this.refresh(); this.userPending.refresh(); });
+      return;
+    }
     this.busy.set('step');
     this.api.completeStep(plan.id, step.key).subscribe({
       next: () => { this.busy.set(null); this.snackBar.open('Etapa concluída.', 'Ok', { duration: 3000 }); this.refresh(); this.userPending.refresh(); },

@@ -91,6 +91,8 @@
 .chip[data-tone="warn"], .chip[data-tone="pending"] { --tone: var(--tone-warn); }
 .chip[data-tone="error"] { --tone: var(--tone-error); }
 .chip-outline { background: transparent; font-weight: 500; }
+/* 0075: situação do plano (emoji + rótulo curto + há X) */
+.chip-situation { white-space: nowrap; }
 
 .hc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag {
