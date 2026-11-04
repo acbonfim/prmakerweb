@@ -1,0 +1,279 @@
+<div class="page-header">
+  <mat-icon class="header-icon">insights</mat-icon>
+  <span class="header-title">Análise de uso</span>
+  <nav class="view-switch" aria-label="Visões de usuários">
+    <a class="view-switch__item" routerLink="/auth/user/manager">Usuários</a>
+    <a class="view-switch__item active" routerLink="/auth/user/usage">Análise de uso</a>
+  </nav>
+  <div class="ms-auto header-actions">
+    @if (loading()) { <mat-spinner diameter="20"></mat-spinner> }
+    <button mat-icon-button matTooltip="Atualizar" (click)="reload()" [disabled]="loading()"><mat-icon>refresh</mat-icon></button>
+  </div>
+</div>
+
+<!-- Filtros: uma linha acima de tudo -->
+<div class="filters" role="group" aria-label="Filtros">
+  <div class="seg" role="radiogroup" aria-label="Período">
+    @for (p of periods; track p.key) {
+      <button type="button" class="seg__item" [class.on]="period() === p.key" role="radio" [attr.aria-checked]="period() === p.key"
+              (click)="setPeriod(p.key)">{{ p.label }}</button>
+    }
+  </div>
+  @if (period() === 'custom') {
+    <label class="f-field"><span>De</span>
+      <input type="date" [ngModel]="customFrom()" (ngModelChange)="customFrom.set($event); applyCustom()">
+    </label>
+    <label class="f-field"><span>Até</span>
+      <input type="date" [ngModel]="customTo()" (ngModelChange)="customTo.set($event); applyCustom()">
+    </label>
+  }
+  <label class="f-field"><span>Usuário</span>
+    <select [ngModel]="user()" (ngModelChange)="setUser($event)">
+      <option value="">Todos</option>
+      @for (u of userOptions(); track u.id) { <option [value]="u.id">{{ u.name }}</option> }
+    </select>
+  </label>
+  <label class="f-field"><span>Tela</span>
+    <select [ngModel]="screen()" (ngModelChange)="setScreen($event)">
+      <option value="">Todas</option>
+      @for (s of screenOptions(); track s) { <option [value]="s">{{ s }}</option> }
+    </select>
+  </label>
+  <label class="f-field"><span>Tipo de evento</span>
+    <select [ngModel]="kind()" (ngModelChange)="setKind($event)">
+      <option value="">Todos</option>
+      @for (k of kinds; track k.key) { <option [value]="k.key">{{ k.label }}</option> }
+    </select>
+  </label>
+  @if (user() || screen() || kind() || sessionFilter()) {
+    <button mat-button type="button" (click)="clearFilters()"><mat-icon>filter_alt_off</mat-icon> Limpar</button>
+  }
+</div>
+
+@if (error()) {
+  <div class="notice">{{ error() }}</div>
+}
+
+<!-- Online agora (ao vivo pelo hub) -->
+<section class="panel">
+  <div class="panel__head">
+    <h2>Online agora</h2>
+    <span class="pill pill--live">{{ presence.users().length }}</span>
+    <span class="muted">ao vivo · {{ presence.connected() ? 'conectado' : (presence.error() || 'conectando…') }}</span>
+  </div>
+  @if (presence.users().length) {
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead><tr><th>Usuário</th><th>Estado</th><th>O que está fazendo</th><th>Última interação</th><th>Abas</th><th>IP</th><th>Navegador / sistema</th></tr></thead>
+        <tbody>
+          @for (p of presence.users(); track p.userId) {
+            <tr class="clickable" (click)="openPresence(p)">
+              <td><span class="who"><app-user-avatar [name]="p.name" [size]="24"></app-user-avatar>{{ p.name }}</span></td>
+              <td><app-presence-badge [presence]="p" [compact]="true"></app-presence-badge></td>
+              <td class="ellipsis">{{ p.primary.busy || p.primary.screen || '—' }}{{ p.primary.card ? ' · card ' + p.primary.card : '' }}</td>
+              <td>{{ p.lastInputAt ? ago(p.primary.lastInputAt) : '—' }}</td>
+              <td class="num">{{ p.entries.length }}</td>
+              <td class="mono">{{ p.primary.ip || '—' }}</td>
+              <td>{{ p.primary.client?.browser || '—' }} · {{ p.primary.client?.os || '—' }} · {{ p.primary.client?.device || '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <p class="muted">Ninguém conectado agora.</p>
+  }
+</section>
+
+<!-- Indicadores -->
+<div class="tiles">
+  <div class="tile"><span class="tile__label">Usuários ativos</span><span class="tile__value">{{ num(kpis()?.activeUsers) }}</span></div>
+  <div class="tile"><span class="tile__label">Sessões</span><span class="tile__value">{{ num(kpis()?.sessions) }}</span></div>
+  <div class="tile"><span class="tile__label">Logins com sucesso</span><span class="tile__value">{{ num(kpis()?.logins) }}</span>
+    <span class="tile__sub" [class.tile__sub--bad]="(kpis()?.failedLogins ?? 0) > 0">{{ num(kpis()?.failedLogins) }} com falha</span></div>
+  <div class="tile"><span class="tile__label">Sessão média</span><span class="tile__value">{{ dur(avgSessionMs()) }}</span></div>
+  <div class="tile"><span class="tile__label">Tempo em primeiro plano</span><span class="tile__value">{{ dur(kpis()?.foregroundMs) }}</span></div>
+  <div class="tile"><span class="tile__label">Telas vistas</span><span class="tile__value">{{ num(kpis()?.views) }}</span></div>
+  <div class="tile"><span class="tile__label">Ações</span><span class="tile__value">{{ num(kpis()?.actions) }}</span></div>
+  <div class="tile"><span class="tile__label">Erros</span><span class="tile__value">{{ num(kpis()?.errors) }}</span></div>
+</div>
+
+<!-- Gráficos -->
+<div class="charts">
+  <section class="panel">
+    <div class="panel__head"><h2>Usuários ativos por dia</h2></div>
+    <app-usage-bars [data]="activeUsersBars()" [series]="activeUsersSeries" ariaLabel="Usuários ativos por dia"></app-usage-bars>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>Logins por dia</h2></div>
+    <app-usage-bars [data]="loginBars()" [series]="loginSeries" ariaLabel="Logins por dia, sucesso e falha"></app-usage-bars>
+  </section>
+  <section class="panel panel--wide">
+    <div class="panel__head"><h2>Quando usam</h2><span class="muted">usuários ativos por dia da semana e hora, somados no período</span></div>
+    <app-usage-heatmap [cells]="summary()?.heatmap ?? []" unit="usuários ativos"></app-usage-heatmap>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>Telas mais visitadas</h2><span class="muted">visitas · tempo em primeiro plano</span></div>
+    <app-usage-hbars [items]="screenBars()"></app-usage-hbars>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>Onde passam mais tempo</h2><span class="muted">tempo em primeiro plano</span></div>
+    <app-usage-hbars [items]="screenTimeBars()"></app-usage-hbars>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>Ações mais usadas</h2></div>
+    <app-usage-hbars [items]="actionBars()" [limit]="12"></app-usage-hbars>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>Erros mais frequentes</h2></div>
+    <app-usage-hbars [items]="errorBars()" color="#d03b3b"></app-usage-hbars>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>Navegadores</h2><span class="muted">sessões</span></div>
+    <app-usage-hbars [items]="browserBars()" [limit]="6"></app-usage-hbars>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>Sistemas e dispositivos</h2><span class="muted">sessões</span></div>
+    <app-usage-hbars [items]="osBars()" [limit]="5"></app-usage-hbars>
+    <div class="spacer"></div>
+    <app-usage-hbars [items]="deviceBars()" [limit]="3"></app-usage-hbars>
+  </section>
+</div>
+
+<!-- Por usuário -->
+<section class="panel">
+  <div class="panel__head"><h2>Por usuário</h2><span class="muted">clique para ver a sessão e o histórico</span></div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th><button class="th-sort" (click)="sortUsers('userName')">Usuário {{ sortMark('userName') }}</button></th>
+          <th>Agora</th>
+          <th class="num"><button class="th-sort" (click)="sortUsers('sessions')">Sessões {{ sortMark('sessions') }}</button></th>
+          <th class="num"><button class="th-sort" (click)="sortUsers('logins')">Logins {{ sortMark('logins') }}</button></th>
+          <th class="num"><button class="th-sort" (click)="sortUsers('foregroundMs')">1º plano {{ sortMark('foregroundMs') }}</button></th>
+          <th class="num"><button class="th-sort" (click)="sortUsers('views')">Telas {{ sortMark('views') }}</button></th>
+          <th class="num"><button class="th-sort" (click)="sortUsers('actions')">Ações {{ sortMark('actions') }}</button></th>
+          <th class="num"><button class="th-sort" (click)="sortUsers('errors')">Erros {{ sortMark('errors') }}</button></th>
+          <th><button class="th-sort" (click)="sortUsers('lastSeenAt')">Visto {{ sortMark('lastSeenAt') }}</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (u of sortedUsers(); track u.userExternalId ?? u.userName) {
+          <tr class="clickable" (click)="openUser(u.userExternalId, u.userName)">
+            <td>{{ u.userName }}</td>
+            <td><app-presence-badge [presence]="presence.for(u.userExternalId)" [compact]="true"></app-presence-badge></td>
+            <td class="num">{{ num(u.sessions) }}</td>
+            <td class="num">{{ num(u.logins) }}</td>
+            <td class="num">{{ dur(u.foregroundMs) }}</td>
+            <td class="num">{{ num(u.views) }}</td>
+            <td class="num">{{ num(u.actions) }}</td>
+            <td class="num">{{ num(u.errors) }}</td>
+            <td>{{ ago(u.lastSeenAt) }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="9" class="muted">Sem uso no período.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Logins, sessões e eventos -->
+<section class="panel">
+  <div class="panel__head">
+    <div class="tabs" role="tablist">
+      <button role="tab" [class.on]="tab() === 'sessions'" [attr.aria-selected]="tab() === 'sessions'" (click)="setTab('sessions')">Sessões</button>
+      <button role="tab" [class.on]="tab() === 'logins'" [attr.aria-selected]="tab() === 'logins'" (click)="setTab('logins')">Logins</button>
+      <button role="tab" [class.on]="tab() === 'events'" [attr.aria-selected]="tab() === 'events'" (click)="setTab('events')">Eventos</button>
+    </div>
+    @if (tab() === 'logins') {
+      <label class="f-field f-field--inline"><span>Resultado</span>
+        <select [ngModel]="loginSuccess()" (ngModelChange)="loginSuccess.set($event); loadTable(0)">
+          <option value="">Todos</option><option value="true">Sucesso</option><option value="false">Falha</option>
+        </select>
+      </label>
+    }
+    @if (tab() === 'events') {
+      <input class="f-search" type="search" placeholder="Buscar ação, tela ou detalhe" [ngModel]="eventSearch()"
+             (ngModelChange)="eventSearch.set($event)" (keyup.enter)="loadTable(0)" (search)="loadTable(0)" data-usage-ignore>
+      @if (sessionFilter()) {
+        <span class="pill">sessão {{ sessionFilter()!.slice(0, 8) }} <button class="pill__x" (click)="clearSessionFilter()" aria-label="Tirar filtro de sessão">×</button></span>
+      }
+    }
+    <span class="ms-auto muted">{{ num(tableTotal()) }} registros</span>
+    @if (tableLoading()) { <mat-spinner diameter="18"></mat-spinner> }
+  </div>
+
+  <div class="table-wrap">
+    @switch (tab()) {
+      @case ('logins') {
+        <table class="tbl">
+          <thead><tr><th>Quando</th><th>Usuário</th><th>Resultado</th><th>IP</th><th>Navegador</th></tr></thead>
+          <tbody>
+            @for (l of logins(); track l.id) {
+              <tr>
+                <td>{{ dt(l.at) }}</td>
+                <td>{{ l.userName }}</td>
+                <td><span class="res" [class.res--fail]="!l.success">{{ l.success ? '✓' : '✕' }} {{ reason(l.reason, l.success) }}</span></td>
+                <td class="mono">{{ l.ip || '—' }}</td>
+                <td class="ellipsis" [matTooltip]="l.userAgent || ''">{{ l.userAgent || '—' }}</td>
+              </tr>
+            } @empty { <tr><td colspan="5" class="muted">Nenhum login no período.</td></tr> }
+          </tbody>
+        </table>
+      }
+      @case ('sessions') {
+        <table class="tbl">
+          <thead><tr><th>Início</th><th>Usuário</th><th>Última atividade</th><th class="num">1º plano</th><th class="num">2º plano</th><th class="num">Ausente</th><th class="num">Telas</th><th class="num">Ações</th><th>Última tela</th><th>IP</th><th>Navegador / sistema / dispositivo</th><th>Tela</th></tr></thead>
+          <tbody>
+            @for (s of sessions(); track s.id) {
+              <tr class="clickable" (click)="openSessionEvents(s)" matTooltip="Ver os eventos desta sessão">
+                <td>{{ dt(s.startedAt) }}</td>
+                <td>{{ s.userName }}</td>
+                <td>{{ s.endedAt ? 'encerrada ' + ago(s.endedAt) : ago(s.lastSeenAt) }}</td>
+                <td class="num">{{ dur(s.foregroundMs) }}</td>
+                <td class="num">{{ dur(s.backgroundMs) }}</td>
+                <td class="num">{{ dur(s.awayMs) }}</td>
+                <td class="num">{{ num(s.views) }}</td>
+                <td class="num">{{ num(s.actions) }}</td>
+                <td>{{ s.lastScreen || '—' }}</td>
+                <td class="mono">{{ s.ip || '—' }}</td>
+                <td>{{ s.browser || '—' }} · {{ s.os || '—' }} · {{ s.device || '—' }}</td>
+                <td class="mono">{{ s.screenSize || '—' }}</td>
+              </tr>
+            } @empty { <tr><td colspan="12" class="muted">Nenhuma sessão no período.</td></tr> }
+          </tbody>
+        </table>
+      }
+      @case ('events') {
+        <table class="tbl">
+          <thead><tr><th>Quando</th><th>Usuário</th><th>Tipo</th><th>Nome</th><th>Tela</th><th>Card</th><th>Detalhe</th><th class="num">Duração</th><th class="num">Status</th></tr></thead>
+          <tbody>
+            @for (e of events(); track e.id) {
+              <tr>
+                <td>{{ dt(e.at) }}</td>
+                <td>{{ e.userName }}</td>
+                <td><span class="kind kind--{{ e.kind }}">{{ kindLabel(e.kind) }}</span></td>
+                <td class="ellipsis" [matTooltip]="e.name">{{ e.name }}</td>
+                <td>{{ e.screen || '—' }}</td>
+                <td>{{ e.card || '' }}</td>
+                <td class="ellipsis" [matTooltip]="e.detail || ''">{{ e.detail || '' }}</td>
+                <td class="num">{{ e.durationMs ? dur(e.durationMs) : '' }}</td>
+                <td class="num">{{ e.status ?? '' }}</td>
+              </tr>
+            } @empty { <tr><td colspan="9" class="muted">Nenhum evento com estes filtros.</td></tr> }
+          </tbody>
+        </table>
+      }
+    }
+  </div>
+
+  @if (pageCount() > 1) {
+    <div class="pager">
+      <button mat-icon-button (click)="page(-1)" [disabled]="tablePage() === 0" aria-label="Página anterior"><mat-icon>chevron_left</mat-icon></button>
+      <span>{{ tablePage() + 1 }} / {{ pageCount() }}</span>
+      <button mat-icon-button (click)="page(1)" [disabled]="tablePage() + 1 >= pageCount()" aria-label="Próxima página"><mat-icon>chevron_right</mat-icon></button>
+    </div>
+  }
+</section>

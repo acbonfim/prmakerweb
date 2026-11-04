@@ -7,6 +7,7 @@ import {filter} from 'rxjs';
 import {BackNavigationService} from '../../services/back-navigation.service';
 import {TabsService} from '../../services/tabs.service';
 import {TabBarComponent} from '../tab-bar/tab-bar.component';
+import {UsageTrackerService} from '../../services/usage/usage-tracker.service';
 
 /** Até aqui o menu é uma gaveta por cima do conteúdo (0043); acima, a coluna lateral de sempre. */
 const COMPACT_QUERY = '(max-width: 768px)';
@@ -39,6 +40,8 @@ export class PageContainerComponent {
   constructor() {
     // Abas internas (0065): restaura/sincroniza as abas do usuário a cada navegação da área logada.
     this.tabs.start(inject(DestroyRef));
+    // Dados de uso (0079): telas, ações e presença enquanto estiver na área logada.
+    inject(UsageTrackerService).start(inject(DestroyRef));
     afterNextRender(() => this.tabs.registerScrollHost(this.contentArea()?.nativeElement));
 
     const onMedia = (e: MediaQueryListEvent) => {

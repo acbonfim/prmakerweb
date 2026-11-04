@@ -4,6 +4,10 @@
   @if (!loadingList()) {
     <span class="header-count">{{ total() }}</span>
   }
+  <nav class="view-switch" aria-label="Visões de usuários">
+    <a class="view-switch__item active" routerLink="/auth/user/manager">Usuários</a>
+    <a class="view-switch__item" routerLink="/auth/user/usage">Análise de uso</a>
+  </nav>
 
   <div class="header-actions ms-auto">
     <div class="search" [class.open]="searchOpen()">
@@ -22,11 +26,46 @@
       </button>
     </div>
 
+    <button mat-stroked-button class="online-filter" [class.on]="onlyOnline()" (click)="toggleOnlyOnline()"
+            [attr.aria-pressed]="onlyOnline()" matTooltip="Mostrar só quem está conectado agora">
+      <span class="online-filter__dot"></span> Só online
+    </button>
+
     <button mat-raised-button color="primary" (click)="openCreate()">
       Novo usuário <mat-icon>add</mat-icon>
     </button>
   </div>
 </div>
+
+<section class="online-now" aria-label="Online agora">
+  <div class="online-now__head">
+    <span class="online-now__title">Online agora</span>
+    <span class="online-now__count">{{ presence.users().length }}</span>
+    @if (presence.error()) {
+      <span class="online-now__note">{{ presence.error() }}</span>
+    } @else if (!presence.connected()) {
+      <span class="online-now__note">conectando ao tempo real…</span>
+    }
+  </div>
+  @if (presence.users().length) {
+    <div class="online-now__list">
+      @for (p of presence.users(); track p.userId) {
+        <button class="online-chip" type="button" (click)="openSessionFromPresence(p)" data-usage-ignore>
+          <app-user-avatar [name]="p.name" [imageUrl]="photoOf(p)?.imagemUrlUser" [size]="30"></app-user-avatar>
+          <span class="online-chip__text">
+            <strong>{{ getDisplayName(p.name) }}</strong>
+            <app-presence-badge [presence]="p"></app-presence-badge>
+          </span>
+          @if (p.entries.length > 1) {
+            <span class="online-chip__tabs" matTooltip="Abas abertas">{{ p.entries.length }}</span>
+          }
+        </button>
+      }
+    </div>
+  } @else if (presence.connected()) {
+    <p class="online-now__empty">Ninguém conectado agora.</p>
+  }
+</section>
 
 <div class="cards-grid">
 
@@ -40,7 +79,7 @@
       </div>
     }
   } @else {
-    @for (user of users(); track user.id) {
+    @for (user of visibleUsers(); track user.id) {
       <div class="user-card" [class.inactive]="!user.active">
         <div class="user-head">
           <app-user-avatar [name]="user.fullName || user.userName" [imageUrl]="user.imagemUrlUser" [size]="42"></app-user-avatar>
@@ -49,6 +88,11 @@
             <span class="user-sub">{{ user.departamento }} · {{ user.userName }}</span>
           </div>
         </div>
+
+        <button type="button" class="presence-row" (click)="openSession(user)" matTooltip="Ver sessão e histórico de uso">
+          <app-presence-badge [presence]="presenceOf(user)" [lastSeen]="lastSeenOf(user)"></app-presence-badge>
+          <mat-icon class="presence-row__go">chevron_right</mat-icon>
+        </button>
 
         <div class="roles">
           @for (item of user.userRoles; track item) {
@@ -93,8 +137,8 @@
       </div>
     }
 
-    @if (users().length === 0) {
-      <div class="empty-state">Nenhum usuário encontrado.</div>
+    @if (visibleUsers().length === 0) {
+      <div class="empty-state">{{ onlyOnline() ? 'Nenhum usuário desta lista está online.' : 'Nenhum usuário encontrado.' }}</div>
     }
   }
 

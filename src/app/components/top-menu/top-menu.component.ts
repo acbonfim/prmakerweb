@@ -21,6 +21,7 @@ import {MatFormFieldModule} from '@angular/material/form-field';
 import {GlobalService} from '../../services/global.service';
 import {StorageService} from '../../services/storage.service';
 import {WsService} from '../../services/ws.service';
+import {UsageTrackerService} from '../../services/usage/usage-tracker.service';
 import {Router, RouterModule} from '@angular/router';
 import {UserPendingService} from '../../services/user-pending.service';
 import {ExecutionUserAction, ExecutionUserPending} from '../execution-plan/execution-plan.model';
@@ -214,7 +215,11 @@ export class TopMenuComponent implements OnInit {
     });
   }
 
+  private readonly usage = inject(UsageTrackerService);
+
   logOut() {
+    // 0079: registra o logout e manda o último lote antes de fechar a conexão.
+    this.usage.endSession();
     this._wsService.endConnection();
     this._globalService.navigateTo("login");
   }

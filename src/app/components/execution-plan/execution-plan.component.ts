@@ -12,6 +12,7 @@ import {
   inject,
   signal
 } from '@angular/core';
+import { UsageTrackerService } from '../../services/usage/usage-tracker.service';
 import { OverlayModule } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -148,6 +149,9 @@ interface LinkDraft {
 export class ExecutionPlanComponent implements OnDestroy {
   private api = inject(ExecutionPlanService);
   private ws = inject(WsService);
+  private usage = inject(UsageTrackerService);
+  /** 0079: plano rodando nesta tela = "executando" na presença do usuário. */
+  private releaseBusy: (() => void) | null = null;
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private clipboard = inject(CliipboardService);
@@ -693,6 +697,12 @@ export class ExecutionPlanComponent implements OnDestroy {
     });
     // 0050: texto do chamado pronto para copiar na etapa (arquivos pequenos; carrega uma vez por versão).
     effect(() => this.loadTicketTexts(this.planArtifacts()));
+    effect(() => {
+      const active = this.isActive();
+      const card = this.plan()?.cardNumber ?? this.cardNumber;
+      this.releaseBusy?.();
+      this.releaseBusy = active ? this.usage.busy(`Plano de execução em andamento${card ? ` (card ${card})` : ''}`) : null;
+    });
     this.ws.startConnection();
     this.ws.on(EXECUTION_PLAN_EVENT, this.onRealtime);
     this.ws.on(PULLREQUEST_CARD_EVENT, this.onPullRequestsChanged);
@@ -1561,6 +1571,8 @@ export class ExecutionPlanComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.releaseBusy?.();
+    this.releaseBusy = null;
     this.narrowMedia.removeEventListener('change', this.onNarrowChange);
     this.closeMobileDetail();
     this.fullscreen.destroy();
