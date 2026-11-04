@@ -1,8 +1,8 @@
 import { inject, signal } from '@angular/core';
 import { BackNavigationService } from '../services/back-navigation.service';
 
-/** Mesma animação da tela cheia da linha do tempo (feature 0020). */
-const ANIMATION: KeyframeAnimationOptions = { duration: 320, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
+/** Mesma animação da tela cheia da linha do tempo (feature 0020); o Especialista do caso usa a mesma ao abrir/fechar. */
+export const ANIMATION: KeyframeAnimationOptions = { duration: 320, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
 type Rect = { top: number; left: number; width: number; height: number };
 /** Celular (0043): a tela cheia ocupa a tela toda, sem margem. */
 const PHONE_MAX_WIDTH = 768;
@@ -205,7 +205,7 @@ function keyframe(r: Rect, radius: number): Keyframe {
   return { top: `${r.top}px`, left: `${r.left}px`, width: `${r.width}px`, height: `${r.height}px`, borderRadius: `${radius}px` };
 }
 
-function reducedMotion(): boolean {
+export function reducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 }
 
