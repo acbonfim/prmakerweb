@@ -37,7 +37,9 @@ import { PlanMarkdownPipe } from './plan-markdown.pipe';
 import { PlanFilesDialogComponent, PlanFilesDialogData } from './plan-files-dialog.component';
 import { PlanNotesComponent } from './plan-notes.component';
 import { PlanHistoryComponent } from './plan-history.component';
-import { PlanChatDialogComponent, PlanChatDialogData } from './plan-chat-dialog.component';
+import { openCaseChat } from '../case-chat/open-case-chat';
+import { CaseChatStatusService } from '../../services/case-chat-status.service';
+import { CancelPlanDialogComponent, CancelPlanDialogData, CancelPlanDialogResult } from './cancel-plan-dialog.component';
 import { StorageService } from '../../services/storage.service';
 import { UserPendingService } from '../../services/user-pending.service';
 import {
@@ -125,6 +127,27 @@ export type StepView = ExecutionStep & {
   you: 'unblock' | 'turn' | null;
 };
 
+/** 0080 (M2): um passo da jornada do card (análise → decisões → correção → QA → fechamento). */
+export interface JourneyNode {
+  key: string;
+  label: string;
+  sub: string;
+  state: 'ok' | 'run' | 'wait' | 'bad' | 'next' | 'todo';
+  icon: string;
+  /** Clicar abre o plano desta fase (quando existe). */
+  phase?: 'analysis' | 'correction';
+  current?: boolean;
+}
+
+/** 0080 (M3): "Em que pé está" — uma frase e o próximo passo. */
+export interface PlanHeadlineText {
+  tone: 'info' | 'warn' | 'bad' | 'ok';
+  text: string;
+  /** Botões: conversar com o especialista, executar/montar (pedido ao executor). */
+  chat?: string;
+  run?: string;
+}
+
 /** Formulário "anexar link" aberto numa etapa (0024). */
 interface LinkDraft {
   key: string;
@@ -143,7 +166,7 @@ interface LinkDraft {
 @Component({
   selector: 'app-execution-plan',
   standalone: true,
-  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent, CodeRefHostDirective, CardSituationComponent, CardAssistantComponent, GeneratedTextsComponent],
+  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanHistoryComponent, TokenUsageComponent, CodeRefHostDirective, CardSituationComponent, CardAssistantComponent, GeneratedTextsComponent],
   templateUrl: './execution-plan.component.html',
   styleUrls: ['./execution-plan.component.css']
 })
@@ -263,7 +286,9 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   /** O contador do cabeçalho leva às sugestões (abre o bloco, se recolhido). */
   revealAssistant(): void {
-    this.assistantRef?.reveal();
+    // 0080: o assistente fica nos detalhes do "Em que pé está".
+    this.showDetails.set(true);
+    setTimeout(() => this.assistantRef?.reveal());
   }
 
   /** "Textos" (0078): todos os textos gerados do card — editar, gerar de novo com IA, enviar. */
@@ -301,34 +326,15 @@ export class ExecutionPlanComponent implements OnDestroy {
     return list.sort((a, b) => (a.phase === b.phase ? 0 : a.phase === 'analysis' ? -1 : 1));
   });
 
-  openChat(): void {
-    const plan = this.plan();
-    if (!plan) return;
-    const pair = this.pair();
-    const otherId = pair ? (pair.analysisId === plan.id ? pair.correctionId : pair.analysisId) : null;
-    if (otherId && this.otherPlan()?.id !== otherId) {
-      this.api.get(otherId).subscribe({ next: (p) => this.otherPlan.set(p), error: () => {} });
-    }
-    const data: PlanChatDialogData = {
-      card: this.loadedCard() ?? plan.cardNumber,
-      plan: this.plan,
-      targets: this.noteTargets,
-      selectedStepKey: this.selectedKey,
-      currentUserId: this.currentUserId,
-      serverOffsetMs: () => this.serverOffsetMs,
-      refresh: () => this.refresh(),
-      openArtifact: (a) => this.openFiles(undefined, a)
-    };
-    this.dialog.open(PlanChatDialogComponent, {
-      data,
-      width: '980px',
-      maxWidth: '96vw',
-      height: '88vh',
-      panelClass: 'plan-chat-panel',
-      backdropClass: 'plan-chat-backdrop',
-      autoFocus: 'textarea',
-      restoreFocus: true
-    });
+  /**
+   * 0080: a conversa saiu do plano — o botão "Especialista do caso" abre o modal da conversa (agente próprio, não altera
+   * o plano). Arquivos soltos/colados no painel vão para a mensagem em edição lá.
+   */
+  openChat(files?: File[]): void {
+    const card = this.loadedCard() ?? this.plan()?.cardNumber;
+    if (!card) return;
+    const ref = openCaseChat(this.dialog, card);
+    if (files?.length) setTimeout(() => ref.componentInstance.addFiles(files));
   }
   private dropLeaveTimer?: ReturnType<typeof setTimeout>;
 
@@ -351,7 +357,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     event.preventDefault();
     this.panelDropping.set(false);
     if (!this.plan()) return;
-    this.notesRef?.addFiles(event.dataTransfer?.files);
+    this.openChat(Array.from(event.dataTransfer?.files ?? []));
   }
 
   /** Ctrl+V com imagem em qualquer lugar do painel (fora de outro campo) vai para o comentário. */
@@ -361,11 +367,11 @@ export class ExecutionPlanComponent implements OnDestroy {
     const files = PlanNotesComponent.clipboardFiles(event);
     if (!files.length || !this.plan()) return;
     event.preventDefault();
-    this.notesRef?.addFiles(files, true);
+    this.openChat(files);
   }
 
   focusNotes(): void {
-    this.notesRef?.focus();
+    this.openChat();
   }
   @ViewChild('stepsBody') private stepsBodyRef?: ElementRef<HTMLDivElement>;
 
@@ -440,6 +446,151 @@ export class ExecutionPlanComponent implements OnDestroy {
   });
 
   readonly phase = computed(() => this.plan()?.phase ?? 'analysis');
+
+  // ── 0080: Especialista do caso, jornada, "Em que pé está", decisões ──────────────────────────────
+
+  private readonly caseStatusApi = inject(CaseChatStatusService);
+  private watchedCase: string | null = null;
+  /** Mensagens novas e "trabalhando" do Especialista do caso (botão do cabeçalho). */
+  readonly caseStatus = computed(() => {
+    const card = this.loadedCard();
+    return card ? this.caseStatusApi.status(card)() : null;
+  });
+  /** Situação, assistente e textos gerados (recolhidos sob o "Em que pé está"). */
+  readonly showDetails = signal(false);
+  /** Etapas concluídas do começo do plano aparecem agrupadas até a pessoa abrir. */
+  readonly showAllDone = signal(false);
+  /** Plano de análise do par quando a tela mostra a correção (as decisões vêm dele). */
+  readonly analysisPlan = signal<ExecutionPlan | null>(null);
+
+  versionOf(planId: string | null | undefined): number | null {
+    return (planId && this.history().find((h) => h.id === planId)?.versionNumber) || null;
+  }
+
+  private latestOf(phase: 'analysis' | 'correction'): ExecutionPlanSummary | null {
+    return this.history()
+      .filter((h) => (h.phase ?? 'analysis') === phase)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
+  }
+
+  /** Perguntas respondidas da análise (as decisões que valem para a próxima versão). */
+  readonly decisions = computed(() => {
+    const plan = this.plan();
+    if (!plan) return [];
+    const source = (plan.phase ?? 'analysis') === 'analysis' ? plan : this.analysisPlan();
+    return (source?.questions ?? [])
+      .filter((q) => q.status === 'answered' && !q.replacedBy && q.answer)
+      .map((q) => ({ id: q.id, question: this.shortText(q.text, 90), answer: q.answer!, by: q.answeredBy ?? '' }));
+  });
+
+  readonly journey = computed<JourneyNode[]>(() => {
+    const plan = this.plan();
+    if (!plan) return [];
+    const analysis = this.latestOf('analysis');
+    const correction = this.latestOf('correction');
+    const phase = plan.phase ?? 'analysis';
+    const open = phase === 'analysis' ? this.openQuestions().length : (this.analysisPlan()?.questions ?? []).filter((q) => q.status === 'open').length;
+    const decisions = this.decisions().length;
+    const nodes: JourneyNode[] = [];
+    const v = (s: ExecutionPlanSummary | null) => (s?.versionNumber ? ` · v${s.versionNumber}` : '');
+    const when = (s: ExecutionPlanSummary) => new Date(s.statusChangedBy ? s.updatedAt : s.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const stateOf = (s: ExecutionPlanSummary): JourneyNode['state'] =>
+      s.status === 'completed' ? 'ok' : s.status === 'cancelled' || s.status === 'failed' ? 'bad' : s.status === 'paused' ? 'wait' : 'run';
+
+    if (analysis) {
+      const decided = !!correction || (decisions > 0 && open === 0 && analysis.status !== 'cancelled' && analysis.status !== 'failed');
+      const state = decided && stateOf(analysis) !== 'bad' ? 'ok' : stateOf(analysis);
+      nodes.push({ key: 'analysis', label: `Análise${v(analysis)}`, phase: 'analysis', current: phase === 'analysis', icon: state === 'ok' ? 'check' : state === 'bad' ? 'close' : 'troubleshoot',
+        state, sub: decided && state === 'ok' && analysis.status !== 'completed' ? 'decidida' : `${this.statusLabel[analysis.status].toLowerCase()} · ${when(analysis)}` });
+    } else {
+      nodes.push({ key: 'analysis', label: 'Análise', state: 'todo', icon: 'troubleshoot', sub: 'a fazer' });
+    }
+    nodes.push({ key: 'decisions', label: 'Decisões', icon: open ? 'front_hand' : decisions ? 'how_to_reg' : 'help',
+      state: open ? 'wait' : decisions ? 'ok' : 'todo', sub: open ? `${open} esperando você` : decisions ? `${decisions} ${decisions === 1 ? 'resposta' : 'respostas'}` : 'a responder' });
+    if (correction) {
+      const state = stateOf(correction);
+      nodes.push({ key: 'correction', label: `Correção${v(correction)}`, phase: 'correction', current: phase === 'correction', state,
+        icon: state === 'ok' ? 'check' : state === 'bad' ? 'close' : 'build', sub: `${this.statusLabel[correction.status].toLowerCase()} · ${when(correction)}` });
+      if (state === 'bad')
+        nodes.push({ key: 'correction-next', label: `Correção · v${(correction.versionNumber ?? 1) + 1}`, state: 'next', icon: 'replay', sub: 'a definir' });
+    } else {
+      nodes.push({ key: 'correction', label: 'Correção', state: 'todo', icon: 'build', sub: 'a montar' });
+    }
+    const stepState = (key: string): JourneyNode['state'] => {
+      if (phase !== 'correction') return 'todo';
+      const s = plan.steps.find((x) => x.key === key);
+      return !s ? 'todo' : s.status === 'completed' ? 'ok' : s.status === 'running' || s.status === 'waiting' ? 'run' : s.status === 'cancelled' ? 'bad' : 'todo';
+    };
+    const qa = stepState('validar-qa');
+    nodes.push({ key: 'qa', label: 'Validar em QA', state: qa, icon: qa === 'ok' ? 'check' : 'fact_check', sub: qa === 'ok' ? 'validado' : 'você' });
+    const close = stepState('fechar-card');
+    nodes.push({ key: 'close', label: 'Fechamento', state: close, icon: close === 'ok' ? 'check' : 'flag', sub: close === 'ok' ? 'concluído' : '' });
+    return nodes;
+  });
+
+  readonly headlineText = computed<PlanHeadlineText | null>(() => {
+    const plan = this.plan();
+    if (!plan) return null;
+    const phaseName = (plan.phase ?? 'analysis') === 'correction' ? 'correção' : 'análise';
+    const v = this.versionOf(plan.id);
+    const name = `${phaseName}${v ? ' v' + v : ''}`;
+    if (this.pinnedPlanId())
+      return { tone: 'info', text: `Você está vendo a **${name}**, uma versão anterior — o card tem uma versão mais nova.` };
+    const pending = this.pendingCount();
+    if (pending)
+      return { tone: 'warn', text: `**Aguardando você:** ${pending === 1 ? '1 ação' : pending + ' ações'} logo abaixo — o plano só segue quando você responder.`,
+        chat: 'Tirar dúvida com o especialista' };
+    if (plan.divergence?.pending)
+      return { tone: 'warn', text: 'A base real **difere do que a análise assumiu** — confira o alerta abaixo e confirme para o PR seguir.', chat: 'Revisar com o especialista' };
+    const req = this.activeRequest();
+    if (req && req.status !== 'queued')
+      return { tone: 'info', text: `O Claude está trabalhando${this.currentStep() ? ' em **' + this.currentStep()!.title + '**' : ''}${req.currentActivity ? ': ' + req.currentActivity.label : ''}.` };
+    if (plan.status === 'cancelled') {
+      const by = plan.statusChangedBy ? ` por ${plan.statusChangedBy}` : '';
+      const why = plan.statusReason ? ` (“${this.shortText(plan.statusReason, 140)}”)` : '';
+      return { tone: 'bad', text: `A **${name}** foi cancelada${by}${why}. A análise e as decisões continuam valendo — converse com o especialista para entender o que houve e gerar a próxima versão.`,
+        chat: 'Entender com o especialista' };
+    }
+    if (plan.status === 'failed')
+      return { tone: 'bad', text: `A **${name}** parou com erro${plan.statusReason ? ': ' + this.shortText(plan.statusReason, 160) : ''}.`, chat: 'Entender com o especialista' };
+    const steps = this.steps();
+    const work = steps.filter((s) => s.kind === 'code' || s.kind === 'pr');
+    if ((plan.phase ?? 'analysis') === 'correction' && this.isActive() && !req && work.length && work.every((s) => s.status === 'pending'))
+      return { tone: 'ok', text: `**Plano de correção pronto — nada foi alterado no código ainda.** Execute quando quiser (o Claude só abre PRs, nunca faz merge).`,
+        run: 'Executar a correção', chat: 'Ajustar com o especialista' };
+    if ((plan.phase ?? 'analysis') === 'analysis' && this.decisions().length && !this.openQuestions().length && !this.pair()?.correctionId && plan.status !== 'completed')
+      return { tone: 'ok', text: `**Análise decidida** (${this.decisions().length} decisões). O próximo passo é montar o plano de correção.`, run: 'Montar a correção' };
+    if (plan.status === 'completed') return { tone: 'ok', text: `A **${name}** está concluída.` };
+    if (plan.status === 'paused') return { tone: 'info', text: `A **${name}** está pausada${plan.statusChangedBy ? ' por ' + plan.statusChangedBy : ''}.` };
+    const current = this.currentStep();
+    return { tone: 'info', text: current ? `Em andamento: **${current.title}**.` : `A **${name}** está em andamento.` };
+  });
+
+  /** Etapas concluídas do começo do plano (agrupadas numa linha — M6). */
+  readonly doneGroup = computed(() => {
+    if (this.showAllDone()) return [];
+    const steps = this.steps();
+    const firstOpen = steps.findIndex((s) => s.view !== 'completed');
+    const lead = firstOpen < 0 ? steps.length : firstOpen;
+    return lead >= 3 ? steps.slice(0, lead) : [];
+  });
+  readonly hiddenSteps = computed(() => new Set(this.doneGroup().map((s) => s.key)));
+  readonly doneTitles = computed(() => this.shortText(this.doneGroup().map((s) => s.title).join(', '), 120));
+
+  /** Total de arquivos do plano (botão "Arquivos e textos"). */
+  readonly artifactTotal = computed(() => Object.values(this.artifactCounts()).reduce((a, b) => a + b, 0));
+
+  /** Botão do "Em que pé está": pede ao executor (ou mostra o comando sem executor). */
+  runFromHeadline(): void {
+    if (this.canAskClaude()) this.openAsk();
+    else if (!this.hasWorkers()) this.copyResumeCommand();
+    else this.snackBar.open('O Claude já está com um pedido neste card.', 'Ok', { duration: 4000 });
+  }
+
+  shortText(text: string | null | undefined, max: number): string {
+    const t = (text ?? '').replace(/\*\*|__|`|#+\s/g, '').replace(/\s+/g, ' ').trim();
+    return t.length > max ? t.slice(0, max - 1) + '…' : t;
+  }
 
   // ── 0024: perguntas e links ───────────────────────────────────────────────────────────────────
 
@@ -709,6 +860,26 @@ export class ExecutionPlanComponent implements OnDestroy {
       untracked(() => {
         this.releaseBusy?.();
         this.releaseBusy = key !== null ? this.usage.busy(`Plano de execução em andamento${card ? ` (card ${card})` : ''}`) : null;
+      });
+    });
+    // 0080: o botão "Especialista do caso" acompanha a conversa do card (mensagens novas, trabalhando).
+    effect(() => {
+      const card = this.loadedCard();
+      if (card === this.watchedCase) return;
+      untracked(() => {
+        if (this.watchedCase) this.caseStatusApi.unwatch(this.watchedCase);
+        this.watchedCase = card;
+        if (card) this.caseStatusApi.watch(card);
+      });
+    });
+    // 0080: vendo a correção, as decisões vêm do plano de análise do par.
+    effect(() => {
+      const plan = this.plan();
+      const id = plan && (plan.phase ?? 'analysis') === 'correction' ? this.pair()?.analysisId ?? null : null;
+      untracked(() => {
+        if (!id) { if (this.analysisPlan()) this.analysisPlan.set(null); return; }
+        if (this.analysisPlan()?.id === id) return;
+        this.api.get(id).subscribe({ next: (p) => this.analysisPlan.set(p), error: () => {} });
       });
     });
     this.ws.startConnection();
@@ -1256,9 +1427,36 @@ export class ExecutionPlanComponent implements OnDestroy {
       : 'Plano retomado.');
   }
 
+  /** 0080 (M8): cancelar diz o que está errado (motivo estruturado) e oferece conversar com o especialista antes. */
   askCancelPlan(): void {
-    this.cancelPlanReason = '';
-    this.confirmCancelPlan.set(true);
+    const plan = this.plan();
+    if (!plan) return;
+    const openPrs = (plan.links ?? []).filter((l) => l.kind === 'pr' && (l.status ?? 'open') === 'open').map((l) => l.title || l.url);
+    const data: CancelPlanDialogData = { phase: plan.phase ?? 'analysis', versionNumber: this.versionOf(plan.id), openPrs };
+    this.dialog.open<CancelPlanDialogComponent, CancelPlanDialogData, CancelPlanDialogResult>(CancelPlanDialogComponent,
+      { data, width: '560px', maxWidth: '96vw', autoFocus: false })
+      .afterClosed().subscribe((r) => {
+        if (r === 'talk') this.openChat();
+        else if (r && typeof r === 'object') this.changeStatus('cancelled', r.reason, 'Plano cancelado.');
+      });
+  }
+
+  /** 0080: confirma a divergência (a etapa de PR pode começar e o Claude segue). */
+  confirmDivergence(): void {
+    const plan = this.plan();
+    if (!plan || this.busy()) return;
+    this.busy.set('divergence');
+    this.api.confirmDivergence(plan.id).subscribe({
+      next: (updated) => {
+        this.busy.set(null);
+        if (updated) this.applyPlan(updated);
+        this.snackBar.open('Divergência confirmada — o Claude segue com a etapa de PR.', 'Ok', { duration: 5000 });
+      },
+      error: (err) => {
+        this.busy.set(null);
+        this.snackBar.open(planApiError(err, 'Não foi possível confirmar.'), 'Fechar', { duration: 8000 });
+      }
+    });
   }
 
   confirmCancel(): void {
@@ -1544,7 +1742,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   }
 
   logIcon(log: ExecutionLog): string {
-    return { info: 'chevron_right', progress: 'autorenew', finding: 'search', decision: 'alt_route', warning: 'warning', error: 'error' }[log.kind] ?? 'chevron_right';
+    return { info: 'chevron_right', progress: 'autorenew', finding: 'search', decision: 'alt_route', warning: 'warning', error: 'error', divergence: 'difference' }[log.kind] ?? 'chevron_right';
   }
 
   trackStep = (_: number, s: StepView) => s.key;
@@ -1579,6 +1777,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.watchedCase) this.caseStatusApi.unwatch(this.watchedCase);
     this.releaseBusy?.();
     this.releaseBusy = null;
     this.busyKey = null;

@@ -1,0 +1,354 @@
+<div class="cc" (paste)="onPaste($event)" (dragover)="onDragOver($event)" (dragleave)="dropping.set(false)" (drop)="onDrop($event)">
+  @if (dropping()) {
+    <div class="cc__drop"><mat-icon>upload_file</mat-icon>Solte para anexar à mensagem</div>
+  }
+
+  <!-- Cabeçalho: quem é, o que está fazendo agora, quem está na conversa -->
+  <header class="cc__head">
+    <span class="sp-av sp-av--lg" aria-hidden="true"><mat-icon>psychology</mat-icon></span>
+    <div class="cc__titles">
+      <span class="cc__title">Especialista do caso · #{{ data.card }}</span>
+      <span class="cc__sub">Conhece o card, os planos, as decisões e o que já aconteceu · conversa com quem está no caso · não mexe no plano sem você pedir</span>
+    </div>
+    <span class="cc__spacer"></span>
+    @if (runLabel(); as label) {
+      <span class="cc__work" role="status" aria-live="polite" [matTooltip]="run()?.workerName ? 'Executor do especialista em ' + run()!.workerName : ''">
+        <span class="cc__spin"></span>{{ label }}
+      </span>
+    } @else if (chat()?.sessionHost) {
+      <span class="cc__chip" matTooltip="Máquina onde vive a sessão do especialista (executor separado do tratamento)"><mat-icon>dns</mat-icon>{{ chat()!.sessionHost }}</span>
+    }
+    @if (tokensLabel(); as t) {
+      <span class="cc__chip cc__chip--hide-sm" [matTooltip]="'Entrada ' + (chat()!.inputTokens | number) + ' · saída ' + (chat()!.outputTokens | number) + ' tokens nesta conversa'">
+        <mat-icon>token</mat-icon>{{ t }} tokens
+      </span>
+    }
+    <span class="cc__people" aria-label="Pessoas na conversa">
+      @for (p of people().slice(0, 5); track p.name) {
+        <app-user-avatar [name]="p.name" [imageUrl]="photos.photo(p.userId)" [size]="28" [matTooltip]="p.name + ' · ' + p.messages + ' mensagens'"></app-user-avatar>
+      }
+      <span class="sp-av sp-av--sm" matTooltip="Especialista do caso"><mat-icon>psychology</mat-icon></span>
+    </span>
+    <button mat-icon-button (click)="showAside.set(!showAside())" [matTooltip]="showAside() ? 'Esconder o contexto' : 'O que o especialista sabe, pontos combinados e arquivos'"
+            aria-label="Contexto do caso"><mat-icon>{{ showAside() ? 'right_panel_close' : 'right_panel_open' }}</mat-icon></button>
+    <button mat-icon-button (click)="close()" matTooltip="Fechar (Esc)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+  </header>
+
+  <div class="cc__grid" [class.cc__grid--aside]="showAside()" [appCodeRefHost]="data.card">
+    <section class="cc__chat">
+      <div class="cc__scroll" #scroll (scroll)="onScroll()">
+        @if (loading()) {
+          <div class="cc__state"><span class="cc__spin"></span>Abrindo a conversa…</div>
+        } @else if (loadError()) {
+          <div class="cc__state"><mat-icon>error_outline</mat-icon>Não foi possível abrir a conversa. <button mat-button (click)="load()">Tentar de novo</button></div>
+        } @else {
+          @if (chat()!.planNotes.length) {
+            <button type="button" class="cc__history" (click)="showHistory.set(!showHistory())">
+              <mat-icon>{{ showHistory() ? 'expand_less' : 'history' }}</mat-icon>
+              {{ chat()!.planNotes.length }} comentários antigos do plano {{ showHistory() ? '(esconder)' : '(histórico, só leitura)' }}
+            </button>
+            @if (showHistory()) {
+              <div class="cc__old">
+                @for (n of chat()!.planNotes; track n.number) {
+                  <div class="cc__old-item">
+                    <b>#{{ n.number }} {{ n.authorName }}</b> · {{ n.createdAt | date: 'dd/MM HH:mm' }} · {{ n.planPhase === 'correction' ? 'correção' : 'análise' }}
+                    <div class="plan-md" [innerHTML]="n.text | planMarkdown:'card'"></div>
+                    @if (n.attachments.length) { <div class="cc__old-att"><mat-icon>attach_file</mat-icon>{{ n.attachments.join(', ') }}</div> }
+                  </div>
+                }
+              </div>
+            }
+          }
+
+          @if (!messages().length) {
+            <div class="cc__empty">
+              <span class="sp-av sp-av--xl"><mat-icon>psychology</mat-icon></span>
+              <b>Converse com o Especialista do caso</b>
+              <span>Ele já conhece o card, a análise, as decisões e o que aconteceu na correção. Pergunte, mande um print ou um áudio.
+                Nada muda no plano até você decidir.</span>
+              <div class="cc__suggest">
+                <button type="button" (click)="send('Em que pé está este card? O que falta para fechar?')">Em que pé está este card?</button>
+                <button type="button" (click)="send('O que deu errado na última versão do plano e o que você mudaria?')">O que deu errado na última versão?</button>
+                <button type="button" (click)="send('Me explique a causa raiz como se eu não fosse desenvolvedor.')">Explique a causa raiz</button>
+              </div>
+            </div>
+          }
+
+          @for (m of messages(); track m.id; let i = $index) {
+            @if (newDay(i)) { <div class="cc__day">{{ m.createdAt | date: 'dd/MM/yyyy' }}</div> }
+
+            @if (m.authorKind === 'system') {
+              <div class="cc__sys"><mat-icon>info</mat-icon><span class="plan-md" [innerHTML]="m.text | planMarkdown:'card'"></span><time>{{ m.createdAt | date: 'HH:mm' }}</time></div>
+            } @else {
+              <article class="msg" [class.msg--mine]="isMine(m)" [class.msg--spec]="m.authorKind === 'specialist'">
+                @if (m.authorKind === 'specialist') {
+                  <span class="sp-av"><mat-icon>psychology</mat-icon></span>
+                } @else {
+                  <app-user-avatar [name]="m.authorName" [imageUrl]="photos.photo(m.authorUserId)" [size]="34"></app-user-avatar>
+                }
+                <div class="msg__col">
+                  <div class="msg__who">
+                    <b>{{ m.authorKind === 'specialist' ? specialistName : (isMine(m) ? 'Você' : m.authorName) }}</b>
+                    · {{ m.createdAt | date: 'HH:mm' }}
+                    @if (m.kind === 'voice') { · mensagem de voz }
+                    @if (duration(m.durationMs); as d) { · {{ d }} }
+                    @if (tokens(m); as t) { · {{ t }} }
+                    @if (m.peopleOnly) { · <span class="msg__tag">só entre pessoas</span> }
+                    @if (m.deep) { · <span class="msg__tag msg__tag--deep">investigar a fundo</span> }
+                    @if (m.editedAt) { · editada }
+                  </div>
+                  <div class="msg__bubble">
+                    @if (m.replyToNumber) {
+                      <div class="msg__quote"><b>{{ authorOf(m.replyToNumber) }}</b> {{ messageTextOf(m.replyToNumber) }}</div>
+                    }
+                    @if (m.steps.length) {
+                      <ul class="msg__steps" aria-label="O que o especialista fez">
+                        @for (s of m.steps; track $index) { <li><mat-icon>check_circle</mat-icon>{{ s }}</li> }
+                      </ul>
+                    }
+                    @if (m.kind === 'voice') {
+                      @for (f of m.files; track f.id) {
+                        @if (f.kind === 'audio') {
+                          @if (blob(f); as url) { <audio class="msg__audio" controls [src]="url" preload="metadata"></audio> }
+                          @else { <div class="msg__loading"><span class="cc__spin"></span>carregando o áudio…</div> }
+                        }
+                      }
+                      <div class="msg__transcript">{{ m.transcript ? '“' + m.transcript + '”' : 'Sem transcrição — o navegador não transcreveu este áudio.' }}</div>
+                    }
+                    @if (m.text) { <div class="plan-md msg__text" [innerHTML]="m.text | planMarkdown:'card'"></div> }
+
+                    @if (m.files.length && m.kind !== 'voice') {
+                      <div class="msg__files">
+                        @for (f of m.files; track f.id) {
+                          @if (f.kind === 'image') {
+                            <button type="button" class="msg__img" (click)="openImage(f)" [matTooltip]="f.name + ' · arquivo #' + f.number">
+                              @if (blob(f); as url) { <img [src]="url" [alt]="f.name"> } @else { <span class="cc__spin"></span> }
+                            </button>
+                          } @else if (f.kind === 'audio') {
+                            @if (blob(f); as url) { <audio class="msg__audio" controls [src]="url" preload="metadata"></audio> }
+                          } @else {
+                            <button type="button" class="msg__file" (click)="download(f)"><mat-icon>{{ fileIcon(f) }}</mat-icon>{{ f.name }}<small>#{{ f.number }}</small></button>
+                          }
+                        }
+                      </div>
+                    }
+
+                    @if (proposalOf(m); as p) {
+                      <div class="prop" [class.prop--done]="p.status !== 'pending'">
+                        <div class="prop__head"><mat-icon>auto_awesome</mat-icon>Proposta #{{ p.number }} · {{ p.title }}</div>
+                        <ul class="prop__list">
+                          @for (c of p.changes.slice(0, 6); track $index) {
+                            <li class="prop__c prop__c--{{ c.kind }}"><mat-icon>{{ changeIcon(c.kind) }}</mat-icon><span>{{ c.title }}@if (c.detail) {<small> — {{ c.detail }}</small>}</span></li>
+                          }
+                          @if (p.changes.length > 6) { <li class="prop__more">+ {{ p.changes.length - 6 }} mudanças</li> }
+                        </ul>
+                        @switch (p.status) {
+                          @case ('pending') {
+                            <div class="prop__acts">
+                              @if (chat()!.canDecide) {
+                                <button mat-flat-button color="primary" (click)="decideProposal(p, true)" [disabled]="sending() || !chat()!.hasPlan">
+                                  <mat-icon>check</mat-icon>Sim, gerar a nova versão</button>
+                              }
+                              <button mat-stroked-button (click)="openProposal(p)"><mat-icon>difference</mat-icon>Ver o que muda</button>
+                              @if (chat()!.canDecide) {
+                                <button mat-button (click)="decideProposal(p, false)" [disabled]="sending()">Ainda não</button>
+                              }
+                              <span class="prop__lock"><mat-icon>lock</mat-icon>{{ chat()!.canDecide ? 'Nada foi alterado no plano até agora' : 'Quem decide: o dono do plano, um admin ou um gestor' }}</span>
+                            </div>
+                          }
+                          @case ('accepted') { <div class="prop__state prop__state--ok"><mat-icon>check_circle</mat-icon>Aceita por {{ p.decidedBy }}{{ p.execute ? ' para já executar' : '' }}{{ p.planNoteNumber ? ' — comentário #' + p.planNoteNumber + ' do plano' : '' }}</div> }
+                          @case ('rejected') { <div class="prop__state"><mat-icon>block</mat-icon>Recusada por {{ p.decidedBy }}{{ p.rejectReason ? ': ' + p.rejectReason : '' }}</div> }
+                          @default { <div class="prop__state"><mat-icon>update</mat-icon>Substituída por uma proposta mais nova</div> }
+                        }
+                      </div>
+                    }
+
+                    @if (actionOf(m); as a) {
+                      <div class="act act--{{ a.status }}">
+                        <div class="act__head"><mat-icon>bolt</mat-icon>Ação #{{ a.number }}: {{ a.title }}</div>
+                        @if (a.detail) { <div class="plan-md act__detail" [innerHTML]="a.detail | planMarkdown:'card'"></div> }
+                        @switch (a.status) {
+                          @case ('pending') {
+                            <div class="prop__acts">
+                              <button mat-flat-button color="primary" (click)="decideAction(a, true)"><mat-icon>check</mat-icon>Confirmar</button>
+                              <button mat-button (click)="decideAction(a, false)">Não autorizar</button>
+                              <span class="prop__lock"><mat-icon>info</mat-icon>Tem efeito fora da conversa: só roda depois da confirmação</span>
+                            </div>
+                          }
+                          @case ('confirmed') { <div class="prop__state"><span class="cc__spin"></span>Confirmada por {{ a.decidedBy }} — o especialista está executando</div> }
+                          @case ('done') { <div class="prop__state prop__state--ok"><mat-icon>check_circle</mat-icon>Feita{{ a.result ? ': ' + a.result : '' }}</div> }
+                          @case ('failed') { <div class="prop__state prop__state--bad"><mat-icon>error</mat-icon>Falhou{{ a.result ? ': ' + a.result : '' }}</div> }
+                          @default { <div class="prop__state"><mat-icon>block</mat-icon>Não autorizada por {{ a.decidedBy }}</div> }
+                        }
+                      </div>
+                    }
+                  </div>
+                  <div class="msg__tools">
+                    <button type="button" (click)="reply(m)" matTooltip="Responder citando esta mensagem"><mat-icon>reply</mat-icon></button>
+                    <button type="button" (click)="pin(m)" matTooltip="Fixar como ponto combinado"><mat-icon>push_pin</mat-icon></button>
+                    @if (chat()!.hasPlan) {
+                      <button type="button" (click)="toPlan(m)" matTooltip="Levar para o plano (vira uma instrução para o Claude do tratamento)"><mat-icon>move_down</mat-icon></button>
+                    }
+                    @if (isMine(m)) {
+                      <button type="button" (click)="remove(m)" matTooltip="Apagar"><mat-icon>delete</mat-icon></button>
+                    }
+                  </div>
+                </div>
+              </article>
+            }
+          }
+
+          <!-- Ao vivo: o que o especialista está fazendo -->
+          @if (working()) {
+            <article class="msg msg--spec msg--live" aria-live="polite">
+              <span class="sp-av sp-av--pulse"><mat-icon>psychology</mat-icon></span>
+              <div class="msg__col">
+                <div class="msg__who"><b>{{ specialistName }}</b> · {{ run()!.status === 'queued' ? 'na fila' : 'trabalhando' }}</div>
+                <div class="msg__bubble">
+                  @if (run()!.status === 'queued') {
+                    <div class="live__now"><span class="cc__spin"></span>{{ run()!.waitReason || 'Começa em instantes…' }}</div>
+                  } @else {
+                    <ul class="msg__steps msg__steps--live">
+                      @for (a of (run()!.recentActivities ?? []).slice().reverse().slice(-5); track a.at + a.label) {
+                        @if (a.label !== run()!.currentActivity?.label) { <li><mat-icon>check_circle</mat-icon>{{ a.label }}</li> }
+                      }
+                    </ul>
+                    <div class="live__now"><span class="cc__spin"></span>{{ run()!.currentActivity?.label || 'Lendo o caso…' }}<span class="dots"><i></i><i></i><i></i></span></div>
+                  }
+                  <button mat-button class="live__stop" (click)="stopRun()"><mat-icon>stop</mat-icon>Parar</button>
+                </div>
+              </div>
+            </article>
+          } @else if (run()?.status === 'failed' || run()?.status === 'expired') {
+            <div class="cc__sys cc__sys--bad"><mat-icon>error_outline</mat-icon>
+              <span>O especialista não respondeu: {{ run()!.lastError || run()!.finishedReason || 'falhou' }}</span>
+              <button mat-button (click)="askAgain()">Tentar de novo</button>
+            </div>
+          }
+
+          @if (typingNames().length) {
+            <div class="cc__typing">{{ typingNames().join(', ') }} {{ typingNames().length === 1 ? 'está' : 'estão' }} digitando<span class="dots"><i></i><i></i><i></i></span></div>
+          }
+        }
+      </div>
+
+      <!-- Compositor -->
+      <div class="comp">
+        <div class="comp__quick">
+          @for (q of quick; track q.label) {
+            <button type="button" (click)="quickSend(q.text)" [disabled]="sending()"><mat-icon>{{ q.icon }}</mat-icon>{{ q.label }}</button>
+          }
+        </div>
+        @if (replyTo(); as r) {
+          <div class="comp__reply"><mat-icon>reply</mat-icon><span><b>{{ r.authorKind === 'specialist' ? 'Especialista' : r.authorName }}</b> {{ messageTextOf(r.number) }}</span>
+            <button mat-icon-button (click)="replyTo.set(null)" aria-label="Cancelar a citação"><mat-icon>close</mat-icon></button></div>
+        }
+        @if (pending().length) {
+          <div class="comp__files">
+            @for (p of pending(); track p.id) {
+              <span class="comp__file">
+                @if (p.preview) { <img [src]="p.preview" [alt]="p.file.name"> } @else { <mat-icon>description</mat-icon><span>{{ p.file.name }}</span> }
+                <button type="button" (click)="removePending(p)" aria-label="Remover"><mat-icon>close</mat-icon></button>
+              </span>
+            }
+          </div>
+        }
+
+        @if (voice.recording()) {
+          <div class="comp__voice" role="status">
+            <span class="rec-dot"></span><span class="rec-time">{{ seconds(voice.seconds()) }}</span>
+            <span class="rec-wave">@for (l of voice.levels(); track $index) { <i [style.height.px]="4 + l * 24"></i> }</span>
+            <span class="rec-text">{{ voice.transcript() || (voice.transcribes ? 'Fale — a transcrição aparece aqui…' : 'Gravando (este navegador não transcreve)') }}</span>
+            <button mat-icon-button (click)="cancelVoice()" matTooltip="Descartar" aria-label="Descartar"><mat-icon>delete</mat-icon></button>
+            <button mat-mini-fab color="primary" (click)="stopVoice()" matTooltip="Parar e revisar" aria-label="Parar"><mat-icon>stop</mat-icon></button>
+          </div>
+        } @else if (voiceReview(); as v) {
+          <div class="comp__voice comp__voice--review">
+            <mat-icon>graphic_eq</mat-icon><span class="rec-time">{{ seconds(v.seconds) }}</span>
+            <textarea class="comp__transcript" [(ngModel)]="voiceTranscript" rows="2"
+                      placeholder="Transcrição (revise — é o que o especialista lê)"></textarea>
+            <button mat-icon-button (click)="cancelVoice()" matTooltip="Descartar" aria-label="Descartar"><mat-icon>delete</mat-icon></button>
+            <button mat-mini-fab color="primary" (click)="sendVoice()" [disabled]="sending()" matTooltip="Enviar o áudio" aria-label="Enviar"><mat-icon>send</mat-icon></button>
+          </div>
+        } @else {
+          <div class="comp__box">
+            <button mat-icon-button (click)="pick()" matTooltip="Anexar arquivos (ou cole/arraste)" aria-label="Anexar"><mat-icon>add_circle</mat-icon></button>
+            <input #picker type="file" multiple hidden (change)="onPick($event)">
+            <div class="comp__field">
+              @if (mentionQuery() !== null && mentionOptions().length) {
+                <div class="comp__mentions" role="listbox">
+                  @for (n of mentionOptions(); track n) { <button type="button" role="option" (mousedown)="$event.preventDefault(); pickMention(n)">&#64;{{ n }}</button> }
+                </div>
+              }
+              <textarea #box [(ngModel)]="draft" (keydown)="onKey($event)" (input)="onInput()" rows="1"
+                        placeholder="Mensagem para o especialista e para quem está no caso — @ menciona, cole ou arraste imagens e arquivos"
+                        aria-label="Mensagem"></textarea>
+            </div>
+            @if (canRecord) {
+              <button mat-icon-button (click)="startVoice()" matTooltip="Mensagem de voz" aria-label="Gravar mensagem de voz"><mat-icon>mic</mat-icon></button>
+            }
+            <button mat-mini-fab class="comp__send" (click)="send()" [disabled]="sending() || (!draft.trim() && !pending().length)" aria-label="Enviar">
+              <mat-icon>{{ sending() ? 'hourglass_top' : 'send' }}</mat-icon>
+            </button>
+          </div>
+        }
+        <div class="comp__flags">
+          <label matTooltip="O especialista não responde a esta mensagem (conversa entre pessoas)"><input type="checkbox" [(ngModel)]="peopleOnly"> Só entre pessoas</label>
+          <label matTooltip="O especialista confere no código/banco antes de responder (modelo de investigação, mais lento)"><input type="checkbox" [(ngModel)]="deep"> Investigar a fundo</label>
+          <span class="cc__spacer"></span>
+          <span class="comp__hint">Enter envia · Shift+Enter quebra a linha</span>
+        </div>
+      </div>
+    </section>
+
+    @if (showAside()) {
+      <aside class="cc__aside">
+        <div class="guard"><mat-icon>verified_user</mat-icon><span>A conversa <b>não altera o plano</b>. Ele só muda quando alguém pede (“Levar para o plano”) ou aceita uma proposta do especialista.</span></div>
+        @if (chat(); as c) {
+          <div class="aside__sec">
+            <h6><mat-icon>school</mat-icon>O que o especialista sabe</h6>
+            <div class="aside__chips">
+              @for (k of c.knows; track k) { <span class="chip" [class.chip--bad]="k.includes('cancelada') || k.includes('falhou')">{{ k }}</span> }
+            </div>
+          </div>
+          <div class="aside__sec">
+            <h6><mat-icon>push_pin</mat-icon>Pontos combinados na conversa</h6>
+            @for (p of points(); track p.id) {
+              <div class="pt">
+                <mat-icon [class.pt--ok]="p.status === 'agreed'">{{ pointIcon(p) }}</mat-icon>
+                <span>{{ p.text }}@if (p.status === 'discussing') { <small> (em discussão)</small> }</span>
+                <button mat-icon-button [matMenuTriggerFor]="ptMenu" aria-label="Mudar o ponto"><mat-icon>more_vert</mat-icon></button>
+                <mat-menu #ptMenu="matMenu">
+                  @if (p.status !== 'agreed') { <button mat-menu-item (click)="setPoint(p, 'agreed')"><mat-icon>check_circle</mat-icon>Combinado</button> }
+                  @if (p.status !== 'discussing') { <button mat-menu-item (click)="setPoint(p, 'discussing')"><mat-icon>pending</mat-icon>Em discussão</button> }
+                  <button mat-menu-item (click)="setPoint(p, 'dropped')"><mat-icon>delete</mat-icon>Descartar</button>
+                </mat-menu>
+              </div>
+            } @empty {
+              <p class="aside__hint">O especialista fixa aqui o que for sendo combinado (ou fixe uma mensagem com <mat-icon inline>push_pin</mat-icon>).</p>
+            }
+          </div>
+          <div class="aside__sec">
+            <h6><mat-icon>folder</mat-icon>Arquivos desta conversa</h6>
+            @for (f of convFiles().slice(0, 12); track f.id) {
+              <button type="button" class="fl" (click)="f.kind === 'image' ? openImage(f) : download(f)">
+                <mat-icon>{{ fileIcon(f) }}</mat-icon><span>{{ f.name }}</span><small>{{ f.fromSpecialist ? 'especialista' : f.createdBy.split(' ')[0] }}</small>
+              </button>
+            } @empty {
+              <p class="aside__hint">Prints, áudios e arquivos gerados aparecem aqui.</p>
+            }
+          </div>
+          <div class="aside__foot">
+            @if (pendingProposal(); as p) {
+              <button mat-flat-button color="primary" class="aside__btn" (click)="openProposal(p)"><mat-icon>difference</mat-icon>Ver a proposta #{{ p.number }}</button>
+            } @else {
+              <button mat-flat-button color="primary" class="aside__btn" (click)="send('Pode gerar a nova versão do plano com o que combinamos?')" [disabled]="sending() || !messages().length">
+                <mat-icon>auto_awesome</mat-icon>Gerar nova versão do plano</button>
+            }
+            <span class="aside__hint aside__hint--center">usa os pontos combinados ({{ agreedPoints() }}) · você revisa antes de valer</span>
+          </div>
+        }
+      </aside>
+    }
+  </div>
+</div>

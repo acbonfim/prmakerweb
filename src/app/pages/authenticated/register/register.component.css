@@ -137,7 +137,13 @@
   grid-area: timeline;
   min-width: 0;
   min-height: 0;
+  /* 0080: prévia do Especialista do caso em cima, a linha do tempo ocupa o resto. */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
+.pr-case-preview { flex: none; }
+:host ::ng-deep .pr-timeline > app-card-timeline { flex: 1 1 auto; min-height: 0; }
 
 /* Botão de ícone no cabeçalho do painel (Descrição montada / Root Cause) */
 .panel-action.mat-mdc-icon-button {
@@ -254,6 +260,8 @@
   }
 
   .pr-tab__count--you { background: #d29922; color: #1f1f1f; }
+
+  .pr-case-preview { display: none; }
 
   .pr-fields,
   .pr-plan,
