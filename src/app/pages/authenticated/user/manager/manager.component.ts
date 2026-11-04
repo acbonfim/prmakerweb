@@ -112,12 +112,17 @@ export class ManagerComponent implements OnInit, OnDestroy {
     return candidates.reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
   }
 
-  /** De onde veio o "visto há" (ex.: "linha do tempo · card 75349"). */
+  /**
+   * De onde veio o "visto há", só quando é certo: a aba do app ("no app · Pull Request") ou a fonte informada pela API.
+   * O DataUltimoLogin pode ter sido atualizado com outra atividade (script da 0079), então fica sem rótulo.
+   */
   lastSeenWhatOf(user: any): string | null {
     const x = this.lastSeenEntry(user);
     const seen = this.lastSeenOf(user);
-    if (x?.lastActivityAt && seen && Date.parse(x.lastActivityAt) >= Date.parse(seen)) return describeLastActivity(x);
-    return seen ? 'login' : null;
+    if (!x || !seen) return null;
+    if (x.lastActivityAt && Date.parse(x.lastActivityAt) >= Date.parse(seen)) return describeLastActivity(x);
+    if (x.lastSeenAt && Date.parse(x.lastSeenAt) >= Date.parse(seen)) return describeLastActivity({ ...x, lastActivitySource: 'app', lastActivityDetail: x.lastScreen });
+    return null;
   }
 
   private lastSeenEntry(user: any): UsageLastSeen | undefined {
