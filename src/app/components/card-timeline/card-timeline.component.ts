@@ -25,6 +25,7 @@ import { TeamsGraphService, TeamsChat } from '../../services/teams-graph.service
 import { WsService } from '../../services/ws.service';
 import { TimelineEntry } from './timeline.model';
 import { TimelineMarkdownPipe } from '../../pipes/timeline-markdown.pipe';
+import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { BackNavigationService } from '../../services/back-navigation.service';
 
 /** Evento e prefixo de grupo do tempo real da timeline (em sincronia com o backend). */
@@ -50,6 +51,7 @@ const TIMELINE_RENDERED = 80;
   standalone: true,
   imports: [
     TimelineMarkdownPipe,
+    CodeRefHostDirective,
     CommonModule,
     FormsModule,
     MatIconModule,

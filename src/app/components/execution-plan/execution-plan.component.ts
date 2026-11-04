@@ -69,6 +69,7 @@ import {
 import { ExecutorsDialogComponent } from '../executors-dialog/executors-dialog.component';
 import { TokenUsageComponent } from '../token-usage/token-usage.component';
 import { TokenUsage } from '../../services/token-pricing.service';
+import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 
 /** Evento do card quando os PRs mudam (status sincronizado com o GitHub, PR aberto) — o plano reage na hora (0025). */
 const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
@@ -129,7 +130,7 @@ interface LinkDraft {
 @Component({
   selector: 'app-execution-plan',
   standalone: true,
-  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent],
+  imports: [CommonModule, FormsModule, OverlayModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, PlanNotesComponent, PlanHistoryComponent, TokenUsageComponent, CodeRefHostDirective],
   templateUrl: './execution-plan.component.html',
   styleUrls: ['./execution-plan.component.css']
 })

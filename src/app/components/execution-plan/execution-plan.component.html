@@ -1,4 +1,4 @@
-<div class="plan" #panel
+<div class="plan" #panel [appCodeRefHost]="loadedCard()"
      [attr.role]="expanded() ? 'dialog' : null" [attr.aria-modal]="expanded() ? 'true' : null"
      [attr.aria-label]="expanded() ? 'Plano de execução em tela cheia' : null"
      [class.plan--dropping]="panelDropping()"

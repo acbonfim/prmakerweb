@@ -4,6 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { PlanNotesComponent } from './plan-notes.component';
+import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { ExecutionArtifact, ExecutionPlan, NoteTargetPlan, isPlanActive } from './execution-plan.model';
 
 /** Sem sinal da skill por mais que isso = sessão do Claude provavelmente parada (mesmo critério do painel). */
@@ -30,7 +31,7 @@ export interface PlanChatDialogData {
 @Component({
   selector: 'app-plan-chat-dialog',
   standalone: true,
-  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanNotesComponent],
+  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanNotesComponent, CodeRefHostDirective],
   template: `
     <div class="pc" (paste)="onPaste($event)">
       <header class="pc__head">
@@ -44,7 +45,7 @@ export interface PlanChatDialogData {
         </span>
         <button mat-icon-button (click)="close()" matTooltip="Fechar (Esc)" aria-label="Fechar"><mat-icon>close_fullscreen</mat-icon></button>
       </header>
-      <div class="pc__body">
+      <div class="pc__body" [appCodeRefHost]="data.card">
         @if (data.plan(); as p) {
           <app-plan-notes #notes variant="chat"
             [planId]="p.id" [planPhase]="p.phase" [notes]="p.notes ?? []" [targets]="data.targets()"
