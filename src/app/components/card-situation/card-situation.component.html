@@ -31,9 +31,9 @@
       </button>
     </header>
 
-    @if (s.stepTitle || s.alsoWaiting.length || devOps()) {
+    @if (showStep() || s.alsoWaiting.length || devOps()) {
       <div class="sit__meta">
-        @if (s.stepTitle) {
+        @if (showStep()) {
           <span class="sit__meta-item" [title]="s.planTitle || ''">
             <mat-icon>flag</mat-icon>Etapa <strong>{{ s.stepTitle }}</strong>
           </span>

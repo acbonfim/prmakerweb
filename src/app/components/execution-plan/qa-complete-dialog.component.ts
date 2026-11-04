@@ -143,8 +143,8 @@ export class QaCompleteDialogComponent {
     } catch (err: any) {
       const msg = apiErrorMessage(err, 'O DevOps não aceitou a mudança.');
       r.error = err?.status === 409
-        ? `Etapa concluída, mas o card não foi movido (regra não atendida): ${msg}`
-        : `Etapa concluída, mas não foi possível mover o card para Ready for QA: ${msg}`;
+        ? `O card não foi movido para Ready for QA (regra não atendida): ${msg}`
+        : `Não foi possível mover o card para Ready for QA: ${msg}`;
     }
   }
 

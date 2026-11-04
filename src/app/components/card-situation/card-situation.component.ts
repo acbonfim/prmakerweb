@@ -69,6 +69,11 @@ export class CardSituationComponent {
     if (!s?.devOpsState && !s?.devOpsColumn) return '';
     return [s.devOpsState, s.devOpsColumn && s.devOpsColumn !== s.devOpsState ? s.devOpsColumn : null].filter(Boolean).join(' · ');
   });
+  /** A etapa só aparece quando diz algo além do título (ex.: "Aguardando chamado" · etapa "Chamado: X"). */
+  readonly showStep = computed(() => {
+    const s = this.situation();
+    return !!s?.stepTitle && s.stepTitle.trim().toLowerCase() !== (s.title ?? '').trim().toLowerCase();
+  });
   readonly showQa = computed(() => {
     const s = this.situation();
     return !!s && (s.kind === 'qa-validation' || !!s.devTestInQaAt || !!s.devTestInQaError);

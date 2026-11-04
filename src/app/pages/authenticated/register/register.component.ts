@@ -76,6 +76,11 @@ const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
 type MobileTab = 'prs' | 'plan' | 'timeline';
 const MOBILE_TAB_KEY = 'prmake.pr-mobile-tab';
 
+/** "Validar em QA" → "validar em QA" (só a 1ª letra; siglas ficam). */
+function lowerFirst(text: string): string {
+  return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+}
+
 function loadMobileTab(): MobileTab {
   try {
     const v = localStorage.getItem(MOBILE_TAB_KEY);
@@ -302,7 +307,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
       const ago = situationAgo(situation.since);
       facts.push({
         icon: 'pending_actions', label: 'Situação atual',
-        value: `${situation.icon || meta.icon} ${(situation.title || meta.short).toLowerCase()}${ago ? ` · ${ago}` : ''}`,
+        value: `${situation.icon || meta.icon} ${lowerFirst(situation.title || meta.short)}${ago ? ` · ${ago}` : ''}`,
         tone: meta.tone === 'pending' ? 'warn' : 'info',
         tooltip: [situation.stepTitle && `Etapa: ${situation.stepTitle}`, situation.since && `Desde ${situationDate(situation.since)}`,
           'Detalhes no cartão "Situação atual" do plano de execução'].filter(Boolean).join('\n')
