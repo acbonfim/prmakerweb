@@ -334,7 +334,9 @@ export class ExecutionPlanComponent implements OnDestroy {
   openChat(files?: File[]): void {
     const card = this.loadedCard() ?? this.plan()?.cardNumber;
     if (!card) return;
-    const ref = openCaseChat(this.dialog, card);
+    // Fora da tela cheia do plano, o modal sai do painel compacto do Especialista (e volta para ele), se estiver na tela.
+    const origin = this.fullscreen.expanded() ? null : document.querySelector<HTMLElement>('app-case-compact .ck');
+    const ref = openCaseChat(this.dialog, card, origin);
     if (files?.length) setTimeout(() => ref.componentInstance.addFiles(files));
   }
   private dropLeaveTimer?: ReturnType<typeof setTimeout>;

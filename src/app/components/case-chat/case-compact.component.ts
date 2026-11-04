@@ -126,7 +126,7 @@ export class CaseCompactComponent implements OnDestroy {
 
   expand(): void {
     const c = this.card();
-    if (c) openCaseChat(this.dialog, c);
+    if (c) openCaseChat(this.dialog, c, this.host.nativeElement.querySelector('.ck'));
   }
 
   send(text?: string): void {
