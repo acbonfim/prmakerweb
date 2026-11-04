@@ -12,6 +12,7 @@ import {
 } from '../../services/execution-plan.service';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { PlanMarkdownPipe } from './plan-markdown.pipe';
+import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { ARTIFACT_GROUPS, ArtifactGroup, ExecutionArtifact } from './execution-plan.model';
 
 export interface PlanFilesDialogData {
@@ -58,7 +59,7 @@ const SQL_KEYWORDS = new Set((
 @Component({
   selector: 'app-plan-files-dialog',
   standalone: true,
-  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe],
+  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective],
   template: `
     <div class="pf">
       <div class="pf__header">
@@ -141,7 +142,7 @@ const SQL_KEYWORDS = new Set((
                   @if (showSource()) {
                     <pre class="pf__code">@for (line of lines(); track $index) {<span class="pf__line">{{ line }}</span>}</pre>
                   } @else {
-                    <div class="pf__md" [innerHTML]="p.text | planMarkdown"></div>
+                    <div class="pf__md" [appCodeRefHost]="data.cardNumber" [innerHTML]="p.text | planMarkdown"></div>
                   }
                 }
                 @case ('code') {

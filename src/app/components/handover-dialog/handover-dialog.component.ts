@@ -9,6 +9,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClient } from '@angular/common/http';
 import { marked } from 'marked';
+import { renderMarkdown } from '../../helpers/markdown-ext';
 import { firstValueFrom } from 'rxjs';
 import { SafeHtmlPipe } from 'primeng/menu';
 import { environment } from '../../../environments/environment';
@@ -16,6 +17,7 @@ import { CliipboardService } from '../../services/cliipboard.service';
 import { GdsService } from '../../services/gds.service';
 import { StorageService } from '../../services/storage.service';
 import { WsService } from '../../services/ws.service';
+import { CardSituation, CardSituationService } from '../card-situation/card-situation.service';
 
 /** Evento de tempo real do card (PullRequestRealTimeEvents no backend); a tela do card já está no grupo. */
 const PULLREQUEST_CARD_EVENT = 'pullRequestCardUpdated';
@@ -61,6 +63,7 @@ export class HandoverDialogComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private storage = inject(StorageService);
   private ws = inject(WsService);
+  private situations = inject(CardSituationService);
 
   private urlBase = environment.apiUrl;
 
@@ -123,7 +126,8 @@ export class HandoverDialogComponent implements OnInit, OnDestroy {
 
   private applyContent(markdown: string, at?: string | null) {
     this.contentMarkdown.set(markdown);
-    this.contentHtml.set(marked.parse(markdown) as string);
+    // 0075: sem links de código/anexos (o handover usa SafeHtmlPipe e não tem o popover)
+    this.contentHtml.set(renderMarkdown(markdown, { codeRefs: false }));
     this.generatedAt.set(at ?? null);
   }
 
@@ -133,8 +137,8 @@ export class HandoverDialogComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
 
     try {
-      const template = await this.fetchTemplate();
-      const prompt = this.buildPrompt(template);
+      const [template, situation] = await Promise.all([this.fetchTemplate(), this.fetchSituation()]);
+      const prompt = this.buildPrompt(template, situation);
       const raw = await this.callAi(prompt);
       const content = raw
         .replace(/^```markdown\s*/i, '')
@@ -171,6 +175,19 @@ export class HandoverDialogComponent implements OnInit, OnDestroy {
     return res?.configurations?.TemplatePassagemConhecimento ?? '';
   }
 
+  /**
+   * 0075: situação atual do card (o que é aguardado agora) — entra no handover como o estado de agora,
+   * igual à skill gerar-handover. Sem plano/sem espera (ou falha ao buscar) → null, o handover segue sem ela.
+   */
+  private async fetchSituation(): Promise<CardSituation | null> {
+    try {
+      const s = await this.situations.load(this.cardNumber, { devops: false, force: true });
+      return s && s.kind && s.kind !== 'none' ? s : null;
+    } catch {
+      return null;
+    }
+  }
+
   private async callAi(prompt: string): Promise<string> {
     const body = JSON.stringify(prompt);
     const res: any = await firstValueFrom(
@@ -183,7 +200,7 @@ export class HandoverDialogComponent implements OnInit, OnDestroy {
     return (content ?? '').toString();
   }
 
-  private buildPrompt(template: string): string {
+  private buildPrompt(template: string, situation: CardSituation | null = null): string {
     const cf = this.data?.cardFull ?? {};
     const pr = this.data?.pullRequest ?? {};
     const timeline = this.data?.timeline ?? [];
@@ -209,7 +226,13 @@ export class HandoverDialogComponent implements OnInit, OnDestroy {
         quem: t.userName,
         registro: t.description,
       })),
+      ...(situation
+        ? { situacaoAtual: { tipo: situation.kind, titulo: situation.title, desde: situation.since, resumo: situation.markdown } }
+        : {}),
     };
+    const situationRule = situation
+      ? `\n- Se houver situacaoAtual, ela é o estado de agora: use-a nos campos de status/próximo passo; sem campo, acrescente no fim a seção '## Situação atual'.`
+      : '';
 
     return `Você é um assistente que preenche um formulário de PASSAGEM DE CONHECIMENTO (handover) de um card de bug, para que o próximo turno dê continuidade ao tratamento sem perder contexto.
 
@@ -218,7 +241,7 @@ Preencha EXATAMENTE o layout abaixo, mantendo todos os títulos e a estrutura, s
 Regras:
 - Responda em português.
 - Saída em MARKDOWN, contendo APENAS o formulário preenchido, sem nenhum texto antes ou depois e sem blocos de código (\`\`\`).
-- Seja objetivo e técnico; priorize o que ajuda o próximo turno a continuar (o que já foi investigado, onde está o problema, o que foi descartado, causa provável e próximo passo).
+- Seja objetivo e técnico; priorize o que ajuda o próximo turno a continuar (o que já foi investigado, onde está o problema, o que foi descartado, causa provável e próximo passo).${situationRule}
 
 LAYOUT A PREENCHER:
 ${template}

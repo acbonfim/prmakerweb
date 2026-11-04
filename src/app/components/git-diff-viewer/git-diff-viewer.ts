@@ -1,14 +1,7 @@
 // git-diff-viewer.component.ts
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-
-interface DiffLine {
-  type: 'addition' | 'deletion' | 'context' | 'info';
-  lineNumber?: number;
-  content: string;
-  oldLineNumber?: number;
-  newLineNumber?: number;
-}
+import { DiffLine, parsePatch } from '../../helpers/unified-diff';
 
 interface FileChange {
   filename: string;
@@ -288,55 +281,8 @@ export class GitDiffViewerComponent {
       status: file.status,
       additions: file.additions,
       deletions: file.deletions,
-      lines: this.parsePatch(file.patch)
+      lines: parsePatch(file.patch)
     }));
-  }
-
-  private parsePatch(patch: string): DiffLine[] {
-    if (!patch) return [];
-
-    const lines = patch.split('\n');
-    const diffLines: DiffLine[] = [];
-    let oldLineNumber = 0;
-    let newLineNumber = 0;
-
-    for (const line of lines) {
-      if (line.startsWith('@@')) {
-        // Linha de informação de contexto
-        const match = line.match(/@@ -(\d+),?\d* \+(\d+),?\d* @@/);
-        if (match) {
-          oldLineNumber = parseInt(match[1], 10);
-          newLineNumber = parseInt(match[2], 10);
-        }
-        diffLines.push({
-          type: 'info',
-          content: line
-        });
-      } else if (line.startsWith('+')) {
-        diffLines.push({
-          type: 'addition',
-          content: line.substring(1),
-          newLineNumber: newLineNumber++,
-          oldLineNumber: undefined
-        });
-      } else if (line.startsWith('-')) {
-        diffLines.push({
-          type: 'deletion',
-          content: line.substring(1),
-          oldLineNumber: oldLineNumber++,
-          newLineNumber: undefined
-        });
-      } else if (line.startsWith(' ')) {
-        diffLines.push({
-          type: 'context',
-          content: line.substring(1),
-          oldLineNumber: oldLineNumber++,
-          newLineNumber: newLineNumber++
-        });
-      }
-    }
-
-    return diffLines;
   }
 
   getStatusBadgeClass(status: string): string {

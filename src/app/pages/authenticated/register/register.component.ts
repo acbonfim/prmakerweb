@@ -58,6 +58,7 @@ import {SmartActionsMenuComponent} from '../../../components/smart-actions-menu/
 import {GithubActionsMenuComponent} from '../../../components/github-actions-menu/github-actions-menu.component';
 import {ActionToolbarComponent, ToolbarItemDirective} from '../../../components/action-toolbar/action-toolbar.component';
 import {SummaryDialogComponent, SummaryDialogData} from '../../../components/summary-dialog/summary-dialog.component';
+import {CardSituationService, situationAgo, situationDate, situationMeta} from '../../../components/card-situation/card-situation.service';
 
 /** Evento e grupo do tempo real da configuração de PR (em sincronia com o backend). */
 const PULLREQUEST_CONFIG_GROUP = 'pullrequest-config';
@@ -74,6 +75,11 @@ const pullRequestCardGroup = (card: string) => `pullrequest:${card.trim()}`;
 
 type MobileTab = 'prs' | 'plan' | 'timeline';
 const MOBILE_TAB_KEY = 'prmake.pr-mobile-tab';
+
+/** "Validar em QA" → "validar em QA" (só a 1ª letra; siglas ficam). */
+function lowerFirst(text: string): string {
+  return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+}
 
 function loadMobileTab(): MobileTab {
   try {
@@ -131,6 +137,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
   /** Descrição/root cause compartilhados com modal, popovers e IA (fonte da verdade dos editores). */
   readonly prState = inject(CardPrStateService);
+  /** 0075/F4: situação do card (cache alimentado pelo cartão do plano + tempo real). */
+  private readonly situationService = inject(CardSituationService);
   /** Integrações de uso pessoal (feature 0002): com pendência, a tela fica bloqueada. */
   readonly integrations = inject(UserIntegrationService);
   /** Pedido de aprovação no Teams (0007): o botão da lista de PRs depende deste status. */
@@ -288,6 +296,21 @@ export class RegisterComponent implements OnInit, OnDestroy {
         value: plan.status === 'completed' ? `${phase} concluída` : `${phase} ${plan.done}/${plan.total}${extra}`,
         tone: plan.status === 'completed' ? 'ok' : yours || plan.openQuestions || plan.status === 'paused' ? 'warn' : plan.status === 'running' ? 'info' : 'muted',
         tooltip: yours ? 'O plano está esperando você — veja o aviso "Aguardando você" no plano de execução' : undefined
+      });
+    }
+
+    // 0075/F4: "Situação: 🔀 aguardando aprovação e merge · há 2 d" (mesma fonte do cartão do plano).
+    const card = `${this.cardNumber ?? ''}`.trim();
+    const situation = card ? this.situationService.situationOf(card)() : null;
+    const meta = situationMeta(situation?.kind);
+    if (situation && meta) {
+      const ago = situationAgo(situation.since);
+      facts.push({
+        icon: 'pending_actions', label: 'Situação atual',
+        value: `${situation.icon || meta.icon} ${lowerFirst(situation.title || meta.short)}${ago ? ` · ${ago}` : ''}`,
+        tone: meta.tone === 'pending' ? 'warn' : 'info',
+        tooltip: [situation.stepTitle && `Etapa: ${situation.stepTitle}`, situation.since && `Desde ${situationDate(situation.since)}`,
+          'Detalhes no cartão "Situação atual" do plano de execução'].filter(Boolean).join('\n')
       });
     }
 

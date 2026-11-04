@@ -38,6 +38,10 @@
                 @if (d?.boardColumn && d?.boardColumn !== d?.state) {
                   <span class="chip chip-outline" matTooltip="Coluna do board">{{ d?.boardColumn }}</span>
                 }
+                @if (situationChip(c); as sc) {
+                  <!-- 0075: o que o card aguarda agora e há quanto tempo -->
+                  <span class="chip chip-situation" [attr.data-tone]="sc.tone" [matTooltip]="sc.tooltip">{{ sc.label }}</span>
+                }
                 @if (pending.byCard().get('' + c.cardNumber); as p) {
                   <span class="chip" data-tone="pending" [matTooltip]="p.count + ' pendência(s) no plano: ' + (p.actions[0]?.title || '')">
                     <mat-icon>front_hand</mat-icon>Aguardando você{{ p.count > 1 ? ' (' + p.count + ')' : '' }}

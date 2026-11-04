@@ -515,3 +515,167 @@ html {
   box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
   .mat-mdc-menu-content { padding: 0; }
 }
+
+/* ──────────────────────────────────────────────────────────────
+   0075/F1: extensões do markdown (helpers/markdown-ext.ts). O HTML entra por [innerHTML], fora do
+   escopo dos componentes — por isso global. Seletores com classe repetida para vencer as regras
+   `.plan-md ::ng-deep a/img` dos componentes (cor do link, largura da imagem).
+   ────────────────────────────────────────────────────────────── */
+
+/* Callouts estilo GitHub: > [!SUMMARY] / [!NOTE] / [!TIP] / [!IMPORTANT] / [!WARNING] / [!CAUTION] */
+.md-callout {
+  --md-callout-color: #58a6ff;
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--md-callout-color);
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--md-callout-color) 10%, transparent);
+  color: var(--mat-sys-on-surface);
+  > :last-child { margin-bottom: 0; }
+  p { margin: 0 0 6px; }
+}
+.md-callout .md-callout__title {
+  margin: 0 0 4px;
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--md-callout-color);
+}
+.md-callout--summary   { --md-callout-color: #79c0ff; }
+.md-callout--note      { --md-callout-color: #58a6ff; }
+.md-callout--tip       { --md-callout-color: #3fb950; }
+.md-callout--important { --md-callout-color: #bc8cff; }
+.md-callout--warning   { --md-callout-color: #d29922; }
+.md-callout--caution   { --md-callout-color: #f85149; }
+.md-callout--summary {
+  background: color-mix(in srgb, var(--md-callout-color) 13%, transparent);
+  border-left-width: 4px;
+}
+
+/* Links de código: [texto](ref:<id>) e citações caminho:linha (o clique abre o popover — F2) */
+a.code-ref.code-ref[href],
+a.code-cite.code-cite[href] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.92em;
+  color: #79c0ff;
+  text-decoration: underline dotted color-mix(in srgb, #79c0ff 70%, transparent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+  transition: background-color 0.12s ease;
+}
+a.code-ref.code-ref[href]:hover,
+a.code-cite.code-cite[href]:hover,
+a.code-ref.code-ref[href]:focus-visible,
+a.code-cite.code-cite[href]:focus-visible {
+  background: color-mix(in srgb, #79c0ff 14%, transparent);
+  text-decoration-style: solid;
+}
+a.code-ref code,
+a.code-cite code {
+  color: inherit;
+  font-size: 1em;
+}
+
+/* Imagens anexo:<nome> (carregadas pelo nome — F3) e galeria lado a lado (Antes × Depois) */
+img.md-attachment.md-attachment {
+  max-width: 100%;
+  min-height: 80px;
+  min-width: 120px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: zoom-in;
+  vertical-align: top;
+}
+.md-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 4px 0;
+}
+.md-gallery > img.md-attachment.md-attachment {
+  flex: 1 1 calc(50% - 5px);
+  max-width: calc(50% - 5px);
+  height: auto;
+  object-fit: contain;
+}
+@media (max-width: 600px) {
+  .md-gallery > img.md-attachment.md-attachment { flex-basis: 100%; max-width: 100%; }
+}
+
+/* ──────────────────────────────────────────────────────────────
+   0075/F2: links de código decorados pela `appCodeRefHost` (cor pelo tipo da mudança da ref do card)
+   ────────────────────────────────────────────────────────────── */
+a.code-ref.code-ref--change[href], a.code-cite.code-ref--change[href]   { --code-ref-color: #e3b341; }
+a.code-ref.code-ref--create[href], a.code-cite.code-ref--create[href]   { --code-ref-color: #3fb950; }
+a.code-ref.code-ref--remove[href], a.code-cite.code-ref--remove[href]   { --code-ref-color: #ff7b72; }
+a.code-ref.code-ref--suspect[href], a.code-cite.code-ref--suspect[href] { --code-ref-color: #f0883e; }
+a.code-ref.code-ref--read[href], a.code-cite.code-ref--read[href]       { --code-ref-color: #79c0ff; }
+a.code-ref.code-ref--missing[href]                                       { --code-ref-color: #8b949e; }
+a.code-ref.code-ref[href][class*='code-ref--'],
+a.code-cite.code-cite[href][class*='code-ref--'] {
+  color: var(--code-ref-color);
+  text-decoration-color: color-mix(in srgb, var(--code-ref-color) 70%, transparent);
+}
+a.code-ref.code-ref[href][class*='code-ref--']:hover,
+a.code-cite.code-cite[href][class*='code-ref--']:hover {
+  background: color-mix(in srgb, var(--code-ref-color) 14%, transparent);
+}
+/* Citação/ref sem fotografia: continua clicável, mais discreta */
+a.code-cite.code-cite--missing[href],
+a.code-ref.code-ref--missing[href] {
+  color: color-mix(in srgb, #79c0ff 60%, #8b949e);
+  text-decoration-style: dashed;
+  text-decoration-color: color-mix(in srgb, #8b949e 70%, transparent);
+}
+
+/* 0075/F3: imagem anexo: com legenda (alt) e aviso quando não acha o arquivo */
+.md-figure {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+  vertical-align: top;
+}
+.md-figure > img.md-attachment.md-attachment { max-width: 100%; height: auto; }
+.md-figure__caption {
+  font-size: 12px;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent);
+  text-align: center;
+}
+.md-figure__missing { display: none; }
+.md-figure--missing > img.md-attachment { display: none; }
+.md-figure--missing > .md-figure__missing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent);
+  overflow-wrap: anywhere;
+}
+img.md-attachment.md-attachment--loading {
+  min-width: 200px;
+  min-height: 120px;
+  background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.09) 50%, rgba(255,255,255,.04) 75%) 0 0 / 200% 100%;
+  animation: md-attachment-shimmer 1.2s linear infinite;
+}
+@keyframes md-attachment-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { img.md-attachment.md-attachment--loading { animation: none; } }
+/* Galeria (Antes × Depois): as figuras ficam lado a lado como as imagens da F1 */
+.md-gallery > .md-figure {
+  flex: 1 1 calc(50% - 5px);
+  max-width: calc(50% - 5px);
+}
+.md-gallery > .md-figure > img.md-attachment.md-attachment { width: 100%; max-width: 100%; }
+@media (max-width: 600px) {
+  .md-gallery > .md-figure { flex-basis: 100%; max-width: 100%; }
+}
+.md-image-dialog .mat-mdc-dialog-surface { border-radius: 14px !important; overflow: hidden; }

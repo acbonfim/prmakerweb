@@ -17,6 +17,7 @@ import {
   HomeCardsService
 } from '../../services/home-cards.service';
 import { AvatarStackComponent, AvatarStackPerson } from '../avatar-stack/avatar-stack.component';
+import { situationChip } from '../card-situation/card-situation.service';
 
 /** Tempo real das listas de recentes da home (PullRequestRealTimeEvents no backend, 0021). */
 const RECENT_GROUP = 'pullrequest-recent';
@@ -283,6 +284,11 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
 
   hasDetails(card: HomeCard): boolean {
     return !!(card.plan || card.pullRequests.length || card.timeline.last || card.notes.last);
+  }
+
+  /** 0075: chip "🎫 chamado · há 3 d" da situação do plano (some quando nada é aguardado). */
+  situationChip(card: HomeCard): { label: string; tone: string; tooltip: string } | null {
+    return card.plan ? situationChip(card.plan.situationKind, card.plan.situationAt) : null;
   }
 
   /** "agora", "há 5 min", "há 3 h", "ontem", "há 4 dias" ou a data. */
