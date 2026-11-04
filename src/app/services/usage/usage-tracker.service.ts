@@ -1,4 +1,4 @@
-import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, inject, signal, untracked } from '@angular/core';
 import { ActivatedRouteSnapshot, NavigationEnd, Router } from '@angular/router';
 import { filter } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -478,9 +478,14 @@ export class UsageTrackerService {
     } catch { /* sem sessionStorage */ }
   }
 
+  /**
+   * Toda entrada pública passa por aqui. `untracked`: chamada de dentro de um effect/computed (ex.: busy() no plano de
+   * execução) não pode registrar como dependência os signals do rastreador (state/busyLabel) — senão o efeito grava
+   * o estado, reexecuta, libera, grava de novo... laço infinito que trava a tela.
+   */
   private safe(fn: () => void): void {
     try {
-      fn();
+      untracked(fn);
     } catch {
       /* telemetria nunca quebra a tela */
     }
