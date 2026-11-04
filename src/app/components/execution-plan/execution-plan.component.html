@@ -21,6 +21,14 @@
     <span class="plan__spacer"></span>
 
     @if (plan(); as p) {
+      @if (assistantOpen(); as n) {
+        <!-- 0077: sugestões abertas do PRMake neste card -->
+        <button type="button" class="plan__assist" (click)="revealAssistant()"
+                [matTooltip]="n === 1 ? 'O PRMake tem 1 sugestão para este card' : 'O PRMake tem ' + n + ' sugestões para este card'"
+                [attr.aria-label]="n + ' sugestões do PRMake'">
+          <mat-icon>assistant</mat-icon>{{ n }}
+        </button>
+      }
       <span class="plan-status plan-status--{{ p.status }}"
             [matTooltip]="p.statusChangedBy ? statusLabel[p.status] + ' por ' + p.statusChangedBy + (p.statusReason ? ': ' + p.statusReason : '') : ''"
             matTooltipPosition="above" role="status" aria-live="polite">
@@ -293,8 +301,10 @@
         @let p = plan()!;
         <!-- 0075/F4: em que pé o card está (o que é aguardado, desde quando, handoff, próximo passo) -->
         <app-card-situation [cardNumber]="loadedCard()"></app-card-situation>
+        <!-- 0077: o PRMake conversa — sugestões que não travam (estimativa, publicação, horas) e as horas do card -->
+        <app-card-assistant #assistant [cardNumber]="loadedCard()"></app-card-assistant>
         <!-- 0076: o que o Claude/PRMake escreveu no card (análise, soluções, PR, chamado, resumo) — Ver -->
-        <app-generated-texts [cardNumber]="loadedCard()" [plan]="p" [pair]="pair()"></app-generated-texts>
+        <app-generated-texts [cardNumber]="loadedCard()" [plan]="p" [pair]="pair()" (openTexts)="openTexts($event)"></app-generated-texts>
         @if (openQuestions().length || stepActions().length) {
           <!-- 0037: tudo o que depende do usuário num lugar só, com o botão certo em cada item. -->
           <div class="plan-questions plan-you" role="region" aria-label="Aguardando você">
@@ -523,6 +533,12 @@
         }
       </button>
     }
+    <!-- 0077: central de textos (editar, gerar de novo com IA, enviar ao DevOps) -->
+    <button mat-stroked-button class="plan__file-btn plan__texts-btn" (click)="openTexts()" [disabled]="!plan()"
+            matTooltip="Textos do card — análise, resumos, root cause, chamado, handover: editar, gerar de novo com IA e enviar">
+      <mat-icon>edit_note</mat-icon>
+      <span class="plan__file-label">Textos</span>
+    </button>
     <span class="plan__spacer"></span>
     <button mat-icon-button class="plan__zip plan__notes-btn" (click)="openChat()" [disabled]="!plan()"
             [matTooltip]="'Conversa com o Claude' + (noteCount() ? ' (' + noteCount() + ' comentários)' : '') + ' — abre a conversa inteira'"

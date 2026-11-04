@@ -1,12 +1,10 @@
 import { WritableSignal, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatDialog } from '@angular/material/dialog';
 import { of } from 'rxjs';
 import { ExecutionPlanService } from '../../services/execution-plan.service';
 import { WsService } from '../../services/ws.service';
 import { CardSituation, CardSituationService } from '../card-situation/card-situation.service';
 import { ExecutionArtifact, ExecutionPlan } from '../execution-plan/execution-plan.model';
-import type { MarkdownViewDialogData } from '../markdown-view/markdown-view-dialog.component';
 import { GeneratedTextsComponent } from './generated-texts.component';
 import { artifactTexts, generatedTextLabel, isGeneratedText } from './generated-texts.model';
 
@@ -51,7 +49,7 @@ describe('generated-texts.model (0076)', () => {
 
 describe('GeneratedTextsComponent (0076)', () => {
   let f: ComponentFixture<GeneratedTextsComponent>;
-  let dialog: jasmine.SpyObj<MatDialog>;
+  let opened: (string | null)[];
   let situation: WritableSignal<CardSituation | null>;
   let gets: string[];
   const el = () => f.nativeElement as HTMLElement;
@@ -75,12 +73,11 @@ describe('GeneratedTextsComponent (0076)', () => {
     try { localStorage.removeItem('prmake.generated-texts-open'); } catch { /* sem storage */ }
     gets = [];
     situation = signal<CardSituation | null>(null);
-    dialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
+    opened = [];
     TestBed.configureTestingModule({
       imports: [GeneratedTextsComponent],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: MatDialog, useValue: dialog },
         { provide: ExecutionPlanService, useValue: {
           get: (id: string) => { gets.push(id); return of(correction); },
           content: () => of(new Blob(['## Soluções\n\n**Recomendada** opção A'], { type: 'text/markdown' })),
@@ -93,6 +90,7 @@ describe('GeneratedTextsComponent (0076)', () => {
     f.componentRef.setInput('cardNumber', '75812');
     f.componentRef.setInput('plan', analysis);
     f.componentRef.setInput('pair', { analysisId: 'pa', correctionId: 'pc' });
+    f.componentInstance.openTexts.subscribe(k => opened.push(k));
   });
 
   it('lista os textos dos dois planos e o resumo, do mais recente para o mais antigo, com fase', async () => {
@@ -107,22 +105,14 @@ describe('GeneratedTextsComponent (0076)', () => {
     expect(el().textContent).toContain('pronto para publicar');
   });
 
-  it('Ver: arquivo carregado na hora (diálogo com load) e resumo com o markdown', async () => {
+  it('0077: Ver abre a central de textos com o texto selecionado (arquivo pela chave; resumo = situação)', async () => {
     situation.set({ kind: 'ticket', markdown: '**Situação**', since: ago(0), publishPending: false, publishedAt: null } as CardSituation);
     await settle();
     const items = [...el().querySelectorAll<HTMLElement>('.gt-item')];
-    const sol = items.find(i => i.textContent!.includes('Soluções propostas'))!;
-    sol.querySelector<HTMLButtonElement>('.gt-item__view')!.click();
-    const data = dialog.open.calls.mostRecent().args[1]!.data as MarkdownViewDialogData;
-    expect(data.title).toBe('Soluções propostas');
-    expect(data.card).toBe('75812');
-    expect(data.subtitle).toContain('Análise');
-    expect(await data.load!()).toContain('**Recomendada** opção A');
-
+    items.find(i => i.textContent!.includes('Soluções propostas'))!.querySelector<HTMLButtonElement>('.gt-item__view')!.click();
     items.find(i => i.textContent!.includes('Resumo da situação'))!.querySelector<HTMLButtonElement>('.gt-item__view')!.click();
-    const d2 = dialog.open.calls.mostRecent().args[1]!.data as MarkdownViewDialogData;
-    expect(d2.markdown).toBe('**Situação**');
-    expect(d2.load).toBeUndefined();
+    el().querySelector<HTMLButtonElement>('.gt__center')!.click();
+    expect(opened).toEqual(['a:a2', 'situation', null]);
   });
 
   it('texto novo pelo tempo real → aviso discreto "O Claude gerou: X · Ver" (sem modal)', async () => {
@@ -134,9 +124,9 @@ describe('GeneratedTextsComponent (0076)', () => {
     expect(fresh.textContent).toContain('O Claude gerou');
     expect(fresh.textContent).toContain('Root cause');
     expect(el().querySelector('.gt-item--new .gt-item__label')!.textContent).toContain('Root cause');
-    expect(dialog.open).not.toHaveBeenCalled();
+    expect(opened).toEqual([]);
     fresh.querySelector<HTMLButtonElement>('.gt__fresh-view')!.click();
-    expect((dialog.open.calls.mostRecent().args[1]!.data as MarkdownViewDialogData).title).toBe('Root cause');
+    expect(opened).toEqual(['a:a9']);
     await settle();
     expect(el().querySelector('.gt__fresh')).toBeNull();
   });

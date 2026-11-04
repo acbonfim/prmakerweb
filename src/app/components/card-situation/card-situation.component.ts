@@ -12,7 +12,7 @@ import {
   MARKDOWN_VIEW_DIALOG, MarkdownViewDialogComponent, MarkdownViewDialogData,
 } from '../markdown-view/markdown-view-dialog.component';
 import {
-  CardSituation, CardSituationPullRequest, CardSituationService, shortDateTime, situationAgo, situationDate, situationMeta,
+  CardPostMode, CardSituation, CardSituationPullRequest, CardSituationService, cardPostMode, shortDateTime, situationAgo, situationDate, situationMeta,
 } from './card-situation.service';
 
 const COLLAPSED_KEY = 'prmake.situation-collapsed';
@@ -81,6 +81,28 @@ export class CardSituationComponent {
     const s = this.situation();
     return !!st && !!s && st.effective !== s.autoPost;
   });
+  // ── 0077: modo de publicação deste card ─────────────────────────────────────────────────────────
+
+  readonly cardModes: { id: CardPostMode; label: string; hint: string }[] = [
+    { id: 'auto', label: 'Automático', hint: 'Neste card o PRMake publica e atualiza o resumo sozinho' },
+    { id: 'manual', label: 'Manual', hint: 'Neste card só publica quando você clicar em Publicar' },
+    { id: 'follow', label: 'Seguir minha preferência', hint: 'Usa o "Publicar automaticamente" (ou o padrão do PRMake)' },
+  ];
+  readonly cardMode = computed<CardPostMode>(() => cardPostMode(this.situation()));
+  readonly savingMode = signal<CardPostMode | null>(null);
+  readonly modeError = signal<string | null>(null);
+  /** "Vale: automático — escolhido neste card" / "— sua preferência" / "— padrão do PRMake". */
+  readonly modeSource = computed(() => {
+    const s = this.situation();
+    if (!s) return '';
+    const on = s.autoPost ? 'automático' : 'manual';
+    switch (s.autoPostSource) {
+      case 'card': return `Vale: ${on} — escolhido neste card`;
+      case 'user': return `Vale: ${on} — ${this.autoDiffers() ? 'preferência do dono do plano' : 'sua preferência'}`;
+      default: return `Vale: ${on} — padrão do PRMake`;
+    }
+  });
+
   /** "em 04/11 às 11:58". */
   readonly publishedWhen = computed(() => shortDateTime(this.situation()?.publishedAt));
 
@@ -263,6 +285,21 @@ export class CardSituationComponent {
       this.autoError.set(apiErrorMessage(err, 'Não foi possível salvar a preferência.'));
     } finally {
       this.savingAuto.set(false);
+    }
+  }
+
+  /** 0077: publicação só deste card — Automático, Manual ou volta a seguir a preferência (null). */
+  async setCardMode(mode: CardPostMode): Promise<void> {
+    const card = this.card();
+    if (!card || this.savingMode() || mode === this.cardMode()) return;
+    this.savingMode.set(mode);
+    this.modeError.set(null);
+    try {
+      await this.svc.setCardAutoPost(card, mode === 'follow' ? null : mode === 'auto');
+    } catch (err) {
+      this.modeError.set(apiErrorMessage(err, 'Não foi possível mudar a publicação deste card.'));
+    } finally {
+      this.savingMode.set(null);
     }
   }
 

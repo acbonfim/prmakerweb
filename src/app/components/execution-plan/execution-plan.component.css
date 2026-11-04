@@ -673,6 +673,18 @@
 }
 .plan__spin { animation: plan-spin 0.9s linear infinite; }
 
+/* 0077: central de textos no rodapé e sugestões do PRMake no cabeçalho */
+.plan__texts-btn.mat-mdc-outlined-button { border-color: color-mix(in srgb, #bc8cff 40%, transparent); }
+.plan__texts-btn .mat-icon { color: #d2a8ff; }
+.plan__assist {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; height: 24px; margin-right: 6px; padding: 0 9px 0 6px; border: 0; border-radius: 12px;
+  background: color-mix(in srgb, #bc8cff 22%, transparent); color: #e2c5ff; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  animation: plan-pop 0.35s ease-out;
+}
+.plan__assist:hover { background: color-mix(in srgb, #bc8cff 32%, transparent); }
+.plan__assist:focus-visible { outline: 2px solid #d2a8ff; outline-offset: 1px; }
+.plan__assist .mat-icon { font-size: 15px; width: 15px; height: 15px; }
+
 /* Coluna estreita: rodapé só com ícones + contador. */
 @container (max-width: 470px) {
   .plan__file-label { display: none; }

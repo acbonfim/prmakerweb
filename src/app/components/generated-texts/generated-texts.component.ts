@@ -1,17 +1,12 @@
-import { Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { MatDialog } from '@angular/material/dialog';
+import { Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { firstValueFrom } from 'rxjs';
 import { ExecutionPlanService } from '../../services/execution-plan.service';
 import { WsService } from '../../services/ws.service';
-import { CardSituationService, shortDateTime, situationAgo, situationDate } from '../card-situation/card-situation.service';
+import { CardSituationService, situationAgo, situationDate } from '../card-situation/card-situation.service';
 import {
   EXECUTION_PLAN_EVENT, ExecutionPlan, ExecutionPlanRealtimePayload,
 } from '../execution-plan/execution-plan.model';
-import {
-  MARKDOWN_VIEW_DIALOG, MarkdownViewDialogComponent, MarkdownViewDialogData,
-} from '../markdown-view/markdown-view-dialog.component';
 import { GeneratedText, PHASE_LABEL, artifactTexts, time } from './generated-texts.model';
 
 const OPEN_KEY = 'prmake.generated-texts-open';
@@ -28,6 +23,9 @@ const MAX_SHOWN = 5;
  * Descrição do PR, Root cause, Texto do chamado…) e o Resumo da situação (atual e o publicado) — com a
  * fase, quando, quem e **Ver** (diálogo com o texto renderizado, links de código/itens e copiar). Texto
  * novo pelo tempo real (`artifact`) → aviso discreto "O Claude gerou: X · Ver", que some sozinho.
+ *
+ * 0077: é o atalho da central de textos — "Ver" abre a central (`openTexts`) com o texto selecionado, onde dá
+ * para editar, gerar de novo com IA e enviar ao DevOps.
  */
 @Component({
   selector: 'app-generated-texts',
@@ -74,9 +72,14 @@ const MAX_SHOWN = 5;
                 </button>
               </li>
             }
-            @if (texts().length > maxShown && !showAll()) {
-              <li class="gt__more"><button type="button" (click)="showAll.set(true)">Mostrar todos ({{ texts().length }})</button></li>
-            }
+            <li class="gt__more">
+              @if (texts().length > maxShown && !showAll()) {
+                <button type="button" (click)="showAll.set(true)">Mostrar todos ({{ texts().length }})</button>
+              }
+              <button type="button" class="gt__center" (click)="openTexts.emit(null)">
+                <mat-icon>edit_note</mat-icon>Abrir a central de textos — editar, gerar de novo com IA, enviar
+              </button>
+            </li>
           </ul>
         }
       </section>
@@ -129,7 +132,9 @@ const MAX_SHOWN = 5;
       border-radius: 6px; background: transparent; color: #79c0ff; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background-color .15s ease, border-color .15s ease; }
     .gt-item__view:hover, .gt-item__view:focus-visible { background: color-mix(in srgb, #58a6ff 14%, transparent); border-color: color-mix(in srgb, #58a6ff 45%, transparent); outline: none; }
     .gt-item__view .mat-icon { font-size: 15px; width: 15px; height: 15px; }
-    .gt__more { padding: 4px 8px 2px; }
+    .gt__more { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 4px 8px 2px; }
+    .gt__center { display: inline-flex; align-items: center; gap: 4px; }
+    .gt__center .mat-icon { font-size: 15px; width: 15px; height: 15px; }
     .gt__more button { padding: 2px 0; border: 0; background: none; color: var(--mat-sys-primary); font: inherit; font-size: 12px; cursor: pointer; }
     .gt__more button:hover { text-decoration: underline; }
     @media (max-width: 576px) {
@@ -148,10 +153,12 @@ export class GeneratedTextsComponent {
   /** Dupla análise ↔ correção (o outro plano é carregado aqui). */
   readonly pair = input<{ analysisId: string | null; correctionId: string | null } | null>(null);
 
+  /** 0077: abre a central de textos com o texto selecionado (null = o primeiro). */
+  readonly openTexts = output<string | null>();
+
   private api = inject(ExecutionPlanService);
   private situations = inject(CardSituationService);
   private ws = inject(WsService);
-  private dialog = inject(MatDialog);
 
   readonly phaseLabel = PHASE_LABEL;
   readonly open = signal(loadOpen());
@@ -267,33 +274,10 @@ export class GeneratedTextsComponent {
     this.fresh.set(null);
   }
 
-  /** Abre o texto num diálogo (arquivo do plano carregado na hora; resumo já em mãos). */
+  /** Abre o texto na central (0077) — o resumo (atual ou o publicado) é o "Resumo da situação" de lá. */
   view(t: GeneratedText): void {
-    const card = this.card();
-    const subtitle = [
-      t.phase ? PHASE_LABEL[t.phase] : 'Card',
-      t.source === 'published' && t.at ? `publicado em ${shortDateTime(t.at)}` : this.ago(t.at),
-      t.by,
-      t.source === 'artifact' ? t.detail : null,
-    ].filter(Boolean).join(' · ');
-    const data: MarkdownViewDialogData = {
-      title: t.label,
-      subtitle,
-      icon: t.icon,
-      card,
-      markdown: t.markdown ?? null,
-      load: t.source === 'artifact' && t.planId && t.artifactId ? () => this.content(t.planId!, t.artifactId!) : undefined,
-      codeRefs: t.source === 'artifact',
-      reRefs: t.source === 'artifact',
-      note: t.source === 'published' ? 'É este o texto que o cliente lê hoje na discussion do card.' : null,
-    };
     if (this.fresh()?.key === t.key) this.dismissFresh();
-    this.dialog.open(MarkdownViewDialogComponent, { ...MARKDOWN_VIEW_DIALOG, data });
-  }
-
-  private async content(planId: string, artifactId: string): Promise<string> {
-    const blob = await firstValueFrom(this.api.content(planId, artifactId));
-    return blob.text();
+    this.openTexts.emit(t.source === 'artifact' ? t.key : 'situation');
   }
 
   private loadOther(id: string | null): void {

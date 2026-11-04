@@ -76,6 +76,17 @@ export interface CardSituation {
   publishedMarkdown?: string | null;
   /** 0076: há um resumo diferente do publicado, pronto para publicar. */
   publishPending: boolean;
+  /** 0077: de onde vem o `autoPost` deste card — escolhido neste card, preferência do dono do plano ou o padrão. */
+  autoPostSource?: 'card' | 'user' | 'global' | string;
+}
+
+/** 0077: modo de publicação deste card (o seletor "Neste card"). */
+export type CardPostMode = 'auto' | 'manual' | 'follow';
+
+/** Modo do card a partir da situação: só é "automático/manual" quando foi escolhido neste card. */
+export function cardPostMode(s: Pick<CardSituation, 'autoPost' | 'autoPostSource'> | null | undefined): CardPostMode {
+  if (!s || s.autoPostSource !== 'card') return 'follow';
+  return s.autoPost ? 'auto' : 'manual';
 }
 
 /** `GET/PUT ExecutionPlan/settings/situation-post` (0076): publicar a situação sozinho na discussion. */
@@ -217,9 +228,23 @@ export class CardSituationService {
   }
 
   /** Publica (ou atualiza) o resumo na discussion do card no DevOps — 0076: o servidor monta o HTML. */
-  publish(card: string | number): Promise<{ commentId: number | string | null }> {
+  publish(card: string | number, markdown?: string | null): Promise<{ commentId: number | string | null }> {
+    // 0077: com `markdown`, publica o texto editado pela pessoa (o servidor converte e atualiza o mesmo comentário).
     return firstValueFrom(this.http.post<{ commentId: number | string | null }>(
-      `${this.apiUrl}/card/${encodeURIComponent(norm(card))}/situation/publish`, {}));
+      `${this.apiUrl}/card/${encodeURIComponent(norm(card))}/situation/publish`, markdown ? { markdown } : {}));
+  }
+
+  /** 0077: publicação automática só deste card (`null` = volta a seguir a preferência do dono / o padrão). */
+  async setCardAutoPost(card: string | number, autoPost: boolean | null): Promise<CardSituation> {
+    const key = norm(card);
+    const res = await firstValueFrom(this.http.put<CardSituation>(
+      `${this.apiUrl}/card/${encodeURIComponent(key)}/situation/auto-post`, { autoPost }));
+    const next = normalize(res, key);
+    const prev = this.stateOf(key)();
+    next.devOpsState ??= prev?.devOpsState ?? null;
+    next.devOpsColumn ??= prev?.devOpsColumn ?? null;
+    this.stateOf(key).set(next);
+    return next;
   }
 
   // ── Preferência de publicação automática (0076) ───────────────────────────────────────────────
@@ -333,6 +358,7 @@ function normalize(res: CardSituation | null, card: string): CardSituation {
     publishedBy: r.publishedBy ?? null,
     publishedMarkdown: r.publishedMarkdown ?? null,
     publishPending: !!r.publishPending,
+    autoPostSource: r.autoPostSource ?? 'global',
   };
 }
 

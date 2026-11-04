@@ -1,0 +1,229 @@
+<div class="tc" [class.tc--detail]="narrow() && showDetail()">
+  <header class="tc__head">
+    @if (narrow() && showDetail()) {
+      <button mat-icon-button type="button" (click)="back()" aria-label="Voltar para a lista de textos"><mat-icon>arrow_back</mat-icon></button>
+    } @else {
+      <mat-icon class="tc__lead">edit_note</mat-icon>
+    }
+    <span class="tc__title">Textos do card · #{{ card }}</span>
+    <span class="tc__spacer"></span>
+    <button mat-icon-button type="button" (click)="close()" matTooltip="Fechar (Esc)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+  </header>
+
+  @if (confirmClose()) {
+    <div class="tc__bar tc__bar--warn" role="alertdialog" aria-label="Alterações não salvas">
+      <mat-icon>warning_amber</mat-icon>
+      <span class="tc__bar-text">Há textos editados e não salvos. Fechar descarta as alterações.</span>
+      <button mat-button type="button" (click)="confirmClose.set(false)">Continuar editando</button>
+      <button mat-flat-button type="button" class="tc__danger" (click)="close(true)">Descartar e fechar</button>
+    </div>
+  }
+
+  <div class="tc__body">
+    <!-- Lista agrupada -->
+    <nav class="tc__list" aria-label="Textos do card">
+      @for (g of grouped(); track g.id) {
+        <div class="tc__group">
+          <div class="tc__group-title">{{ g.label }}</div>
+          @for (t of g.items; track t.key) {
+            <button type="button" class="tci" [class.tci--on]="selected()?.key === t.key" (click)="select(t)" [attr.aria-current]="selected()?.key === t.key">
+              <mat-icon class="tci__icon" aria-hidden="true">{{ t.icon }}</mat-icon>
+              <span class="tci__text">
+                <span class="tci__label">{{ t.label }}@if (isDirty(t)) { <span class="tci__dirty" title="Editado e não salvo">●</span> }</span>
+                <span class="tci__meta">
+                  <span>{{ t.origin }}</span>
+                  @if (t.at) { <span [title]="date(t.at)">{{ ago(t.at) }}</span> }
+                </span>
+                <span class="tci__where"><mat-icon>place</mat-icon>{{ t.where }}</span>
+                <span class="tc-state tc-state--{{ t.sendState }}">{{ stateLabel(t) }}</span>
+              </span>
+            </button>
+          }
+        </div>
+      } @empty {
+        @if (loadingSources()) {
+          <div class="tc__empty"><mat-icon class="tc__spin">progress_activity</mat-icon> Buscando os textos do card…</div>
+        } @else {
+          <div class="tc__empty">Nenhum texto gerado neste card ainda. Quando o Claude/PRMake escrever a análise, o resumo ou o root cause, eles aparecem aqui.</div>
+        }
+      }
+      @if (register().status === 'error' || handover().status === 'error' || timeline().status === 'error') {
+        <div class="tc__src-errors" role="status">
+          @if (register().status === 'error') { <div><mat-icon>error_outline</mat-icon>Resumo, root cause e descrição indisponíveis. <button type="button" class="tc__link" (click)="retry('register')">Tentar de novo</button></div> }
+          @if (handover().status === 'error') { <div><mat-icon>error_outline</mat-icon>Handover indisponível. <button type="button" class="tc__link" (click)="retry('handover')">Tentar de novo</button></div> }
+          @if (timeline().status === 'error') { <div><mat-icon>error_outline</mat-icon>Timeline indisponível (o estado de envio da análise pode estar errado). <button type="button" class="tc__link" (click)="retry('timeline')">Tentar de novo</button></div> }
+        </div>
+      }
+    </nav>
+
+    <!-- Texto selecionado -->
+    <section class="tc__detail" aria-live="polite">
+      @if (selected(); as s) {
+        <div class="tcd__head">
+          <mat-icon class="tcd__icon">{{ s.icon }}</mat-icon>
+          <div class="tcd__titles">
+            <h2 class="tcd__title">{{ s.label }}</h2>
+            <div class="tcd__meta">
+              <span class="tcd__fact">{{ s.origin }}</span>
+              @if (s.at) { <span class="tcd__fact" [title]="date(s.at)">{{ s.atVerb ? s.atVerb + ' ' : '' }}{{ ago(s.at) }}</span> }
+              <span class="tcd__fact tcd__where"><mat-icon>place</mat-icon>{{ s.where }}</span>
+              <span class="tc-state tc-state--{{ s.sendState }}">{{ stateLabel(s) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tcd__toolbar" role="toolbar" aria-label="Ações do texto">
+          @if (mode() !== 'edit') {
+            <button mat-stroked-button type="button" (click)="edit()" [disabled]="s.markdown === null || !!busy()"><mat-icon>edit</mat-icon>Editar</button>
+          }
+          @if (mode() !== 'ai') {
+            <button mat-stroked-button type="button" (click)="openAi()" [disabled]="s.markdown === null || !!busy()"
+                    matTooltip="Usa a sua chave de IA (cobrada na sua conta)"><mat-icon>auto_awesome</mat-icon>Gerar de novo com IA</button>
+          }
+          @if (sendText(); as label) {
+            <button mat-flat-button color="primary" type="button" (click)="askSend()" [disabled]="!text().trim() || !!busy()">
+              <mat-icon>{{ s.sendTarget === 'timeline' ? 'timeline' : 'send' }}</mat-icon>{{ label }}…
+            </button>
+          }
+          <span class="tc__spacer"></span>
+          <button mat-icon-button type="button" (click)="copy()" [disabled]="!text()" matTooltip="Copiar (texto e formatado)" aria-label="Copiar o texto">
+            <mat-icon>{{ copied() ? 'check' : 'content_copy' }}</mat-icon>
+          </button>
+        </div>
+
+        @if (confirmSend()) {
+          <div class="tc__bar tc__bar--confirm" role="alertdialog" aria-label="Confirmar o envio">
+            <mat-icon>{{ s.sendTarget === 'timeline' ? 'timeline' : 'campaign' }}</mat-icon>
+            <span class="tc__bar-text">
+              {{ sendWhere(s) }}
+              @if (dirty()) { <strong> Vai o texto editado{{ s.saveTarget !== 'situation-draft' && s.saveTarget !== 'summary' ? ' (é salvo no PRMake antes)' : '' }}.</strong> }
+            </span>
+            <span class="tc__bar-actions">
+              <button mat-button type="button" (click)="confirmSend.set(false)" [disabled]="busy() === 'send'">Cancelar</button>
+              <button mat-flat-button color="primary" type="button" (click)="send()" [disabled]="busy() === 'send'">
+                {{ busy() === 'send' ? 'Enviando…' : 'Enviar' }}
+              </button>
+            </span>
+          </div>
+        }
+        @if (message(); as m) {
+          <div class="tc__msg" [class.tc__msg--error]="!m.ok" role="status">
+            <mat-icon>{{ m.ok ? 'check_circle' : 'error_outline' }}</mat-icon><span>{{ m.text }}</span>
+            <button type="button" class="tc__x" (click)="message.set(null)" aria-label="Fechar o aviso"><mat-icon>close</mat-icon></button>
+          </div>
+        }
+        @if (s.sendState === 'stale' && mode() === 'view' && !confirmSend()) {
+          <div class="tc__hint"><mat-icon>sync_problem</mat-icon>O texto mudou depois do envio — quem lê {{ s.where }} ainda vê a versão anterior.</div>
+        }
+
+        <div class="tcd__content">
+          @switch (mode()) {
+            @case ('edit') {
+              <div class="tce" [class.tce--preview]="previewOnPhone()">
+                <div class="tce__tabs" role="tablist">
+                  <button type="button" role="tab" [class.on]="!previewOnPhone()" (click)="previewOnPhone.set(false)">Escrever</button>
+                  <button type="button" role="tab" [class.on]="previewOnPhone()" (click)="previewOnPhone.set(true)">Prévia</button>
+                </div>
+                <label class="tce__pane tce__pane--src">
+                  <span class="tce__label">Markdown</span>
+                  <textarea class="tce__area" [ngModel]="draft() ?? ''" (ngModelChange)="onDraft($event)" spellcheck="true"
+                            aria-label="Texto em markdown"></textarea>
+                </label>
+                <div class="tce__pane tce__pane--prev">
+                  <span class="tce__label">Prévia</span>
+                  <div class="tc-md tce__preview" [appCodeRefHost]="card" [innerHTML]="html()"></div>
+                </div>
+              </div>
+              <div class="tce__foot">
+                <span class="tce__note">
+                  @if (s.saveTarget === 'situation-draft') { O rascunho fica neste navegador até você publicar. }
+                  @else if (s.sendTarget) { Salvar não envia: {{ s.where }} só muda quando você enviar. }
+                  @else { Fica no PRMake ({{ s.where }}). }
+                </span>
+                <button mat-button type="button" (click)="cancelEdit()" [disabled]="busy() === 'save'">Descartar</button>
+                <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="!dirty() || !!busy()">
+                  {{ busy() === 'save' ? 'Salvando…' : saveLabel(s) }}
+                </button>
+              </div>
+            }
+            @case ('ai') {
+              <div class="tca">
+                <div class="tca__cost" role="note">
+                  <mat-icon>payments</mat-icon>
+                  <span>Usa a <strong>sua chave de IA</strong> (cobrada na sua conta) e só roda quando você clicar em gerar. Nada é salvo sem você revisar.</span>
+                </div>
+                <label class="tca__label" for="tca-ask">O que mudar?</label>
+                <textarea id="tca-ask" class="tca__ask" [ngModel]="instructions()" (ngModelChange)="instructions.set($event)" rows="3"
+                          placeholder="Ex.: deixe mais curto, foque no cliente, em inglês, cite o chamado…"></textarea>
+                <div class="tca__chips">
+                  @for (q of quickAsks; track q) { <button type="button" class="tca__chip" (click)="addAsk(q)">+ {{ q }}</button> }
+                </div>
+                <div class="tca__ctx" role="group" aria-labelledby="tca-ctx-title">
+                  <div class="tca__ctx-title" id="tca-ctx-title">Contexto que vai para a IA</div>
+                  <div class="tca__ctx-grid">
+                    @for (p of aiParts(); track p.id) {
+                      <label class="tca__check" [class.tca__check--off]="!p.text">
+                        <input type="checkbox" [checked]="!!aiChecks()[p.id] && !!p.text" [disabled]="!p.text" (change)="toggleCheck(p.id, $any($event.target).checked)" />
+                        <span class="tca__check-text">
+                          <span>{{ p.label }}</span>
+                          @if (!p.text && p.unavailable) { <span class="tca__why">{{ p.unavailable }}</span> }
+                        </span>
+                      </label>
+                    }
+                  </div>
+                </div>
+                <div class="tca__actions">
+                  <button type="button" class="tc__link" (click)="showPrompt.set(!showPrompt())">{{ showPrompt() ? 'Esconder o prompt' : 'Ver o prompt' }}</button>
+                  <span class="tc__spacer"></span>
+                  <button mat-button type="button" (click)="mode.set('view')" [disabled]="busy() === 'ai'">Voltar</button>
+                  <button mat-flat-button color="primary" type="button" (click)="generate()" [disabled]="!!busy()">
+                    <mat-icon>auto_awesome</mat-icon>{{ busy() === 'ai' ? 'Gerando…' : aiResult() ? 'Gerar de novo' : 'Gerar com a minha IA' }}
+                  </button>
+                </div>
+                @if (showPrompt()) { <pre class="tca__prompt">{{ prompt() }}</pre> }
+                @if (aiError()) {
+                  <div class="tc__msg tc__msg--error" role="alert">
+                    <mat-icon>error_outline</mat-icon>
+                    <span>A IA não gerou o texto: {{ aiError() }} Confira a sua chave de IA em <strong>Minhas integrações</strong> e tente de novo — o texto atual não mudou.</span>
+                  </div>
+                }
+                @if (aiResult(); as out) {
+                  <div class="tca__compare">
+                    <div class="tca__col">
+                      <span class="tce__label">Atual</span>
+                      <div class="tc-md tca__box" [innerHTML]="html()"></div>
+                    </div>
+                    <div class="tca__col tca__col--new">
+                      <span class="tce__label">Sugestão da IA</span>
+                      <div class="tc-md tca__box" [innerHTML]="aiHtml(out)"></div>
+                    </div>
+                  </div>
+                  <div class="tca__actions">
+                    <span class="tce__note">Vai para o editor — revise e salve.</span>
+                    <span class="tc__spacer"></span>
+                    <button mat-button type="button" (click)="aiResult.set(null)">Descartar</button>
+                    <button mat-flat-button color="primary" type="button" (click)="useAi()"><mat-icon>edit_note</mat-icon>Usar este texto</button>
+                  </div>
+                }
+              </div>
+            }
+            @default {
+              @if (s.markdown === null) {
+                <div class="tc__state" role="status"><mat-icon class="tc__spin">progress_activity</mat-icon> Carregando o texto…</div>
+              } @else if (contentFailed(s) && !s.markdown) {
+                <div class="tc__state tc__state--error" role="alert"><mat-icon>error_outline</mat-icon> Não foi possível carregar o arquivo.</div>
+              } @else {
+                @if (s.draft || dirty()) {
+                  <div class="tc__hint tc__hint--draft"><mat-icon>edit_note</mat-icon>{{ dirty() ? 'Editado e não salvo — mostrando o rascunho.' : 'Rascunho guardado neste navegador (ainda não publicado).' }}</div>
+                }
+                <div class="tc-md tcd__md" [appCodeRefHost]="card" [innerHTML]="html()"></div>
+              }
+            }
+          }
+        </div>
+      } @else {
+        <div class="tc__state"><mat-icon>touch_app</mat-icon> Escolha um texto.</div>
+      }
+    </section>
+  </div>
+</div>

@@ -52,6 +52,13 @@ class FakeSituations {
   watch(card: string) { this.watched.push(card); }
   unwatch(card: string) { this.watched = this.watched.filter(c => c !== card); }
   async publish(card: string) { this.published.push(card); return { commentId: 1 }; }
+  cardModes: (boolean | null)[] = [];
+  async setCardAutoPost(card: string, autoPost: boolean | null) {
+    this.cardModes.push(autoPost);
+    const next = { ...this.situationOf(card)()!, autoPost: autoPost ?? this.settings.effective, autoPostSource: autoPost === null ? 'user' : 'card' };
+    this.situationOf(card).set(next);
+    return next;
+  }
   async loadPostSettings() { this.postSettings.set(this.settings); return this.settings; }
   async savePostSettings(autoPost: boolean | null) {
     this.saved.push(autoPost);
@@ -280,6 +287,29 @@ describe('CardSituationComponent (0075/F4)', () => {
     [...el.querySelectorAll<HTMLButtonElement>('.sit__post-help .sit__link')].find(b => b.textContent!.includes('Usar o padrão'))!.click();
     await settle(f);
     expect(svc.saved).toEqual([false, null]);
+  });
+
+  it('0077: modo deste card — Automático/Manual/Seguir, com a origem; PUT auto-post só do card', async () => {
+    await render(situation({ kind: 'ticket', title: 'Aguardando chamado', markdown: '**S**', autoPost: true, autoPostSource: 'global' }));
+    const seg = () => [...el.querySelectorAll<HTMLButtonElement>('.sit__seg-btn')];
+    expect(seg().map(b => b.textContent!.trim())).toEqual(['Automático', 'Manual', 'Seguir minha preferência']);
+    expect(seg()[2].getAttribute('aria-checked')).toBe('true');
+    expect(el.querySelector('.sit__mode-src')!.textContent).toContain('Vale: automático — padrão do PRMake');
+
+    seg()[1].click();
+    await settle(f);
+    expect(svc.cardModes).toEqual([false]);
+    expect(seg()[1].getAttribute('aria-checked')).toBe('true');
+    expect(el.querySelector('.sit__mode-src')!.textContent).toContain('Vale: manual — escolhido neste card');
+
+    seg()[2].click();
+    await settle(f);
+    expect(svc.cardModes).toEqual([false, null]);
+    expect(seg()[2].getAttribute('aria-checked')).toBe('true');
+    // clicar no modo atual não grava de novo
+    seg()[2].click();
+    await settle(f);
+    expect(svc.cardModes.length).toBe(2);
   });
 
   it('erro na carga: aviso discreto com "Tentar de novo"', async () => {

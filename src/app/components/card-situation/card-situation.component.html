@@ -74,6 +74,21 @@
           Publicar automaticamente
         </mat-slide-toggle>
       </div>
+      <!-- 0077: modo deste card (acima da preferência do usuário e do padrão) e de onde vem -->
+      <div class="sit__mode" role="radiogroup" aria-label="Publicação do resumo neste card">
+        <span class="sit__mode-label">Neste card</span>
+        <span class="sit__seg">
+          @for (m of cardModes; track m.id) {
+            <button type="button" role="radio" class="sit__seg-btn" [class.sit__seg-btn--on]="cardMode() === m.id"
+                    [attr.aria-checked]="cardMode() === m.id" [disabled]="!!savingMode()" (click)="setCardMode(m.id)"
+                    [matTooltip]="m.hint">{{ savingMode() === m.id ? 'Salvando…' : m.label }}</button>
+          }
+        </span>
+        <span class="sit__mode-src">{{ modeSource() }}</span>
+      </div>
+      @if (modeError()) {
+        <div class="sit__post-error" role="alert"><mat-icon>error_outline</mat-icon>{{ modeError() }}</div>
+      }
       @if (!collapsed()) {
         <div class="sit__post-help">
           O PRMake atualiza o mesmo comentário a cada mudança: chamado, PR, QA ou etapa sua.

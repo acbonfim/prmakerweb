@@ -143,6 +143,36 @@ describe('CardSituationService (0075/F4)', () => {
     expect((await reset).autoPost).toBeNull();
   });
 
+  it('0077: publish com o texto editado manda { markdown }; auto-post só do card (PUT) atualiza o cache', async () => {
+    const pub = svc.publish('75812', '**editado**');
+    const req = http.expectOne(r => r.url.endsWith('ExecutionPlan/card/75812/situation/publish'));
+    expect(req.request.body).toEqual({ markdown: '**editado**' });
+    req.flush({ commentId: 9 });
+    await pub;
+
+    const loaded = svc.load('75812', { devops: true });
+    http.expectOne(url(true)).flush(base({ autoPost: false, autoPostSource: 'global' } as Partial<CardSituation>));
+    await loaded;
+    expect(svc.situationOf('75812')()?.autoPostSource).toBe('global');
+
+    const put = svc.setCardAutoPost('75812', true);
+    const r2 = http.expectOne(r => r.url.endsWith('ExecutionPlan/card/75812/situation/auto-post'));
+    expect(r2.request.method).toBe('PUT');
+    expect(r2.request.body).toEqual({ autoPost: true });
+    r2.flush(base({ autoPost: true, autoPostSource: 'card', devOpsState: null } as Partial<CardSituation>));
+    const s = await put;
+    expect(s.autoPostSource).toBe('card');
+    expect(svc.situationOf('75812')()?.autoPost).toBeTrue();
+    // o PUT não traz o DevOps: mantém o estado que já veio
+    expect(svc.situationOf('75812')()?.devOpsState).toBe('Active');
+
+    const back = svc.setCardAutoPost('75812', null);
+    const r3 = http.expectOne(r => r.url.endsWith('situation/auto-post'));
+    expect(r3.request.body).toEqual({ autoPost: null });
+    r3.flush(base({ autoPostSource: 'user' } as Partial<CardSituation>));
+    expect((await back).autoPostSource).toBe('user');
+  });
+
   it('"há X" e chip da Home', () => {
     const now = Date.parse('2026-11-04T12:00:00Z');
     expect(situationAgo('2026-11-04T11:59:30Z', now)).toBe('agora');
