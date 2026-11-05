@@ -5,6 +5,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { Observable, firstValueFrom, shareReplay, catchError, throwError } from 'rxjs';
 import { WorkItemsService } from '../../services/work-items.service';
 import { CaseChatService } from '../../services/case-chat.service';
+import { ExecutionQueueService } from '../../services/execution-queue.service';
 import {
   WorkItem,
   WorkItemCatalog,
@@ -35,6 +36,7 @@ const CATALOG_TTL_MS = 60_000;
 export class WorkItemActionsService {
   private api = inject(WorkItemsService);
   private chat = inject(CaseChatService);
+  private queue = inject(ExecutionQueueService);
   private dialog = inject(MatDialog);
   private snack = inject(MatSnackBar);
   private router = inject(Router);
@@ -185,6 +187,23 @@ export class WorkItemActionsService {
     } catch (e) {
       this.fail(e);
       return undefined;
+    }
+  }
+
+  /**
+   * Card 77988: itens a partir da análise que terminou sem plano de implementação/correção ("só a análise por enquanto").
+   * O Claude do tratamento monta o plano na máquina de quem pediu — com `start`, já executa; sem, deixa pausado.
+   */
+  async fromAnalysis(card: string, start: boolean, fix: string): Promise<boolean> {
+    try {
+      await firstValueFrom(this.queue.delivery(card, start));
+      this.ok(start
+        ? `Pedido enviado: o Claude monta o plano de ${fix} e já começa — o item aparece aqui em instantes.`
+        : `Pedido enviado: o Claude monta o plano de ${fix} e deixa pausado — use Executar no item quando quiser.`);
+      return true;
+    } catch (e) {
+      this.fail(e);
+      return false;
     }
   }
 
