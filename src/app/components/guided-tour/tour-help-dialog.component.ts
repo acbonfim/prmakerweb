@@ -3,11 +3,13 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { GuidedTourService } from './guided-tour.service';
-import { TourDefinition, TourStep } from './tour.model';
+import { TourDefinition, TourHost, TourStep } from './tour.model';
 
 export interface TourHelpData {
   tour: TourDefinition;
   hasCard: boolean;
+  /** 0084: para esconder os passos que a pessoa não pode usar (`requires`). */
+  host?: TourHost;
 }
 
 /** Resultado: `{ tour: true }` = fazer o tour; `{ from: id }` = mostrar aquele passo na tela. */
@@ -27,20 +29,19 @@ export type TourHelpResult = { tour: true } | { from: string } | undefined;
         <mat-icon class="th__icon">help_outline</mat-icon>
         <div class="th__titles">
           <span class="th__title">{{ data.tour.title }}</span>
-          <span class="th__sub">Tudo o que mudou na tela do card e como usar cada parte</span>
+          @if (data.tour.help?.subtitle; as sub) { <span class="th__sub">{{ sub }}</span> }
         </div>
         <button mat-icon-button mat-dialog-close aria-label="Fechar"><mat-icon>close</mat-icon></button>
       </header>
       <div class="th__body">
-        <div class="th__tips">
-          <b>Para usar do jeito certo</b>
-          <ul>
-            <li><b>Dúvida ou discordância?</b> Pergunte ao <b>Especialista do caso</b> (coluna da direita) — não cancele o plano nem use comentários como chat.</li>
-            <li><b>O plano espera por você?</b> Responda na própria etapa; é isso que faz o Claude continuar.</li>
-            <li><b>O Claude está rodando?</b> Olhe o ícone do robô no cabeçalho do plano: ele se mexe enquanto trabalha.</li>
-            <li><b>Mudar o plano?</b> Só por uma proposta do especialista que você aceita (ou por um comentário-instrução no plano).</li>
-          </ul>
-        </div>
+        @if (data.tour.help?.tips?.length) {
+          <div class="th__tips">
+            <b>Para usar do jeito certo</b>
+            <ul>
+              @for (t of data.tour.help!.tips!; track $index) { <li [innerHTML]="t"></li> }
+            </ul>
+          </div>
+        }
         @for (g of groups(); track g.name) {
           <section class="th__group">
             <h3>{{ g.name }}</h3>
@@ -54,7 +55,7 @@ export type TourHelpResult = { tour: true } | { from: string } | undefined;
                   @if (tours.available(s)) {
                     <button mat-button class="th__show" (click)="show(s)"><mat-icon>my_location</mat-icon>Mostrar na tela</button>
                   } @else {
-                    <span class="th__na">{{ s.phase === 'card' && !data.hasCard ? 'abra um card para ver' : 'aparece quando houver' }}</span>
+                    <span class="th__na">{{ s.phase !== 'entry' && !data.hasCard ? 'abra um card para ver' : 'aparece quando houver' }}</span>
                   }
                 }
               </article>
@@ -98,7 +99,7 @@ export class TourHelpDialogComponent {
 
   readonly groups = computed(() => {
     const map = new Map<string, TourStep[]>();
-    for (const s of this.data.tour.steps.filter((x) => x.guide !== false)) map.set(s.group, [...(map.get(s.group) ?? []), s]);
+    for (const s of this.data.tour.steps.filter((x) => x.guide !== false && this.tours.allowed(x, this.data.host))) map.set(s.group, [...(map.get(s.group) ?? []), s]);
     return Array.from(map, ([name, steps]) => ({ name, steps }));
   });
 

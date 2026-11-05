@@ -31,6 +31,14 @@ export interface TourStep {
   guide?: false;
   /** Deixa a pessoa usar o elemento destacado (ex.: digitar o número do card). */
   interactive?: boolean;
+  /**
+   * 0084: o que a tela precisa fazer antes do passo (ex.: `project` abre um sistema, `map` abre o mapa). Quem faz é o
+   * `TourHost.prepare`; o tour espera o elemento aparecer. Passo com `prepare` não é descartado no início do tour por
+   * não ter o elemento na tela ainda.
+   */
+  prepare?: string;
+  /** 0084: só para quem tem a permissão (ex.: `admin`), conforme `TourHost.can`. */
+  requires?: string;
 }
 
 export interface TourDefinition {
@@ -39,10 +47,20 @@ export interface TourDefinition {
   version: number;
   title: string;
   steps: TourStep[];
+  /** 0084: textos do guia "Como usar esta tela" (subtítulo e dicas do topo, HTML simples). */
+  help?: { subtitle: string; tips?: string[] };
 }
+
+/** Resultado do `prepare`: já estava pronto, a tela mudou (esperar o elemento) ou não dá (pular o passo). */
+export type TourPrepareResult = 'ready' | 'changed' | 'skip';
 
 /** O que a tela oferece ao tour (abrir a aba certa no celular, saber se há card aberto). */
 export interface TourHost {
-  hasCard(): boolean;
+  /** Tela em duas fases (entrada → card). Sem isto, o tour inteiro roda de uma vez. */
+  hasCard?(): boolean;
   showMobileTab?(tab: TourMobileTab): void;
+  /** 0084: prepara a tela para o passo (ver `TourStep.prepare`). */
+  prepare?(step: TourStep): TourPrepareResult;
+  /** 0084: a pessoa pode ver o passo (ver `TourStep.requires`)? */
+  can?(requirement: string): boolean;
 }

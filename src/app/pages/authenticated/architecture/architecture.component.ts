@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnInit, ViewChild, computed, effect, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild, computed, effect, inject, signal, untracked } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -6,6 +6,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatDialog } from '@angular/material/dialog';
+import { GuidedTourService } from '../../../components/guided-tour/guided-tour.service';
+import { BASE_SOLVACE_TOUR } from '../../../components/guided-tour/base-solvace.tour';
+import { TourHelpData, TourHelpDialogComponent, TourHelpResult } from '../../../components/guided-tour/tour-help-dialog.component';
+import { TourHost, TourPrepareResult, TourStep } from '../../../components/guided-tour/tour.model';
+import { MyIntegrationsDialogComponent } from '../../../components/my-integrations-dialog/my-integrations-dialog.component';
+import { TabsService } from '../../../services/tabs.service';
 import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdown.pipe';
 import { renderMermaidIn } from '../../../helpers/mermaid-loader';
 import { StorageService } from '../../../services/storage.service';
@@ -29,6 +36,7 @@ import { ReverseEngineeringService, ReverseTrap, reverseDocOfItem } from '../../
 import {
   ARCHITECTURE_KINDS,
   ArchitectureAskResponse,
+  ArchitectureAskStatus,
   ArchitectureProject,
   ArchitectureSearchHit,
   ArchitectureSection,
@@ -96,7 +104,7 @@ interface TreeGroup {
   templateUrl: './architecture.component.html',
   styleUrls: ['./architecture.component.css']
 })
-export class ArchitectureComponent implements OnInit {
+export class ArchitectureComponent implements OnInit, OnDestroy {
   private api = inject(ArchitectureService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -149,6 +157,8 @@ export class ArchitectureComponent implements OnInit {
   readonly askFiles = signal<PendingAttachment[]>([]);
   readonly askAttachMessages = signal<string[]>([]);
   readonly attachSupport = signal<{ supports: boolean; limits: AskAttachmentLimits }>({ supports: false, limits: DEFAULT_ATTACH_LIMITS });
+  /** 0084: a IA do Pergunte está configurada para esta pessoa? (selo "IA pronta" / "Configurar a IA" no topo). */
+  readonly aiStatus = signal<ArchitectureAskStatus | null>(null);
   readonly dictation = new Dictation();
   readonly canDictate = dictationSupported();
   readonly askExamples = [
@@ -307,10 +317,7 @@ export class ArchitectureComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
-    this.api.askStatus().subscribe({
-      next: st => this.attachSupport.set({ supports: !!st.available && !!st.supportsAttachments, limits: st.limits ?? DEFAULT_ATTACH_LIMITS }),
-      error: () => { /* sem status: o recurso de anexo fica escondido */ }
-    });
+    this.loadAiStatus();
     this.route.queryParamMap.subscribe(q => {
       const modo = q.get('modo');
       if (modo === 'simples' || modo === 'tecnico') this.setMode(modo, false);
@@ -692,6 +699,101 @@ export class ArchitectureComponent implements OnInit {
     navigator.clipboard?.writeText(location.href).then(
       () => this.snackBar.open('Link copiado', 'Ok', { duration: 2500 }),
       () => this.snackBar.open('Não foi possível copiar', 'Ok', { duration: 2500 }));
+  }
+
+  // ── 0084: configuração inicial e tour guiado ─────────────────────────────────────────────────
+
+  private loadAiStatus(): void {
+    this.api.askStatus().subscribe({
+      next: st => {
+        this.aiStatus.set(st);
+        this.attachSupport.set({ supports: !!st.available && !!st.supportsAttachments, limits: st.limits ?? DEFAULT_ATTACH_LIMITS });
+      },
+      error: () => { /* sem status: o selo e o recurso de anexo ficam escondidos */ }
+    });
+  }
+
+  /** "Minhas integrações" (a chave de IA é pessoal); ao fechar, relê o status para o selo mudar na hora. */
+  openIntegrations(): void {
+    this.dialog.open(MyIntegrationsDialogComponent, { width: '640px', maxWidth: '94vw', maxHeight: '90vh', panelClass: 'custom-dialog-container' })
+      .afterClosed().subscribe(() => this.loadAiStatus());
+  }
+
+  private readonly dialog = inject(MatDialog);
+  private readonly tours = inject(GuidedTourService);
+  readonly tourHost: TourHost = {
+    can: (requirement) => requirement === 'admin' && this.isAdmin(),
+    prepare: (step) => this.prepareTourStep(step)
+  };
+  private tourOffered = false;
+  /** Primeira vez na tela: o tour abre sozinho quando a base carrega na visão geral (link direto para uma seção não é interrompido). */
+  private readonly tourOnEntry = effect(() => {
+    if (this.tourOffered || this.loading() || this.selection().type !== 'overview') return;
+    this.tourOffered = true;
+    untracked(() => setTimeout(() => this.tours.autoStart(BASE_SOLVACE_TOUR, this.tourHost), 700));
+  });
+  /** A tela fica guardada quando a pessoa troca de aba (0065): o tour não pode ficar por cima da outra aba. */
+  private readonly tabLeaving = inject(TabsService).leaving$.subscribe(() => this.tours.stop(BASE_SOLVACE_TOUR.id));
+
+  ngOnDestroy(): void {
+    this.tabLeaving.unsubscribe();
+    this.tours.stop(BASE_SOLVACE_TOUR.id);
+  }
+
+  openHelp(): void {
+    const data: TourHelpData = { tour: BASE_SOLVACE_TOUR, hasCard: true, host: this.tourHost };
+    this.dialog.open<TourHelpDialogComponent, TourHelpData, TourHelpResult>(TourHelpDialogComponent, {
+      data, width: '760px', maxWidth: '96vw', autoFocus: false
+    }).afterClosed().subscribe(r => {
+      if (!r) return;
+      // Depois de o diálogo sair da tela (o tour não abre com diálogo aberto).
+      setTimeout(() => this.tours.start(BASE_SOLVACE_TOUR, this.tourHost, 'from' in r ? r.from : undefined), 250);
+    });
+  }
+
+  /** O tour pede a tela certa para o passo (ver `BASE_SOLVACE_TOUR`): visão geral, lista de sistemas, mapa ou um sistema. */
+  private prepareTourStep(step: TourStep): TourPrepareResult {
+    const narrow = window.matchMedia('(max-width: 900px)').matches;
+    if (step.prepare === 'tree') {
+      // No celular a lista é uma gaveta fechada; no computador está sempre à vista.
+      if (!narrow || this.treeOpen()) return 'ready';
+      this.treeOpen.set(true);
+      return 'changed';
+    }
+    // A gaveta da lista cobre o conteúdo no celular.
+    const drawer = narrow && this.treeOpen();
+    if (drawer) this.treeOpen.set(false);
+    const sel = this.selection();
+    switch (step.prepare) {
+      case 'overview':
+        if (sel.type === 'overview') return drawer ? 'changed' : 'ready';
+        this.goOverview();
+        return 'changed';
+      case 'map':
+        if (sel.type === 'map') return drawer ? 'changed' : 'ready';
+        this.openMap();
+        return 'changed';
+      case 'project': {
+        if (sel.type === 'project' && this.currentProject()) return drawer ? 'changed' : 'ready';
+        const p = this.tourProject();
+        if (!p) return 'skip';
+        this.selectProject(p);
+        return 'changed';
+      }
+      default:
+        return drawer ? 'changed' : 'ready';
+    }
+  }
+
+  /** Sistema que o tour abre para mostrar: o mais completo (guia no Simples, ligações, engenharia reversa para o admin). */
+  private tourProject(): ArchitectureProject | null {
+    const score = (p: ArchitectureProject) =>
+      (this.simple() ? (guideSections(p).length ? 4 : 0) : (p.sections.length ? 4 : 0)) +
+      ((p.relations?.length || p.usedBy?.length) ? 2 : 0) +
+      (this.isAdmin() && this.isModule(p) && this.reverseCount(p) ? 1 : 0);
+    let best: ArchitectureProject | null = null;
+    for (const p of this.projects()) if (!best || score(p) > score(best)) best = p;
+    return best;
   }
 
   // ── Formatação ────────────────────────────────────────────────────────────────────────────────
