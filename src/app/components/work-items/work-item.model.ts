@@ -1,10 +1,16 @@
+import type { WorkItemTypeInfo } from './work-item-types';
+
 /**
  * Itens de trabalho do card (feature 0085) — espelha `WorkItemResponse`/`WorkTaskResponse` da API
  * (`api/v1/WorkItems`). Um card tem vários itens; cada item tem sub-tarefas ordenadas. Itens e sub-tarefas
  * compartilham uma numeração global (`#123`).
  */
 
-export type WorkItemType = 'bug' | 'user-story';
+/**
+ * Tipo do item (rodada 4): os tipos próprios do catálogo (`itemTypes` — task, pull-request, review, analysis, fix…);
+ * `bug`/`user-story` só em itens antigos. Ver work-item-types.ts.
+ */
+export type WorkItemType = 'bug' | 'user-story' | (string & {});
 export type WorkItemStatus = 'pending' | 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled' | 'reverting' | 'reverted';
 export type WorkTaskStatus = 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'skipped' | 'cancelled' | 'reverted';
 export type WorkItemOrigin = 'user' | 'specialist' | 'analysis' | 'correction' | 'template';
@@ -17,7 +23,7 @@ export type TaskKind = 'branch' | 'cherry-pick' | 'code' | 'pr' | 'devops-state'
  * `state` = estados do card no DevOps, `commits` = seletor de commits, `select` = `options`. Sem `input` no catálogo,
  * o editor deduz pelo nome do parâmetro (`paramInput` em work-item-pickers).
  */
-export type TaskParamInput = 'repository' | 'branch' | 'target-branch' | 'state' | 'commits' | 'text' | 'textarea' | 'select';
+export type TaskParamInput = 'repository' | 'branch' | 'target-branch' | 'state' | 'commits' | 'text' | 'textarea' | 'select' | 'pull-request';
 /** Opção de um parâmetro `select` (texto simples ou `{value, label}`). */
 export type TaskParamOption = string | { value: string; label?: string | null };
 export type WorkItemLinkKind = 'pr' | 'branch' | 'commit' | 'doc' | 'attachment' | 'timeline' | (string & {});
@@ -158,6 +164,8 @@ export interface WorkItemCatalog {
   defaultRepository?: string | null;
   /** URL base do GitHub (`https://github.com/<owner>`) para os links de repositório/branch. */
   githubUrl?: string | null;
+  /** Rodada 4: tipos do item (`WorkItemTypes`); ausente = os semeados (work-item-types.ts). */
+  itemTypes?: WorkItemTypeInfo[] | null;
 }
 
 export interface WorkTaskInput {
@@ -292,7 +300,11 @@ const KIND_DEFAULTS: Record<string, { label: string; icon: string }> = {
   comment: { label: 'Comentário', icon: 'chat_bubble_outline' },
   manual: { label: 'Manual', icon: 'pan_tool' },
   ticket: { label: 'Abrir chamado', icon: 'confirmation_number' },
-  notify: { label: 'Avisar', icon: 'campaign' }
+  notify: { label: 'Avisar', icon: 'campaign' },
+  'pr-review': { label: 'Revisar PR', icon: 'rate_review' },
+  'devops-action': { label: 'Ação no DevOps', icon: 'bolt' },
+  'pr-text': { label: 'Texto do PR (PRMake)', icon: 'article' },
+  'sql-query': { label: 'Consulta SQL', icon: 'manage_search' }
 };
 
 export function kindInfo(kind: string | null | undefined, catalog?: WorkItemCatalog | null): { label: string; icon: string } {

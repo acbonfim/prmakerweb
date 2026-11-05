@@ -7,7 +7,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { WorkItemsService } from '../../services/work-items.service';
 import { WsService } from '../../services/ws.service';
-import { workItemTypeIcon, workItemTypeLabel } from '../../helpers/work-item-type-icons';
+import { WiTypeIconComponent } from './wi-type-icon.component';
 import {
   TASK_ACTION_LABELS,
   WorkItem,
@@ -55,12 +55,12 @@ export interface WorkItemDialogData {
 @Component({
   selector: 'app-work-item-dialog',
   standalone: true,
-  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe],
+  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <div class="wi-dlg">
       <header class="wi-dlg__head">
-        <mat-icon class="wi-type wid__type" [svgIcon]="typeIcon()" [matTooltip]="typeLabel()"></mat-icon>
+        <app-wi-type-icon class="wi-type wid__type" [type]="item()?.type" [catalog]="data.catalog" [size]="20" />
         <div class="wi-dlg__head-main">
           <span class="wi-dlg__title"><span class="wi-num">{{ num(data.number) }}</span> {{ item()?.title || 'Item de trabalho' }}</span>
           @if (item(); as it) {
@@ -220,8 +220,6 @@ export class WorkItemDialogComponent {
 
   readonly look = computed(() => itemStatusLook(this.item()?.status));
   readonly progress = computed(() => { const it = this.item(); return it ? itemProgress(it) : { done: 0, total: 0, pct: 0 }; });
-  readonly typeIcon = computed(() => workItemTypeIcon(this.item()?.type ?? this.data.cardType));
-  readonly typeLabel = computed(() => workItemTypeLabel(this.item()?.type ?? this.data.cardType));
   readonly busyItem = computed(() => { const it = this.item(); return !!it && isItemBusy(it); });
   readonly canRun = computed(() => { const it = this.item(); return !!it && canExecute(it); });
   readonly canCancelIt = computed(() => { const it = this.item(); return !!it && canCancel(it); });
