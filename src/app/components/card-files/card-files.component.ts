@@ -10,19 +10,19 @@ import { WorkItemsService } from '../../services/work-items.service';
 import { saveBlob } from '../../services/execution-plan.service';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { renderMarkdown } from '../../helpers/markdown-ext';
-import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
+import { FileViewerComponent } from '../file-viewer/file-viewer.component';
 import { CardFilesStore } from '../work-items/card-files.store';
 import { WorkItem, formatWorkNumber } from '../work-items/work-item.model';
 import {
-  FILE_KIND_LOOKS, WorkItemFile, WorkItemFileKind, countFilesByItem, fileIcon, fileKindLook, fileMeta, filePreviewKind,
-  fileTextAsMarkdown, filesOfItem, isTextFile, normalizeFileKind
+  CASE_FILES_KEY, FILE_KIND_LOOKS, WorkItemFile, WorkItemFileKind, countFilesByItem, fileIcon, fileKindLook, fileMeta, filePreviewKind, fileSourceChip,
+  filesOfItem, isTextFile, normalizeFileKind
 } from '../work-items/work-item-files';
 
 type KindTab = 'all' | WorkItemFileKind;
 
 interface FileView {
   status: 'loading' | 'ready' | 'error' | 'none';
-  html: string;
+  blob?: Blob;
 }
 
 const NARROW = '(max-width: 720px)';
@@ -36,7 +36,7 @@ const NARROW = '(max-width: 720px)';
 @Component({
   selector: 'app-card-files',
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatTooltipModule, CodeRefHostDirective],
+  imports: [MatButtonModule, MatIconModule, MatTooltipModule, FileViewerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="cf" [class.cf--detail]="narrow() && showDetail()">
@@ -86,8 +86,8 @@ const NARROW = '(max-width: 720px)';
                   @if (meta(f); as m) { <span>{{ m }}</span> }
                 </span>
                 <span class="cfi__where">
-                  <mat-icon>{{ f.workItemNumber ? 'checklist' : 'history' }}</mat-icon>{{ whereOf(f) }}
-                  @if (f.source === 'plan') { <span class="cfi__chip">plano</span> }
+                  <mat-icon>{{ whereIcon(f) }}</mat-icon>{{ whereOf(f) }}
+                  @if (chip(f); as c) { <span class="cfi__chip" [matTooltip]="c.tooltip">{{ c.label }}</span> }
                 </span>
               </span>
             </button>
@@ -114,7 +114,7 @@ const NARROW = '(max-width: 720px)';
                 <div class="cfd__meta">
                   <span class="cfd__fact">{{ look(f).label }}</span>
                   @if (meta(f, true); as m) { <span class="cfd__fact">{{ m }}</span> }
-                  <span class="cfd__fact cfd__where"><mat-icon>{{ f.workItemNumber ? 'checklist' : 'history' }}</mat-icon>{{ whereOf(f) }}</span>
+                  <span class="cfd__fact cfd__where"><mat-icon>{{ whereIcon(f) }}</mat-icon>{{ whereOf(f) }}</span>
                   @if (f.createdBy) { <span class="cfd__fact">por {{ f.createdBy }}</span> }
                 </div>
               </div>
@@ -144,7 +144,10 @@ const NARROW = '(max-width: 720px)';
                   <div class="cf__state"><mat-icon>draft</mat-icon>Este tipo de arquivo não tem visualização aqui.
                     <button mat-stroked-button type="button" (click)="download(f)"><mat-icon>download</mat-icon>Baixar {{ f.name }}</button></div>
                 }
-                @default { <div class="cf-md" [appCodeRefHost]="card()" [innerHTML]="view().html"></div> }
+                @default {
+                  <app-file-viewer class="cfd__viewer" [name]="f.name" [contentType]="f.contentType" [kind]="f.kind"
+                                   [blob]="view().blob ?? null" [card]="card()" />
+                }
               }
             </div>
           } @else {
@@ -176,10 +179,10 @@ export class CardFilesComponent {
   readonly busy = signal<string | null>(null);
   readonly copied = signal<string | null>(null);
   private readonly cache = new Map<string, FileView>();
-  private readonly objectUrls: string[] = [];
   private seq = 0;
-  readonly view = signal<FileView>({ status: 'loading', html: '' });
+  readonly view = signal<FileView>({ status: 'loading' });
 
+  readonly chip = fileSourceChip;
   readonly key = (f: WorkItemFile) => `${f.source ?? 'item'}:${f.id}`;
   readonly look = (f: WorkItemFile) => fileKindLook(f.kind);
   readonly icon = fileIcon;
@@ -230,6 +233,8 @@ export class CardFilesComponent {
     }
     const orphans = counts.get(0) ?? 0;
     if (orphans || selected === 0) out.push({ number: 0, label: 'Sem item (versões antigas do plano)', count: orphans });
+    const conversation = counts.get(CASE_FILES_KEY) ?? 0;
+    if (conversation || selected === CASE_FILES_KEY) out.push({ number: CASE_FILES_KEY, label: 'Conversa do especialista', count: conversation });
     return out;
   });
 
@@ -238,10 +243,7 @@ export class CardFilesComponent {
 
   constructor() {
     this.mq?.addEventListener('change', this.onNarrow);
-    inject(DestroyRef).onDestroy(() => {
-      this.mq?.removeEventListener('change', this.onNarrow);
-      this.objectUrls.forEach((u) => URL.revokeObjectURL(u));
-    });
+    inject(DestroyRef).onDestroy(() => this.mq?.removeEventListener('change', this.onNarrow));
 
     // Carrega o conteúdo do arquivo aberto (com cache por versão do arquivo — recarga da lista não pisca a leitura).
     effect(() => {
@@ -278,7 +280,12 @@ export class CardFilesComponent {
     this.query.set('');
   }
 
+  whereIcon(f: WorkItemFile): string {
+    return f.source === 'case' ? 'psychology' : f.workItemNumber ? 'checklist' : 'history';
+  }
+
   whereOf(f: WorkItemFile): string {
+    if (f.source === 'case') return 'Conversa do especialista';
     const n = Number(f.workItemNumber ?? 0);
     if (!n) return 'Versão antiga do plano';
     const item = this.items().find((i) => i.number === n);
@@ -304,27 +311,18 @@ export class CardFilesComponent {
 
   private load(f: WorkItemFile | null, force: boolean): void {
     const s = ++this.seq;
-    if (!f) { this.view.set({ status: 'ready', html: '' }); return; }
-    const kind = filePreviewKind(f);
-    if (kind === 'none') { this.view.set({ status: 'none', html: '' }); return; }
+    if (!f) { this.view.set({ status: 'ready' }); return; }
+    if (filePreviewKind(f) === 'none') { this.view.set({ status: 'none' }); return; }
     const ck = this.cacheKey(f);
     const cached = force ? undefined : this.cache.get(ck);
     if (cached) { this.view.set(cached); return; }
-    // Só mostra "Carregando…" se não houver nada do arquivo anterior para manter; a troca é direta quando a leitura é rápida.
-    this.view.set({ status: 'loading', html: '' });
-    firstValueFrom(this.api.fileContent(this.numberOf(f), f)).then(async (blob) => {
-      let md: string;
-      if (kind === 'image') {
-        const url = URL.createObjectURL(blob);
-        this.objectUrls.push(url);
-        md = `![${f.name.replace(/[[\]]/g, '')}](${url})`;
-      } else {
-        md = fileTextAsMarkdown(f, await blob.text());
-      }
-      const view: FileView = { status: 'ready', html: renderMarkdown(md, { codeRefs: true, reRefs: true }) };
+    this.view.set({ status: 'loading' });
+    // A prévia (SQL com destaque, markdown, JSON, imagem com zoom) é a do `app-file-viewer` — a mesma de "Arquivos e textos".
+    firstValueFrom(this.api.fileContent(this.numberOf(f), f)).then((blob) => {
+      const view: FileView = { status: 'ready', blob };
       this.cache.set(ck, view);
       if (s === this.seq) this.view.set(view);
-    }, () => { if (s === this.seq) this.view.set({ status: 'error', html: '' }); });
+    }, () => { if (s === this.seq) this.view.set({ status: 'error' }); });
   }
 
   async download(f: WorkItemFile): Promise<void> {

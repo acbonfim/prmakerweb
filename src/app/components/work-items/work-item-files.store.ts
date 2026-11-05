@@ -2,12 +2,14 @@ import { DestroyRef, computed, inject, signal } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { WorkItemsService } from '../../services/work-items.service';
 import { WsService } from '../../services/ws.service';
+import { EXECUTION_PLAN_EVENT } from '../execution-plan/execution-plan.model';
 import { WorkItemFile, isFilesEvent } from './work-item-files';
 import { listenWorkItems } from './work-items-live';
 
 /**
  * 0085 rodada 5 (1.2): estado dos arquivos de um item — carrega `GET WorkItems/{number}/files` e recarrega ao vivo
- * (`workItemsUpdated` com action `file`, de sub-tarefa ou status do item, e a volta da conexão). Criar dentro de um
+ * (`workItemsUpdated` com action `file`, de sub-tarefa ou status do item, e a volta da conexão; e artefato novo no plano
+ * do card — `executionPlanUpdated` action `artifact`: análise, script ou evidência gravados enquanto o item roda). Criar dentro de um
  * contexto de injeção (`new WorkItemFilesStore()` num campo do componente); `watch(number, card)` aponta o item e é
  * idempotente. Desliga sozinho com o dono (DestroyRef).
  */
@@ -28,6 +30,14 @@ export class WorkItemFilesStore {
   private stopLive: (() => void) | null = null;
   private sub?: Subscription;
   private seq = 0;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+
+  private readonly onPlanEvent = (p: { cardNumber?: string | number; action?: string }) => {
+    if (!this.card || !this.number || `${p?.cardNumber ?? ''}`.trim() !== this.card) return;
+    if (p.action !== 'artifact') return;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => { this.timer = null; this.load(); }, 500);
+  };
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.stop());
@@ -57,6 +67,7 @@ export class WorkItemFilesStore {
       this.stopLive = listenWorkItems(this.ws, c, (p) => {
         if (this.number && isFilesEvent(p, this.number)) this.load();
       }, 400);
+      this.ws.on(EXECUTION_PLAN_EVENT, this.onPlanEvent);
     }
   }
 
@@ -93,6 +104,9 @@ export class WorkItemFilesStore {
   private stop(): void {
     this.stopLive?.();
     this.stopLive = null;
+    this.ws.off(EXECUTION_PLAN_EVENT, this.onPlanEvent);
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
     this.sub?.unsubscribe();
   }
 }

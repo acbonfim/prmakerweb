@@ -9,15 +9,15 @@ import { WorkItemsService } from '../../services/work-items.service';
 import { saveBlob } from '../../services/execution-plan.service';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { renderMarkdown } from '../../helpers/markdown-ext';
-import { MARKDOWN_VIEW_DIALOG, MarkdownViewDialogComponent, MarkdownViewDialogData } from '../markdown-view/markdown-view-dialog.component';
+import { FILE_VIEWER_DIALOG, FileViewerDialogComponent, FileViewerDialogData } from '../file-viewer/file-viewer-dialog.component';
 import { formatWorkNumber } from './work-item.model';
 import {
   WorkItemFile,
   fileIcon,
   fileKindLook,
   fileMeta,
+  fileSourceChip,
   filePreviewKind,
-  fileTextAsMarkdown,
   filesOfItem,
   filesOfTask,
   groupFiles,
@@ -81,7 +81,7 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
                     <mat-icon>checklist</mat-icon>{{ f.workItemNumber ? num(f.workItemNumber) : 'sem item' }}
                   </span>
                 }
-                @if (f.source === 'plan') { <span class="wif__chip wif__chip--plan" matTooltip="Arquivo do plano ligado ao item"><mat-icon>account_tree</mat-icon>plano</span> }
+                @if (chip(f); as c) { <span class="wif__chip wif__chip--plan" [matTooltip]="c.tooltip"><mat-icon>{{ c.icon }}</mat-icon>{{ c.label }}</span> }
                 <span class="wif__acts">
                   <button mat-icon-button (click)="open(f)" [matTooltip]="canOpen(f) ? 'Abrir' : 'Baixar'" [attr.aria-label]="'Abrir ' + f.name"><mat-icon>{{ canOpen(f) ? 'visibility' : 'download' }}</mat-icon></button>
                   @if (isText(f)) {
@@ -202,6 +202,7 @@ export class WorkItemFilesComponent {
   readonly meta = (f: WorkItemFile) => fileMeta(this.taskNumber() != null ? { ...f, taskNumber: null } : f, (n) => formatWorkNumber(n), false);
   readonly isText = isTextFile;
   readonly canOpen = (f: WorkItemFile) => filePreviewKind(f) !== 'none';
+  readonly chip = fileSourceChip;
   readonly key = (f: WorkItemFile) => `${f.source ?? 'item'}:${f.id}`;
 
   private get itemNumber(): number {
@@ -213,31 +214,21 @@ export class WorkItemFilesComponent {
     return this.itemNumber || Number(f.workItemNumber ?? 0);
   }
 
-  /** Abre no visualizador (markdown/código/imagem); sem prévia → baixa. */
+  /** Abre no visualizador rico (o mesmo de "Arquivos e textos": SQL com destaque, markdown, imagem com zoom); sem prévia → baixa. */
   open(f: WorkItemFile): void {
-    const kind = filePreviewKind(f);
-    if (kind === 'none') { this.download(f); return; }
-    const look = fileKindLook(f.kind);
-    let objectUrl: string | null = null;
-    const data: MarkdownViewDialogData = {
-      title: f.name,
-      subtitle: [look.label, fileMeta(f, (n) => formatWorkNumber(n))].filter(Boolean).join(' · '),
+    if (filePreviewKind(f) === 'none') { this.download(f); return; }
+    const data: FileViewerDialogData = {
+      name: f.name,
+      contentType: f.contentType,
+      kind: f.kind,
+      subtitle: [fileKindLook(f.kind).label, fileMeta(f, (n) => formatWorkNumber(n))].filter(Boolean).join(' · '),
       icon: this.icon(f),
       card: this.card(),
-      codeRefs: kind === 'markdown',
-      reRefs: kind === 'markdown' && !!this.card(),
+      ticket: f.kind === 'ticket',
       note: f.kind === 'ticket' ? 'Chamado completo — copie (texto e formatado) e abra no sistema de chamados.' : null,
-      load: async () => {
-        const blob = await firstValueFrom(this.api.fileContent(this.numberOf(f), f));
-        if (kind === 'image') {
-          objectUrl = URL.createObjectURL(blob);
-          return `![${f.name.replace(/[[\]]/g, '')}](${objectUrl})`;
-        }
-        return fileTextAsMarkdown(f, await blob.text());
-      }
+      load: () => firstValueFrom(this.api.fileContent(this.numberOf(f), f))
     };
-    const ref = this.dialog.open(MarkdownViewDialogComponent, { ...MARKDOWN_VIEW_DIALOG, data });
-    ref.afterClosed().subscribe(() => { if (objectUrl) URL.revokeObjectURL(objectUrl); });
+    this.dialog.open(FileViewerDialogComponent, { ...FILE_VIEWER_DIALOG, data });
   }
 
   async download(f: WorkItemFile): Promise<void> {
