@@ -51,7 +51,8 @@ export interface WorkTask {
   status: WorkTaskStatus;
   stepKey?: string | null;
   result?: string | null;
-  output?: Record<string, unknown> | null;
+  /** JSON livre gravado pelo executor (objeto, na maioria das vezes). */
+  output?: unknown;
   undo?: WorkItemUndo | null;
   startedAt?: string | null;
   completedAt?: string | null;
@@ -78,7 +79,8 @@ export interface WorkItem {
   templateKey?: string | null;
   planId?: string | null;
   planPhase?: 'analysis' | 'correction' | null;
-  createdBy: string;
+  /** Id do usuário que criou (nulo para o servidor/executor). */
+  createdBy?: string | null;
   createdByName?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -159,8 +161,9 @@ export interface UpdateWorkItemRequest {
 }
 
 export interface ExecuteWorkItemResponse {
-  requestId: string;
+  requestId?: string | null;
   status: string;
+  item?: WorkItem | null;
 }
 
 export interface DuplicateConflict {
@@ -355,9 +358,13 @@ export function isUrl(value: unknown): value is string {
 }
 
 /** Ordem de leitura das saídas (`output` é jsonb livre): pares chave/valor em texto. */
-export function outputEntries(output: Record<string, unknown> | null | undefined): { key: string; value: string; url: boolean }[] {
-  if (!output || typeof output !== 'object') return [];
-  return Object.entries(output).map(([key, v]) => {
+export function outputEntries(output: unknown): { key: string; value: string; url: boolean }[] {
+  if (output === null || output === undefined || output === '') return [];
+  if (typeof output !== 'object') {
+    const value = `${output}`;
+    return [{ key: 'saída', value, url: isUrl(value) }];
+  }
+  return Object.entries(output as Record<string, unknown>).map(([key, v]) => {
     const value = v === null || v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v);
     return { key, value, url: isUrl(value) };
   });

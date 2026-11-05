@@ -9,7 +9,6 @@ import {
   WorkItem,
   WorkItemCatalog,
   WorkItemError,
-  WorkTask,
   WorkTaskAction,
   formatWorkNumber,
   itemStatusLook
@@ -74,9 +73,9 @@ export class WorkItemsService {
     return this.http.post<WorkItem>(`${this.apiUrl}/${number}/undo`, {}).pipe(this.fail(`Não foi possível desfazer o item ${formatWorkNumber(number)}.`));
   }
 
-  /** Ação numa sub-tarefa (do usuário): start/complete/fail/skip. */
-  taskAction(taskNumber: number, action: WorkTaskAction, body: { result?: string | null; output?: Record<string, unknown> | null } = {}): Observable<WorkTask> {
-    return this.http.post<WorkTask>(`${this.apiUrl}/tasks/${taskNumber}/${action}`, { result: body.result ?? null, output: body.output ?? null })
+  /** Ação numa sub-tarefa (do usuário): start/complete/fail/skip — devolve o item atualizado. */
+  taskAction(taskNumber: number, action: WorkTaskAction, body: { result?: string | null; output?: Record<string, unknown> | null } = {}): Observable<WorkItem> {
+    return this.http.post<WorkItem>(`${this.apiUrl}/tasks/${taskNumber}/${action}`, { result: body.result ?? null, output: body.output ?? null })
       .pipe(this.fail(`Não foi possível atualizar a sub-tarefa ${formatWorkNumber(taskNumber)}.`));
   }
 
