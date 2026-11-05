@@ -137,13 +137,18 @@ import {
             <mat-icon>psychology</mat-icon>Pedir ao especialista
           </button>
           @if (duplicate()) {
-            <button mat-flat-button color="warn" type="button" (click)="create(true)" [disabled]="busy() || !duplicateReason().trim()">
-              <mat-icon>content_copy</mat-icon>Criar mesmo assim
+            <button mat-flat-button color="warn" type="button" (click)="create(true, startAfter())" [disabled]="busy() || !duplicateReason().trim()">
+              <mat-icon>content_copy</mat-icon>{{ startAfter() ? 'Criar e iniciar mesmo assim' : 'Criar mesmo assim' }}
             </button>
           } @else {
-            <button mat-flat-button color="primary" type="button" class="st__create" (click)="create()" [disabled]="busy() || missing().length > 0">
-              @if (busy() === 'create') { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>add_task</mat-icon> }
+            <button mat-stroked-button color="primary" type="button" class="st__create" (click)="create()" [disabled]="busy() || missing().length > 0">
+              @if (busy() === 'create' && !startAfter()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>add_task</mat-icon> }
               Criar item
+            </button>
+            <button mat-flat-button color="primary" type="button" class="st__create st__create-start" (click)="create(false, true)" [disabled]="busy() || missing().length > 0"
+                    matTooltip="Cria o item e já coloca na fila do executor">
+              @if (busy() === 'create' && startAfter()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>play_arrow</mat-icon> }
+              Criar e iniciar
             </button>
           }
         </footer>
@@ -302,6 +307,8 @@ export class SpecialistToolsComponent {
   readonly error = signal<string | null>(null);
   readonly duplicate = signal<WorkItemError['existing'] | null>(null);
   readonly duplicateReason = signal('');
+  /** "Criar e iniciar": depois de criar, já executa (fila do executor). */
+  readonly startAfter = signal(false);
   /** Tipo do item que será criado (o do modelo ou `task`; a pessoa pode trocar). */
   readonly itemType = signal('task');
   readonly githubUrl = this.pickers.githubUrl;
@@ -481,12 +488,16 @@ export class SpecialistToolsComponent {
     this.created.emit(n);
   }
 
-  /** "Criar item": o servidor renderiza o modelo com as respostas e cria (origem `template`). */
-  async create(allowDuplicate = false): Promise<void> {
+  /**
+   * "Criar item": o servidor renderiza o modelo com as respostas e cria (origem `template`). "Criar e iniciar" (`start`) já
+   * executa o item criado; se a execução falhar, o item fica criado e a mensagem diz para executar pela Bancada.
+   */
+  async create(allowDuplicate = false, start = false): Promise<void> {
     const v = this.current();
     const card = (this.card() ?? '').trim();
     if (!v || !card || this.busy()) return;
     if (!allowDuplicate && this.missing().length) { this.error.set(`Responda: ${this.missing().join(', ')}.`); return; }
+    this.startAfter.set(start);
     this.busy.set('create');
     this.error.set(null);
     try {
@@ -496,7 +507,16 @@ export class SpecialistToolsComponent {
         type: this.itemType(),
         ...(allowDuplicate ? { allowDuplicate: true, duplicateReason: this.duplicateReason().trim() } : {})
       }));
-      this.snack.open(`Item ${formatWorkNumber(item.number)} criado pela ferramenta "${v.title}".`, 'Ok', { duration: 4000 });
+      let message = `Item ${formatWorkNumber(item.number)} criado pela ferramenta "${v.title}".`;
+      if (start) {
+        try {
+          await firstValueFrom(this.api.execute(item.number));
+          message = `Item ${formatWorkNumber(item.number)} criado e iniciado pela ferramenta "${v.title}".`;
+        } catch (e) {
+          message = `Item ${formatWorkNumber(item.number)} criado, mas não iniciou: ${e instanceof WorkItemError ? e.message : 'execute pela Bancada.'}`;
+        }
+      }
+      this.snack.open(message, 'Ok', { duration: 5000 });
       this.back();
       this.created.emit(item.number);
     } catch (e) {
