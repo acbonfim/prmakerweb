@@ -786,6 +786,24 @@ a.re-ref.re-ref[href]:focus-visible {
 }
 a.re-ref code { color: inherit; font-size: 1em; }
 
+/* 0090: itens de trabalho (#123) na conversa do especialista — o clique abre o popover do item */
+a.wi-ref.wi-ref[href] {
+  color: #79c0ff;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-decoration: underline dotted color-mix(in srgb, #79c0ff 65%, transparent);
+  text-underline-offset: 3px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease;
+}
+a.wi-ref.wi-ref[href]:hover,
+a.wi-ref.wi-ref[href]:focus-visible {
+  background: color-mix(in srgb, #79c0ff 14%, transparent);
+  text-decoration-style: solid;
+}
+
 /* Links de código: [texto](ref:<id>) e citações caminho:linha (o clique abre o popover — F2) */
 a.code-ref.code-ref[href],
 a.code-cite.code-cite[href] {

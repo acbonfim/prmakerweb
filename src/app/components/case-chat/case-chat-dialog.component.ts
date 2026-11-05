@@ -38,11 +38,16 @@ import {
 } from './case-chat.model';
 import { VoiceRecorder, VoiceResult } from './voice-recorder';
 import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-proposal-dialog.component';
+import { CaseComposer, CaseComposerService } from './case-composer.service';
+import { ComposerAction, ComposerSuggestion } from './composer-suggest';
+import { ComposerSuggestComponent } from './composer-suggest.component';
 
 export interface CaseChatDialogData {
   card: string;
   /** Tipo do card — as ferramentas do especialista mudam com ele (padrão: bug). */
   cardType?: 'bug' | 'user-story';
+  /** 0090: abre já no formulário desta ferramenta (o `/ferramenta` da conversa compacta). */
+  tool?: string;
 }
 
 /** Resultado ao fechar: `openItem` = item de trabalho criado/aberto por uma ferramenta (quem hospeda mostra o item). */
@@ -77,7 +82,7 @@ const QUICK = [
   selector: 'app-case-chat-dialog',
   standalone: true,
   imports: [DatePipe, DecimalPipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, MatBadgeModule,
-    PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent, SpecialistToolsComponent],
+    PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent, SpecialistToolsComponent, ComposerSuggestComponent],
   templateUrl: './case-chat-dialog.component.html',
   styleUrls: ['./case-chat-dialog.component.css']
 })
@@ -89,6 +94,9 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   private snack = inject(MatSnackBar);
   readonly photos = inject(UserPhotoService);
   private store = inject(CaseChatStore);
+  private composerSvc = inject(CaseComposerService);
+  /** 0090: `/` comandos e ferramentas, `#` itens de trabalho. */
+  readonly composer = new CaseComposer(this.composerSvc, () => this.data.card, () => this.data.cardType ?? 'bug');
   /** 0081: a conversa fica em memória (CaseChatStore) — fechar e abrir de novo não recarrega nem perde o rascunho. */
   private readonly room: CaseRoom = this.store.room(this.data.card);
   private readonly me = inject(StorageService).getAccess()?.user ?? null;
@@ -130,6 +138,7 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   @ViewChild('scroll') private scrollRef?: ElementRef<HTMLDivElement>;
   @ViewChild('box') private boxRef?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('picker') private pickerRef?: ElementRef<HTMLInputElement>;
+  @ViewChild(SpecialistToolsComponent) private toolsRef?: SpecialistToolsComponent;
 
   readonly messages = computed(() => this.chat()?.messages ?? []);
   readonly run = computed(() => this.chat()?.run ?? null);
@@ -189,6 +198,7 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
       if (el) el.scrollTop = this.room.scrollTop ?? el.scrollHeight;
       this.viewReady = true;
       this.boxRef?.nativeElement.focus();
+      if (this.data.tool) this.openTool(this.data.tool);
     }, 0);
   }
 
@@ -225,6 +235,8 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
 
   send(textOverride?: string): void {
     if (this.sending()) return;
+    // 0090: comando digitado (`/clear`, `/cancelar-item-de-trabalho #n`, `/ferramenta`) não vai como mensagem.
+    if (textOverride === undefined && !this.pending().length && this.runCommand()) return;
     const request = this.store.send(this.data.card, textOverride);
     if (!request) return;
     this.sending.set(true);
@@ -251,6 +263,11 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   }
 
   onKey(event: KeyboardEvent): void {
+    const action = this.composer.key(event, this.draft);
+    if (action !== undefined) {
+      if (action) this.applyComposer(action);
+      return;
+    }
     if (this.mentionQuery() !== null && this.mentionOptions().length && (event.key === 'Enter' || event.key === 'Tab')) {
       event.preventDefault();
       this.pickMention(this.mentionOptions()[0]);
@@ -273,11 +290,87 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
     const before = (box ? this.draft.slice(0, box.selectionStart ?? this.draft.length) : this.draft);
     const m = /(?:^|\s)@([\p{L}\p{N}._-]*)$/u.exec(before);
     this.mentionQuery.set(m ? m[1] : null);
+    this.composer.update(this.draft, before.length);
     const now = Date.now();
     if (this.draft.trim() && now - this.lastTypingSent > TYPING_EVERY_MS) {
       this.lastTypingSent = now;
       this.api.typing(this.data.card).subscribe({ error: () => {} });
     }
+  }
+
+  /** Cursor andou (clique, ←/→, Home/End): a lista segue o que está no cursor. */
+  onCaret(event?: KeyboardEvent): void {
+    if (event && ['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape', 'Shift'].includes(event.key)) return;
+    const box = this.boxRef?.nativeElement;
+    if (box) this.composer.update(this.draft, box.selectionStart ?? this.draft.length);
+  }
+
+  pickSuggestion(s: ComposerSuggestion): void {
+    const action = this.composer.pick(s, this.draft);
+    if (action) this.applyComposer(action);
+  }
+
+  /** Escolha da lista: completa o texto, limpa a conversa ou abre a ferramenta. */
+  private applyComposer(action: ComposerAction): void {
+    const box = this.boxRef?.nativeElement;
+    switch (action.kind) {
+      case 'insert':
+        this.draft = action.text;
+        if (box) {
+          box.value = action.text;
+          box.focus();
+          box.setSelectionRange(action.caret, action.caret);
+        }
+        this.composer.update(action.text, action.caret);
+        return;
+      case 'clear':
+        this.draft = '';
+        void this.clearConversation();
+        return;
+      case 'tool':
+        this.draft = '';
+        this.openTool(action.key);
+        return;
+    }
+  }
+
+  /** O texto inteiro é um comando? Executa e diz que tratou (não envia como mensagem). */
+  private runCommand(): boolean {
+    const cmd = this.composer.command(this.draft);
+    if (!cmd) return false;
+    switch (cmd.kind) {
+      case 'clear':
+        void this.clearConversation();
+        return true;
+      case 'tool':
+        this.draft = '';
+        this.openTool(cmd.key);
+        return true;
+      case 'cancel':
+        if (!cmd.number) {
+          this.snack.open('Diga qual item: /cancelar-item-de-trabalho #123 (digite # para escolher).', 'Ok', { duration: 5000 });
+          return true;
+        }
+        void this.composerSvc.cancelItem(this.data.card, cmd.number, cmd.reason).then((ok) => { if (ok) this.draft = ''; });
+        return true;
+      case 'unknown':
+        this.snack.open(`Não existe o comando /${cmd.name} — digite / no começo da mensagem para ver os comandos e as ferramentas.`, 'Ok', { duration: 6000 });
+        return true;
+    }
+  }
+
+  private async clearConversation(): Promise<void> {
+    if (!(await this.composerSvc.clear(this.data.card))) return;
+    this.draft = '';
+    this.replyTo.set(null);
+    this.room.scrollTop = null;
+    this.load();
+  }
+
+  /** Abre o painel de Ferramentas já no formulário da ferramenta. */
+  openTool(key: string): void {
+    this.toolsOpen.set(true);
+    this.toolsRef?.openTool(key);
   }
 
   pickMention(name: string): void {

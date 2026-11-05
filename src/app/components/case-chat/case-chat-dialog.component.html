@@ -83,7 +83,7 @@
             @if (newDay(i)) { <div class="cc__day">{{ m.createdAt | date: 'dd/MM/yyyy' }}</div> }
 
             @if (m.authorKind === 'system') {
-              <div class="cc__sys"><mat-icon>info</mat-icon><span class="plan-md" [innerHTML]="m.text | planMarkdown:'card'"></span><time>{{ m.createdAt | date: 'HH:mm' }}</time></div>
+              <div class="cc__sys"><mat-icon>info</mat-icon><span class="plan-md" [innerHTML]="m.text | planMarkdown:'case'"></span><time>{{ m.createdAt | date: 'HH:mm' }}</time></div>
             } @else {
               <article class="msg" [class.msg--mine]="isMine(m)" [class.msg--spec]="m.authorKind === 'specialist'">
                 @if (m.authorKind === 'specialist') {
@@ -120,7 +120,7 @@
                       }
                       <div class="msg__transcript">{{ m.transcript ? '“' + m.transcript + '”' : 'Sem transcrição — o navegador não transcreveu este áudio.' }}</div>
                     }
-                    @if (m.text) { <div class="plan-md msg__text" [innerHTML]="m.text | planMarkdown:'card'"></div> }
+                    @if (m.text) { <div class="plan-md msg__text" [innerHTML]="m.text | planMarkdown:'case'"></div> }
 
                     @if (m.files.length && m.kind !== 'voice') {
                       <div class="msg__files">
@@ -171,7 +171,7 @@
                     @if (actionOf(m); as a) {
                       <div class="act act--{{ a.status }}">
                         <div class="act__head"><mat-icon>bolt</mat-icon>Ação #{{ a.number }}: {{ a.title }}</div>
-                        @if (a.detail) { <div class="plan-md act__detail" [innerHTML]="a.detail | planMarkdown:'card'"></div> }
+                        @if (a.detail) { <div class="plan-md act__detail" [innerHTML]="a.detail | planMarkdown:'case'"></div> }
                         @switch (a.status) {
                           @case ('pending') {
                             <div class="prop__acts">
@@ -280,13 +280,18 @@
             <button mat-icon-button (click)="pick()" matTooltip="Anexar arquivos (ou cole/arraste)" aria-label="Anexar"><mat-icon>add_circle</mat-icon></button>
             <input #picker type="file" multiple hidden (change)="onPick($event)">
             <div class="comp__field">
-              @if (mentionQuery() !== null && mentionOptions().length) {
+              @if (composer.open()) {
+                <app-composer-suggest class="comp__suggest" [suggestions]="composer.suggestions()" [active]="composer.active()"
+                                      [heading]="composer.trigger()?.kind === 'slash' ? 'Comandos e ferramentas do especialista' : 'Itens de trabalho'"
+                                      [loading]="composer.loadingTools()" (picked)="pickSuggestion($event)" (hovered)="composer.active.set($event)"></app-composer-suggest>
+              } @else if (mentionQuery() !== null && mentionOptions().length) {
                 <div class="comp__mentions" role="listbox">
                   @for (n of mentionOptions(); track n) { <button type="button" role="option" (mousedown)="$event.preventDefault(); pickMention(n)">&#64;{{ n }}</button> }
                 </div>
               }
-              <textarea #box [(ngModel)]="draft" (keydown)="onKey($event)" (input)="onInput()" rows="1"
-                        [placeholder]="compact ? 'Mensagem — @ menciona, cole imagens' : 'Mensagem para o especialista e para quem está no caso — @ menciona, cole ou arraste imagens e arquivos'"
+              <textarea #box [(ngModel)]="draft" (keydown)="onKey($event)" (input)="onInput()" (click)="onCaret()" (keyup)="onCaret($event)"
+                        (blur)="composer.hide()" rows="1"
+                        [placeholder]="compact ? 'Mensagem — / comandos, # item, @ menciona' : 'Mensagem para o especialista e para quem está no caso — / comandos e ferramentas, # item de trabalho, @ menciona, cole ou arraste arquivos'"
                         aria-label="Mensagem"></textarea>
             </div>
             @if (canRecord) {
@@ -301,7 +306,7 @@
           <label matTooltip="O especialista não responde a esta mensagem (conversa entre pessoas)"><input type="checkbox" [(ngModel)]="peopleOnly"> Só entre pessoas</label>
           <label matTooltip="O especialista confere no código/banco antes de responder (modelo de investigação, mais lento)"><input type="checkbox" [(ngModel)]="deep"> Investigar a fundo</label>
           <span class="cc__spacer"></span>
-          <span class="comp__hint">Enter envia · Shift+Enter quebra a linha</span>
+          <span class="comp__hint">Enter envia · Shift+Enter quebra a linha · / comandos · # item</span>
         </div>
       </div>
       <!-- Ferramentas (rodada 6): cobrem a conversa; montadas desde o início para a contagem do ícone já aparecer -->

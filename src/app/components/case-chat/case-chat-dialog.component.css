@@ -159,6 +159,8 @@
   border-radius: 10px; background: var(--surface-2, #323232); box-shadow: 0 8px 24px rgba(0,0,0,.45); }
 .comp__mentions button { text-align: left; border: 0; background: transparent; color: inherit; font: inherit; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
 .comp__mentions button:hover, .comp__mentions button:first-child { background: color-mix(in srgb, var(--spec) 14%, transparent); }
+.comp__suggest { position: absolute; bottom: calc(100% + 8px); left: -40px; right: -90px; z-index: 6; }
+@media (max-width: 640px) { .comp__suggest { left: -36px; right: -80px; } }
 .comp__send { background: linear-gradient(135deg, #8e6cf0, #6a4fd0) !important; color: #fff !important; box-shadow: none !important; }
 .comp__send[disabled] { opacity: .45; }
 .comp__flags { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--cc-muted); }

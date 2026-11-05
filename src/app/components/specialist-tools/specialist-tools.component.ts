@@ -313,6 +313,8 @@ export class SpecialistToolsComponent {
   readonly itemType = signal('task');
   readonly githubUrl = this.pickers.githubUrl;
   private loadSeq = 0;
+  /** Ferramenta pedida antes de o catálogo chegar. */
+  private pendingKey: string | null = null;
 
   readonly ctx = computed(() => toolContext(this.catalog(), this.card()));
   readonly views = computed(() => buildToolViews(this.catalog(), this.cardType()));
@@ -390,6 +392,7 @@ export class SpecialistToolsComponent {
         this.catalog.set(c);
         this.loading.set(false);
         this.pickers.ensureGithubUrl(c);
+        if (this.pendingKey) this.openTool(this.pendingKey);
       },
       error: (e) => {
         if (seq !== this.loadSeq) return;
@@ -412,8 +415,10 @@ export class SpecialistToolsComponent {
     this.duplicateReason.set('');
   }
 
-  /** Abre direto uma ferramenta pela chave (ex.: vindo de outro botão). */
+  /** Abre direto uma ferramenta pela chave (ex.: vindo de outro botão; 0090: do `/` do compositor) — espera o catálogo. */
   openTool(key: string): void {
+    if (!this.catalog()) { this.pendingKey = key; return; }
+    this.pendingKey = null;
     const v = this.views().find((x) => x.key === key);
     if (v) this.pick(v);
   }

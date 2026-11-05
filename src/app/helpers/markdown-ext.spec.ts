@@ -1,7 +1,7 @@
 import { Marked } from 'marked';
 import {
-  badgeKind, findCitations, findReRefs, hasCitation, hasReRef, normalizeLegacyEmojis, parseAttachmentHref, parseCitation,
-  parseReHref, parseRefHref, renderMarkdown,
+  badgeKind, findCitations, findReRefs, findWorkRefs, hasCitation, hasReRef, normalizeLegacyEmojis, parseAttachmentHref, parseCitation,
+  parseReHref, parseRefHref, parseWorkHref, renderMarkdown,
 } from './markdown-ext';
 
 const on = (t: string) => renderMarkdown(t, { codeRefs: true });
@@ -344,5 +344,47 @@ describe('markdown-ext (0076: selos, tabelas, itens da engenharia reversa)', () 
       expect(hasReRef('ver GAP-7')).toBeTrue();
       expect(hasReRef('sem item')).toBeFalse();
     });
+  });
+});
+
+describe('markdown-ext (0090: #nn = item de trabalho)', () => {
+  const chat = (t: string) => renderMarkdown(t, { codeRefs: true, reRefs: true, workRefs: true });
+  const links = (html: string) => {
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    return [...d.querySelectorAll('a.wi-ref')].map(a => [a.getAttribute('href'), a.textContent]);
+  };
+
+  it('#123 solto vira link do item (começo, meio, pontuação, parênteses)', () => {
+    expect(links(chat('#12 e o #345, (#6). Fim: #7!'))).toEqual([
+      ['#wi/12', '#12'], ['#wi/345', '#345'], ['#wi/6', '#6'], ['#wi/7', '#7'],
+    ]);
+  });
+
+  it('não liga #nn colado em letra/número, em URL, em âncora ou título markdown', () => {
+    expect(links(chat('abc#12 e 4#5'))).toEqual([]);
+    expect(links(chat('veja https://x.com/a#12 e [link](https://x.com/#3)'))).toEqual([]);
+    expect(links(chat('#12abc #1_2'))).toEqual([]);
+    expect(chat('# 12 título')).toContain('<h1');
+    expect(links(chat('# 12 título'))).toEqual([]);
+  });
+
+  it('não liga dentro de código nem fora da conversa (workRefs desligado)', () => {
+    expect(links(chat('`#12` e ```\n#13\n```'))).toEqual([]);
+    expect(links(renderMarkdown('#12', { codeRefs: true, reRefs: true }))).toEqual([]);
+  });
+
+  it('convive com itens da engenharia reversa (modulo#RN-012)', () => {
+    const d = document.createElement('div');
+    d.innerHTML = chat('revamp-kaizen#RN-012 e #4');
+    expect(d.querySelectorAll('a.re-ref').length).toBe(1);
+    expect(links(d.innerHTML)).toEqual([['#wi/4', '#4']]);
+  });
+
+  it('findWorkRefs / parseWorkHref', () => {
+    expect(findWorkRefs('cancela o #12 e o #3; abc#9 não')).toEqual([12, 3]);
+    expect(parseWorkHref('#wi/42')).toBe(42);
+    expect(parseWorkHref('#wi/0')).toBeNull();
+    expect(parseWorkHref('#re/UC-1')).toBeNull();
   });
 });
