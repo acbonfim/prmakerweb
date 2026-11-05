@@ -200,12 +200,57 @@ button.hc-row:hover { background: color-mix(in srgb, var(--mat-sys-on-surface) 7
   100% { background-position: 0 0; }
 }
 
+/* ── Itens de trabalho (0088) ── */
+.hc-row .ellipsis { flex: 1; }
+.chip-item {
+  --tone: var(--item-color, var(--tone-neutral));
+}
+.spin { animation: hc-spin 1.2s linear infinite; }
+@keyframes hc-spin { to { transform: rotate(360deg); } }
+
+.header-hint { margin-left: auto; font-size: 12px; color: var(--hc-muted); }
+
+/* ── Lista em destaque: "Meus cards na Bancada" (0088) ── */
+.featured {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 45%, transparent);
+  background: color-mix(in srgb, var(--mat-sys-primary) 7%, var(--surface-2, #1d2229));
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+}
+.featured .section-header {
+  background: transparent;
+  padding: 2px 4px 10px;
+  margin-bottom: 6px;
+}
+.featured .header-icon { font-size: 26px; width: 26px; height: 26px; }
+.featured .section-title { font-size: 21px; font-weight: 600; }
+/* Cartões em grade (a página rola; sem rolagem interna). */
+.featured .hc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr));
+  align-items: stretch;
+  max-height: none;
+  overflow: visible;
+}
+.featured .hc {
+  border-left: 3px solid color-mix(in srgb, var(--mat-sys-primary) 70%, transparent);
+}
+/* O mais recente puxa o olho. */
+.featured .hc:first-child:not(.hc-skeleton) {
+  border-color: color-mix(in srgb, var(--mat-sys-primary) 70%, transparent);
+}
+.featured .hc-rows { flex: 1; }
+
 /* Uma coluna só: a página rola inteira (sem rolagem dentro da lista). */
 @media (max-width: 900px) {
   .hc-list { max-height: none; overflow: visible; }
 }
 
 @media (max-width: 600px) {
+  .featured { padding: 10px; }
+  .featured .section-title { font-size: 18px; }
+  .header-hint { display: none; }
   .hc { padding: 12px 10px 8px; }
   .hc-foot { flex-wrap: wrap; }
   .hc-last { flex-basis: 100%; }
