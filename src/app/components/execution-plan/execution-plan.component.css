@@ -1256,6 +1256,8 @@
 .vbar__ver-text small { font-size: 10.5px; color: var(--plan-muted); }
 .vbar__caret.mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--plan-muted); }
 .vbar .journey { flex: 1 1 auto; min-width: 0; padding: 2px 0; }
+/* 0085 (rodada 3): sem o botão da versão (Bancada), a barra só existe com etapas */
+.vbar--steps-only:not(:has(.journey)) { display: none; }
 @media (max-width: 576px) {
   .vbar { flex-wrap: wrap; }
   .vbar .journey { flex-basis: 100%; }

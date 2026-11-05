@@ -364,11 +364,83 @@
 
   &:empty { display: none; }
   > app-card-situation:empty, > app-card-assistant:empty { display: none; }
-  // A linha de horas do assistente já está ao lado das abas (wb-hoursline): aqui, só na Bancada, fica escondida.
-  ::ng-deep app-card-assistant .as__hours { display: none; }
 }
+// A linha de horas do assistente já está ao lado das abas (wb-hoursline): na Bancada inteira (aba Itens e o assistente
+// dentro do plano, na aba Execução) ela fica escondida. A tela de PR não usa este estilo.
+:host ::ng-deep app-card-assistant .as__hours { display: none; }
 .wb-pane--plan { overflow: hidden; }
 .wb-plan { display: block; flex: 1 1 auto; min-height: 0; }
+
+// Execução do item (rodada 3): seletor dos itens com plano — a versão é o item de trabalho
+.wb-exec {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.wb-exec__label {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--wb-faint);
+  .mat-icon { font-size: 17px; width: 17px; height: 17px; }
+}
+.wb-exec__pick.mat-mdc-outlined-button {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  height: 34px;
+  padding: 0 6px 0 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  --mdc-outlined-button-outline-color: var(--wb-border);
+
+  ::ng-deep .mdc-button__label { display: inline-flex; min-width: 0; }
+}
+.wb-exec__sel { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.wb-exec__st { flex: none; font-size: 18px; width: 18px; height: 18px; }
+.wb-exec__st--spin { animation: wb-exec-spin 1.6s linear infinite; }
+.wb-exec__num { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wb-exec__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-exec__status { flex: none; color: var(--wb-muted); }
+.wb-exec__caret { flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--wb-faint); margin: 0 !important; }
+.wb-exec__none { font-size: 12.5px; color: var(--wb-faint); }
+.wb-exec__opt--on { background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent); }
+.wb-exec__opt-st { color: var(--wb-faint); }
+@keyframes wb-exec-spin { to { transform: rotate(360deg); } }
+
+// Item fechado: mudar = criar outro item (na tela ou pelo especialista)
+.wb-closed {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--wb-muted);
+  background: color-mix(in srgb, var(--mat-sys-primary) 7%, var(--surface-1, #262b33));
+  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 28%, transparent);
+}
+.wb-closed__icon { flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--mat-sys-primary); }
+.wb-closed__text { flex: 1 1 260px; min-width: 0; }
+.wb-closed__actions {
+  flex: none;
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  .mat-mdc-outlined-button { height: 30px; font-size: 12.5px; border-radius: 8px; }
+  .mat-icon { font-size: 16px; width: 16px; height: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .wb-exec__st--spin { animation: none; } }
 
 .wb-plan-bar {
   flex: none;
@@ -511,3 +583,42 @@
   mat-icon { color: #f0b429; font-size: 18px; width: 18px; height: 18px; flex: none; }
   span { flex: 1 1 auto; min-width: 0; }
 }
+
+// Popover do robô do cabeçalho (o mesmo visual do popover do ícone do plano — run-pop do app-execution-plan)
+.run-pop {
+  --run-c: var(--mat-sys-primary); --run-warn: #d29922;
+  --run-muted: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent);
+  width: min(380px, calc(100vw - 24px)); max-height: min(70vh, 560px); overflow-y: auto; border-radius: 12px; padding: 4px 0 8px;
+  background: var(--surface-2, #323232); color: var(--mat-sys-on-surface); box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  border: 1px solid rgba(255, 255, 255, .08); font-size: 12.5px;
+}
+.run-pop__head { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 14px; font-size: 13.5px; }
+.run-pop__head > .mat-icon { color: var(--run-muted); }
+.run-pop__head--running > .mat-icon, .run-pop__head--claimed > .mat-icon { color: var(--run-c); }
+.run-pop__head--queued > .mat-icon { color: var(--run-warn); }
+.run-pop__spin { animation: wb-run-pulse 1.6s ease-in-out infinite; }
+@keyframes wb-run-pulse { 50% { opacity: .35; } }
+.run-pop__spacer { flex: 1; }
+.run-pop__close.mat-mdc-icon-button { width: 32px; height: 32px; padding: 4px; }
+.run-pop__close .mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.run-pop__facts { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 2px 14px 8px; }
+.run-pop__facts dt { color: var(--run-muted); }
+.run-pop__facts dd { margin: 0; overflow-wrap: anywhere; }
+.run-pop__now { display: flex; gap: 8px; align-items: flex-start; margin: 0 10px 6px; padding: 8px 10px; border-radius: 10px;
+  background: color-mix(in srgb, var(--run-c) 12%, transparent); }
+.run-pop__now .mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--run-c); flex: none; }
+.run-pop__now small { color: var(--run-muted); }
+.run-pop__quiet { margin: 0 14px 6px; color: var(--run-warn); }
+.run-pop__sub { margin: 8px 14px 2px; font-size: 11.5px; font-weight: 600; color: var(--run-muted); text-transform: uppercase; letter-spacing: .04em; }
+.run-pop__log {
+  list-style: none; margin: 0 14px; padding: 6px 12px; max-height: 220px; overflow-y: auto; font-size: 12px;
+  border-left: 2px solid color-mix(in srgb, var(--run-c) 40%, transparent);
+  li { display: flex; align-items: center; gap: 6px; padding: 2px 0; }
+  .mat-icon { font-size: 14px; width: 14px; height: 14px; color: var(--run-muted); flex: none; }
+  span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  time { color: var(--run-muted); font-variant-numeric: tabular-nums; }
+}
+.run-pop__text { margin: 2px 14px 8px; line-height: 1.45; color: color-mix(in srgb, var(--mat-sys-on-surface) 80%, transparent); }
+.run-pop__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px 0; }
+.run-pop__stop .mat-icon { margin-right: 4px; }
+@media (prefers-reduced-motion: reduce) { .run-pop__spin { animation: none; } }

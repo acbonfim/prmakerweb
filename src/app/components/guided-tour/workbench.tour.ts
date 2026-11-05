@@ -9,10 +9,12 @@ import { TourDefinition } from './tour.model';
  * na lateral inteira, sugestões (situação/assistente) e a sugestão de análise inicial.
  * v3: o popover do botão Card virou a aba **Card** da coluna principal (horas, lançar +1h/+2h/+4h/outro, dados e texto
  * do card) e a linha de horas fica ao lado das abas Itens | Plano | Card.
+ * v4 (rodada 3): a aba Plano virou **Execução** — o plano é por item de trabalho (seletor dos itens com plano, sem
+ * "Análise v1 / Correção v2"); item fechado = criar outro item (na tela ou pelo especialista).
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 3,
+  version: 4,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -58,8 +60,8 @@ export const WORKBENCH_TOUR: TourDefinition = {
       id: 'analyze', anchor: 'wb-analyze', group: 'O card', since: 1, phase: 'card', side: 'bottom', align: 'end', optional: true,
       title: 'Pedir a análise',
       body: '<b>Analisar bug</b> (ou <b>Analisar US</b>) manda o Claude analisar o card pela fila de execução.',
-      detail: 'O pedido vai para a fila e roda no seu executor. O andamento aparece no plano; com um plano em andamento o botão ' +
-        'fica desligado (continue pelo próprio plano).'
+      detail: 'O pedido vai para a fila e roda no seu executor. A análise vira um item de trabalho e o andamento aparece na aba ' +
+        'Execução; com um plano em andamento o botão fica desligado (continue pelo próprio item).'
     },
     {
       id: 'prs', anchor: 'wb-prs', group: 'O card', since: 1, phase: 'card', side: 'bottom', align: 'end', optional: true,
@@ -126,16 +128,19 @@ export const WORKBENCH_TOUR: TourDefinition = {
         '"Sessão de execução (n)" volta para ela. Sub-tarefas suas (ex.: validar) esperam você marcar como feitas.'
     },
     {
-      id: 'plan', anchor: 'wb-plan', group: 'Plano', since: 1, phase: 'card', side: 'right', align: 'start', prepare: 'tab:plan',
-      title: 'O plano do Claude',
-      body: 'A análise e a correção do card, etapa por etapa, ao vivo. Perguntas do plano são respondidas na própria etapa.',
-      detail: 'É o mesmo plano da tela de Pull Request. Em cards com itens, a aba Itens fica em evidência; em cards antigos (sem ' +
-        'itens), o plano.'
+      id: 'plan', anchor: 'wb-plan', group: 'Execução', since: 4, phase: 'card', side: 'right', align: 'start', prepare: 'tab:plan',
+      title: 'Execução do item',
+      body: 'Cada item de trabalho tem a sua execução: escolha o item no seletor (<i>#30 Análise inicial do bug · concluído</i>) e ' +
+        'veja o plano dele — etapas, perguntas, arquivos e registro, ao vivo.',
+      detail: 'Não há mais "Análise v1 / Correção v2": a versão é o próprio item, analisado e refinado. O seletor abre no item em ' +
+        'andamento (ou no mais recente); o "Abrir plano" de um item leva direto a ele. Item concluído ou cancelado é uma versão ' +
+        'fechada — para mudar, cancele o item ou crie outro (+ Novo item, ou peça ao especialista). Perguntas do plano são ' +
+        'respondidas na própria etapa.'
     },
     {
-      id: 'cancel', anchor: 'wb-cancel-plan', group: 'Plano', since: 1, phase: 'card', side: 'bottom', optional: true, prepare: 'tab:plan',
+      id: 'cancel', anchor: 'wb-cancel-plan', group: 'Execução', since: 1, phase: 'card', side: 'bottom', optional: true, prepare: 'tab:plan',
       title: 'Cancelar e desfazer',
-      body: 'Para o plano e os itens dele — e, se você marcar, <b>desfaz</b> o que já foi feito (fecha PRs, apaga branches criadas…).',
+      body: 'Para o item em execução (o plano e os itens dele) — e, se você marcar, <b>desfaz</b> o que já foi feito (fecha PRs, apaga branches criadas…).',
       detail: 'O desfazer vira um pedido na fila e roda em ordem reversa. Para só mudar o rumo do plano, prefira conversar com ' +
         'o Especialista do caso.'
     },
@@ -143,8 +148,8 @@ export const WORKBENCH_TOUR: TourDefinition = {
       id: 'chat', anchor: 'wb-chat', group: 'Conversa e histórico', since: 2, phase: 'card', side: 'left', align: 'start', prepare: 'tab:chat',
       title: 'Especialista do caso',
       body: 'A lateral é do especialista: dúvidas, discordâncias e pedidos de itens novos — ele conhece o card, o plano e as regras.',
-      detail: 'O especialista responde com código, banco (só leitura) e a Base Solvace, e pode propor itens de trabalho ou uma ' +
-        'nova versão do plano — nada muda sem você aceitar.'
+      detail: 'O especialista responde com código, banco (só leitura) e a Base Solvace, e pode criar itens de trabalho (sem ' +
+        'repetir os que existem) — é assim que um item fechado ganha a sua continuação. Nada muda sem você aceitar.'
     },
     {
       id: 'help', anchor: 'wb-help', group: 'Começo', since: 1, phase: 'card', side: 'bottom', align: 'end', guide: false,
@@ -157,6 +162,7 @@ export const WORKBENCH_TOUR: TourDefinition = {
     tips: [
       '<b>Uma entrega = um item.</b> Cada item tem sub-tarefas em ordem e roda em paralelo aos outros itens do card.',
       '<b>Dúvida ou pedido novo?</b> Fale com o <b>Especialista do caso</b> — ele cria itens sem repetir os que já existem.',
+      '<b>A versão é o item.</b> Precisa mudar algo de um item fechado? Crie outro item (na tela ou pelo especialista).',
       '<b>Errou o caminho?</b> "Cancelar e desfazer" fecha PRs e apaga branches criadas, sempre pelo PRMake.'
     ]
   }

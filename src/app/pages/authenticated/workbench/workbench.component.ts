@@ -2,6 +2,7 @@ import {
   Component, DestroyRef, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { ConnectedPosition, OverlayModule } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -38,6 +39,9 @@ import {
   CancelWorkDialogComponent, CancelWorkDialogData, CancelWorkDialogResult
 } from '../../../components/work-items/cancel-work-dialog.component';
 import { workDialogConfig } from '../../../components/work-items/work-dialog-config';
+import { WorkItemActionsService } from '../../../components/work-items/work-item-actions.service';
+import { WorkItem, WorkItemStatus, formatWorkNumber, itemStatusLook } from '../../../components/work-items/work-item.model';
+import { listenWorkItems } from '../../../components/work-items/work-items-live';
 import { WorkbenchCardComponent } from '../../../components/workbench-card/workbench-card.component';
 import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workbench-prs.component';
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
@@ -53,7 +57,33 @@ import { WorkItemsService } from '../../../services/work-items.service';
 import { WsService } from '../../../services/ws.service';
 import { cardFieldText, workbenchFacts } from './workbench-facts';
 
-/** Aba da coluna principal (desktop) — Itens de trabalho | Plano | Card. */
+/** Itens com plano em andamento (o seletor da aba Execução abre neles por padrão). */
+const ACTIVE_PLAN_ITEM: ReadonlySet<WorkItemStatus> = new Set<WorkItemStatus>(['queued', 'running', 'waiting', 'reverting']);
+/** Item "fechado" (versão fechada): concluído, cancelado ou desfeito — mudar = criar outro item. */
+const CLOSED_PLAN_ITEM: ReadonlySet<WorkItemStatus> = new Set<WorkItemStatus>(['completed', 'cancelled', 'reverted']);
+
+/** Opção do seletor "Execução do item" (itens de trabalho que têm plano). */
+export interface PlanItemOption {
+  number: number;
+  planId: string;
+  title: string;
+  status: WorkItemStatus;
+  label: string;
+  statusLabel: string;
+  icon: string;
+  color: string;
+  spin: boolean;
+}
+
+/** Item padrão do seletor: o em andamento mais recente; sem nenhum, o mais recente. */
+export function defaultPlanItem(items: readonly WorkItem[]): WorkItem | null {
+  const withPlan = items.filter((i) => !!i.planId);
+  const recent = (a: WorkItem, b: WorkItem) => (Date.parse(b.createdAt) - Date.parse(a.createdAt)) || (b.number - a.number);
+  const active = withPlan.filter((i) => ACTIVE_PLAN_ITEM.has(i.status)).sort(recent);
+  return active[0] ?? withPlan.slice().sort(recent)[0] ?? null;
+}
+
+/** Aba da coluna principal (desktop) — Itens de trabalho | Execução (plano do item) | Card. */
 export type WorkbenchMainTab = 'items' | 'plan' | 'card';
 /** Aba no celular (< 1024 px) — Itens | Plano | Especialista | Card. */
 export type WorkbenchMobileTab = WorkbenchMainTab | 'chat' | 'card';
@@ -95,12 +125,17 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
  * de análise inicial na aba Itens. A coluna principal tem a aba **Card** (`app-workbench-card`: horas + lançar horas,
  * dados, texto do card — o botão "Card" da barra abre essa aba; no celular, a aba Card) e a linha de horas do card
  * (`app-card-hours`) fica ao lado do segmentado Itens | Plano | Card.
+ *
+ * Rodada 3: a aba Plano virou **Execução** — o plano é por item de trabalho (a versão é o item analisado e refinado, sem
+ * "Análise v1 / Correção v2"). Um seletor escolhe entre os itens que têm plano (padrão: o em andamento mais recente) e o
+ * `app-execution-plan` recebe `[planId]` + `[hideVersions]`. Item fechado = aviso com "+ Novo item" / "Pedir ao
+ * especialista". `?item=<n>&focus=plan` abre a aba já no plano daquele item.
  */
 @Component({
   selector: 'app-workbench',
   standalone: true,
   imports: [
-    FormsModule, MatButtonModule, MatFormFieldModule, MatIconModule,
+    FormsModule, OverlayModule, MatButtonModule, MatFormFieldModule, MatIconModule,
     MatInputModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
     CardAlertBarComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
     CardSituationComponent, CardAssistantComponent, CardHoursComponent, WorkItemListComponent, WorkbenchPrsComponent,
@@ -123,6 +158,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   private situations = inject(CardSituationService);
   private assistant = inject(CardAssistantService);
   private ws = inject(WsService);
+  private actions = inject(WorkItemActionsService);
   private host = inject(ElementRef<HTMLElement>);
   /** Abas internas (0065): só a aba ativa mexe na URL e no nome da aba. */
   private tabScreen = this.tabs.bindScreen(inject(DestroyRef));
@@ -232,6 +268,44 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   readonly cancelling = signal(false);
   readonly chatFlash = signal(false);
 
+  // ── Execução do item (0085, rodada 3): a versão é o item de trabalho ────────────────────────
+  /** Itens do card que têm plano (lidos aqui para o seletor; a lista de itens tem a sua própria leitura). */
+  readonly planItems = signal<WorkItem[]>([]);
+  /** Card cujos itens já foram lidos (o plano espera por eles para abrir direto no item certo). */
+  private readonly planItemsCard = signal<string | null>(null);
+  /** Item escolhido no seletor (ou por `?item=&focus=plan`); null = o padrão (em andamento / mais recente). */
+  readonly pickedPlanItem = signal<number | null>(null);
+  private stopPlanItems?: () => void;
+  private planItemsSub?: Subscription;
+
+  readonly planItemOptions = computed<PlanItemOption[]>(() => this.planItems()
+    .filter((i) => !!i.planId)
+    .sort((a, b) => b.number - a.number)
+    .map((i) => {
+      const look = itemStatusLook(i.status);
+      const statusLabel = look.label.toLowerCase();
+      return {
+        number: i.number, planId: i.planId!, title: i.title, status: i.status, statusLabel,
+        label: `${formatWorkNumber(i.number)} ${i.title} · ${statusLabel}`,
+        icon: look.icon, color: look.color, spin: !!look.spin
+      };
+    }));
+  readonly selectedPlanItem = computed<PlanItemOption | null>(() => {
+    const options = this.planItemOptions();
+    const picked = this.pickedPlanItem();
+    const hit = picked != null ? options.find((o) => o.number === picked) : null;
+    if (hit) return hit;
+    const def = defaultPlanItem(this.planItems());
+    return def ? options.find((o) => o.number === def.number) ?? null : null;
+  });
+  /** Plano mostrado na aba Execução (null = o plano atual do card, para cards sem itens com plano). */
+  readonly selectedPlanId = computed(() => this.selectedPlanItem()?.planId ?? null);
+  /** Item fechado em tela: a aba mostra o aviso "versão fechada" com Novo item / Pedir ao especialista. */
+  readonly closedPlanItem = computed(() => {
+    const it = this.selectedPlanItem();
+    return it && CLOSED_PLAN_ITEM.has(it.status) ? it : null;
+  });
+
   readonly caseUnread = computed(() => {
     const c = this.card();
     return c ? this.caseStore.status(c)().unread : 0;
@@ -266,6 +340,21 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     }
     return { mode: 'idle', icon: 'smart_toy', target: 'plan', tooltip: 'O Claude não está rodando agora neste card' };
   });
+  /** Componente do plano (dados do pedido do Claude para o popover do robô da Bancada). */
+  readonly runCmp = computed(() => this.planCmp() ?? null);
+  /** Popover do robô do cabeçalho da Bancada (ancorado no próprio robô, não no ícone do plano). */
+  readonly robotOpen = signal(false);
+  readonly robotPositions: ConnectedPosition[] = [
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
+    { originX: 'center', originY: 'bottom', overlayX: 'center', overlayY: 'top', offsetY: 6 },
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -6 }
+  ];
+  readonly specialistWorking = computed(() => {
+    const c = this.card();
+    return !!c && !!this.caseStore.status(c)().working;
+  });
+
   /** Tempo real (SignalR) caído há mais de alguns segundos: a tela não atualiza sozinha. */
   readonly realtimeDown = signal(false);
   private wsTimer?: ReturnType<typeof setTimeout>;
@@ -321,13 +410,25 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     });
     inject(DestroyRef).onDestroy(() => { if (watchedHours) this.assistant.unwatch(watchedHours); });
 
-    // Busca o plano assim que o componente do plano existe (ele nasce junto com o corpo, depois do card).
+    // Busca o plano assim que o componente do plano existe (ele nasce junto com o corpo, depois do card) e os itens
+    // do card foram lidos — assim a aba Execução abre direto no plano do item (sem passar pelo plano atual do card).
     effect(() => {
       const cmp = this.planCmp();
       const card = this.card();
-      if (!cmp || !card || !this.hasBody()) return;
-      untracked(() => { if (cmp.loadedCard() !== card) cmp.load(card); });
+      if (!cmp || !card || !this.hasBody() || this.planItemsCard() !== card) return;
+      untracked(() => {
+        if (cmp.loadedCard() === card) return;
+        cmp.planId = this.selectedPlanId();
+        cmp.load(card);
+      });
     });
+
+    // Itens com plano (seletor da aba Execução): lê ao abrir o card e acompanha o tempo real dos itens.
+    effect(() => {
+      const card = this.hasBody() ? this.card() : null;
+      untracked(() => this.watchPlanItems(card));
+    });
+    inject(DestroyRef).onDestroy(() => { this.stopPlanItems?.(); this.planItemsSub?.unsubscribe(); });
 
     // Nome/status da aba (0065): a aba de card já mostra número e título; aqui só a contagem de itens.
     effect(() => {
@@ -355,6 +456,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.narrowMedia?.removeEventListener('change', this.onNarrowChange);
+    this.stopPlanItems?.();
     this.cardSub?.unsubscribe();
     this.querySub?.unsubscribe();
     clearTimeout(this.flashTimer);
@@ -374,7 +476,11 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       this.query = card;
       this.open(card, false);
     }
-    if (card && Number.isFinite(item) && item > 0) {
+    const hasItem = !!card && Number.isFinite(item) && item > 0;
+    if (hasItem && focus === 'plan') {
+      // "Abrir plano" de um item: a aba Execução já no plano daquele item (sem abrir o modal do item).
+      this.pickedPlanItem.set(item);
+    } else if (hasItem) {
       this.openItem.set(item);
       this.selectMobile('items');
     }
@@ -402,6 +508,9 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       this.planHeadline.set(null);
       this.pickedTab.set(null);
       this.pickedMobileTab.set(null);
+      this.planItems.set([]);
+      this.planItemsCard.set(null);
+      this.pickedPlanItem.set(null);
     }
     this.card.set(card);
     if (syncUrl) this.syncUrl(card);
@@ -456,6 +565,58 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     this.pickedMobileTab.set(tab);
   }
 
+  // ── Execução do item ────────────────────────────────────────────────────────────────────────
+
+  /** Lê os itens do card (os que têm plano entram no seletor) e recarrega a cada mudança dos itens no tempo real. */
+  private watchPlanItems(card: string | null): void {
+    this.stopPlanItems?.();
+    this.stopPlanItems = undefined;
+    this.planItemsSub?.unsubscribe();
+    if (!card) return;
+    this.loadPlanItems(card);
+    this.stopPlanItems = listenWorkItems(this.ws, card, (payload) => {
+      // Atividade ao vivo (heartbeat) não muda item nem status: não relê.
+      if (payload?.action === 'activity') return;
+      this.loadPlanItems(card);
+    });
+  }
+
+  private loadPlanItems(card: string): void {
+    this.planItemsSub?.unsubscribe();
+    this.planItemsSub = this.workItems.list(card).subscribe({
+      next: (items) => {
+        if (this.card() !== card) return;
+        this.planItems.set(items ?? []);
+        this.planItemsCard.set(card);
+      },
+      // Sem itens (erro): a aba mostra o plano atual do card, como antes.
+      error: () => { if (this.card() === card) this.planItemsCard.set(card); }
+    });
+  }
+
+  /** Seletor "Execução do item". */
+  pickPlanItem(number: number): void {
+    this.pickedPlanItem.set(number);
+  }
+
+  /** "+ Novo item" do aviso de versão fechada: cria o item e mostra a lista. */
+  async newItem(): Promise<void> {
+    const card = this.card();
+    if (!card) return;
+    const saved = await this.actions.create(card, this.cardType());
+    if (saved && this.card() === card) this.selectMobile('items');
+  }
+
+  /** "Pedir ao especialista" do aviso de versão fechada: o pedido vai para a conversa do caso (lateral). */
+  async askSpecialistForItem(): Promise<void> {
+    const card = this.card();
+    if (!card) return;
+    const sent = await this.actions.askSpecialist(card, this.cardType());
+    if (!sent || this.card() !== card) return;
+    if (this.narrow()) this.selectMobile('chat');
+    this.flashChat();
+  }
+
   onCountChange(n: number): void {
     this.itemCount.set(n);
   }
@@ -506,22 +667,47 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
 
   // ── Robô / conexão ──────────────────────────────────────────────────────────────────────────
 
-  /** Clique no robô: abre o pedido do Claude no plano (popover do próprio plano) ou os itens em execução. */
+  /**
+   * Clique no robô: os itens em execução (lista) ou o popover do pedido do Claude ancorado no próprio robô do cabeçalho
+   * (máquina, desde, tentativa, pedido, agora, últimas atividades, Parar) — os dados vêm do componente do plano.
+   */
   openRobot(): void {
     const robot = this.robot();
     if (robot.target === 'items') {
+      this.robotOpen.set(false);
       this.selectMobile('items');
       return;
     }
-    this.selectMobile('plan');
-    if (this.claudeRequest()) {
-      // O ícone do plano precisa estar visível para o popover se ancorar nele.
-      setTimeout(() => this.planCmp()?.runOpen.set(true), 80);
+    this.robotOpen.update((open) => !open);
+  }
+
+  onRobotKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.robotOpen.set(false);
     }
+  }
+
+  /** "Ver itens em execução" do popover do robô. */
+  robotToItems(): void {
+    this.robotOpen.set(false);
+    this.selectMobile('items');
+  }
+
+  /** "Analisar/Continuar com Claude" do popover do robô: a barra de pedido do plano (aba Execução). */
+  robotAsk(): void {
+    this.robotOpen.set(false);
+    this.resumeClaude();
+  }
+
+  robotExecutors(): void {
+    this.robotOpen.set(false);
+    this.planCmp()?.openExecutors();
   }
 
   /** "Sem sinal do Claude": retomar pelo executor (o mesmo diálogo do plano). */
   resumeClaude(): void {
+    this.pickedPlanItem.set(null);
     this.selectMobile('plan');
     setTimeout(() => this.planCmp()?.openAsk(), 80);
   }
@@ -575,6 +761,8 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       next: (r) => {
         this.analyzing.set(false);
         this.analysisAskedFor.set(card);
+        // O item novo da análise vira o padrão do seletor assim que aparecer.
+        this.pickedPlanItem.set(null);
         const where = r.waitReason ? ` ${r.waitReason}.` : '';
         this.snack.open(`Análise pedida para o Claude.${where}`, 'Ok', { duration: 6000 });
         if (!stay) this.selectMain('plan');
