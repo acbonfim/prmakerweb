@@ -283,8 +283,12 @@ export class PluginEditorDialogComponent {
     };
   }
 
+  /**
+   * Só valida como JSON o que parece JSON de verdade: objeto (`{"…` / `{}`) ou array (`[`, `[{`, `["`, `[1`, `[true`…).
+   * Marcadores de padrão como `{branch}{suffix}` ou `{card}` são texto (antes eram recusados como "JSON inválido").
+   */
   private looksLikeJson(value: string): boolean {
     const t = value.trim();
-    return t.startsWith('{') || t.startsWith('[');
+    return /^\{\s*("|\})/.test(t) || /^\[\s*(["{\[\]\d-]|true|false|null)/.test(t);
   }
 }
