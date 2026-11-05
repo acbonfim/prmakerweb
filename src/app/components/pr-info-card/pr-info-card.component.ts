@@ -59,6 +59,17 @@ export interface InfoFact {
             }
           </div>
         </div>
+        @if (starterName()) {
+          <!-- 0085 (rodada 5): quem começou o card no PRMake (a primeira análise/plano), ao lado de quem abriu no DevOps -->
+          <div class="pr-info__author pr-info__author--starter"
+               [matTooltip]="starterLabel() + ': ' + starterName() + (starterAt() ? ' em ' + (starterAt() | date:'dd/MM/yyyy HH:mm') : '')">
+            <app-user-avatar [name]="starterName()" [imageUrl]="starterPhoto()" [size]="28"></app-user-avatar>
+            <div class="pr-info__col">
+              <span class="pr-info__label">{{ starterLabel() }}</span>
+              <strong class="pr-info__value">{{ starterName() }}</strong>
+            </div>
+          </div>
+        }
 
         @if (facts().length) {
           <div class="pr-info__facts">
@@ -89,6 +100,7 @@ export interface InfoFact {
     }
     .pr-info { display: flex; align-items: center; gap: 10px 18px; width: 100%; min-height: 44px; }
     .pr-info__author { display: flex; align-items: center; gap: 10px; flex: none; }
+    .pr-info__author--starter { gap: 8px; padding-left: 14px; border-left: 1px solid rgba(255, 255, 255, 0.08); cursor: default; }
     .pr-info__col { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
     .pr-info__label { font-size: 10.5px; color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); }
     .pr-info__value { font-size: 13px; font-weight: 600; white-space: nowrap; }
@@ -138,6 +150,11 @@ export class PrInfoCardComponent {
   readonly updatedAt = input<string | null>(null);
   readonly authorLabel = input('Aberto por');
   readonly openedLabel = input('Aberto em');
+  /** 0085 (rodada 5): quem iniciou o card no PRMake (primeira análise/plano) — opcional; sem nome, não aparece. */
+  readonly starterName = input<string>('');
+  readonly starterPhoto = input<string | null>(null);
+  readonly starterLabel = input('Iniciado no PRMake por');
+  readonly starterAt = input<string | null>(null);
   /** Resumo do card em etiquetas (0026). */
   readonly facts = input<InfoFact[]>([]);
   /** Mostra o skeleton no lugar de autor/resumo (os botões de ação continuam visíveis). */

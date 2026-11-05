@@ -13,10 +13,13 @@ import { TourDefinition } from './tour.model';
  * "Análise v1 / Correção v2"); item fechado = criar outro item (na tela ou pelo especialista).
  * v5 (rodada 4): **Ferramentas do especialista** — botão no topo da coluna do especialista (e ao lado de "+ Novo item")
  * com os atalhos do dia a dia que criam o item já montado.
+ * v6 (rodada 5): botão **Card** abre o card num modal (mesma animação da timeline); aba Card sem espaços vazios; na
+ * Execução, Pausar/Continuar no menu ⋮ do plano e a faixa fixa **Arquivos do plano** + "Ver o plano completo"; na barra,
+ * quem iniciou o card no PRMake.
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 5,
+  version: 6,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -43,9 +46,9 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'padrão dos itens novos. O ⓘ abre todos os campos, o histórico e os comentários; a seta abre o card no DevOps.'
     },
     {
-      id: 'facts', anchor: 'wb-facts', group: 'O card', since: 2, phase: 'card', side: 'bottom', align: 'start',
+      id: 'facts', anchor: 'wb-facts', group: 'O card', since: 6, phase: 'card', side: 'bottom', align: 'start',
       title: 'Etiquetas do card',
-      body: 'A mesma barra da tela de PR: quem abriu, <b>estado</b>, ambiente, módulo, produção/release, prioridade, responsável, ' +
+      body: 'A mesma barra da tela de PR: quem abriu no DevOps, quem <b>iniciou no PRMake</b>, <b>estado</b>, ambiente, módulo, produção/release, prioridade, responsável, ' +
         'horas restantes, <b>plano</b> e <b>situação atual</b>.',
       detail: 'Passe o mouse numa etiqueta para ver o detalhe (coluna e raia do board, etapa da situação…). As cores avisam: verde ' +
         'concluído, âmbar pedindo atenção, azul em andamento.'
@@ -73,11 +76,11 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'ações do GitHub e do DevOps — as mesmas da tela de Pull Request.'
     },
     {
-      id: 'hours', anchor: 'wb-card-pane', group: 'O card', since: 3, phase: 'card', side: 'left', align: 'start', optional: true,
+      id: 'hours', anchor: 'wb-card-pane', group: 'O card', since: 6, phase: 'card', side: 'left', align: 'start', optional: true,
       prepare: 'tab:card',
       title: 'Aba Card: horas e texto',
       body: 'A aba <b>Card</b> reúne as horas (lance <b>+1h</b>, <b>+2h</b>, <b>+4h</b> ou outro valor), os dados principais e o texto ' +
-        'do card. O botão <b>Card</b> da barra abre esta aba; a linha de horas fica sempre ao lado das abas.',
+        'do card. O botão <b>Card</b> da barra abre o mesmo conteúdo num modal; a linha de horas fica sempre ao lado das abas.',
       detail: 'No Bug, as horas lançadas comparadas com a média dos bugs (acima ou abaixo); na US, o planejado × o realizado. ' +
         'Lançar horas pede uma confirmação curta e grava no DevOps (soma em Completed e tira do Remaining). Também ficam aqui ' +
         'estado, área, iteração, responsável, prioridade, datas, anexos/links e o texto (Repro Steps no Bug; descrição e ' +
@@ -138,6 +141,15 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'andamento (ou no mais recente); o "Abrir plano" de um item leva direto a ele. Item concluído ou cancelado é uma versão ' +
         'fechada — para mudar, cancele o item ou crie outro (+ Novo item, ou peça ao especialista). Perguntas do plano são ' +
         'respondidas na própria etapa.'
+    },
+    {
+      id: 'plan-files', anchor: 'plan-files-bar', group: 'Execução', since: 6, phase: 'card', side: 'bottom', align: 'start',
+      optional: true, prepare: 'tab:plan',
+      title: 'Arquivos do plano',
+      body: 'Os arquivos do plano (análise, scripts, chamados) ficam sempre aqui — abra ou baixe — com o <b>Ver o plano completo</b> ao lado.',
+      detail: 'Clique no nome para abrir no visualizador; a seta baixa o arquivo; ".zip" baixa todos. <b>Pausar</b>, ' +
+        '<b>Continuar</b> e <b>Continuar com Claude</b> ficam no menu <b>⋮</b> do cabeçalho do plano. Em User Story o plano ' +
+        'se chama <b>Plano de implementação</b>.'
     },
     {
       id: 'cancel', anchor: 'wb-cancel-plan', group: 'Execução', since: 1, phase: 'card', side: 'bottom', optional: true, prepare: 'tab:plan',

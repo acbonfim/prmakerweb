@@ -29,7 +29,7 @@ import { CardSituationService } from '../../../components/card-situation/card-si
 import { CardTimelineComponent } from '../../../components/card-timeline/card-timeline.component';
 import { CaseCompactComponent } from '../../../components/case-chat/case-compact.component';
 import { ExecutionPlanComponent, PlanHeadline } from '../../../components/execution-plan/execution-plan.component';
-import { isPlanActive } from '../../../components/execution-plan/execution-plan.model';
+import { ExecutionPlanSummary, isPlanActive } from '../../../components/execution-plan/execution-plan.model';
 import { PrInfoCardComponent } from '../../../components/pr-info-card/pr-info-card.component';
 import { GuidedTourService } from '../../../components/guided-tour/guided-tour.service';
 import { TourHelpData, TourHelpDialogComponent, TourHelpResult } from '../../../components/guided-tour/tour-help-dialog.component';
@@ -43,6 +43,7 @@ import { WorkItemActionsService } from '../../../components/work-items/work-item
 import { WorkItem, WorkItemStatus, formatWorkNumber, itemStatusLook } from '../../../components/work-items/work-item.model';
 import { listenWorkItems } from '../../../components/work-items/work-items-live';
 import { WorkbenchCardComponent } from '../../../components/workbench-card/workbench-card.component';
+import { openWorkbenchCard } from '../../../components/workbench-card/workbench-card-dialog.component';
 import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workbench-prs.component';
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
 import { SpecialistToolsComponent } from '../../../components/specialist-tools/specialist-tools.component';
@@ -54,6 +55,7 @@ import { CaseChatStore } from '../../../services/case-chat-store.service';
 import { planApiError } from '../../../services/execution-plan.service';
 import { ExecutionQueueService } from '../../../services/execution-queue.service';
 import { TabsService } from '../../../services/tabs.service';
+import { UserPhotoService } from '../../../services/user-photo.service';
 import { WorkItemsService } from '../../../services/work-items.service';
 import { WsService } from '../../../services/ws.service';
 import { cardFieldText, workbenchFacts } from './workbench-facts';
@@ -161,6 +163,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   private ws = inject(WsService);
   private actions = inject(WorkItemActionsService);
   private host = inject(ElementRef<HTMLElement>);
+  private photos = inject(UserPhotoService);
   /** Abas internas (0065): só a aba ativa mexe na URL e no nome da aba. */
   private tabScreen = this.tabs.bindScreen(inject(DestroyRef));
 
@@ -194,12 +197,26 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       updatedAt: date('System.ChangedDate')
     };
   });
+  /**
+   * Rodada 5: quem iniciou o card no PRMake — o criador do plano mais antigo do card (`GET ExecutionPlan/card/{n}`, o
+   * histórico que o próprio `app-execution-plan` já lê). Sem plano, nada aparece.
+   */
+  readonly starter = computed<{ name: string; userId: string | null; at: string } | null>(() => {
+    const cmp = this.planCmp();
+    const card = this.card();
+    if (!cmp || !card || cmp.loadedCard() !== card) return null;
+    const first = cmp.history().filter((h) => !!h.createdBy?.trim())
+      .reduce<ExecutionPlanSummary | null>((a, h) => !a || Date.parse(h.createdAt) < Date.parse(a.createdAt) ? h : a, null);
+    return first ? { name: first.createdBy.trim(), userId: first.createdByUserId ?? null, at: first.createdAt } : null;
+  });
+  readonly starterPhoto = computed(() => this.photos.photo(this.starter()?.userId));
   readonly facts = computed(() => {
     const c = this.card();
     return workbenchFacts({
       card: this.cardFull(),
       plan: this.planHeadline(),
-      situation: c ? this.situations.situationOf(c)() : null
+      situation: c ? this.situations.situationOf(c)() : null,
+      us: this.cardType() === 'user-story'
     });
   });
 
@@ -400,6 +417,12 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     const wsSub = this.ws._wsOn.subscribe((on: boolean) => this.onRealtime(on));
     if (!this.ws.isConnected()) this.onRealtime(false);
     inject(DestroyRef).onDestroy(() => wsSub.unsubscribe());
+
+    // Foto de quem iniciou no PRMake (barra do card).
+    effect(() => {
+      const id = this.starter()?.userId;
+      if (id) untracked(() => this.photos.ensure([id]));
+    });
 
     // Horas do card (chip do botão "Card"): acompanha o card aberto e busca as horas se ainda não vieram.
     let watchedHours: string | null = null;
@@ -697,9 +720,24 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   /** Entradas da timeline (contador do botão). */
   readonly timelineCount = computed(() => this.timelineCmp()?.entries().length ?? 0);
 
-  /** Botão "Card" da barra: abre a aba Card (horas, lançar horas, dados e texto do card). */
-  showCard(): void {
-    this.selectMobile('card');
+  /**
+   * Botão "Card" da barra (rodada 5): o conteúdo da aba Card (horas, lançar horas, dados e texto do card) num modal que
+   * cresce a partir do botão e volta para ele — a mesma animação da linha do tempo. Sem o card do DevOps, abre a aba.
+   */
+  showCard(origin?: HTMLElement | null): void {
+    const card = this.card();
+    if (!card || !this.cardFull()) {
+      this.selectMobile('card');
+      return;
+    }
+    openWorkbenchCard(this.dialog, {
+      card,
+      cardType: this.cardType,
+      cardFull: this.cardFull,
+      title: this.title,
+      devOpsUrl: this.devOpsUrl,
+      openDetails: () => this.openDetails()
+    }, origin);
   }
 
   onExecuting(numbers: number[]): void {

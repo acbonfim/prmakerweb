@@ -174,13 +174,15 @@
   @let au = author();
   <app-pr-info-card class="wb-info" data-tour="wb-facts"
                     [userName]="au.name" [authorLabel]="au.label" [openedAt]="au.openedAt" [updatedAt]="au.updatedAt"
+                    [starterName]="starter()?.name ?? ''" [starterPhoto]="starterPhoto()" [starterAt]="starter()?.at ?? null"
                     [facts]="facts()">
     <ng-container ngProjectAs="[info-actions]">
       <span class="wb-actions">
         @let hc = hoursChip();
-        <button mat-stroked-button type="button" class="wb-act" data-tour="wb-card-btn"
-                [class.wb-act--on]="visibleMain() === 'card'" [attr.aria-pressed]="visibleMain() === 'card'" (click)="showCard()"
-                [matTooltip]="'Aba Card: horas (lançar +1h, +2h, +4h…), dados e ' + (cardType() === 'user-story' ? 'descrição e critérios de aceite' : 'Repro Steps')">
+        <!-- Rodada 5: o card abre num modal que cresce a partir do botão (a mesma animação da linha do tempo) -->
+        <button mat-stroked-button type="button" class="wb-act" data-tour="wb-card-btn" aria-haspopup="dialog"
+                (click)="showCard($any($event.currentTarget))"
+                [matTooltip]="'Card: horas (lançar +1h, +2h, +4h…), dados e ' + (cardType() === 'user-story' ? 'descrição e critérios de aceite' : 'Repro Steps') + ' — abre num modal'">
           <mat-icon>description</mat-icon>Card
           @if (hc) { <span class="wb-hours-chip wb-hours-chip--{{ hc.tone }}" [matTooltip]="hc.tooltip">{{ hc.text }}</span> }
         </button>
@@ -392,6 +394,7 @@
           </div>
         }
         <app-execution-plan class="wb-plan" [cardNumber]="card()" [planId]="selectedPlanId()" [hideVersions]="true"
+                            [compactActions]="true" [showFilesBar]="true"
                             [itemNumber]="sel?.number ?? null" (headline)="onHeadline($event)"></app-execution-plan>
       </div>
 
