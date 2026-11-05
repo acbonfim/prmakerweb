@@ -421,3 +421,19 @@
   .wb-cardtext__scroll { max-height: none; overflow: visible; }
   .wb-timeline { flex: none; height: 60dvh; }
 }
+
+/* DevOps indisponível: aviso fino em vez de esconder a Bancada */
+.wb-degraded {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-radius: var(--cc-radius-md, 8px);
+  background: color-mix(in srgb, #f0b429 10%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, #f0b429 35%, transparent);
+  color: var(--cc-text-2, #c9d1d9);
+  font-size: 13px;
+  mat-icon { color: #f0b429; font-size: 18px; width: 18px; height: 18px; flex: none; }
+  span { flex: 1 1 auto; min-width: 0; }
+}

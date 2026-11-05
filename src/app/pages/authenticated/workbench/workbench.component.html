@@ -1,5 +1,7 @@
 <!-- 0085: Bancada do card — cabeçalho do card, coluna principal (Itens | Plano) e coluna lateral (Especialista, Card, Timeline) -->
 @let found = cardState() === 'found';
+<!-- DevOps fora do ar/sem integração: a Bancada continua com itens, plano, especialista e timeline (dados do PRMake) -->
+@let body = found || cardState() === 'error';
 @let cf = cardFull();
 <header class="wb-head">
   <div class="wb-head__row">
@@ -93,11 +95,10 @@
     </div>
   }
   @case ('error') {
-    <div class="wb-empty">
-      <mat-icon class="wb-empty__icon">cloud_off</mat-icon>
-      <h2>Não foi possível ler o card #{{ card() }}</h2>
-      <p>Falha ao consultar o DevOps (confira suas integrações pessoais).</p>
-      <button mat-stroked-button type="button" (click)="reload()"><mat-icon>refresh</mat-icon>Tentar de novo</button>
+    <div class="wb-degraded" role="status">
+      <mat-icon>cloud_off</mat-icon>
+      <span><strong>#{{ card() }}</strong> — não foi possível ler o card no DevOps (confira suas integrações pessoais). Itens, plano, especialista e timeline continuam abaixo.</span>
+      <button mat-button type="button" (click)="reload()"><mat-icon>refresh</mat-icon>Tentar de novo</button>
     </div>
   }
   @case ('loading') {
@@ -105,7 +106,7 @@
   }
 }
 
-@if (found && cf) {
+@if (body) {
   @let main = visibleMain();
   @let mtab = mobileTab();
   <!-- Celular (< 1024): uma seção por vez -->

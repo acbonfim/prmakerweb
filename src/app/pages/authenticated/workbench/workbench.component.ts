@@ -49,6 +49,8 @@ export type WorkbenchMainTab = 'items' | 'plan';
 /** Aba no celular (< 1024 px) — Itens | Plano | Especialista | Card. */
 export type WorkbenchMobileTab = WorkbenchMainTab | 'chat' | 'card';
 type CardState = 'idle' | 'loading' | 'found' | 'missing' | 'error';
+/** Corpo da Bancada visível: card lido, ou DevOps indisponível (os dados do PRMake continuam úteis). */
+const BODY_STATES: ReadonlySet<CardState> = new Set<CardState>(['found', 'error']);
 
 const NARROW_QUERY = '(max-width: 1023.98px)';
 const REPRO_FIELD = 'Microsoft.VSTS.TCM.ReproSteps';
@@ -116,6 +118,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   readonly card = signal<string | null>(null);
   readonly cardFull = signal<CardFull | null>(null);
   readonly cardState = signal<CardState>('idle');
+  readonly hasBody = computed(() => BODY_STATES.has(this.cardState()));
 
   readonly cardType = computed(() => workItemTypeOf(fieldText(this.cardFull(), 'System.WorkItemType')));
   readonly typeIcon = computed(() => workItemTypeIcon(this.cardType()));
@@ -222,7 +225,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     effect(() => {
       const cmp = this.planCmp();
       const card = this.card();
-      if (!cmp || !card || this.cardState() !== 'found') return;
+      if (!cmp || !card || !this.hasBody()) return;
       untracked(() => { if (cmp.loadedCard() !== card) cmp.load(card); });
     });
 
@@ -370,7 +373,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       // Espera o card abrir (o corpo nasce depois da leitura do DevOps).
       const tryOpen = (left: number) => {
         const tl = this.timelineCmp();
-        if (tl && this.cardState() === 'found') this.openTimeline(null);
+        if (tl && this.hasBody()) this.openTimeline(null);
         else if (left > 0) setTimeout(() => tryOpen(left - 1), 300);
       };
       setTimeout(() => tryOpen(20), 300);
