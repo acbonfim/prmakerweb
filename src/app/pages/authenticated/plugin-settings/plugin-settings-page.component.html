@@ -1,0 +1,200 @@
+<!-- 0086: Configurações por seção — navegação por assunto, busca única, salvar por seção com revisão. -->
+<div class="page-header ps__header">
+  <mat-icon class="header-icon">tune</mat-icon>
+  <span class="header-title">Configurações</span>
+
+  <div class="ps__search">
+    <mat-icon>search</mat-icon>
+    <input #searchInput type="text" placeholder="Buscar em todas as seções (rótulo, chave, ajuda, valor)"
+           [ngModel]="store.search()" (ngModelChange)="store.search.set($event ?? '')" (keyup.escape)="clearSearch()"
+           aria-label="Buscar configurações" />
+    @if (searching()) {
+      <button mat-icon-button matTooltip="Limpar busca" (click)="clearSearch()"><mat-icon>close</mat-icon></button>
+    }
+  </div>
+
+  <div class="ps__counters">
+    @if (store.pendingCount()) {
+      <span class="ps__counter ps__counter--dirty" matTooltip="Alterações ainda não salvas (salve por seção)">
+        <mat-icon>edit</mat-icon>{{ store.pendingCount() }} não salva(s)
+      </span>
+    }
+    @if (store.errorCount()) {
+      <span class="ps__counter ps__counter--error" matTooltip="Campos com valor inválido">
+        <mat-icon>error_outline</mat-icon>{{ store.errorCount() }} com erro
+      </span>
+    }
+    @if (store.missingCount()) {
+      <span class="ps__counter" matTooltip="Chaves que o código lê e não existem no banco — o código usa o padrão">
+        <mat-icon>help_outline</mat-icon>{{ store.missingCount() }} usando o padrão
+      </span>
+    }
+    @if (store.obsoleteCount()) {
+      <mat-slide-toggle class="ps__obsolete" [checked]="store.showObsolete()" (change)="store.showObsolete.set($event.checked)"
+                        matTooltip="Chaves que nenhum código lê mais (podem ser removidas)">
+        Mostrar obsoletas ({{ store.obsoleteCount() }})
+      </mat-slide-toggle>
+    }
+    <button mat-icon-button matTooltip="Recarregar (mantém as alterações não salvas)" (click)="reloadCatalog()"
+            [disabled]="store.loading()">
+      <mat-icon>refresh</mat-icon>
+    </button>
+  </div>
+</div>
+
+@if (store.demo()) {
+  <div class="ps__demo"><mat-icon>science</mat-icon>Dados de exemplo (<code>?exemplo=1</code>) — salvar só altera esta tela.</div>
+}
+@if (store.loading()) { <mat-progress-bar mode="indeterminate" class="ps__progress" /> }
+
+@if (store.loadError(); as err) {
+  <div class="ps__empty">
+    <mat-icon>cloud_off</mat-icon>
+    <span>{{ err }}</span>
+    <button mat-stroked-button (click)="reloadCatalog()"><mat-icon>refresh</mat-icon> Tentar de novo</button>
+  </div>
+} @else if (store.catalog()) {
+  <div class="ps" [class.ps--compact]="compact()">
+
+    <!-- ── Navegação por seção ─────────────────────────────────────────────────────────────── -->
+    @if (compact()) {
+      <mat-select class="ps__picker" [value]="section()?.key" (selectionChange)="selectSection($event.value)"
+                  aria-label="Seção">
+        @for (s of store.sections(); track s.key) {
+          <mat-option [value]="s.key">
+            {{ s.title }}@if (pendingIn(s.key)) { · {{ pendingIn(s.key) }} não salva(s) }@if (errorsIn(s.key)) { · {{ errorsIn(s.key) }} com erro }
+          </mat-option>
+        }
+      </mat-select>
+    } @else {
+      <nav class="ps__nav" aria-label="Seções">
+        @for (s of store.sections(); track s.key) {
+          <button type="button" class="ps__nav-item" [class.ps__nav-item--active]="!searching() && section()?.key === s.key"
+                  [class.ps__nav-item--advanced]="s.key === advancedKey" (click)="selectSection(s.key)"
+                  [attr.aria-current]="!searching() && section()?.key === s.key ? 'page' : null">
+            <mat-icon>{{ s.icon || 'tune' }}</mat-icon>
+            <span class="ps__nav-title">{{ s.title }}</span>
+            @if (errorsIn(s.key)) {
+              <span class="ps__pill ps__pill--error" [matTooltip]="errorsIn(s.key) + ' campo(s) com erro'">{{ errorsIn(s.key) }}</span>
+            }
+            @if (pendingIn(s.key)) {
+              <span class="ps__pill" [matTooltip]="pendingIn(s.key) + ' alteração(ões) não salva(s)'">{{ pendingIn(s.key) }}</span>
+            }
+          </button>
+        }
+      </nav>
+    }
+
+    <!-- ── Conteúdo ─────────────────────────────────────────────────────────────────────────── -->
+    <div class="ps__content">
+      @if (searching()) {
+        <div class="ps__results-title">
+          {{ store.searchCount() }} resultado(s) para “{{ store.search().trim() }}”
+        </div>
+        @for (r of store.searchResults(); track r.section.key) {
+          <section class="ps__section">
+            <ng-container *ngTemplateOutlet="sectionHead; context: { $implicit: r.section }" />
+            @for (g of r.groups; track g.group.key) {
+              <div class="ps__group">
+                <div class="ps__group-head"><span class="ps__group-title">{{ g.group.title }}</span></div>
+                <div class="ps__fields">
+                  @for (f of g.fields; track f.id) {
+                    <app-setting-field [field]="f" [highlight]="highlightId() === f.id" />
+                  }
+                </div>
+              </div>
+            }
+          </section>
+        } @empty {
+          <div class="ps__empty"><mat-icon>search_off</mat-icon><span>Nada encontrado em nenhuma seção.</span></div>
+        }
+      } @else if (section(); as s) {
+        <section class="ps__section">
+          <ng-container *ngTemplateOutlet="sectionHead; context: { $implicit: s }" />
+
+          @if (s.key === advancedKey) {
+            @if (missingPlugins().length) {
+              <div class="ps__warn">
+                <mat-icon>extension_off</mat-icon>
+                <span>
+                  O código procura {{ missingPlugins().length === 1 ? 'este plugin, que não existe' : 'estes plugins, que não existem' }}:
+                  @for (m of missingPlugins(); track m; let last = $last) { <strong>{{ m }}</strong>{{ last ? '.' : ', ' }} }
+                  Crie com <em>Novo plugin</em> usando o nome exato — as chaves dele ficam desabilitadas até lá.
+                </span>
+              </div>
+            }
+          }
+
+          @for (g of s.groups; track g.key) {
+            @if (groupVisible(g)) {
+              @let parts = groupFields(g);
+              <div class="ps__group">
+                <div class="ps__group-head">
+                  <span class="ps__group-title">{{ g.title }}</span>
+                  @if (g.description) { <span class="ps__group-desc">{{ g.description }}</span> }
+                </div>
+                <div class="ps__fields">
+                  @for (f of parts.main; track f.id) {
+                    <app-setting-field [field]="f" [highlight]="highlightId() === f.id" />
+                  }
+                </div>
+                @if (parts.more.length) {
+                  @let open = isExpanded(s, g) || moreNeedsAttention(parts.more);
+                  <button mat-button class="ps__more" (click)="toggleMore(s, g)" [attr.aria-expanded]="open">
+                    <mat-icon>{{ open ? 'expand_less' : 'expand_more' }}</mat-icon>
+                    Mais opções ({{ parts.more.length }})
+                  </button>
+                  @if (open) {
+                    <div class="ps__fields">
+                      @for (f of parts.more; track f.id) {
+                        <app-setting-field [field]="f" [highlight]="highlightId() === f.id" />
+                      }
+                    </div>
+                  }
+                }
+              </div>
+            }
+          }
+
+          @if (s.key === advancedKey) {
+            <div class="ps__group ps__group--grid">
+              <div class="ps__group-head">
+                <span class="ps__group-title">Plugins</span>
+                <span class="ps__group-desc">Nome, só administradores, uso pessoal/opcional e quem preenche cada campo (editor
+                  do plugin). Salvar aqui grava o plugin inteiro — prefira as seções para mudar valores.</span>
+              </div>
+              <app-plugin (changed)="reloadCatalog()" />
+            </div>
+          } @else if (!s.groups.length) {
+            <div class="ps__empty"><mat-icon>inbox</mat-icon><span>Nenhuma chave nesta seção.</span></div>
+          }
+        </section>
+      }
+    </div>
+  </div>
+}
+
+<!-- Cabeçalho de seção: título, descrição e salvar/descartar só desta seção. -->
+<ng-template #sectionHead let-s>
+  <div class="ps__section-head">
+    <mat-icon class="ps__section-icon">{{ s.icon || 'tune' }}</mat-icon>
+    <div class="ps__section-titles">
+      <span class="ps__section-title">{{ s.title }}</span>
+      @if (s.description && !searching()) { <span class="ps__section-desc">{{ s.description }}</span> }
+    </div>
+    <span class="ps__spacer"></span>
+    @if (blocking(s); as n) {
+      <span class="ps__counter ps__counter--error"><mat-icon>error_outline</mat-icon>{{ n }} com erro</span>
+    }
+    @if (pendingIn(s.key)) {
+      <button mat-button (click)="discardSection(s)" [disabled]="store.saving() === s.key">
+        <mat-icon>undo</mat-icon> Descartar
+      </button>
+    }
+    <button mat-flat-button color="primary" (click)="save(s)" [disabled]="!canSave(s)"
+            [matTooltip]="blocking(s) ? 'Corrija os campos com erro antes de salvar' : 'Revisar e salvar só esta seção'">
+      <mat-icon>{{ store.saving() === s.key ? 'hourglass_top' : 'save' }}</mat-icon>
+      Salvar ({{ pendingIn(s.key) }})
+    </button>
+  </div>
+</ng-template>

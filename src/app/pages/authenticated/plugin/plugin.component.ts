@@ -1,4 +1,4 @@
-import { Component, computed, ElementRef, OnInit, signal, ViewChild } from '@angular/core';
+import { Component, computed, ElementRef, OnInit, output, signal, ViewChild } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { PluginEditorDialogComponent } from './plugin-editor/plugin-editor-dialog.component';
 import { DialogManagerPluginComponent } from './dialog-manager-plugin/dialog-manager-plugin.component';
@@ -34,6 +34,9 @@ export class PluginComponent implements OnInit {
   searchOpen = signal(false);
   filterText = signal('');
   processingId = signal<number | null>(null);
+
+  /** 0086: a grade agora vive em "Plugins (avançado)" da tela de configurações — avisa para recarregar o catálogo. */
+  readonly changed = output<void>();
 
   readonly skeletons = Array.from({ length: 6 });
 
@@ -104,7 +107,9 @@ export class PluginComponent implements OnInit {
     });
 
     dialogRef.afterClosed().subscribe((result) => {
-      if (result) this.getAllPlugin();
+      if (!result) return;
+      this.getAllPlugin();
+      this.changed.emit();
     });
   }
 
@@ -119,6 +124,7 @@ export class PluginComponent implements OnInit {
       if (!result) return;
       const createdId = typeof result === 'object' ? result.id : null;
       this.getAllPlugin(createdId ?? undefined);
+      this.changed.emit();
     });
   }
 
@@ -144,6 +150,7 @@ export class PluginComponent implements OnInit {
         this.processingId.set(null);
         this._globalService.sendAlert('Salvo com sucesso!', 'Ok');
         this.getAllPlugin();
+        this.changed.emit();
       },
       (error) => {
         this.processingId.set(null);
@@ -159,7 +166,8 @@ export class PluginComponent implements OnInit {
       await this._gdsService.deletePlugin(plugin.id).toPromise();
       this.processingId.set(null);
       this._globalService.sendAlert('Deletado com sucesso!', 'Ok');
-      await this.getAllPlugin();
+      this.getAllPlugin();
+      this.changed.emit();
     } catch (error: any) {
       this.processingId.set(null);
       console.error(error.message);
