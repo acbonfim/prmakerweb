@@ -3,6 +3,7 @@ import {PageContainerComponent} from '../../components/page-container/page-conta
 import {Component} from '@angular/core';
 import {AuthGuard} from '../../auth/auth.guard';
 import {AdminGuard} from '../../auth/admin.guard';
+import {pluginSettingsLeaveGuard} from './plugin-settings/plugin-settings.guard';
 
 export const AUTHENTICATED_ROUTES: Routes = [
   {
@@ -46,10 +47,12 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadComponent: () => import('./services/services.component').then(m => m.ServicesComponent)
       },
       {
+        // 0086: configurações por seção (a grade de plugins e o editor da 0032 ficam em "Plugins (avançado)").
         path: 'plugin-manager',
-        data: { tab: { title: 'Plugins', icon: 'hub' } },
+        data: { tab: { title: 'Configurações', icon: 'tune' } },
         canActivate: [AuthGuard, AdminGuard],
-        loadComponent: () => import('./plugin/plugin.component').then(m => m.PluginComponent)
+        canDeactivate: [pluginSettingsLeaveGuard],
+        loadComponent: () => import('./plugin-settings/plugin-settings-page.component').then(m => m.PluginSettingsPageComponent)
       },
       {
         path: 'reverse-engineering',

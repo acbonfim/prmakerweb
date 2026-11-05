@@ -77,8 +77,8 @@ export class SideMenuComponent implements OnInit {
       allowedRoles: ['admin']
     },
     {
-      label: 'Plugins',
-      icon: 'hub',
+      label: 'Configurações',
+      icon: 'tune',
       link: 'auth/plugin-manager',
       allowedRoles: ['admin']
     },
