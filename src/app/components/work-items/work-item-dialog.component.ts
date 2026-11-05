@@ -307,7 +307,7 @@ export class WorkItemDialogComponent {
   }
 
   openPlan(): void {
-    this.actions.openPlan();
+    this.actions.openPlan(this.item()?.number ?? this.data.number);
     this.ref.close();
   }
 

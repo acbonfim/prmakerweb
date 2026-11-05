@@ -207,9 +207,9 @@ export class WorkItemActionsService {
     }
   }
 
-  /** "Abrir plano": a Bancada mostra a aba Plano (`?focus=plan`). */
-  openPlan(): void {
-    this.router.navigate([], { queryParams: { focus: 'plan', item: null }, queryParamsHandling: 'merge' });
+  /** "Abrir plano": a Bancada abre a aba Execução já no plano do item (`?item=<n>&focus=plan`). */
+  openPlan(itemNumber?: number | null): void {
+    this.router.navigate([], { queryParams: { focus: 'plan', item: itemNumber ?? null }, queryParamsHandling: 'merge' });
   }
 
   // ── internos ─────────────────────────────────────────────────────────────────────────────────

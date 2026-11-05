@@ -10,6 +10,7 @@ import {
   computed,
   effect,
   inject,
+  input,
   signal,
   untracked
 } from '@angular/core';
@@ -226,6 +227,33 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   /** Resumo do plano em tela (ou null sem plano) — para o cartão do topo (0026). */
   @Output() headline = new EventEmitter<PlanHeadline | null>();
+
+  // ── 0085 (rodada 3): plano de um item de trabalho (Bancada) ──────────────────────────────────────
+  // Padrões que deixam tudo como antes: a tela de PR não passa nada (segue o plano atual do card e mostra as versões).
+
+  /** Plano fixo (o do item de trabalho escolhido na Bancada); null = o plano atual do card, como sempre. */
+  readonly fixedPlanId = signal<string | null>(null);
+  @Input()
+  set planId(value: string | null | undefined) {
+    const id = value && `${value}`.trim() ? `${value}`.trim() : null;
+    if (id === this.fixedPlanId()) return;
+    this.fixedPlanId.set(id);
+    if (this.pinnedPlanId() === id) return;
+    this.pinnedPlanId.set(id);
+    // Sem card carregado, o load() leva o plano fixo; com card, troca já.
+    if (!this.loadedCard()) return;
+    this.selectedKey.set(null);
+    this.plan.set(null);
+    this.logs.set([]);
+    this.fetch({ silent: false });
+  }
+  get planId(): string | null {
+    return this.fixedPlanId();
+  }
+  /** Esconde o botão/histórico de versões e o "v1/v2" dos textos (na Bancada a versão é o item de trabalho). */
+  readonly hideVersions = input(false);
+  /** Número do item de trabalho do plano em tela — nos textos no lugar do "v1" ("a correção #25"). */
+  readonly itemNumber = input<number | null>(null);
 
   readonly fullscreen = new FullscreenPanel({
     host: () => this.hostRef.nativeElement,
@@ -506,7 +534,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   /** 0082: há versão mais nova desta mesma fase (análise e correção contam separado). */
   readonly isOlderVersion = computed(() => {
     const plan = this.plan();
-    if (!plan) return false;
+    if (!plan || this.hideVersions()) return false;
     const latest = this.latestOf(plan.phase ?? 'analysis');
     return !!latest && latest.id !== plan.id && Date.parse(latest.createdAt) > Date.parse(plan.createdAt);
   });
@@ -515,9 +543,18 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly versionLabel = computed(() => {
     const plan = this.plan();
     if (!plan) return '';
-    const v = this.versionOf(plan.id);
-    return `${(plan.phase ?? 'analysis') === 'correction' ? 'Correção' : 'Análise'}${v ? ' v' + v : ''}`;
+    return `${(plan.phase ?? 'analysis') === 'correction' ? 'Correção' : 'Análise'}${this.versionSuffix(plan.id)}`;
   });
+
+  /** " v2" (versões do card) ou, com `hideVersions`, " #30" (o item de trabalho) / nada. */
+  private versionSuffix(planId: string): string {
+    if (this.hideVersions()) {
+      const n = this.itemNumber();
+      return n ? ` #${n}` : '';
+    }
+    const v = this.versionOf(planId);
+    return v ? ' v' + v : '';
+  }
 
   /** Perguntas respondidas da análise (as decisões que valem para a próxima versão). */
   readonly decisions = computed(() => {
@@ -552,8 +589,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     const plan = this.plan();
     if (!plan) return null;
     const phaseName = (plan.phase ?? 'analysis') === 'correction' ? 'correção' : 'análise';
-    const v = this.versionOf(plan.id);
-    const name = `${phaseName}${v ? ' v' + v : ''}`;
+    const name = `${phaseName}${this.versionSuffix(plan.id)}`;
     if (this.isOlderVersion()) {
       const latest = this.latestOf(plan.phase ?? 'analysis');
       return { tone: 'info', text: `Você está vendo a **${name}**, uma versão anterior — a mais nova é a **${phaseName} v${latest?.versionNumber ?? '?'}** (troque pelo botão da versão).` };
@@ -570,7 +606,10 @@ export class ExecutionPlanComponent implements OnDestroy {
     if (plan.status === 'cancelled') {
       const by = plan.statusChangedBy ? ` por ${plan.statusChangedBy}` : '';
       const why = plan.statusReason ? ` (“${this.shortText(plan.statusReason, 140)}”)` : '';
-      return { tone: 'bad', text: `A **${name}** foi cancelada${by}${why}. A análise e as decisões continuam valendo — converse com o especialista para entender o que houve e gerar a próxima versão.`,
+      const next = this.hideVersions()
+        ? 'converse com o especialista para entender o que houve e, para mudar, crie um novo item.'
+        : 'converse com o especialista para entender o que houve e gerar a próxima versão.';
+      return { tone: 'bad', text: `A **${name}** foi cancelada${by}${why}. A análise e as decisões continuam valendo — ${next}`,
         chat: 'Entender com o especialista' };
     }
     if (plan.status === 'failed')
@@ -607,15 +646,17 @@ export class ExecutionPlanComponent implements OnDestroy {
     const plan = this.plan();
     if (!plan) return;
     const correction = plan.phase === 'correction';
-    const v = this.versionOf(plan.id);
+    const v = this.versionSuffix(plan.id);
+    // Sem versões (Bancada): o documento é só deste plano, sem "v1" nem a troca pela última análise feita do card.
+    const history = this.hideVersions() ? [] : this.history();
     this.dialog.open(MarkdownViewDialogComponent, {
       ...MARKDOWN_VIEW_DIALOG,
       data: {
-        title: correction ? `Plano de correção${v ? ' v' + v : ''} completo` : `Análise${v ? ' v' + v : ''} completa`,
+        title: correction ? `Plano de correção${v} completo` : `Análise${v} completa`,
         subtitle: plan.title,
         icon: correction ? 'build' : 'troubleshoot',
         card: plan.cardNumber,
-        load: () => this.documents.build(plan, this.history()),
+        load: () => this.documents.build(plan, history),
       } satisfies MarkdownViewDialogData,
     });
   }
@@ -703,7 +744,9 @@ export class ExecutionPlanComponent implements OnDestroy {
     if (plan?.lastActivityAt && last.finishedAt && Date.parse(plan.lastActivityAt) > Date.parse(last.finishedAt)) return null;
     return last;
   });
-  readonly canAskClaude = computed(() => this.hasWorkers() && !this.activeRequest() && !this.pinnedPlanId());
+  readonly canAskClaude = computed(() => this.hasWorkers() && !this.activeRequest()
+    // Plano antigo do histórico: não pede. Plano fixo de um item (Bancada): só enquanto ele está em andamento.
+    && (!this.pinnedPlanId() || (this.pinnedPlanId() === this.fixedPlanId() && this.isActive())));
   readonly askLabel = computed(() => this.plan() && this.isActive() ? 'Continuar com Claude' : 'Analisar com Claude');
   readonly askOpen = signal(false);
   readonly showRequestDetail = signal(false);
@@ -983,7 +1026,7 @@ export class ExecutionPlanComponent implements OnDestroy {
       this.askOpen.set(false);
       this.logs.set([]);
       this.history.set([]);
-      this.pinnedPlanId.set(null);
+      this.pinnedPlanId.set(this.fixedPlanId());
       this.selectedKey.set(null);
     }
     this.fetch({ silent: false });
@@ -1020,7 +1063,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.askOpen.set(false);
     this.logs.set([]);
     this.history.set([]);
-    this.pinnedPlanId.set(null);
+    this.pinnedPlanId.set(this.fixedPlanId());
     this.selectedKey.set(null);
     this.isLoading.set(false);
     this.loadError.set(false);
@@ -1143,6 +1186,8 @@ export class ExecutionPlanComponent implements OnDestroy {
     const pinned = this.pinnedPlanId();
     if (pinned && payload.planId !== pinned) {
       this.loadHistory(card);
+      // Plano fixo (Bancada): o pedido do Claude no card (robô, "continuar") pode ter mudado por outro plano.
+      if (this.fixedPlanId()) this.loadQueue(card);
       return;
     }
     clearTimeout(this.refreshTimer);
@@ -1501,7 +1546,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     const plan = this.plan();
     if (!plan) return;
     const openPrs = (plan.links ?? []).filter((l) => l.kind === 'pr' && (l.status ?? 'open') === 'open').map((l) => l.title || l.url);
-    const data: CancelPlanDialogData = { phase: plan.phase ?? 'analysis', versionNumber: this.versionOf(plan.id), openPrs };
+    const data: CancelPlanDialogData = { phase: plan.phase ?? 'analysis', versionNumber: this.hideVersions() ? null : this.versionOf(plan.id), openPrs };
     this.dialog.open<CancelPlanDialogComponent, CancelPlanDialogData, CancelPlanDialogResult>(CancelPlanDialogComponent,
       { data, width: '560px', maxWidth: '96vw', autoFocus: false })
       .afterClosed().subscribe((r) => {

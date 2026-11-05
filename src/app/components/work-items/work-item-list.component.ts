@@ -196,7 +196,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                       <button mat-menu-item (click)="duplicate(it)"><mat-icon>content_copy</mat-icon>Criar novo a partir deste</button>
                       @if (canCancelIt(it)) { <button mat-menu-item (click)="cancel(it)"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
                       @if (canUndoIt(it)) { <button mat-menu-item (click)="undo(it)"><mat-icon>undo</mat-icon>Desfazer</button> }
-                      @if (it.planId) { <button mat-menu-item (click)="openPlan()"><mat-icon>account_tree</mat-icon>Abrir plano</button> }
+                      @if (it.planId) { <button mat-menu-item (click)="openPlan(it.number)"><mat-icon>account_tree</mat-icon>Abrir plano</button> }
                     </mat-menu>
                   </span>
                 </div>
@@ -752,8 +752,8 @@ export class WorkItemListComponent {
     if (it) this.afterSaved(it);
   }
 
-  openPlan(): void {
-    this.actions.openPlan();
+  openPlan(itemNumber: number): void {
+    this.actions.openPlan(itemNumber);
   }
 
   private afterSaved(saved: WorkItem): void {

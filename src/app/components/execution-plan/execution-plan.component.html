@@ -204,7 +204,7 @@
         <mat-icon>more_vert</mat-icon>
       </button>
       <mat-menu #moreMenu="matMenu" class="app-menu" xPosition="before">
-        @if (history().length > 1) {
+        @if (!hideVersions() && history().length > 1) {
           <button mat-menu-item (click)="historyPanel.open(moreOrigin)">
             <mat-icon>history</mat-icon><span>Histórico de versões ({{ history().length }})</span>
           </button>
@@ -239,16 +239,19 @@
   }
 
   @if (plan(); as p) {
-    <!-- 0082: a versão em tela num botão (troca pelo histórico) e, na barra, só as etapas dela -->
-    <div class="vbar">
-      <button type="button" class="vbar__ver vbar__ver--{{ p.phase }}" data-tour="plan-version"
-              cdkOverlayOrigin #versionOrigin="cdkOverlayOrigin" (click)="historyPanel.open(versionOrigin)"
-              [attr.aria-label]="'Versão em tela: ' + versionLabel() + ' — trocar de versão'"
-              [matTooltip]="history().length > 1 ? 'Trocar de versão (' + history().length + ' no card)' : 'Versões do plano'">
-        <mat-icon>{{ p.phase === 'correction' ? 'build' : 'troubleshoot' }}</mat-icon>
-        <span class="vbar__ver-text"><b>{{ versionLabel() }}</b><small>{{ isOlderVersion() ? 'versão anterior' : 'mais recente' }}</small></span>
-        <mat-icon class="vbar__caret">unfold_more</mat-icon>
-      </button>
+    <!-- 0082: a versão em tela num botão (troca pelo histórico) e, na barra, só as etapas dela.
+         0085 (rodada 3): com hideVersions (Bancada: a versão é o item de trabalho) fica só a barra de etapas. -->
+    <div class="vbar" [class.vbar--steps-only]="hideVersions()">
+      @if (!hideVersions()) {
+        <button type="button" class="vbar__ver vbar__ver--{{ p.phase }}" data-tour="plan-version"
+                cdkOverlayOrigin #versionOrigin="cdkOverlayOrigin" (click)="historyPanel.open(versionOrigin)"
+                [attr.aria-label]="'Versão em tela: ' + versionLabel() + ' — trocar de versão'"
+                [matTooltip]="history().length > 1 ? 'Trocar de versão (' + history().length + ' no card)' : 'Versões do plano'">
+          <mat-icon>{{ p.phase === 'correction' ? 'build' : 'troubleshoot' }}</mat-icon>
+          <span class="vbar__ver-text"><b>{{ versionLabel() }}</b><small>{{ isOlderVersion() ? 'versão anterior' : 'mais recente' }}</small></span>
+          <mat-icon class="vbar__caret">unfold_more</mat-icon>
+        </button>
+      }
       @if (journey().length) {
         <nav class="journey" data-tour="plan-journey" [attr.aria-label]="'Etapas da ' + versionLabel()">
           @for (n of journey(); track n.key; let last = $last) {
@@ -404,7 +407,7 @@
           <!-- 0080 (M4): as respostas viram decisões; mudar uma decisão = conversar com o especialista -->
           <section class="decisions" aria-label="Decisões" data-tour="plan-decisions">
             <div class="decisions__head">
-              <mat-icon>how_to_reg</mat-icon>Decisões que valem para a próxima versão
+              <mat-icon>how_to_reg</mat-icon>{{ hideVersions() ? 'Decisões que valem para os próximos itens' : 'Decisões que valem para a próxima versão' }}
               <span class="plan__spacer"></span>
               <button type="button" class="decisions__link" (click)="openChat()">mudar uma decisão = conversar com o especialista</button>
             </div>
