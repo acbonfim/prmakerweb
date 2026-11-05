@@ -201,13 +201,16 @@
             <app-workbench-prs [card]="card()" [cardType]="cardType()" [cardFull]="cf"
                                (countChange)="prCount.set($event)" (devopsChanged)="reload()"></app-workbench-prs>
           </span>
-          <button mat-stroked-button type="button" class="wb-act wb-analyze" data-tour="wb-analyze"
-                  [disabled]="analyzing() || planActive()"
-                  [matTooltip]="planActive() ? 'Já há um plano em andamento — continue pelo plano' : 'Pede ao Claude a análise deste card (fila de execução)'"
-                  (click)="analyze()">
-            @if (analyzing()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon [svgIcon]="typeIcon()"></mat-icon> }
-            {{ cardType() === 'user-story' ? 'Analisar US' : 'Analisar bug' }}
-          </button>
+          <!-- Só sem análise válida no card: depois da análise inicial, o caminho é pelos itens e pelo Especialista -->
+          @if (canRequestAnalysis() || analyzing()) {
+            <button mat-stroked-button type="button" class="wb-act wb-analyze" data-tour="wb-analyze"
+                    [disabled]="analyzing() || planActive()"
+                    [matTooltip]="planActive() ? 'Já há um plano em andamento — continue pelo plano' : 'Pede ao Claude a análise deste card (fila de execução)'"
+                    (click)="analyze()">
+              @if (analyzing()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon [svgIcon]="typeIcon()"></mat-icon> }
+              {{ cardType() === 'user-story' ? 'Analisar US' : 'Analisar bug' }}
+            </button>
+          }
         }
       </span>
     </ng-container>

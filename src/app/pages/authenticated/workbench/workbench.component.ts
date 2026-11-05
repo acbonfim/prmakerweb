@@ -65,6 +65,8 @@ import { cardFieldText, workbenchFacts } from './workbench-facts';
 const ACTIVE_PLAN_ITEM: ReadonlySet<WorkItemStatus> = new Set<WorkItemStatus>(['queued', 'running', 'waiting', 'reverting']);
 /** Item "fechado" (versão fechada): concluído, cancelado ou desfeito — mudar = criar outro item. */
 const CLOSED_PLAN_ITEM: ReadonlySet<WorkItemStatus> = new Set<WorkItemStatus>(['completed', 'cancelled', 'reverted']);
+/** Item de análise que não vale (cancelado, falhou ou desfeito): o card pode pedir a análise de novo. */
+const DISCARDED_ANALYSIS: ReadonlySet<WorkItemStatus> = new Set<WorkItemStatus>(['failed', 'cancelled', 'reverting', 'reverted']);
 
 /** Opção do seletor "Execução do item" (itens de trabalho que têm plano). */
 export interface PlanItemOption {
@@ -278,6 +280,13 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     const h = this.planHeadline();
     return !!h && isPlanActive(h.status as any);
   });
+  /**
+   * "Analisar bug" / "Analisar US" só aparece enquanto o card não tem análise: some quando já há um item de análise
+   * válido (em andamento ou concluído) e também enquanto os itens do card não foram lidos (sem piscar o botão).
+   */
+  readonly canRequestAnalysis = computed(() =>
+    this.planItemsCard() === this.card()
+    && !this.planItems().some((i) => i.type === 'analysis' && !DISCARDED_ANALYSIS.has(i.status)));
 
   /** PRs do card (contados pelo `app-workbench-prs`). */
   readonly prCount = signal<number | null>(null);
@@ -827,7 +836,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
    */
   analyze(stay = false): void {
     const card = this.card();
-    if (!card || this.analyzing() || this.planActive()) return;
+    if (!card || this.analyzing() || this.planActive() || !this.canRequestAnalysis()) return;
     this.analyzing.set(true);
     this.queueApi.create(card, { kind: 'analyze' }).subscribe({
       next: (r) => {

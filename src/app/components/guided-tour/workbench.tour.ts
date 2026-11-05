@@ -68,7 +68,8 @@ export const WORKBENCH_TOUR: TourDefinition = {
       title: 'Pedir a análise',
       body: '<b>Analisar bug</b> (ou <b>Analisar US</b>) manda o Claude analisar o card pela fila de execução.',
       detail: 'O pedido vai para a fila e roda no seu executor. A análise vira um item de trabalho e o andamento aparece na aba ' +
-        'Execução; com um plano em andamento o botão fica desligado (continue pelo próprio item).'
+        'Execução; com um plano em andamento o botão fica desligado (continue pelo próprio item). Feita a análise, o botão some — ' +
+        'ele volta só se a análise for cancelada, falhar ou for desfeita.'
     },
     {
       id: 'prs', anchor: 'wb-prs', group: 'O card', since: 1, phase: 'card', side: 'bottom', align: 'end', optional: true,
