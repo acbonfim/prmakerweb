@@ -63,10 +63,94 @@
         <button mat-icon-button type="button" class="wb-icon-btn wb-robot"
                 [class.wb-robot--running]="rb.mode === 'running'" [class.wb-robot--queued]="rb.mode === 'queued'"
                 [class.wb-robot--idle]="rb.mode === 'idle'"
-                [matTooltip]="rb.tooltip" [attr.aria-label]="rb.tooltip" (click)="openRobot()">
+                cdkOverlayOrigin #robotOrigin="cdkOverlayOrigin" [attr.aria-expanded]="robotOpen()"
+                [matTooltip]="robotOpen() ? '' : rb.tooltip" [attr.aria-label]="rb.tooltip" (click)="openRobot()">
           <span class="wb-robot__glow" aria-hidden="true"></span>
           <mat-icon>{{ rb.icon }}</mat-icon>
         </button>
+        <!-- Popover do robô ancorado nele mesmo (o mesmo conteúdo do ícone do plano; dados do app-execution-plan) -->
+        <ng-template cdkConnectedOverlay [cdkConnectedOverlayOrigin]="robotOrigin" [cdkConnectedOverlayOpen]="robotOpen()"
+                     [cdkConnectedOverlayPositions]="robotPositions" [cdkConnectedOverlayHasBackdrop]="true"
+                     cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop" [cdkConnectedOverlayPush]="true"
+                     (backdropClick)="robotOpen.set(false)" (detach)="robotOpen.set(false)" (overlayKeydown)="onRobotKey($event)">
+          @let pc = runCmp();
+          <div class="run-pop" role="dialog" aria-label="O que o Claude está fazendo" aria-live="polite">
+            @if (pc?.activeRequest(); as r) {
+              <div class="run-pop__head run-pop__head--{{ r.status }}">
+                <mat-icon [class.run-pop__spin]="r.status !== 'queued'">{{ r.status === 'queued' ? 'hourglass_top' : 'smart_toy' }}</mat-icon>
+                <b>{{ r.status === 'queued' ? 'Na fila do Claude' : 'Claude rodando' }}</b>
+                <span class="run-pop__spacer"></span>
+                <button mat-icon-button class="run-pop__close" (click)="robotOpen.set(false)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+              </div>
+              <dl class="run-pop__facts">
+                @if (r.status === 'queued') {
+                  <dt>Desde</dt><dd>{{ pc!.formatTime(r.createdAt) }} · {{ r.waitReason || 'começa em instantes' }}
+                    @if (r.waitCode === 'offline' && pc!.requestWorker(r)?.lastSeenAt) { (último sinal {{ pc!.relativeTime(pc!.requestWorker(r)!.lastSeenAt) }}) }</dd>
+                } @else {
+                  <dt>Máquina</dt><dd>{{ r.workerName || 'sua máquina' }}</dd>
+                  <dt>Desde</dt><dd>{{ pc!.relativeTime(r.startedAt || r.claimedAt) }}</dd>
+                }
+                @if (r.attempts > 0) { <dt>Tentativa</dt><dd>{{ r.status === 'queued' ? r.attempts + 1 : r.attempts }}/{{ r.maxAttempts }}</dd> }
+                <dt>Pedido</dt><dd>{{ pc!.sourceLabel[r.source] || r.source }} — {{ r.requestedBy }}</dd>
+                @if (r.newSession) { <dt>Sessão</dt><dd>correção numa sessão nova (só o resumo da análise)</dd> }
+              </dl>
+              @if (pc!.liveActivity(); as a) {
+                <div class="run-pop__now">
+                  <mat-icon>{{ pc!.activityIcon(a.tool) }}</mat-icon>
+                  <span><b>Agora:</b> {{ a.label }} <small>{{ pc!.activityAge(a.at) }}</small></span>
+                </div>
+                @if (pc!.activityQuietMinutes(); as m) {
+                  <p class="run-pop__quiet">Sem novidade há {{ m }} min — o Claude pode estar pensando ou esperando um comando terminar.</p>
+                }
+              } @else if (r.status !== 'queued') {
+                <div class="run-pop__now"><mat-icon>psychology</mat-icon><span>Pensando…</span></div>
+              }
+              @if (pc!.recentActivities().length) {
+                <h5 class="run-pop__sub">Últimas atividades</h5>
+                <ol class="run-pop__log" aria-label="Últimas atividades do Claude">
+                  @for (a of pc!.recentActivities(); track a.at + a.label) {
+                    <li><mat-icon>{{ pc!.activityIcon(a.tool) }}</mat-icon><span>{{ a.label }}</span><time>{{ pc!.formatTime(a.at) }}</time></li>
+                  }
+                </ol>
+              }
+              @if (executingItems().length) {
+                <p class="run-pop__text">Executando {{ executingItems().length === 1 ? 'o item #' + executingItems()[0] : executingItems().length + ' itens' }}.</p>
+              }
+              <div class="run-pop__actions">
+                @if (r.waitCode === 'budget') { <button mat-button (click)="pc!.forceRequest(r)" [disabled]="!!pc!.busy()">Rodar mesmo assim</button> }
+                @if (r.waitCode === 'gathering') { <button mat-button (click)="pc!.startNow()" [disabled]="!!pc!.busy()">Começar agora</button> }
+                @if (r.waitCode === 'no-worker' || r.waitCode === 'offline' || r.waitCode === 'paused') {
+                  <button mat-button (click)="robotExecutors()">Meus executores</button>
+                }
+                @if (executingItems().length) { <button mat-button (click)="robotToItems()">Ver itens</button> }
+                <span class="run-pop__spacer"></span>
+                <button mat-stroked-button class="run-pop__stop" (click)="pc!.cancelRequest(r)" [disabled]="!!pc!.busy()">
+                  <mat-icon>{{ r.status === 'queued' ? 'close' : 'stop' }}</mat-icon>{{ r.status === 'queued' ? 'Cancelar' : 'Parar' }}
+                </button>
+              </div>
+            } @else {
+              <div class="run-pop__head">
+                <mat-icon>smart_toy</mat-icon><b>O Claude não está rodando agora</b>
+                <span class="run-pop__spacer"></span>
+                <button mat-icon-button class="run-pop__close" (click)="robotOpen.set(false)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+              </div>
+              @if (specialistWorking()) {
+                <p class="run-pop__text">O <b>Especialista do caso</b> está trabalhando numa resposta (lateral).</p>
+              }
+              @if (pc?.queue()?.recent?.[0]; as last) {
+                <p class="run-pop__text">Última execução: {{ pc!.requestStatusLabel(last.status) }} {{ pc!.relativeTime(last.finishedAt || last.createdAt) }}{{ last.workerName ? ' em ' + last.workerName : '' }}.</p>
+              }
+              <p class="run-pop__text">Quando o Claude estiver trabalhando neste card, o robô se mexe — clique nele para ver o que ele está fazendo.</p>
+              <div class="run-pop__actions">
+                @if (pc && !pc.hasWorkers()) { <button mat-button (click)="robotExecutors()">Meus executores</button> }
+                <span class="run-pop__spacer"></span>
+                @if (canAskClaude()) {
+                  <button mat-flat-button color="primary" (click)="robotAsk()"><mat-icon>rocket_launch</mat-icon>{{ askLabel() }}</button>
+                }
+              </div>
+            }
+          </div>
+        </ng-template>
       </span>
     }
 
@@ -167,7 +251,7 @@
     </button>
     <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'plan'" [attr.aria-selected]="mtab === 'plan'"
             (click)="selectMobile('plan')">
-      <mat-icon>account_tree</mat-icon><span>Plano</span>
+      <mat-icon>account_tree</mat-icon><span>Execução</span>
       @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you">{{ n }}</span> }
     </button>
     <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'chat'" [attr.aria-selected]="mtab === 'chat'"
@@ -185,15 +269,17 @@
     <!-- Coluna principal: Itens de trabalho | Plano (montados; troca por visibilidade) | Card (só quando aberta) -->
     <section class="wb-main" [class.wb-hidden]="!main">
       <div class="wb-segrow">
-        <div class="wb-seg" role="tablist" aria-label="Itens de trabalho, plano ou card">
+        <div class="wb-seg" role="tablist" aria-label="Itens de trabalho, execução do item ou card">
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'items'"
                   [attr.aria-selected]="main === 'items'" (click)="selectMain('items')">
             <mat-icon>checklist</mat-icon>Itens de trabalho
             @if (itemCount()) { <span class="wb-count">{{ itemCount() }}</span> }
           </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'plan'"
-                  [attr.aria-selected]="main === 'plan'" (click)="selectMain('plan')">
-            <mat-icon>account_tree</mat-icon>Plano
+                  [attr.aria-selected]="main === 'plan'" (click)="selectMain('plan')"
+                  matTooltip="Execução do item: o plano do Claude de cada item de trabalho (passos, perguntas, arquivos e registro)"
+                  matTooltipShowDelay="600">
+            <mat-icon>account_tree</mat-icon>Execução
             @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you" [matTooltip]="n + ' aguardando você'">{{ n }}</span> }
           </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'card'" data-tour="wb-card-tab"
@@ -243,9 +329,53 @@
       </div>
 
       <div class="wb-pane wb-pane--plan" [class.wb-hidden]="main !== 'plan'" data-tour="wb-plan">
-        @if (canCancelPlan()) {
+        <!-- Execução do item (rodada 3): a versão é o item de trabalho — o seletor troca entre os itens que têm plano -->
+        @let sel = selectedPlanItem();
+        <div class="wb-exec" data-tour="wb-exec-item">
+          <span class="wb-exec__label"><mat-icon>play_circle</mat-icon>Execução do item</span>
+          @if (planItemOptions().length) {
+            <button mat-stroked-button type="button" class="wb-exec__pick" [matMenuTriggerFor]="execMenu"
+                    [attr.aria-label]="'Item em tela: ' + (sel?.label ?? 'nenhum') + ' — trocar de item'"
+                    [matTooltip]="planItemOptions().length > 1 ? 'Trocar de item (' + planItemOptions().length + ' itens com plano)' : 'Item de trabalho deste plano'"
+                    matTooltipShowDelay="500">
+              <span class="wb-exec__sel">
+                @if (sel) {
+                  <mat-icon class="wb-exec__st" [class.wb-exec__st--spin]="sel.spin" [style.color]="sel.color">{{ sel.icon }}</mat-icon>
+                  <span class="wb-exec__num">#{{ sel.number }}</span>
+                  <span class="wb-exec__title">{{ sel.title }}</span>
+                  <span class="wb-exec__status">· {{ sel.statusLabel }}</span>
+                }
+                <mat-icon class="wb-exec__caret">expand_more</mat-icon>
+              </span>
+            </button>
+            <mat-menu #execMenu="matMenu" class="app-menu" xPosition="after">
+              @for (o of planItemOptions(); track o.number) {
+                <button mat-menu-item type="button" (click)="pickPlanItem(o.number)" [class.wb-exec__opt--on]="o.number === sel?.number"
+                        [attr.aria-current]="o.number === sel?.number ? 'true' : null">
+                  <mat-icon [style.color]="o.color">{{ o.icon }}</mat-icon>
+                  <span><b>#{{ o.number }}</b> {{ o.title }} <small class="wb-exec__opt-st">· {{ o.statusLabel }}</small></span>
+                </button>
+              }
+            </mat-menu>
+          } @else {
+            <span class="wb-exec__none">Plano atual do card — nenhum item de trabalho com plano ainda.</span>
+          }
+        </div>
+
+        @if (closedPlanItem(); as ci) {
+          <div class="wb-closed" role="status" data-tour="wb-closed-item">
+            <mat-icon class="wb-closed__icon">lock</mat-icon>
+            <span class="wb-closed__text">Este item é uma versão fechada. Para mudar, crie um novo item (na tela ou pelo especialista).</span>
+            <span class="wb-closed__actions">
+              <button mat-stroked-button type="button" (click)="newItem()"><mat-icon>add</mat-icon>Novo item</button>
+              <button mat-stroked-button type="button" (click)="askSpecialistForItem()"><mat-icon>psychology</mat-icon>Pedir ao especialista</button>
+            </span>
+          </div>
+        }
+
+        @if (canCancelPlan() && !closedPlanItem()) {
           <div class="wb-plan-bar">
-            <span class="wb-plan-bar__hint">Errou o caminho? Cancele o plano e, se quiser, desfaça o que já foi feito.</span>
+            <span class="wb-plan-bar__hint">Errou o caminho? Cancele {{ sel ? 'o item #' + sel.number : 'o plano' }} e, se quiser, desfaça o que já foi feito.</span>
             <button mat-stroked-button type="button" class="wb-cancel" data-tour="wb-cancel-plan" [disabled]="cancelling()"
                     matTooltip="Cancela o plano e os itens dele; opcionalmente desfaz PRs, branches e estado do card"
                     (click)="cancelPlan()">
@@ -253,7 +383,8 @@
             </button>
           </div>
         }
-        <app-execution-plan class="wb-plan" [cardNumber]="card()" (headline)="onHeadline($event)"></app-execution-plan>
+        <app-execution-plan class="wb-plan" [cardNumber]="card()" [planId]="selectedPlanId()" [hideVersions]="true"
+                            [itemNumber]="sel?.number ?? null" (headline)="onHeadline($event)"></app-execution-plan>
       </div>
 
       <!-- Aba Card (desktop e celular): horas + lançar horas, dados principais, anexos/links e o texto do card -->

@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSelectModule } from '@angular/material/select';
 import { WorkItemsService } from '../../services/work-items.service';
 import {
   CreateWorkItemRequest,
@@ -22,6 +23,9 @@ import {
 } from './work-item.model';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
 import { WI_BUG_ICON, WI_US_ICON } from '../../helpers/work-item-type-icons';
+import { WiParamFieldComponent } from '../work-item-pickers/wi-param-field.component';
+import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
+import { BranchSuggestContext } from '../work-item-pickers/param-input';
 
 export interface WorkItemEditorDialogData {
   card: string;
@@ -90,7 +94,7 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
 @Component({
   selector: 'app-work-item-editor-dialog',
   standalone: true,
-  imports: [FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule],
+  imports: [FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, MatSelectModule, WiParamFieldComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <div class="wi-dlg wie">
@@ -149,10 +153,12 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
               <div class="wie__task-head">
                 <span class="wie__order">{{ i + 1 }}</span>
                 @if (t.number) { <span class="wi-num wie__tnum">{{ num(t.number) }}</span> }
-                <mat-icon class="wie__kind-ico">{{ kindOf(t.kind).icon }}</mat-icon>
-                <select class="wi-select wie__kind" [(ngModel)]="t.kind" (ngModelChange)="touch()" aria-label="Tipo da sub-tarefa">
-                  @for (k of kinds(); track k.kind) { <option [ngValue]="k.kind">{{ k.label }}</option> }
-                </select>
+                <mat-select class="wi-select wie__kind" [(ngModel)]="t.kind" (selectionChange)="touch()" panelClass="wie-kind-panel" aria-label="Tipo da sub-tarefa">
+                  <mat-select-trigger><span class="wie__kind-opt"><mat-icon>{{ kindOf(t.kind).icon }}</mat-icon>{{ kindOf(t.kind).label }}</span></mat-select-trigger>
+                  @for (k of kinds(); track k.kind) {
+                    <mat-option [value]="k.kind"><span class="wie__kind-opt"><mat-icon>{{ k.icon }}</mat-icon>{{ k.label }}</span></mat-option>
+                  }
+                </mat-select>
                 <select class="wi-select wie__exec" [(ngModel)]="t.executor" aria-label="Quem executa">
                   <option ngValue="claude">Claude</option>
                   <option ngValue="user">Você</option>
@@ -166,7 +172,9 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
               @for (p of paramsOf(t); track p.key) {
                 <label class="wi-field wie__param">
                   <span>{{ p.label }}@if (p.required) { * }</span>
-                  <input class="wi-input" [ngModel]="t.params[p.key]" (ngModelChange)="t.params[p.key] = $event" [placeholder]="p.placeholder || ''">
+                  <app-wi-param-field [param]="p" [kind]="t.kind" [value]="t.params[p.key]" (valueChange)="setParam(t, p.key, $event)"
+                                      [card]="data.card" [repository]="repoOf(t)" [sourceBranch]="sourceOf(t)"
+                                      [suggest]="suggest()" [githubUrl]="githubUrl()" />
                 </label>
               }
               @if (t.open) {
@@ -212,13 +220,16 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
     .wie__task-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .wie__tnum { font-size: 11.5px; }
     .wie__order { min-width: 18px; font-weight: 600; color: var(--cc-text-3); text-align: center; }
-    .wie__kind-ico { font-size: 18px; width: 18px; height: 18px; color: var(--cc-text-2); }
-    .wie__kind { width: auto; min-width: 140px; flex: 0 1 200px; padding: 4px 8px; }
+    .wie__kind { width: auto; min-width: 170px; flex: 0 1 230px; padding: 4px 8px; }
+    .wie__kind .mat-mdc-select-value, .wie__kind .mat-mdc-select-arrow { color: inherit; }
+    .wie__kind-opt { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+    .wie__kind-opt mat-icon { font-size: 18px; width: 18px; height: 18px; margin: 0 !important; color: var(--cc-text-2); }
+    .wie-kind-panel .mat-mdc-option { min-height: 36px; }
     .wie__exec { width: auto; flex: 0 0 auto; padding: 4px 8px; }
     .wie__task-head .mat-mdc-icon-button { width: 32px; height: 32px; padding: 4px; }
     .wie__task-head .mat-mdc-icon-button mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .wie__param { flex-direction: row; align-items: center; gap: 8px; }
-    .wie__param > span { flex: 0 0 120px; overflow: hidden; text-overflow: ellipsis; }
+    .wie__param { flex-direction: row; align-items: flex-start; gap: 8px; }
+    .wie__param > span { flex: 0 0 140px; overflow: hidden; text-overflow: ellipsis; padding-top: 8px; }
     .wie__more { align-self: flex-start; background: none; border: 0; color: var(--mat-sys-primary); font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
     .wie__small { margin: 0; font-size: 12px; }
     .wie__dup > div { display: flex; flex-direction: column; gap: 6px; flex: 1; }
@@ -229,6 +240,7 @@ export class WorkItemEditorDialogComponent {
   readonly data = inject<WorkItemEditorDialogData>(MAT_DIALOG_DATA);
   private ref = inject(MatDialogRef<WorkItemEditorDialogComponent, WorkItemEditorDialogResult>);
   private api = inject(WorkItemsService);
+  private pickers = inject(WorkItemPickerSource);
 
   readonly editing = !!this.data.item;
   readonly bugIcon = WI_BUG_ICON;
@@ -246,25 +258,66 @@ export class WorkItemEditorDialogComponent {
   readonly duplicate = signal<WorkItemError['existing'] | null>(null);
   /** Kinds do catálogo, mais os que as sub-tarefas já usam (catálogo mudou ou ainda não chegou). */
   readonly kinds = computed(() => {
-    const list = (this.catalog()?.taskKinds ?? []).map((k) => ({ kind: `${k.kind}`, label: k.label || `${k.kind}` }));
-    for (const t of this.tasks()) if (!list.some((k) => k.kind === t.kind)) list.push({ kind: t.kind, label: kindInfo(t.kind, this.catalog()).label });
-    if (!list.length) list.push({ kind: 'manual', label: 'Manual' });
+    const c = this.catalog();
+    const list = (c?.taskKinds ?? []).map((k) => ({ kind: `${k.kind}`, ...kindInfo(`${k.kind}`, c) }));
+    for (const t of this.tasks()) if (!list.some((k) => k.kind === t.kind)) list.push({ kind: t.kind, ...kindInfo(t.kind, c) });
+    if (!list.length) list.push({ kind: 'manual', ...kindInfo('manual', c) });
     return list;
   });
+
+  /** Destinos do fluxo (catálogo ou `Skills/rules`) — sugestões do destino do PR. */
+  private readonly flowTargets = signal<string | string[] | null>(null);
+  /** Regras do card para as sugestões de branch/destino. */
+  readonly suggest = computed<BranchSuggestContext>(() => {
+    const c = this.catalog();
+    return { mainBranch: c?.mainBranch ?? null, branchesByTarget: c?.branchesByTarget ?? null, flowTargets: this.flowTargets() };
+  });
+  readonly githubUrl = this.pickers.githubUrl;
 
   title = this.data.item?.title ?? '';
   description = this.data.item?.description ?? '';
   duplicateReason = '';
 
   constructor() {
+    this.pickers.loadRepositories();
     if (!this.catalog()) {
       this.api.catalog(this.data.card).subscribe({
-        next: (c) => { this.catalog.set(c); if (this.data.templateKey) this.applyTemplate(this.data.templateKey); },
-        error: (e) => this.catalogError.set(e.message)
+        next: (c) => { this.catalog.set(c); this.loadSuggestions(c); if (this.data.templateKey) this.applyTemplate(this.data.templateKey); },
+        error: (e) => { this.catalogError.set(e.message); this.loadSuggestions(null); }
       });
-    } else if (this.data.templateKey) {
-      this.applyTemplate(this.data.templateKey);
+    } else {
+      this.loadSuggestions(this.catalog());
+      if (this.data.templateKey) this.applyTemplate(this.data.templateKey);
     }
+  }
+
+  /** Destinos do fluxo, URL do GitHub e (catálogo sem `?card=`) as branches do card pelas regras. */
+  private loadSuggestions(c: WorkItemCatalog | null): void {
+    this.pickers.ensureGithubUrl(c);
+    this.pickers.flowTargets(c, this.data.card).subscribe((t) => this.flowTargets.set(t));
+    if (c && !c.mainBranch && this.data.card) {
+      this.pickers.rules(this.data.card).subscribe((r) => {
+        if (r && (r.mainBranch || r.branchesByTarget)) this.catalog.update((x) => x && { ...x, mainBranch: r.mainBranch ?? null, branchesByTarget: r.branchesByTarget ?? null });
+      });
+    }
+  }
+
+  setParam(t: TaskDraft, key: string, value: string | null | undefined): void {
+    t.params[key] = `${value ?? ''}`;
+    this.touch();
+  }
+
+  /** Repositório da sub-tarefa; senão o da primeira sub-tarefa que tiver; senão o padrão do card. */
+  repoOf(t: TaskDraft): string | null {
+    const own = `${t.params['repository'] ?? ''}`.trim();
+    if (own) return own;
+    const other = this.tasks().map((x) => `${x.params['repository'] ?? ''}`.trim()).find(Boolean);
+    return other || this.catalog()?.defaultRepository || null;
+  }
+
+  /** Branch de onde vêm os commits (cherry-pick): `from`, senão a branch do card. */
+  sourceOf(t: TaskDraft): string | null {
+    return `${t.params['from'] ?? ''}`.trim() || this.catalog()?.mainBranch || `${t.params['source'] ?? ''}`.trim() || null;
   }
 
   kindOf(kind: string) {
