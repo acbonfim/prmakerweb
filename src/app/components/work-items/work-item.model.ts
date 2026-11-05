@@ -384,3 +384,191 @@ export function linkIcon(kind: string | null | undefined): string {
     default: return 'description';
   }
 }
+
+// ── Sessão de execução ao vivo (ajustes da 0085: `GET WorkItems/{number}/live`) ─────────────────────────
+
+/** Pedido do executor ligado ao item (item de plano → o pedido ativo da pista main do plano). */
+export interface WorkItemLiveRequest {
+  id: string;
+  kind: string;
+  /** queued · claimed · running · done · failed · cancelled · expired */
+  status: string;
+  workerName?: string | null;
+  claimedAt?: string | null;
+  startedAt?: string | null;
+  lastHeartbeatAt?: string | null;
+  /** Por que está esperando (no-worker, offline, paused, busy, budget, retry, throttled, gathering, updating). */
+  waitCode?: string | null;
+}
+
+/** O que o Claude está fazendo (rótulo montado pelo executor a partir da ferramenta — nunca o comando). */
+export interface WorkItemLiveActivity {
+  label: string;
+  tool?: string | null;
+  at: string;
+}
+
+export interface WorkItemLiveLog {
+  at: string;
+  kind: string;
+  text: string;
+  taskNumber?: number | null;
+}
+
+/** `GET WorkItems/{number}/live` — o estado ao vivo da execução do item. */
+export interface WorkItemLive {
+  number: number;
+  status: WorkItemStatus | string;
+  request: WorkItemLiveRequest | null;
+  activity: WorkItemLiveActivity | null;
+  recent: WorkItemLiveActivity[];
+  /** Últimos 50 registros, mais novo por último. */
+  logs: WorkItemLiveLog[];
+  executorOnline: boolean;
+}
+
+/** Linha do feed da sessão (atividades do executor + registros do item), mais nova por último. */
+export interface LiveFeedEntry {
+  at: string;
+  text: string;
+  /** activity = o que o Claude fez · log = registro do item (kind do registro em `kind`). */
+  source: 'activity' | 'log';
+  kind?: string | null;
+  tool?: string | null;
+  taskNumber?: number | null;
+}
+
+const LIVE_ITEM: ReadonlySet<string> = new Set(['queued', 'running', 'waiting', 'reverting']);
+
+/** Item que está na sessão de execução agora (na fila, rodando, esperando alguém ou desfazendo). */
+export function isExecutingItem(item: Pick<WorkItem, 'status'> | null | undefined): boolean {
+  return !!item && LIVE_ITEM.has(item.status);
+}
+
+/** Números dos itens em execução, em ordem de número. */
+export function executingNumbers(items: readonly Pick<WorkItem, 'status' | 'number'>[]): number[] {
+  return items.filter((x) => isExecutingItem(x)).map((x) => x.number).sort((a, b) => a - b);
+}
+
+/** Os itens em execução no topo (em ordem de número); o resto mantém a ordem recebida. */
+export function sortExecutingFirst<T extends Pick<WorkItem, 'status' | 'number'>>(items: readonly T[]): T[] {
+  const live = items.filter((x) => isExecutingItem(x)).sort((a, b) => a.number - b.number);
+  return [...live, ...items.filter((x) => !isExecutingItem(x))];
+}
+
+const WAIT_CODE_LABELS: Record<string, string> = {
+  'no-worker': 'Nenhum executor cadastrado — instale o executor na sua máquina',
+  offline: 'Seu executor está offline',
+  paused: 'Seu executor está pausado',
+  busy: 'Executor ocupado — começa quando abrir uma vaga',
+  budget: 'Limite diário de gasto atingido',
+  retry: 'Vai tentar de novo em instantes',
+  throttled: 'Limite de uso do Claude atingido — volta sozinho',
+  gathering: 'Juntando os pedidos antes de começar',
+  updating: 'Executor se atualizando'
+};
+
+/** Motivo da espera do pedido, em português (código desconhecido → texto genérico). */
+export function waitCodeLabel(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return WAIT_CODE_LABELS[code] ?? `Aguardando (${code})`;
+}
+
+const REQUEST_LABELS: Record<string, string> = {
+  queued: 'Na fila do executor',
+  claimed: 'Começando',
+  running: 'Rodando',
+  done: 'Terminou',
+  failed: 'Falhou',
+  cancelled: 'Cancelado',
+  expired: 'Expirou'
+};
+
+export function requestStatusLabel(status: string | null | undefined): string {
+  return REQUEST_LABELS[status ?? ''] ?? (status || '—');
+}
+
+/** Ícone da ferramenta usada pelo Claude (mesma regra do plano). */
+export function activityIcon(tool: string | null | undefined): string {
+  if (!tool) return 'bolt';
+  if (tool === 'Read') return 'menu_book';
+  if (tool === 'Grep' || tool === 'Glob') return 'search';
+  if (tool === 'Edit' || tool === 'Write' || tool === 'MultiEdit') return 'edit';
+  if (tool.startsWith('mcp__prmake__')) return 'checklist';
+  if (tool === 'Task' || tool === 'Agent') return 'hub';
+  return 'terminal';
+}
+
+/**
+ * Feed da sessão: atividades recentes + registros do item, sem repetir, do mais antigo para o mais novo (o mais novo
+ * embaixo). A atividade atual entra no feed também (é a última coisa feita).
+ */
+export function buildLiveFeed(live: Pick<WorkItemLive, 'recent' | 'logs' | 'activity'> | null | undefined, max = 120): LiveFeedEntry[] {
+  if (!live) return [];
+  const entries: LiveFeedEntry[] = [];
+  const seen = new Set<string>();
+  const push = (e: LiveFeedEntry) => {
+    const key = `${e.source}|${e.at}|${e.text}`;
+    if (!e.text || seen.has(key)) return;
+    seen.add(key);
+    entries.push(e);
+  };
+  for (const a of [...(live.recent ?? []), ...(live.activity ? [live.activity] : [])]) {
+    push({ at: a.at, text: a.label, source: 'activity', tool: a.tool ?? null });
+  }
+  for (const l of live.logs ?? []) {
+    push({ at: l.at, text: l.text, source: 'log', kind: l.kind, taskNumber: l.taskNumber ?? null });
+  }
+  const time = (s: string) => { const t = Date.parse(s); return isNaN(t) ? 0 : t; };
+  // sort estável: mesmo horário mantém a ordem de chegada.
+  return entries.map((e, i) => ({ e, i })).sort((a, b) => time(a.e.at) - time(b.e.at) || a.i - b.i).map((x) => x.e).slice(-max);
+}
+
+/** Duração legível: `45 s`, `3 min 12 s`, `1 h 05 min`. */
+export function formatElapsed(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined || isNaN(ms) || ms < 0) return '';
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec} s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} min ${String(sec % 60).padStart(2, '0')} s`;
+  const h = Math.floor(min / 60);
+  return `${h} h ${String(min % 60).padStart(2, '0')} min`;
+}
+
+/** Sub-tarefas cujo status mudou entre duas cargas (para a transição de "concluída"/"em andamento"). */
+export function changedTaskNumbers(prev: readonly Pick<WorkTask, 'number' | 'status'>[] | null | undefined, next: readonly Pick<WorkTask, 'number' | 'status'>[]): number[] {
+  if (!prev?.length) return [];
+  const before = new Map(prev.map((t) => [t.number, t.status]));
+  return next.filter((t) => before.has(t.number) && before.get(t.number) !== t.status).map((t) => t.number);
+}
+
+const PR_URL = /\/pull(s|request)?\/\d+|\/pullrequest\/\d+/i;
+
+/** Links de PR do item (links `pr` + saídas das sub-tarefas que são URL de PR), sem repetir. */
+export function pullRequestLinks(item: Pick<WorkItem, 'links' | 'tasks'> | null | undefined): { title: string; url: string }[] {
+  if (!item) return [];
+  const out: { title: string; url: string }[] = [];
+  const seen = new Set<string>();
+  const add = (url: string | null | undefined, title: string | null | undefined) => {
+    const u = (url ?? '').trim();
+    if (!isUrl(u) || seen.has(u)) return;
+    seen.add(u);
+    out.push({ title: (title ?? '').trim() || u, url: u });
+  };
+  for (const l of item.links ?? []) if (l.kind === 'pr' || PR_URL.test(l.url ?? '')) add(l.url, l.title);
+  for (const t of item.tasks ?? []) {
+    for (const o of outputEntries(t.output)) {
+      if (o.url && (PR_URL.test(o.value) || /^pr(url|_url|link)?$/i.test(o.key))) add(o.value, t.title);
+    }
+  }
+  return out;
+}
+
+/** Links de branch e outros (não-PR) que as sub-tarefas devolveram. */
+export function taskOutputLinks(task: Pick<WorkTask, 'output'>): { key: string; url: string; kind: 'pr' | 'branch' | 'link' }[] {
+  return outputEntries(task.output).filter((o) => o.url).map((o) => ({
+    key: o.key,
+    url: o.value,
+    kind: PR_URL.test(o.value) || /^pr/i.test(o.key) ? 'pr' : /branch/i.test(o.key) || /\/tree\/|\/branches|version=GB/i.test(o.value) ? 'branch' : 'link'
+  }));
+}

@@ -21,8 +21,10 @@ import {
   canCancel,
   canExecute,
   canUndo,
+  executingNumbers,
   executorLabel,
   formatWorkNumber,
+  isExecutingItem,
   isItemBusy,
   isOpenItem,
   itemProgress,
@@ -31,6 +33,7 @@ import {
   matchesFilter,
   originIcon,
   originLabel,
+  sortExecutingFirst,
   taskStatusLook,
   userTaskActions
 } from './work-item.model';
@@ -38,6 +41,7 @@ import { WorkItemActionsService } from './work-item-actions.service';
 import { WorkItemDialogComponent, WorkItemDialogData, WorkItemDialogResult } from './work-item-dialog.component';
 import { workDialogConfig } from './work-dialog-config';
 import { listenWorkItems } from './work-items-live';
+import { WorkItemExecutionComponent } from './work-item-execution.component';
 
 const FILTERS: { key: WorkItemFilter; label: string }[] = [
   { key: 'all', label: 'Todos' },
@@ -54,13 +58,19 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
  * independente); título → modal do item; sub-tarefa → modal da sub-tarefa. Tempo real pelo grupo `execplan:{card}`
  * (`workItemsUpdated` é só sinal: refaz o GET). Expansão guardada por card no sessionStorage.
  *
+ * Ajustes 0085 — **modo execução**: o play (▶) de um item (ou um item já na fila/rodando ao carregar) divide a lista:
+ * à esquerda os itens (os em execução no topo, com animação de "trabalhando"), à direita a sessão de execução
+ * (`app-work-item-execution`), com abas quando há vários itens rodando. A sessão fecha (volta à lista inteira) e reabre
+ * pelo botão "Sessão de execução" da barra. Abaixo de 1024 px (ou com a lista estreita) a sessão fica em cima da lista.
+ *
  * API pública: `[card]`, `[cardType]` ('bug' | 'user-story', padrão do item novo), `[openItem]` (número — abre o modal
- * do item; vem do `?item=`), `(countChange)` (quantidade de itens do card a cada carga).
+ * do item; vem do `?item=`), `(countChange)` (quantidade de itens do card a cada carga), `(executingChange)` (números
+ * dos itens em execução — na fila, rodando, esperando ou desfazendo — a cada mudança).
  */
 @Component({
   selector: 'app-work-item-list',
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule],
+  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, WorkItemExecutionComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wil">
@@ -69,6 +79,12 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
         <button mat-stroked-button class="wil__ask" (click)="askSpecialist()" [disabled]="!card()" matTooltip="O especialista do caso monta o item pelas regras do PRMake">
           <mat-icon>psychology</mat-icon>Pedir ao especialista
         </button>
+        @if (!sessionVisible() && (sessionTabs().length || executing().length)) {
+          <button mat-stroked-button class="wil__reopen" (click)="openSession()" matTooltip="Reabrir a sessão de execução ao lado da lista">
+            <mat-icon [class.wil__bot]="executing().length">smart_toy</mat-icon>Sessão de execução
+            @if (executing().length) { <small class="wil__reopen-n">{{ executing().length }}</small> }
+          </button>
+        }
         <span class="wil__spacer"></span>
         <div class="wil__filters" role="radiogroup" aria-label="Filtrar itens">
           @for (f of filters; track f.key) {
@@ -85,6 +101,37 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
         <div class="wil__msg wil__msg--err"><mat-icon>error_outline</mat-icon><span>{{ loadError() }}</span><button mat-button (click)="load()">Tentar de novo</button></div>
       }
 
+      <div class="wil__layout" [class.wil__layout--split]="sessionVisible()" [class.wil__layout--side]="wide()">
+      @if (sessionVisible()) {
+        <aside class="wil__session" aria-label="Sessão de execução">
+          <div class="wil__session-bar">
+            <mat-icon class="wil__session-ico" [class.wil__bot]="executing().length">smart_toy</mat-icon>
+            <span class="wil__session-title">Sessão de execução</span>
+            <span class="wil__spacer"></span>
+            <button mat-icon-button class="wil__session-close" (click)="closeSession()" matTooltip="Fechar a sessão (volta à lista inteira)" aria-label="Fechar a sessão de execução">
+              <mat-icon>close_fullscreen</mat-icon>
+            </button>
+          </div>
+          @if (sessionTabs().length > 1) {
+            <div class="wil__tabs" role="tablist" aria-label="Itens em execução">
+              @for (n of sessionTabs(); track n) {
+                <div class="wil__tab" role="tab" [class.on]="activeTab() === n" [attr.aria-selected]="activeTab() === n" [class.wil__tab--live]="isLiveNumber(n)">
+                  <button class="wil__tab-main" (click)="activeTab.set(n)" [matTooltip]="tabTitle(n)">
+                    <mat-icon [style.color]="tabLook(n).color" [class.wil__spin]="tabLook(n).spin && !isRunningNumber(n)" [class.wil__bot]="isRunningNumber(n)">{{ isRunningNumber(n) ? 'smart_toy' : tabLook(n).icon }}</mat-icon>
+                    <span class="wil__num">{{ num(n) }}</span><span class="wil__tab-title">{{ tabShortTitle(n) }}</span>
+                  </button>
+                  <button class="wil__tab-x" (click)="closeTab(n)" [attr.aria-label]="'Fechar a sessão do ' + num(n)" matTooltip="Tirar da sessão"><mat-icon>close</mat-icon></button>
+                </div>
+              }
+            </div>
+          }
+          @if (activeTab(); as n) {
+            <app-work-item-execution class="wil__exec" [number]="n" [card]="card() ?? null" [catalog]="catalog()"
+                                     (openDetails)="openItemDialog($event)" (itemChange)="mergeItem($event)" />
+          }
+        </aside>
+      }
+      <div class="wil__main">
       @if (loading() && !items().length) {
         <div class="wil__msg"><mat-icon class="wil__spin">autorenew</mat-icon>Carregando itens…</div>
       } @else if (!items().length && !loadError()) {
@@ -105,7 +152,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
         @if (!visible().length) { <div class="wil__msg">Nenhum item neste filtro.</div> }
         <ul class="wil__list">
           @for (it of visible(); track it.id) {
-            <li class="wil__item" [class.wil__item--open]="isExpanded(it.number)" [class.wil__item--dim]="it.status === 'cancelled' || it.status === 'reverted'">
+            <li class="wil__item" [class.wil__item--live]="isLive(it)" [class.wil__item--active]="sessionVisible() && activeTab() === it.number" [class.wil__item--open]="isExpanded(it.number)" [class.wil__item--dim]="it.status === 'cancelled' || it.status === 'reverted'">
               <div class="wil__row">
                 <button class="wil__chev" (click)="toggle(it.number)" [attr.aria-expanded]="isExpanded(it.number)"
                         [attr.aria-label]="(isExpanded(it.number) ? 'Recolher ' : 'Expandir ') + num(it.number)" [disabled]="!it.tasks.length">
@@ -127,14 +174,17 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                     }
                   }
                   <span class="wil__actions">
-                    @if (busy(it)) {
-                      <span class="wil__running" [matTooltip]="it.activity || look(it).label">
-                        <mat-icon class="wil__spin">autorenew</mat-icon><span class="wil__running-text">{{ it.activity || (it.status === 'queued' ? 'Na fila' : it.status === 'reverting' ? 'Desfazendo' : 'Executando') }}</span>
-                      </span>
+                    @if (isLive(it)) {
+                      <button class="wil__running" (click)="showSession(it.number)" [matTooltip]="(it.activity || look(it).label) + ' — ver a sessão de execução'"
+                              [attr.aria-label]="'Ver a sessão de execução do ' + num(it.number)">
+                        <mat-icon [class.wil__bot]="busy(it)">{{ it.status === 'waiting' ? 'front_hand' : 'smart_toy' }}</mat-icon>
+                        <span class="wil__running-text">{{ it.activity || (it.status === 'queued' ? 'Na fila' : it.status === 'reverting' ? 'Desfazendo' : it.status === 'waiting' ? 'Aguardando' : 'Executando') }}</span>
+                      </button>
                     } @else {
-                      <button mat-stroked-button class="wil__run" data-tour="wi-run" (click)="execute(it)" [disabled]="!canRun(it) || pending().has(it.number)"
-                              [matTooltip]="canRun(it) ? 'Executar este item (roda em paralelo aos outros)' : 'Só itens pendentes ou que falharam'">
-                        <mat-icon>play_arrow</mat-icon>Executar
+                      <button mat-icon-button class="wil__play" data-tour="wi-run" (click)="execute(it)" [disabled]="!canRun(it) || pending().has(it.number)"
+                              [matTooltip]="canRun(it) ? 'Executar (roda em paralelo aos outros itens)' : 'Executar — só itens pendentes ou que falharam'"
+                              [attr.aria-label]="'Executar ' + num(it.number)">
+                        <mat-icon>play_arrow</mat-icon>
                       </button>
                     }
                     @if (it.editable) {
@@ -142,6 +192,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                     }
                     <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Mais ações" [disabled]="pending().has(it.number)"><mat-icon>more_horiz</mat-icon></button>
                     <mat-menu #menu="matMenu" xPosition="before">
+                      @if (it.startedAt || isLive(it)) { <button mat-menu-item (click)="showSession(it.number)"><mat-icon>smart_toy</mat-icon>Ver sessão de execução</button> }
                       <button mat-menu-item (click)="duplicate(it)"><mat-icon>content_copy</mat-icon>Criar novo a partir deste</button>
                       @if (canCancelIt(it)) { <button mat-menu-item (click)="cancel(it)"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
                       @if (canUndoIt(it)) { <button mat-menu-item (click)="undo(it)"><mat-icon>undo</mat-icon>Desfazer</button> }
@@ -150,6 +201,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                   </span>
                 </div>
               </div>
+              @if (busy(it)) { <span class="wil__livebar" aria-hidden="true"></span> }
               @if (isExpanded(it.number) && it.tasks.length) {
                 <ol class="wil__tasks">
                   @for (t of it.tasks; track t.id) {
@@ -174,10 +226,12 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
           }
         </ul>
       }
+      </div>
+      </div>
     </div>
   `,
   styles: [`
-    :host { display: block; container-type: inline-size; font-size: 13px; color: var(--mat-sys-on-surface); }
+    :host { display: block; container-type: inline-size; container-name: wilhost; font-size: 13px; color: var(--mat-sys-on-surface); }
     .wil { display: flex; flex-direction: column; gap: 8px; }
     .wil__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .wil__bar .mat-mdc-button-base mat-icon { margin-right: 4px; }
@@ -198,7 +252,11 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
     .wil__empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
     .wil__empty-actions mat-icon { margin-right: 4px; }
     .wil__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-    .wil__item { border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); border-radius: 10px; background: var(--surface-1, #262b33); }
+    .wil__item { position: relative; border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); border-radius: 10px; background: var(--surface-1, #262b33); }
+    .wil__item--live { border-color: color-mix(in srgb, #58a6ff 45%, transparent); background: color-mix(in srgb, #58a6ff 4%, var(--surface-1, #262b33)); }
+    .wil__item--active::before { content: ''; position: absolute; left: -1px; top: 6px; bottom: 6px; width: 3px; border-radius: 3px; background: #58a6ff; }
+    .wil__livebar { position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; overflow: hidden;
+      background: linear-gradient(90deg, transparent, rgba(88,166,255,.85), transparent); background-size: 35% 100%; background-repeat: no-repeat; }
     .wil__item--open { border-color: var(--cc-surface-border-strong, rgba(255,255,255,.18)); }
     .wil__item--dim { opacity: .7; }
     .wil__row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 8px 4px 2px; min-height: 40px; }
@@ -223,9 +281,13 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
     .wil__actions { display: inline-flex; align-items: center; gap: 2px; }
     .wil__actions .mat-mdc-icon-button { width: 32px; height: 32px; padding: 4px; }
     .wil__actions .mat-mdc-icon-button mat-icon { font-size: 18px; width: 18px; height: 18px; }
-    .wil__run { height: 28px; font-size: 12px; padding: 0 10px; }
-    .wil__run mat-icon { margin-right: 2px !important; }
-    .wil__running { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; font-size: 11.5px; color: #58a6ff; padding: 0 6px; }
+    .wil__actions .wil__play.mat-mdc-icon-button { width: 30px; height: 30px; padding: 3px; margin-right: 2px; border-radius: 50%;
+      background: var(--mat-sys-primary); color: var(--mat-sys-on-primary); }
+    .wil__actions .wil__play.mat-mdc-icon-button mat-icon { font-size: 22px; width: 22px; height: 22px; }
+    .wil__actions .wil__play.mat-mdc-icon-button:disabled { background: rgba(255,255,255,.06); color: var(--cc-text-3); }
+    .wil__running { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; font: inherit; font-size: 11.5px; color: #58a6ff; padding: 3px 8px; cursor: pointer;
+      background: color-mix(in srgb, #58a6ff 10%, transparent); border: 1px solid color-mix(in srgb, #58a6ff 35%, transparent); border-radius: 999px; }
+    .wil__running:hover { background: color-mix(in srgb, #58a6ff 18%, transparent); }
     .wil__running mat-icon { font-size: 16px; width: 16px; height: 16px; flex: none; }
     .wil__running-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .wil__tasks { list-style: none; margin: 0; padding: 0 10px 8px 34px; display: flex; flex-direction: column; }
@@ -243,7 +305,49 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
     .wil__qa mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .wil__spin { animation: wil-spin 1.1s linear infinite; }
     @keyframes wil-spin { to { transform: rotate(360deg); } }
-    @media (prefers-reduced-motion: reduce) { .wil__spin { animation: none; } .wil__bar-fill { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { .wil__spin { animation: none; } .wil__bar-fill { transition: none; } .wil__livebar { display: none; } }
+
+    /* Modo execução: lista + sessão (empilhadas por padrão; lado a lado em tela larga com espaço). */
+    .wil__layout { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+    .wil__main { min-width: 0; container-type: inline-size; display: flex; flex-direction: column; gap: 8px; }
+    .wil__layout--split .wil__session { max-height: min(78vh, 760px); }
+    @container wilhost (min-width: 760px) {
+      .wil__layout--split.wil__layout--side { display: grid; grid-template-columns: minmax(300px, 5fr) minmax(360px, 7fr); align-items: start; }
+      .wil__layout--split.wil__layout--side .wil__main { grid-column: 1; grid-row: 1; }
+      .wil__layout--split.wil__layout--side .wil__session { grid-column: 2; grid-row: 1; position: sticky; top: 8px;
+        max-height: calc(100dvh - var(--cime-topbar-total, 70px) - 60px); min-height: 420px; }
+    }
+    .wil__session { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; padding: 8px; border-radius: 12px;
+      background: var(--surface-3, #212730); border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); }
+    .wil__session-bar { display: flex; align-items: center; gap: 6px; padding: 0 0 0 4px; flex: none; }
+    .wil__session-ico { color: #58a6ff; font-size: 18px; width: 18px; height: 18px; }
+    .wil__session-title { font-weight: 600; font-size: 12.5px; letter-spacing: .02em; }
+    .wil__session-close.mat-mdc-icon-button { width: 30px; height: 30px; padding: 3px; }
+    .wil__session-close mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .wil__exec { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .wil__tabs { display: flex; gap: 4px; overflow-x: auto; flex: none; padding-bottom: 2px; }
+    .wil__tab { display: inline-flex; align-items: center; flex: none; max-width: 220px; border-radius: 999px;
+      border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); color: var(--cc-text-2); }
+    .wil__tab.on { background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent); border-color: color-mix(in srgb, var(--mat-sys-primary) 55%, transparent); color: var(--mat-sys-on-surface); }
+    .wil__tab--live { border-color: color-mix(in srgb, #58a6ff 45%, transparent); }
+    .wil__tab-main { display: inline-flex; align-items: center; gap: 4px; min-width: 0; background: none; border: 0; color: inherit; font: inherit; font-size: 11.5px; padding: 3px 2px 3px 8px; cursor: pointer; }
+    .wil__tab-main mat-icon { font-size: 15px; width: 15px; height: 15px; flex: none; }
+    .wil__tab-main .wil__num { font-size: 11.5px; }
+    .wil__tab-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wil__tab-x { display: inline-flex; align-items: center; justify-content: center; background: none; border: 0; color: var(--cc-text-3); cursor: pointer; padding: 3px 6px 3px 2px; border-radius: 999px; }
+    .wil__tab-x:hover { color: var(--mat-sys-on-surface); }
+    .wil__tab-x mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .wil__reopen { border-color: color-mix(in srgb, #58a6ff 45%, transparent) !important; }
+    .wil__reopen mat-icon { color: #58a6ff; }
+    .wil__reopen-n { margin-left: 6px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: #58a6ff; color: #0d1117; font-size: 11px; font-weight: 700; line-height: 18px; }
+    @media (prefers-reduced-motion: no-preference) {
+      .wil__item--live { animation: wil-glow 2.4s ease-in-out infinite; }
+      .wil__livebar { animation: wil-slide 1.5s ease-in-out infinite; }
+      .wil__bot { animation: wil-bob 1.4s ease-in-out infinite; }
+    }
+    @keyframes wil-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(88,166,255,0); } 50% { box-shadow: 0 0 0 3px rgba(88,166,255,.16); } }
+    @keyframes wil-slide { 0% { background-position: -35% 0; } 100% { background-position: 135% 0; } }
+    @keyframes wil-bob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-2px) rotate(-8deg); } 75% { transform: translateY(-1px) rotate(8deg); } }
     @container (max-width: 560px) {
       .wil__meta { width: 100%; margin-left: 30px; }
       .wil__actions { margin-left: auto; }
@@ -258,6 +362,8 @@ export class WorkItemListComponent {
   readonly cardType = input<'bug' | 'user-story'>('bug');
   readonly openItem = input<number | null>(null);
   readonly countChange = output<number>();
+  /** Números dos itens em execução (na fila, rodando, esperando ou desfazendo) — a cada mudança. */
+  readonly executingChange = output<number[]>();
 
   private api = inject(WorkItemsService);
   private plans = inject(ExecutionPlanService);
@@ -280,7 +386,20 @@ export class WorkItemListComponent {
   readonly correctionPlan = signal<ExecutionPlanSummary | null>(null);
   readonly generating = signal(false);
 
-  readonly visible = computed(() => this.items().filter((it) => matchesFilter(it, this.filter())));
+  /** Itens na sessão de execução (abas), na ordem em que entraram. */
+  readonly sessionTabs = signal<number[]>([]);
+  readonly activeTab = signal<number | null>(null);
+  /** Sessão aberta ao lado da lista (a pessoa pode fechar e reabrir). */
+  readonly sessionOpen = signal(false);
+  /** Tela ≥ 1024 px: sessão ao lado da lista (abaixo disso, em cima). */
+  readonly wide = signal(true);
+  readonly executing = computed(() => executingNumbers(this.items()));
+  readonly sessionVisible = computed(() => this.sessionOpen() && this.sessionTabs().length > 0);
+
+  readonly visible = computed(() => {
+    const list = this.items().filter((it) => matchesFilter(it, this.filter()));
+    return this.sessionVisible() ? sortExecutingFirst(list) : list;
+  });
   readonly counts = computed(() => {
     const all = this.items();
     return {
@@ -300,6 +419,7 @@ export class WorkItemListComponent {
   readonly look = (it: WorkItem) => itemStatusLook(it.status);
   readonly progress = (it: WorkItem) => itemProgress(it);
   readonly busy = (it: WorkItem) => isItemBusy(it);
+  readonly isLive = (it: WorkItem) => isExecutingItem(it);
   readonly canRun = (it: WorkItem) => canExecute(it);
   readonly canCancelIt = (it: WorkItem) => canCancel(it);
   readonly canUndoIt = (it: WorkItem) => canUndo(it);
@@ -312,6 +432,9 @@ export class WorkItemListComponent {
   private stopLive: (() => void) | null = null;
   private lastOpened: string | null = null;
   private loadSeq = 0;
+  /** A pessoa fechou a sessão: item novo em execução não reabre sozinho (só entra nas abas). */
+  private sessionClosedByUser = false;
+  private lastExecuting = '';
 
   constructor() {
     registerWorkItemTypeIcons(inject(MatIconRegistry), inject(DomSanitizer));
@@ -331,7 +454,106 @@ export class WorkItemListComponent {
       untracked(() => this.openItemDialog(n, this.items().find((x) => x.number === n), true));
     });
 
-    inject(DestroyRef).onDestroy(() => this.stopLive?.());
+    // Itens que passam a executar entram na sessão (e ela abre, se a pessoa não a fechou); avisa a página.
+    effect(() => {
+      const nums = this.executing();
+      untracked(() => this.onExecutingChanged(nums));
+    });
+
+    const destroyRef = inject(DestroyRef);
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      const mq = window.matchMedia('(min-width: 1024px)');
+      this.wide.set(mq.matches);
+      const onChange = (e: MediaQueryListEvent) => this.wide.set(e.matches);
+      mq.addEventListener?.('change', onChange);
+      destroyRef.onDestroy(() => mq.removeEventListener?.('change', onChange));
+    }
+
+    destroyRef.onDestroy(() => this.stopLive?.());
+  }
+
+  // ── sessão de execução ───────────────────────────────────────────────────────────────────────
+
+  private onExecutingChanged(nums: number[]): void {
+    const key = nums.join(',');
+    if (key === this.lastExecuting) return;
+    this.lastExecuting = key;
+    this.executingChange.emit(nums);
+    const fresh = nums.filter((n) => !this.sessionTabs().includes(n));
+    if (!fresh.length) return;
+    this.sessionTabs.update((t) => [...t, ...fresh]);
+    if (this.activeTab() === null || !this.sessionVisible()) this.activeTab.set(fresh[0]);
+    if (!this.sessionClosedByUser) this.sessionOpen.set(true);
+  }
+
+  /** Mostra a sessão de um item (entra nas abas se ainda não estiver). */
+  showSession(n: number): void {
+    if (!this.sessionTabs().includes(n)) this.sessionTabs.update((t) => [...t, n]);
+    this.activeTab.set(n);
+    this.openSession();
+  }
+
+  openSession(): void {
+    if (!this.sessionTabs().length) {
+      const live = this.executing();
+      if (!live.length) return;
+      this.sessionTabs.set(live);
+    }
+    if (this.activeTab() === null || !this.sessionTabs().includes(this.activeTab()!)) this.activeTab.set(this.sessionTabs()[0]);
+    this.sessionClosedByUser = false;
+    this.sessionOpen.set(true);
+  }
+
+  closeSession(): void {
+    this.sessionClosedByUser = true;
+    this.sessionOpen.set(false);
+    // Itens que já terminaram saem das abas; os que rodam continuam (o botão da barra reabre).
+    const live = new Set(this.executing());
+    this.sessionTabs.update((t) => t.filter((n) => live.has(n)));
+    if (this.activeTab() !== null && !this.sessionTabs().includes(this.activeTab()!)) this.activeTab.set(this.sessionTabs()[0] ?? null);
+  }
+
+  closeTab(n: number): void {
+    const tabs = this.sessionTabs();
+    const i = tabs.indexOf(n);
+    if (i < 0) return;
+    const next = tabs.filter((x) => x !== n);
+    this.sessionTabs.set(next);
+    if (this.activeTab() === n) this.activeTab.set(next[Math.min(i, next.length - 1)] ?? null);
+    if (!next.length) this.sessionOpen.set(false);
+  }
+
+  /** Item recarregado pela sessão: atualiza a linha sem outro GET. */
+  mergeItem(it: WorkItem): void {
+    if (it.cardNumber && this.currentCard && `${it.cardNumber}`.trim() !== this.currentCard) return;
+    this.items.update((l) => (l.some((x) => x.number === it.number) ? l.map((x) => (x.number === it.number ? { ...it, logs: x.logs } : x)) : l));
+  }
+
+  private itemBy(n: number): WorkItem | undefined {
+    return this.items().find((x) => x.number === n);
+  }
+
+  isLiveNumber(n: number): boolean {
+    return isExecutingItem(this.itemBy(n));
+  }
+
+  isRunningNumber(n: number): boolean {
+    const st = this.itemBy(n)?.status;
+    return st === 'running' || st === 'reverting';
+  }
+
+  tabLook(n: number) {
+    return itemStatusLook(this.itemBy(n)?.status);
+  }
+
+  tabTitle(n: number): string {
+    const it = this.itemBy(n);
+    return it ? `${formatWorkNumber(n)} ${it.title} — ${itemStatusLook(it.status).label}` : formatWorkNumber(n);
+  }
+
+  tabShortTitle(n: number): string {
+    const t = this.itemBy(n)?.title ?? '';
+    return t.length > 22 ? t.slice(0, 21) + '…' : t;
   }
 
   // ── carga e tempo real ───────────────────────────────────────────────────────────────────────
@@ -346,6 +568,11 @@ export class WorkItemListComponent {
     this.correctionPlan.set(null);
     this.catalog.set(null);
     this.expanded.set(new Set());
+    this.sessionTabs.set([]);
+    this.activeTab.set(null);
+    this.sessionOpen.set(false);
+    this.sessionClosedByUser = false;
+    this.lastExecuting = '';
     if (!card) return;
     this.load();
     this.actions.catalogOrNull(card).then((c) => { if (c && this.currentCard === card) this.catalog.set(c); });
@@ -364,6 +591,12 @@ export class WorkItemListComponent {
         const sorted = (list ?? []).map((it) => ({ ...it, tasks: (it.tasks ?? []).slice().sort((a, b) => a.order - b.order), links: it.links ?? [] }))
           .sort((a, b) => a.number - b.number);
         this.items.set(sorted);
+        const known = new Set(sorted.map((x) => x.number));
+        if (this.sessionTabs().some((n) => !known.has(n))) {
+          this.sessionTabs.update((t) => t.filter((n) => known.has(n)));
+          if (this.activeTab() !== null && !known.has(this.activeTab()!)) this.activeTab.set(this.sessionTabs()[0] ?? null);
+          if (!this.sessionTabs().length) this.sessionOpen.set(false);
+        }
         this.loading.set(false);
         this.loadError.set(null);
         if (first) this.restoreExpanded(card, sorted);
@@ -485,6 +718,7 @@ export class WorkItemListComponent {
       // Mostra "na fila" na hora; o tempo real traz o resto.
       this.items.update((l) => l.map((x) => (x.number === it.number && canExecute(x) ? { ...x, status: 'queued' } : x)));
       this.expand(it.number);
+      this.showSession(it.number);
       this.load(true);
     }
   }

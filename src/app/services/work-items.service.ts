@@ -9,6 +9,7 @@ import {
   WorkItem,
   WorkItemCatalog,
   WorkItemError,
+  WorkItemLive,
   WorkTaskAction,
   formatWorkNumber,
   itemStatusLook
@@ -38,6 +39,14 @@ export class WorkItemsService {
   /** Um item com os registros (histórico). */
   get(number: number): Observable<WorkItem> {
     return this.http.get<WorkItem>(`${this.apiUrl}/${number}`).pipe(this.fail(`Não foi possível carregar o item ${formatWorkNumber(number)}.`));
+  }
+
+  /**
+   * Estado ao vivo da execução do item (pedido do executor, atividade agora, últimas atividades e os últimos 50
+   * registros) — a sessão de execução da Bancada. Item de plano usa o pedido ativo da pista main do plano.
+   */
+  live(number: number): Observable<WorkItemLive> {
+    return this.http.get<WorkItemLive>(`${this.apiUrl}/${number}/live`).pipe(this.fail(`Não foi possível acompanhar o item ${formatWorkNumber(number)}.`));
   }
 
   /** Kinds de sub-tarefa e modelos (já preenchidos para o card — ex.: branch `hotfix/77434-rv`). */
