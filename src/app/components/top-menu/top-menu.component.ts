@@ -32,6 +32,7 @@ import {SkillsDialogComponent} from '../skills-dialog/skills-dialog.component';
 import {ExecutorsDialogComponent} from '../executors-dialog/executors-dialog.component';
 import {AiUsageDialogComponent} from '../ai-usage-dialog/ai-usage-dialog.component';
 import {BackNavigationService} from '../../services/back-navigation.service';
+import {SetupGuideService} from '../setup-guide/setup-guide.service';
 
 interface AutoCompleteCompleteEvent {
   originalEvent: Event;
@@ -105,6 +106,8 @@ export class TopMenuComponent implements OnInit {
     this.integrations.loadStatus();
     // Pendências dos planos de execução (0037): sino, título da aba, selo nos recentes.
     this.pending.start();
+    // 0083: primeiro acesso de quem ainda não está configurado abre o guia "Primeiros passos".
+    void this.setup.maybeAutoOpen();
   }
 
   // Relê o usuário do storage e recalcula firstName/lastName a partir do fullName.
@@ -154,6 +157,19 @@ export class TopMenuComponent implements OnInit {
 
   /** Integrações de uso pessoal (feature 0002): status para o indicador de pendência do menu. */
   readonly integrations = inject(UserIntegrationService);
+
+  /** Guia de configuração inicial (0083): progresso no menu e reabrir. */
+  readonly setup = inject(SetupGuideService);
+
+  /** Progresso do guia no item do menu: lido ao abrir o menu (não pesa no carregamento da tela). */
+  refreshSetup() {
+    if (!this.setup.loading()) void this.setup.refresh();
+  }
+
+  openSetupGuide() {
+    void this.setup.refresh();
+    void this.setup.open();
+  }
 
   openMyIntegrations() {
     this.dialog.open(MyIntegrationsDialogComponent, {

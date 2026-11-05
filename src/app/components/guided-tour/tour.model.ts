@@ -39,6 +39,8 @@ export interface TourDefinition {
   version: number;
   title: string;
   steps: TourStep[];
+  /** Texto do botão do último passo (padrão: "Concluir tour"). */
+  doneText?: string;
 }
 
 /** O que a tela oferece ao tour (abrir a aba certa no celular, saber se há card aberto). */

@@ -72,6 +72,23 @@
 .integration__help ol { margin: 6px 0 0; padding-left: 18px; }
 .integration__help li + li { margin-top: 2px; }
 
+/* 0083: "Como obter" de cada integração */
+.guide-toggle {
+  display: inline-flex; align-items: center; gap: 4px; margin: 10px 14px 0; padding: 2px 4px; border: 0; background: none;
+  color: var(--mat-sys-primary); font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.guide-toggle mat-icon { font-size: 17px; width: 17px; height: 17px; }
+.integration__help--guide { margin-top: 6px; }
+.integration__help--guide p { margin: 0; }
+.integration__help--guide li { line-height: 1.5; }
+:host ::ng-deep .integration__help a { color: var(--mat-sys-primary); }
+:host ::ng-deep .integration__help code { font-family: 'Courier New', monospace; font-size: 12px; background: rgba(255,255,255,.07); padding: 0 4px; border-radius: 4px; color: #e6edf3; }
+.guide__note { margin-top: 8px !important; font-size: 12px; opacity: .85; }
+.guide__links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
+.guide__links a { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; text-decoration: none; }
+.guide__links a:hover { text-decoration: underline; }
+.guide__links mat-icon { font-size: 14px; width: 14px; height: 14px; }
+
 .integration__fields { display: flex; flex-direction: column; gap: 14px; padding: 16px 14px 4px; }
 .field-row { display: flex; align-items: flex-start; gap: 4px; }
 .field-row__action { margin-top: 4px; }
