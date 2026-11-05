@@ -155,5 +155,14 @@ export const PR_SCREEN_TOUR: TourDefinition = {
       title: 'Pronto! A ajuda fica aqui',
       body: 'Reveja o tour ou leia o guia completo em <b>Como usar esta tela</b>.',
     }
-  ]
+  ],
+  help: {
+    subtitle: 'Tudo o que mudou na tela do card e como usar cada parte',
+    tips: [
+      '<b>Dúvida ou discordância?</b> Pergunte ao <b>Especialista do caso</b> (coluna da direita) — não cancele o plano nem use comentários como chat.',
+      '<b>O plano espera por você?</b> Responda na própria etapa; é isso que faz o Claude continuar.',
+      '<b>O Claude está rodando?</b> Olhe o ícone do robô no cabeçalho do plano: ele se mexe enquanto trabalha.',
+      '<b>Mudar o plano?</b> Só por uma proposta do especialista que você aceita (ou por um comentário-instrução no plano).'
+    ]
+  }
 };

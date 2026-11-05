@@ -7,14 +7,28 @@
       @else { Engenharia reversa e regras de negócio — o mesmo conteúdo que o Claude consulta nas análises. }
     </span>
   </div>
+  <!-- 0084: tour guiado e guia completo da tela -->
+  <button mat-icon-button type="button" class="header-help" data-tour="kb-help" (click)="openHelp()"
+          matTooltip="Como usar a Base Solvace (tour guiado e guia completo)" aria-label="Como usar esta tela">
+    <mat-icon>help_outline</mat-icon>
+  </button>
   <span class="header-spacer"></span>
-  <div class="mode" role="group" aria-label="Modo de leitura">
+  <!-- 0084: configuração inicial — a IA do Pergunte usa a chave pessoal (Minhas integrações) -->
+  @if (aiStatus(); as ai) {
+    <button type="button" class="ai-setup" [class.ai-setup--warn]="!ai.available" data-tour="kb-ai-setup" (click)="openIntegrations()"
+            [matTooltip]="ai.available
+              ? 'O Pergunte e o Aprender com um card usam a sua chave de IA (' + (ai.provider || 'IA') + '). Clique para ver ou trocar em Minhas integrações.'
+              : 'Sem IA o Pergunte só busca pela palavra' + (ai.reason ? ' (' + ai.reason + ')' : '') + '. Clique para configurar em Minhas integrações.'">
+      <mat-icon>{{ ai.available ? 'check_circle' : 'key' }}</mat-icon>{{ ai.available ? 'IA pronta' + (ai.provider ? ' · ' + ai.provider : '') : 'Configurar a IA' }}
+    </button>
+  }
+  <div class="mode" role="group" aria-label="Modo de leitura" data-tour="kb-mode">
     <button type="button" class="mode__btn" [class.mode__btn--on]="simple()" (click)="setMode('simples')"
             matTooltip="Para QA, gestores e suporte: guia em linguagem simples, sem detalhes técnicos"><mat-icon>auto_stories</mat-icon>Simples</button>
     <button type="button" class="mode__btn" [class.mode__btn--on]="!simple()" (click)="setMode('tecnico')"
             matTooltip="A engenharia reversa completa, como o Claude lê"><mat-icon>code</mat-icon>Técnico</button>
   </div>
-  <button mat-stroked-button class="suggest-btn" [class.kb__admin--on]="showLearn()" (click)="toggleLearn()"
+  <button mat-stroked-button class="suggest-btn" [class.kb__admin--on]="showLearn()" (click)="toggleLearn()" data-tour="kb-learn"
           matTooltip="Informe um card: o PRMake lê tudo o que foi feito nele e propõe o que guardar na base">
     <mat-icon>school</mat-icon>Aprender com um card
   </button>
@@ -34,14 +48,14 @@
     }
   }
   @if (isAdmin()) {
-    <button mat-stroked-button class="suggest-btn" (click)="showSuggestions.set(!showSuggestions())"
+    <button mat-stroked-button class="suggest-btn" (click)="showSuggestions.set(!showSuggestions())" data-tour="kb-suggestions"
             matTooltip="Sugestões das análises (aprendizados e divergências) aguardando o admin">
       <mat-icon>lightbulb</mat-icon>Sugestões
       @if (suggestions().length) { <span class="suggest-count">{{ suggestions().length }}</span> }
     </button>
   }
   @if (isAdmin()) {
-    <button mat-stroked-button class="suggest-btn" [class.kb__admin--on]="showQuestions()" (click)="showQuestions.set(!showQuestions())"
+    <button mat-stroked-button class="suggest-btn" [class.kb__admin--on]="showQuestions()" (click)="showQuestions.set(!showQuestions())" data-tour="kb-questions"
             matTooltip="Perguntas feitas no Pergunte que a base ainda não responde — a fila para a base aprender">
       <mat-icon>help_center</mat-icon>Perguntas
       @if (openQuestions()) { <span class="suggest-count">{{ openQuestions() }}</span> }
@@ -54,8 +68,8 @@
 
 <div class="kb">
   <!-- ── Árvore ─────────────────────────────────────────────────────────────────── -->
-  <aside class="kb__tree" [class.kb__tree--open]="treeOpen()" aria-label="Projetos e artigos">
-    <div class="kb__search">
+  <aside class="kb__tree" [class.kb__tree--open]="treeOpen()" aria-label="Projetos e artigos" data-tour="kb-tree">
+    <div class="kb__search" data-tour="kb-search">
       <mat-icon>search</mat-icon>
       <input type="search" placeholder="Filtrar ou perguntar… (Enter)" [ngModel]="filter()" (ngModelChange)="filter.set($event)"
              (keydown.enter)="onSearchEnter()" aria-label="Filtrar a base ou fazer uma pergunta" />
@@ -140,7 +154,7 @@
     }
 
     @if (articleGroups().length) {
-      <div class="kb__group">
+      <div class="kb__group" data-tour="kb-kc">
         <div class="kb__group-title"><mat-icon>gavel</mat-icon>Regras de negócio — Knowledge Center</div>
         @for (c of articleGroups(); track c.category) {
           <button type="button" class="kb__node" (click)="toggle('kc:' + c.category)">
@@ -227,7 +241,7 @@
         <button mat-stroked-button (click)="load()">Tentar de novo</button>
       </div>
     } @else if (selection().type === 'map') {
-      <app-ecosystem-map [focus]="mapFocus()" [simple]="simple()" [names]="friendlyNames()" (openProject)="openProjectByKey($event)" (openItem)="openReverseRef($event)" [canOpenItem]="isAdmin()"></app-ecosystem-map>
+      <app-ecosystem-map data-tour="kb-map" [focus]="mapFocus()" [simple]="simple()" [names]="friendlyNames()" (openProject)="openProjectByKey($event)" (openItem)="openReverseRef($event)" [canOpenItem]="isAdmin()"></app-ecosystem-map>
     } @else if (selection().type === 'ask') {
       <section class="ask" aria-live="polite" kbAttachDrop (filesDropped)="addFiles($event)">
         <form class="ask__box ask__box--top" (submit)="$event.preventDefault(); askAi()">
@@ -311,7 +325,7 @@
     } @else if (selection().type === 'overview') {
       <section class="kb__overview">
         <!-- 0037: pergunte com as suas palavras — a IA leva ao trecho certo -->
-        <div class="ask__hero" kbAttachDrop (filesDropped)="addFiles($event)">
+        <div class="ask__hero" data-tour="kb-ask" kbAttachDrop (filesDropped)="addFiles($event)">
           <div class="ask__hero-title"><mat-icon>auto_awesome</mat-icon>Pergunte à Base Solvace</div>
           <p>Escreva o que você precisa saber, com as suas palavras — a IA entende a pergunta e leva ao trecho que responde.
             @if (attachSupport().supports) { Você também pode <strong>colar um print</strong>, arrastar um arquivo (imagem, PDF, log) ou usar o microfone. }
@@ -353,8 +367,8 @@
           </div>
         }
         <div class="kb__cards">
-          @for (g of groups(); track g.kind) {
-            <div class="kb__card">
+          @for (g of groups(); track g.kind; let first = $first) {
+            <div class="kb__card" [attr.data-tour]="first ? 'kb-catalog' : null">
               <div class="kb__card-head"><mat-icon>{{ g.icon }}</mat-icon>{{ g.label }}</div>
               @for (p of cardProjects(g); track p.key) {
                 <button type="button" class="kb__card-item" (click)="selectProject(p)">
@@ -410,9 +424,9 @@
           <span>{{ friendly(p) }}</span>
           @if (section(); as cs) { <mat-icon>chevron_right</mat-icon><span>{{ cs.title }}</span> }
           <span class="header-spacer"></span>
-          <button mat-icon-button (click)="copyLink()" matTooltip="Copiar o link"><mat-icon>link</mat-icon></button>
+          <button mat-icon-button data-tour="kb-link" (click)="copyLink()" matTooltip="Copiar o link"><mat-icon>link</mat-icon></button>
         </nav>
-        <h1>{{ friendly(p) }}</h1>
+        <h1 data-tour="kb-project">{{ friendly(p) }}</h1>
         @if (tagline(p)) { <p class="kb__tagline">{{ tagline(p) }}</p> }
         <div class="kb__facts">
           @if (p.businessArea) { <span class="kb__fact"><mat-icon>business_center</mat-icon>{{ p.businessArea }}</span> }
@@ -420,9 +434,9 @@
           @if (guideTabs().length) { <span class="kb__fact kb__fact--ok"><mat-icon>menu_book</mat-icon>guia em linguagem simples</span> }
         </div>
         @if (isModule(p) && isAdmin()) {
-          <a class="kb__re" (click)="openReverse(p.key)"><mat-icon>biotech</mat-icon>Documentação completa (engenharia reversa): {{ reverseCount(p) }}/{{ reverseTotal }} publicados<mat-icon>chevron_right</mat-icon></a>
+          <a class="kb__re" data-tour="kb-reverse" (click)="openReverse(p.key)"><mat-icon>biotech</mat-icon>Documentação completa (engenharia reversa): {{ reverseCount(p) }}/{{ reverseTotal }} publicados<mat-icon>chevron_right</mat-icon></a>
         }
-        <app-kb-connections [project]="p" [projects]="projects()" (openProject)="openProjectByKey($event)" (openMap)="openMap(p.key)"></app-kb-connections>
+        <app-kb-connections [attr.data-tour]="(p.relations?.length || p.usedBy?.length) ? 'kb-connections' : null" [project]="p" [projects]="projects()" (openProject)="openProjectByKey($event)" (openMap)="openMap(p.key)"></app-kb-connections>
         @if (isModule(p) && reverseCount(p)) {
           @if (isAdmin()) { <app-kb-by-question [moduleKey]="p.key" (openReverse)="openReverseRef($event)" [canOpenReverse]="isAdmin()"></app-kb-by-question> }
         }
@@ -430,9 +444,9 @@
         <div class="kb__doc-kicker">
           <mat-icon>{{ kindIcon(p.kind) }}</mat-icon>{{ kindLabel(p.kind) }}
           <span class="header-spacer"></span>
-          <button mat-icon-button (click)="copyLink()" matTooltip="Copiar o link"><mat-icon>link</mat-icon></button>
+          <button mat-icon-button data-tour="kb-link" (click)="copyLink()" matTooltip="Copiar o link"><mat-icon>link</mat-icon></button>
         </div>
-        <h1>{{ p.name }} <code class="kb__key">{{ p.key }}</code></h1>
+        <h1 data-tour="kb-project">{{ p.name }} <code class="kb__key">{{ p.key }}</code></h1>
         <div class="kb__meta">
           @if (p.repository) { <a [href]="p.repository" target="_blank" rel="noopener noreferrer"><mat-icon>code</mat-icon>repositório</a> }
           @if (p.sourceCommit) {
@@ -443,7 +457,7 @@
           <span>atualizado por {{ p.updatedBy }} em {{ date(p.updatedAt) }}</span>
         </div>
         @if (isModule(p) && isAdmin()) {
-          <a class="kb__re" (click)="openReverse(p.key)" matTooltip="Documentos com cada regra, caso de uso, tela, endpoint e integração — aprovados e usados pelas análises">
+          <a class="kb__re" data-tour="kb-reverse" (click)="openReverse(p.key)" matTooltip="Documentos com cada regra, caso de uso, tela, endpoint e integração — aprovados e usados pelas análises">
             <mat-icon>biotech</mat-icon>Engenharia reversa: {{ reverseCount(p) }}/{{ reverseTotal }} documentos publicados{{ reverseCount(p) ? '' : ' — gerar' }}<mat-icon>chevron_right</mat-icon>
           </a>
         }
@@ -453,7 +467,7 @@
         }
 
         @if (dependsOn().length || usedBy().length) {
-          <section class="kb__links" aria-label="Integrações">
+          <section class="kb__links" aria-label="Integrações" data-tour="kb-connections">
             <button type="button" class="kb__links-head" (click)="linksOpen.set(!linksOpen())" [attr.aria-expanded]="linksOpen()">
               <mat-icon>{{ linksOpen() ? 'expand_more' : 'chevron_right' }}</mat-icon>
               <strong>Integrações</strong>
@@ -505,7 +519,7 @@
         }
 
         @if (isAdmin()) {
-          <div class="kb__admin" role="toolbar" aria-label="Ferramentas do administrador">
+          <div class="kb__admin" role="toolbar" aria-label="Ferramentas do administrador" data-tour="kb-admin">
             @if (section()) {
               <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'edit'" (click)="openAdmin('edit')"><mat-icon>edit</mat-icon>Editar</button>
               <button mat-stroked-button [class.kb__admin--on]="adminMode() === 'history'" (click)="openAdmin('history')"><mat-icon>history</mat-icon>Histórico</button>
@@ -529,14 +543,14 @@
 
         @if (simple()) {
           @if (guideTabs().length) {
-            <nav class="kb__tabs" aria-label="Guia">
+            <nav class="kb__tabs" aria-label="Guia" data-tour="kb-tabs">
               @for (s of guideTabs(); track s.key) {
                 <button type="button" class="kb__tab" [class.kb__tab--on]="section()?.key === s.key" (click)="selectProject(p, s.key)">{{ s.title }}</button>
               }
             </nav>
           }
           @if (techTabs().length) {
-            <button type="button" class="kb__tech-toggle" (click)="techOpen.set(!techOpen())" [attr.aria-expanded]="techOpen() || sectionIsTech()">
+            <button type="button" class="kb__tech-toggle" data-tour="kb-tech" (click)="techOpen.set(!techOpen())" [attr.aria-expanded]="techOpen() || sectionIsTech()">
               <mat-icon>{{ techOpen() || sectionIsTech() ? 'expand_more' : 'chevron_right' }}</mat-icon>
               Detalhes técnicos <span>({{ techTabs().length }} seções — para quem vai mexer no código)</span>
             </button>
@@ -549,7 +563,7 @@
             }
           }
         } @else if (p.sections.length) {
-          <nav class="kb__tabs" aria-label="Seções">
+          <nav class="kb__tabs" aria-label="Seções" data-tour="kb-tabs">
             @for (s of p.sections; track s.key) {
               <button type="button" class="kb__tab" [class.kb__tab--on]="!showTraps() && section()?.key === s.key" [class.kb__tab--old]="!!p.supersededSections?.[s.key]" (click)="showTraps.set(false); selectProject(p, s.key)"
                       [matTooltip]="(p.supersededSections?.[s.key] ? 'Histórico — ' + p.supersededSections?.[s.key] + '. ' : '') + 'versão ' + s.version + ' · ' + tokens(s.length) + (s.audience === 'human' ? ' · Guia (não vai para as skills)' : '')">

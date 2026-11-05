@@ -747,7 +747,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
   });
 
   openHelp(): void {
-    const data: TourHelpData = { tour: PR_SCREEN_TOUR, hasCard: this.tourHost.hasCard() };
+    const data: TourHelpData = { tour: PR_SCREEN_TOUR, hasCard: !!this.tourHost.hasCard?.() };
     this.dialog.open<TourHelpDialogComponent, TourHelpData, TourHelpResult>(TourHelpDialogComponent, {
       data, width: '760px', maxWidth: '96vw', autoFocus: false
     }).afterClosed().subscribe((r) => {

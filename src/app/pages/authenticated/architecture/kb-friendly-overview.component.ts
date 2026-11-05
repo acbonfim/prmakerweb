@@ -34,8 +34,9 @@ const ECOSYSTEM = 'ecossistema';
       <button mat-stroked-button (click)="openMap.emit()"><mat-icon>hub</mat-icon>Como os sistemas se conectam</button>
     </div>
     <div class="fo__cards">
-      @for (g of groups(); track g.area) {
-        <div class="fo__card">
+      @for (g of groups(); track g.area; let first = $first) {
+        <!-- 0084: o primeiro cartão é a âncora do tour ("O catálogo") -->
+        <div class="fo__card" [attr.data-tour]="first ? 'kb-catalog' : null">
           <div class="fo__card-head"><mat-icon>{{ g.icon }}</mat-icon>{{ g.area }}<span class="fo__count">{{ g.projects.length }}</span></div>
           @for (p of cardProjects(g.area, g.projects); track p.key) {
             <button type="button" class="fo__item" (click)="openProject.emit(p.key)">
