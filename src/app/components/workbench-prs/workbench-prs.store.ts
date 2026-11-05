@@ -30,6 +30,11 @@ export type WorkbenchRegister = PullRequestRegister & {
 export interface CardBranchRules {
   mainBranch: string;
   branchesByTarget: Record<string, string>;
+  /** Repositório em tratamento (o pedido, senão o do card) e o tipo dele no BranchStrategy (legacy, revamp-backend…). */
+  repository?: string | null;
+  repoKind?: string | null;
+  /** Só os destinos do fluxo desse tipo de repositório, com a branch de cada um; vazio = repositório fora das regras. */
+  repositoryTargets: { target: string; branch: string }[];
 }
 
 /**
@@ -70,6 +75,8 @@ export class WorkbenchPrsStore implements OnDestroy {
 
   readonly rules = signal<CardBranchRules | null>(null);
   private rulesFor: string | null = null;
+  /** Regras por repositório (a mesma chamada `Skills/rules?repository=`), para as trocas de repositório no "Abrir PR". */
+  private rulesByRepo = new Map<string, Promise<CardBranchRules | null>>();
 
   /** Última escolha do "Abrir PR" nesta Bancada (padrão do próximo). */
   readonly lastTarget = signal<string | null>(null);
@@ -117,6 +124,7 @@ export class WorkbenchPrsStore implements OnDestroy {
     this.cardFullFor = null;
     this.rules.set(null);
     this.rulesFor = null;
+    this.rulesByRepo.clear();
     this.pr.loadRegister(next, null);
     this.switchGroup(next);
     this.registerLoad = next ? this.loadRegister() : Promise.resolve();
@@ -234,13 +242,51 @@ export class WorkbenchPrsStore implements OnDestroy {
     const card = this.card();
     if (!card || this.rulesFor === card) return;
     this.rulesFor = card;
+    const rules = await this.fetchRules(card, null);
+    if (this.card() !== card) return;
+    this.rules.set(rules);
+    if (!rules) this.rulesFor = null;
+  }
+
+  /** Regras do card para um repositório (cache por repositório); o servidor já resolve o tipo e os destinos do fluxo. */
+  rulesForRepository(repository: string): Promise<CardBranchRules | null> {
+    const card = this.card();
+    const repo = repository.trim();
+    if (!card || !repo) return Promise.resolve(null);
+    const key = `${card}|${repo.toLowerCase()}`;
+    let found = this.rulesByRepo.get(key);
+    if (!found) {
+      found = this.fetchRules(card, repo);
+      this.rulesByRepo.set(key, found);
+      void found.then(r => { if (!r) this.rulesByRepo.delete(key); });
+    }
+    return found;
+  }
+
+  /** Destinos que existem para o repositório (fluxo do card); `null` = as regras não conhecem o repositório → todos. */
+  async targetsForRepository(repository: string): Promise<string[] | null> {
+    const rules = await this.rulesForRepository(repository);
+    const targets = rules?.repositoryTargets?.map(t => t.target) ?? [];
+    return targets.length ? targets : null;
+  }
+
+  private async fetchRules(card: string, repository: string | null): Promise<CardBranchRules | null> {
     try {
-      const res: any = await firstValueFrom(this.http.get(`${this.base}Skills/rules?card=${encodeURIComponent(card)}`));
-      if (this.card() !== card) return;
+      const repoQuery = repository ? `&repository=${encodeURIComponent(repository)}` : '';
+      const res: any = await firstValueFrom(this.http.get(`${this.base}Skills/rules?card=${encodeURIComponent(card)}${repoQuery}`));
       const main = `${res?.mainBranch ?? ''}`.trim();
-      this.rules.set(main ? { mainBranch: main, branchesByTarget: res?.branchesByTarget ?? {} } : null);
+      if (!main) return null;
+      return {
+        mainBranch: main,
+        branchesByTarget: res?.branchesByTarget ?? {},
+        repository: res?.repository ?? null,
+        repoKind: res?.repoKind ?? null,
+        repositoryTargets: Array.isArray(res?.repositoryTargets)
+          ? res.repositoryTargets.filter((t: any) => t?.target && t?.branch).map((t: any) => ({ target: `${t.target}`, branch: `${t.branch}` }))
+          : [],
+      };
     } catch {
-      if (this.card() === card) { this.rules.set(null); this.rulesFor = null; }
+      return null;
     }
   }
 

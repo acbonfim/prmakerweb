@@ -326,15 +326,7 @@
           <app-card-assistant [cardNumber]="card()"></app-card-assistant>
         </div>
 
-        <!-- Rodada 4: "Ferramentas" ao lado de "+ Novo item" / "Pedir ao especialista" (abre o mesmo painel da lateral) -->
-        <ng-template #wiToolsBtn>
-          <button mat-stroked-button type="button" class="wb-tools-btn wb-tools-btn--list" data-tour="wi-tools" (click)="openTools()"
-                  [attr.aria-expanded]="toolsOpen()" matTooltip="Ferramentas do especialista: atalhos que criam o item já montado (PR para uma branch, promoção, fechamento…)">
-            <mat-icon>construction</mat-icon>Ferramentas
-            @if (toolCount(); as n) { <span class="wb-count">{{ n }}</span> }
-          </button>
-        </ng-template>
-        <app-work-item-list [card]="card()" [cardType]="cardType()" [openItem]="openItem()" [barExtra]="wiToolsBtn"
+        <app-work-item-list [card]="card()" [cardType]="cardType()" [openItem]="openItem()"
                             (countChange)="onCountChange($event)" (executingChange)="onExecuting($event)"></app-work-item-list>
       </div>
 
@@ -409,21 +401,7 @@
     <!-- Coluna lateral: o Especialista do caso ocupa a altura toda -->
     <aside class="wb-side" [class.wb-hidden]="!showChat()">
       <div class="wb-chat" [class.wb-flash]="chatFlash()" data-tour="wb-chat">
-        <app-case-compact class="wb-chat__box" [card]="card()">
-          <!-- Rodada 4: ferramentas do especialista no topo da coluna -->
-          <button ck-head-actions mat-stroked-button type="button" class="wb-tools-btn" data-tour="wb-tools"
-                  [class.wb-tools-btn--on]="toolsOpen()" [attr.aria-expanded]="toolsOpen()" (click)="toolsOpen() ? closeTools() : openTools()"
-                  [matTooltip]="'Ferramentas do especialista' + (toolCount() ? ' (' + toolCount() + ' para este card)' : '') + ': atalhos que criam o item já montado'">
-            <mat-icon>construction</mat-icon><span class="wb-tools-btn__label">Ferramentas</span>
-            @if (toolCount(); as n) { <span class="wb-count">{{ n }}</span> }
-          </button>
-        </app-case-compact>
-      </div>
-      <!-- Painel das ferramentas: cobre a coluna do especialista (desktop) ou a tela (celular); montado para já contar -->
-      <div class="wb-tools" [class.wb-hidden]="!toolsOpen()" data-tour="wb-tools-panel">
-        <app-specialist-tools [card]="card()" [cardType]="cardType()" [open]="toolsOpen()"
-                              (countChange)="toolCount.set($event)" (closed)="closeTools()"
-                              (created)="onToolCreated($event)" (asked)="onToolAsked()"></app-specialist-tools>
+        <app-case-compact class="wb-chat__box" [card]="card()" [cardType]="cardType()" (itemOpened)="onToolCreated($event)"></app-case-compact>
       </div>
     </aside>
   </div>

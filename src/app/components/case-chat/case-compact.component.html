@@ -18,8 +18,6 @@
           <app-user-avatar [name]="p.name" [imageUrl]="photos.photo(p.userId)" [size]="22" [matTooltip]="p.name"></app-user-avatar>
         }
       </span>
-      <!-- 0085 rodada 4: ações extras de quem hospeda (ex.: "Ferramentas" na Bancada) -->
-      <ng-content select="[ck-head-actions]"></ng-content>
       <button mat-icon-button class="ck__expand" (click)="expand()" matTooltip="Abrir a conversa grande (voz, contexto, ferramentas)" aria-label="Abrir a conversa grande">
         <mat-icon>open_in_full</mat-icon>
       </button>

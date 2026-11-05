@@ -72,3 +72,48 @@ export function defaultTarget(options: TargetBranchOption[], last: string | null
   if (options.some(o => o.value === 'development')) return 'development';
   return options[0]?.value ?? last ?? 'development';
 }
+
+/** Sugestão de branch pelas regras do card: o rótulo do destino e a branch. */
+export interface BranchSuggestion {
+  key: string;
+  label: string;
+  branch: string;
+  target: string | null;
+  hint: string;
+}
+
+/** Subconjunto das regras do card (`GET Skills/rules`) que as sugestões de branch usam. */
+export interface BranchSuggestionRules {
+  mainBranch: string;
+  branchesByTarget?: Record<string, string> | null;
+  repository?: string | null;
+  repoKind?: string | null;
+  repositoryTargets?: { target: string; branch: string }[] | null;
+}
+
+/**
+ * Branch principal do card (User Story = feature/, Bug = hotfix/ — vem pronta das regras) e a branch de cada destino **do
+ * repositório em tratamento**: só os destinos do fluxo desse tipo de repositório (revamp-backend não tem QA). Repositório
+ * fora das regras (sem `repositoryTargets`) → os destinos do plugin de PR que têm branch por destino.
+ */
+export function buildBranchSuggestions(rules: BranchSuggestionRules | null, targetOptions: TargetBranchOption[]): BranchSuggestion[] {
+  if (!rules) return [];
+  const list: BranchSuggestion[] = [{
+    key: 'main', label: 'Principal', branch: rules.mainBranch, target: null,
+    hint: 'Branch principal do card (BranchNamePattern; User Story usa feature/) — abre o PR com ela',
+  }];
+  const labels = new Map(targetOptions.map(t => [t.value, t.label || t.value]));
+  const forRepo = rules.repositoryTargets ?? [];
+  const targets = forRepo.length
+    ? forRepo.map(t => ({ value: t.target, branch: t.branch }))
+    : targetOptions.map(t => ({ value: t.value, branch: rules.branchesByTarget?.[t.value] }));
+  const where = forRepo.length && rules.repoKind ? ` (${rules.repository ?? 'repositório'} · ${rules.repoKind})` : '';
+  for (const t of targets) {
+    if (!t.branch || t.branch === rules.mainBranch) continue;
+    list.push({
+      key: t.value, label: labels.get(t.value) ?? t.value, branch: t.branch, target: t.value,
+      hint: `Branch para o destino ${t.value} (BranchSuffixByTarget) — abre o PR ${t.branch} → ${t.value}${where}`,
+    });
+  }
+  return list;
+}

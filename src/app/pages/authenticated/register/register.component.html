@@ -149,7 +149,7 @@
           <div class="pr-timeline" [class.pr-tab-panel--on]="tab === 'timeline'" [class.pr-focus]="focusedPanel() === 'timeline'">
             <!-- O card buscado (e não o que está sendo digitado): a conversa não troca a cada tecla. -->
             @if (prState.cardNumber(); as loaded) {
-              <app-case-compact class="pr-case-compact" [card]="loaded"></app-case-compact>
+              <app-case-compact class="pr-case-compact" [card]="loaded" [cardType]="cardType === 'us' ? 'user-story' : 'bug'"></app-case-compact>
             } @else {
               <div class="pr-case-empty"><mat-icon>psychology</mat-icon><span>Busque um card para conversar com o Especialista do caso.</span></div>
             }

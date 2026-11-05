@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, ViewChild, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, ElementRef, OnDestroy, ViewChild, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -37,6 +37,10 @@ const TYPING_EVERY_MS = 4000;
 })
 export class CaseCompactComponent implements OnDestroy {
   readonly card = input<string | null>(null);
+  /** Tipo do card (as ferramentas da conversa grande mudam com ele). */
+  readonly cardType = input<'bug' | 'user-story'>('bug');
+  /** Item de trabalho criado/aberto por uma ferramenta da conversa grande (o hospedeiro mostra o item). */
+  readonly itemOpened = output<number>();
 
   private store = inject(CaseChatStore);
   private api = inject(CaseChatService);
@@ -126,7 +130,9 @@ export class CaseCompactComponent implements OnDestroy {
 
   expand(): void {
     const c = this.card();
-    if (c) openCaseChat(this.dialog, c, this.host.nativeElement.querySelector('.ck'));
+    if (!c) return;
+    openCaseChat(this.dialog, c, this.host.nativeElement.querySelector('.ck'), this.cardType())
+      .afterClosed().subscribe((r) => { if (r?.openItem) this.itemOpened.emit(r.openItem); });
   }
 
   send(text?: string): void {

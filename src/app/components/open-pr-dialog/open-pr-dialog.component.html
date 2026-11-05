@@ -24,7 +24,7 @@
                            [(value)]="repository"></app-repo-autocomplete>
 
     <app-target-branch-toggle class="field field--target"
-                              [options]="data.targetOptions"
+                              [options]="targetChoices()"
                               [disabled]="isEdit"
                               [(value)]="target"></app-target-branch-toggle>
   </div>

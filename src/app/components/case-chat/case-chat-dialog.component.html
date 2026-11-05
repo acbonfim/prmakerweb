@@ -29,6 +29,11 @@
       }
       <span class="sp-av sp-av--sm" matTooltip="Especialista do caso"><mat-icon>psychology</mat-icon></span>
     </span>
+    <button mat-icon-button class="cc__tools-btn" [class.cc__tools-btn--on]="toolsOpen()" (click)="toolsOpen.set(!toolsOpen())" [attr.aria-pressed]="toolsOpen()"
+            [matTooltip]="'Ferramentas do especialista' + (toolCount() ? ' (' + toolCount() + ' para este card)' : '') + ': atalhos que criam o item já montado'"
+            aria-label="Ferramentas do especialista" data-tour="case-tools">
+      <mat-icon [matBadge]="toolCount() || null" matBadgeSize="small" matBadgeColor="accent" aria-hidden="false">construction</mat-icon>
+    </button>
     <button mat-icon-button (click)="showAside.set(!showAside())" [matTooltip]="showAside() ? 'Esconder o contexto' : 'O que o especialista sabe, pontos combinados e arquivos'"
             aria-label="Contexto do caso"><mat-icon>{{ showAside() ? 'right_panel_close' : 'right_panel_open' }}</mat-icon></button>
     <button mat-icon-button (click)="close()" matTooltip="Fechar (Esc)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
@@ -298,6 +303,12 @@
           <span class="cc__spacer"></span>
           <span class="comp__hint">Enter envia · Shift+Enter quebra a linha</span>
         </div>
+      </div>
+      <!-- Ferramentas (rodada 6): cobrem a conversa; montadas desde o início para a contagem do ícone já aparecer -->
+      <div class="cc__tools" [class.cc__tools--hidden]="!toolsOpen()" data-tour="case-tools-panel">
+        <app-specialist-tools [card]="data.card" [cardType]="data.cardType ?? 'bug'" [open]="toolsOpen()"
+                              (countChange)="toolCount.set($event)" (closed)="toolsOpen.set(false)"
+                              (created)="onToolCreated($event)" (asked)="onToolAsked()"></app-specialist-tools>
       </div>
     </section>
 
