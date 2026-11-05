@@ -16,6 +16,9 @@ import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import { CaseAction, CaseFile, CaseMessage, CaseProposal, SPECIALIST_NAME, isRunActive } from './case-chat.model';
 import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-proposal-dialog.component';
 import { openCaseChat } from './open-case-chat';
+import { CaseComposer, CaseComposerService } from './case-composer.service';
+import { ComposerAction, ComposerSuggestion } from './composer-suggest';
+import { ComposerSuggestComponent } from './composer-suggest.component';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_FILES = 20;
@@ -31,7 +34,8 @@ const TYPING_EVERY_MS = 4000;
 @Component({
   selector: 'app-case-compact',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent],
+  imports: [DatePipe, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent,
+    ComposerSuggestComponent],
   templateUrl: './case-compact.component.html',
   styleUrls: ['./case-compact.component.css']
 })
@@ -49,6 +53,9 @@ export class CaseCompactComponent implements OnDestroy {
   private host = inject(ElementRef<HTMLElement>);
   readonly photos = inject(UserPhotoService);
   readonly specialistName = SPECIALIST_NAME;
+  private composerSvc = inject(CaseComposerService);
+  /** 0090: `/` comandos e ferramentas, `#` itens de trabalho (o mesmo do modal). */
+  readonly composer = new CaseComposer(this.composerSvc, () => this.card(), () => this.cardType());
 
   @ViewChild('scroll') private scrollRef?: ElementRef<HTMLDivElement>;
   @ViewChild('box') private boxRef?: ElementRef<HTMLTextAreaElement>;
@@ -128,16 +135,18 @@ export class CaseCompactComponent implements OnDestroy {
 
   // ── Abrir / enviar ──────────────────────────────────────────────────────────────────────────────
 
-  expand(): void {
+  expand(tool?: string): void {
     const c = this.card();
     if (!c) return;
-    openCaseChat(this.dialog, c, this.host.nativeElement.querySelector('.ck'), this.cardType())
+    openCaseChat(this.dialog, c, this.host.nativeElement.querySelector('.ck'), this.cardType(), tool)
       .afterClosed().subscribe((r) => { if (r?.openItem) this.itemOpened.emit(r.openItem); });
   }
 
   send(text?: string): void {
     const c = this.card();
     if (!c || this.sending()) return;
+    // 0090: comando digitado (`/clear`, `/cancelar-item-de-trabalho #n`, `/ferramenta`) não vai como mensagem.
+    if (text === undefined && !this.pending().length && this.runCommand(c)) return;
     const request = this.store.send(c, text);
     if (!request) return;
     this.sending.set(true);
@@ -156,6 +165,11 @@ export class CaseCompactComponent implements OnDestroy {
   }
 
   onKey(event: KeyboardEvent): void {
+    const action = this.composer.key(event, this.draft);
+    if (action !== undefined) {
+      if (action) this.applyComposer(action);
+      return;
+    }
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       this.send();
@@ -164,11 +178,80 @@ export class CaseCompactComponent implements OnDestroy {
 
   onInput(): void {
     const c = this.card();
+    this.onCaret();
     const now = Date.now();
     if (c && this.draft.trim() && now - this.lastTypingSent > TYPING_EVERY_MS) {
       this.lastTypingSent = now;
       this.api.typing(c).subscribe({ error: () => {} });
     }
+  }
+
+  /** Cursor andou (digitou, clicou, ←/→): a lista segue o que está no cursor. */
+  onCaret(event?: KeyboardEvent): void {
+    if (event && ['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape', 'Shift'].includes(event.key)) return;
+    const box = this.boxRef?.nativeElement;
+    this.composer.update(this.draft, box?.selectionStart ?? this.draft.length);
+  }
+
+  pickSuggestion(s: ComposerSuggestion): void {
+    const action = this.composer.pick(s, this.draft);
+    if (action) this.applyComposer(action);
+  }
+
+  private applyComposer(action: ComposerAction): void {
+    const box = this.boxRef?.nativeElement;
+    switch (action.kind) {
+      case 'insert':
+        this.draft = action.text;
+        if (box) {
+          box.value = action.text;
+          box.focus();
+          box.setSelectionRange(action.caret, action.caret);
+        }
+        this.composer.update(action.text, action.caret);
+        return;
+      case 'clear':
+        this.draft = '';
+        void this.clearConversation();
+        return;
+      case 'tool':
+        this.draft = '';
+        this.expand(action.key);
+        return;
+    }
+  }
+
+  private runCommand(card: string): boolean {
+    const cmd = this.composer.command(this.draft);
+    if (!cmd) return false;
+    switch (cmd.kind) {
+      case 'clear':
+        void this.clearConversation();
+        return true;
+      case 'tool':
+        this.draft = '';
+        this.expand(cmd.key);
+        return true;
+      case 'cancel':
+        if (!cmd.number) {
+          this.snack.open('Diga qual item: /cancelar-item-de-trabalho #123 (digite # para escolher).', 'Ok', { duration: 5000 });
+          return true;
+        }
+        void this.composerSvc.cancelItem(card, cmd.number, cmd.reason).then((ok) => { if (ok) this.draft = ''; });
+        return true;
+      case 'unknown':
+        this.snack.open(`Não existe o comando /${cmd.name} — digite / no começo da mensagem para ver os comandos e as ferramentas.`, 'Ok', { duration: 6000 });
+        return true;
+    }
+  }
+
+  private async clearConversation(): Promise<void> {
+    const c = this.card();
+    if (!c || !(await this.composerSvc.clear(c))) return;
+    this.draft = '';
+    this.clearReply();
+    this.stickToBottom = true;
+    this.store.reload(c, 0);
   }
 
   clearReply(): void {

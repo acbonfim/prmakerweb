@@ -31,6 +31,8 @@ import {
  *   rótulo viram o mesmo selo (textos já publicados ficam iguais aos novos).
  * - **Itens da engenharia reversa** (`reRefs`): `UC-121`, `revamp-kaizen#RN-012` → `<a class="re-ref"
  *   href="#re/<ref>">` (popover do item pela `appCodeRefHost`).
+ * - **Itens de trabalho** (`workRefs`, 0090): `#123` → `<a class="wi-ref" href="#wi/123">` (popover do item de
+ *   trabalho pela `appCodeRefHost`) — só na conversa do especialista.
  */
 
 export interface RenderMarkdownOptions {
@@ -40,6 +42,8 @@ export interface RenderMarkdownOptions {
   /** Liga os links dos itens da engenharia reversa (`UC-121`, `modulo#RN-012`) — só onde há um card
    *  (o popover consulta o item pelo card). Padrão: desligado (telas da própria engenharia reversa). */
   reRefs?: boolean;
+  /** 0090: `#123` vira link do item de trabalho (só na conversa do especialista; o plano não muda). */
+  workRefs?: boolean;
 }
 
 export interface Citation {
@@ -428,6 +432,58 @@ const reRefExtension: TokenizerAndRendererExtension = {
   },
 };
 
+// ── Itens de trabalho (0090) ─────────────────────────────────────────────────────────────────────
+// `#123` solto (não colado em letra/número, nem dentro de URL/caminho/entidade `&#64;`), até 7 dígitos.
+const WI_BEFORE = '(?<![\\p{L}\\p{N}_&#/\\\\.=?@-])';
+const WI_BODY = '#(\\d{1,7})(?![\\p{L}\\p{N}_])';
+const WI_SEARCH = new RegExp(`${WI_BEFORE}${WI_BODY}`, 'gu');
+const WI_AT_START = new RegExp(`^${WI_BODY}`, 'u');
+
+/** Números de item de trabalho (`#123`) num texto puro, na ordem (com repetição). */
+export function findWorkRefs(text: string | null | undefined): number[] {
+  if (!text) return [];
+  return [...text.matchAll(new RegExp(WI_SEARCH.source, WI_SEARCH.flags))].map(m => Number(m[1])).filter(n => n > 0);
+}
+
+/** href interno do item de trabalho: `#wi/123`. */
+export function workRefHref(n: number): string {
+  return `#wi/${n}`;
+}
+
+/** `#wi/123` → 123, ou null. */
+export function parseWorkHref(href: string | null | undefined): number | null {
+  const m = /^#wi\/(\d{1,7})$/.exec((href ?? '').trim());
+  const n = m ? Number(m[1]) : 0;
+  return n > 0 ? n : null;
+}
+
+interface WorkRefToken extends Tokens.Generic {
+  type: 'workRef';
+  number: number;
+}
+
+const workRefExtension: TokenizerAndRendererExtension = {
+  name: 'workRef',
+  level: 'inline',
+  start(src) {
+    if (this.lexer.state.inLink) return undefined;
+    const m = new RegExp(WI_SEARCH.source, 'u').exec(src);
+    return m ? m.index : undefined;
+  },
+  tokenizer(src) {
+    if (this.lexer.state.inLink) return undefined;
+    const m = WI_AT_START.exec(src);
+    const n = m ? Number(m[1]) : 0;
+    if (!m || n <= 0) return undefined;
+    const token: WorkRefToken = { type: 'workRef', raw: m[0], number: n };
+    return token;
+  },
+  renderer(token) {
+    const n = (token as WorkRefToken).number;
+    return `<a class="wi-ref" href="${workRefHref(n)}" title="Ver o item de trabalho #${n}">#${n}</a>`;
+  },
+};
+
 /** Primeira coluna só de números (`1`, `2.`, `#3`) → coluna estreita e esmaecida. */
 const NUMERIC_CELL = /^\s*#?\d{1,4}[.)º]?\s*$/;
 
@@ -520,13 +576,14 @@ function rendererExtension(codeRefs: boolean): MarkedExtension {
 
 const instances = new Map<string, Marked>();
 
-function markedFor(codeRefs: boolean, reRefs: boolean): Marked {
-  const key = `${codeRefs ? 1 : 0}${reRefs ? 1 : 0}`;
+function markedFor(codeRefs: boolean, reRefs: boolean, workRefs: boolean): Marked {
+  const key = `${codeRefs ? 1 : 0}${reRefs ? 1 : 0}${workRefs ? 1 : 0}`;
   let md = instances.get(key);
   if (!md) {
     const extensions: TokenizerAndRendererExtension[] = [calloutExtension];
     if (codeRefs) extensions.push(citeExtension);
     if (reRefs) extensions.push(reRefExtension);
+    if (workRefs) extensions.push(workRefExtension);
     md = new Marked({ gfm: true, breaks: true, async: false }, { extensions }, rendererExtension(codeRefs));
     instances.set(key, md);
   }
@@ -536,5 +593,5 @@ function markedFor(codeRefs: boolean, reRefs: boolean): Marked {
 /** Markdown → HTML (gfm + quebras de linha) com as extensões do PRMake. */
 export function renderMarkdown(text: string | null | undefined, options: RenderMarkdownOptions): string {
   if (!text) return '';
-  return markedFor(!!options.codeRefs, !!options.reRefs).parse(text, { async: false }) as string;
+  return markedFor(!!options.codeRefs, !!options.reRefs, !!options.workRefs).parse(text, { async: false }) as string;
 }

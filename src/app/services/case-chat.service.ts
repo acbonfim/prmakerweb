@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { CaseAction, CaseChat, CaseFile, CaseMessage, CasePoint, CaseProposal } from '../components/case-chat/case-chat.model';
 import { ExecutionRequest } from '../components/execution-plan/execution-queue.model';
+import { WorkItem } from '../components/work-items/work-item.model';
 
 export interface PostCaseMessage {
   text?: string;
@@ -51,6 +52,16 @@ export class CaseChatService {
 
   toPlan(card: string, id: string, text?: string): Observable<unknown> {
     return this.http.post(this.url(card, `/messages/${id}/to-plan`), { text: text ?? null });
+  }
+
+  /** 0090 (`/clear`): limpa a conversa para todos; o especialista recomeça do zero. */
+  clear(card: string): Observable<void> {
+    return this.http.post<void>(this.url(card, '/clear'), {});
+  }
+
+  /** 0090 (`/cancelar-item-de-trabalho #n`): cancela (e, com `undo`, desfaz) um item deste card e avisa na conversa. */
+  cancelWorkItem(card: string, number: number, undo: boolean, reason?: string | null): Observable<WorkItem> {
+    return this.http.post<WorkItem>(this.url(card, `/work-items/${number}/cancel`), { undo, reason: reason || null });
   }
 
   typing(card: string): Observable<void> {

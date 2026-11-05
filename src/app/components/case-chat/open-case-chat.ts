@@ -8,12 +8,17 @@ import { CaseChatDialogComponent, CaseChatDialogData, CaseChatDialogResult } fro
  * lugar — o mesmo efeito da tela cheia do plano e da linha do tempo (FullscreenPanel). A animação mora em
  * `helpers/dialog-morph.ts` (0085: o modal do card usa a mesma).
  */
-export function openCaseChat(dialog: MatDialog, card: string, origin?: HTMLElement | null, cardType: 'bug' | 'user-story' = 'bug'): MatDialogRef<CaseChatDialogComponent, CaseChatDialogResult> {
+export function openCaseChat(dialog: MatDialog, card: string, origin?: HTMLElement | null, cardType: 'bug' | 'user-story' = 'bug',
+  tool?: string | null): MatDialogRef<CaseChatDialogComponent, CaseChatDialogResult> {
   const narrow = window.matchMedia('(max-width: 640px)').matches;
   const open = dialog.openDialogs.find((d) => d.componentInstance instanceof CaseChatDialogComponent) as MatDialogRef<CaseChatDialogComponent, CaseChatDialogResult> | undefined;
-  if (open && open.componentInstance.data.card === card) return open;
+  if (open && open.componentInstance.data.card === card) {
+    if (tool) open.componentInstance.openTool(tool);
+    return open;
+  }
   const morph = canMorphFrom(origin) ? origin : null;
-  const data: CaseChatDialogData = { card, cardType };
+  // 0090: `tool` = abre já no formulário da ferramenta (o `/ferramenta` da conversa compacta).
+  const data: CaseChatDialogData = { card, cardType, ...(tool ? { tool } : {}) };
   const ref = dialog.open(CaseChatDialogComponent, {
     data,
     width: narrow ? '100vw' : '1280px',

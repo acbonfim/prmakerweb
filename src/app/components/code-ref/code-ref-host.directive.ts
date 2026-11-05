@@ -9,11 +9,11 @@ import {
   CODE_CHANGES, CodeRefHead, CodeRefTarget, changeMeta, citationText, linesLabel, matchCitation, parseCodeHref,
 } from './code-ref.model';
 import type { CodeRefPopoverComponent, CodeRefTab } from './code-ref-popover.component';
-import type { ReItemPopoverComponent } from './re-item-popover.component';
-import { parseReHref } from '../../helpers/markdown-ext';
+import { parseReHref, parseWorkHref } from '../../helpers/markdown-ext';
 
 const LINK_SELECTOR = 'a.code-ref, a.code-cite';
 const RE_SELECTOR = 'a.re-ref';
+const WI_SELECTOR = 'a.wi-ref';
 const IMG_SELECTOR = 'img.md-attachment';
 const CHANGE_CLASSES = [...CODE_CHANGES.map(c => `code-ref--${c}`), 'code-ref--missing', 'code-cite--missing'];
 const SHEET_MAX_WIDTH = 600;
@@ -36,6 +36,7 @@ let openPopover: { close: () => void } | null = null;
  *   volta ao link; um popover por vez.
  * - **Clique** em `a.re-ref` (`UC-121`, `modulo#RN-012` — 0076) → popover do item da engenharia
  *   reversa, no mesmo overlay/folha inferior.
+ * - **Clique** em `a.wi-ref` (`#123` na conversa do especialista — 0090) → popover do item de trabalho.
  * - **Decora** os links depois de cada render (MutationObserver): classe `code-ref--<mudança>` e title
  *   "Alterar · caminho:linhas" a partir das cabeças do card (carregadas só quando há link na tela);
  *   citação sem ref ganha `code-cite--missing`.
@@ -72,7 +73,7 @@ export class CodeRefHostDirective {
   private seenImgs = new WeakSet<HTMLImageElement>();
 
   private overlayRef: OverlayRef | null = null;
-  private popoverRef: ComponentRef<CodeRefPopoverComponent | ReItemPopoverComponent> | null = null;
+  private popoverRef: ComponentRef<unknown> | null = null;
   private popoverSubs: { unsubscribe(): void }[] = [];
   private anchor: HTMLElement | null = null;
 
@@ -132,6 +133,16 @@ export class CodeRefHostDirective {
   onClick(event: MouseEvent): void {
     if ((event as MouseEvent & { __codeRef?: boolean }).__codeRef) return; // diretiva aninhada já tratou
     const el = event.target as HTMLElement | null;
+    const wiLink = el?.closest<HTMLAnchorElement>(WI_SELECTOR);
+    if (wiLink && this.host.nativeElement.contains(wiLink)) {
+      const n = parseWorkHref(wiLink.getAttribute('href'));
+      if (!n) return;
+      (event as MouseEvent & { __codeRef?: boolean }).__codeRef = true;
+      event.preventDefault();
+      if (this.anchor === wiLink && this.overlayRef) { this.closePopover(true); return; }
+      void this.openWorkItem(wiLink, n);
+      return;
+    }
     const reLink = el?.closest<HTMLAnchorElement>(RE_SELECTOR);
     if (reLink && this.host.nativeElement.contains(reLink)) {
       const ref = parseReHref(reLink.getAttribute('href'));
@@ -199,6 +210,20 @@ export class CodeRefHostDirective {
     this.track(link, ref, comp, [comp.instance.closed.subscribe(() => this.closePopover(true))]);
   }
 
+  /** 0090: popover do item de trabalho (`#123` na conversa do especialista). */
+  private async openWorkItem(link: HTMLElement, number: number): Promise<void> {
+    openPopover?.close();
+    const card = this.cardKey();
+    const { WorkItemPopoverComponent } = await import('../work-items/work-item-popover.component');
+    if (this.destroyed || !link.isConnected) return;
+    const { ref, sheet } = this.createOverlay(link, 'wi-item-pane');
+    const comp = ref.attach(new ComponentPortal(WorkItemPopoverComponent, null, this.injector));
+    comp.setInput('card', card);
+    comp.setInput('number', number);
+    comp.setInput('mode', sheet ? 'sheet' : 'popover');
+    this.track(link, ref, comp, [comp.instance.closed.subscribe(() => this.closePopover(true))]);
+  }
+
   /** Overlay ancorado no link (folha inferior em tela estreita). */
   private createOverlay(link: HTMLElement, pane: string): { ref: OverlayRef; sheet: boolean } {
     const sheet = window.innerWidth < SHEET_MAX_WIDTH;
@@ -221,7 +246,7 @@ export class CodeRefHostDirective {
   }
 
   /** Guarda o popover aberto (um por vez), reposiciona ao mudar de tamanho e fecha com Esc/fora. */
-  private track(link: HTMLElement, ref: OverlayRef, comp: ComponentRef<CodeRefPopoverComponent | ReItemPopoverComponent>,
+  private track(link: HTMLElement, ref: OverlayRef, comp: ComponentRef<unknown>,
                 subs: { unsubscribe(): void }[]): void {
     this.overlayRef = ref;
     this.popoverRef = comp;

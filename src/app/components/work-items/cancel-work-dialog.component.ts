@@ -12,6 +12,8 @@ export interface CancelWorkDialogData {
   title: string;
   planId?: string;
   number?: number;
+  /** 0090: "Desfazer o que já foi feito" já marcado (o item tem sub-tarefa concluída). */
+  undoDefault?: boolean;
 }
 
 /** `undefined` = desistiu (Voltar/fechar). */
@@ -80,7 +82,7 @@ export type CancelWorkDialogResult = { undo: boolean; reason?: string } | undefi
 export class CancelWorkDialogComponent {
   readonly data = inject<CancelWorkDialogData>(MAT_DIALOG_DATA);
   readonly ref = inject(MatDialogRef<CancelWorkDialogComponent, CancelWorkDialogResult>);
-  readonly undo = signal(false);
+  readonly undo = signal(!!this.data.undoDefault);
   readonly num = formatWorkNumber(this.data.number);
   reason = '';
 
