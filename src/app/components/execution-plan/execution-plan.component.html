@@ -395,7 +395,7 @@
       } @else if (!plan() && activeRequest(); as r) {
         <!-- 0087: o Claude já foi chamado e o plano ainda não nasceu — um estado contínuo (na fila → começando → plano),
              sem voltar ao "nenhum plano". Quando o plano chega, esta área é só trocada pelo plano. -->
-        <div class="plan__state plan__live" role="status" aria-live="polite">
+        <div class="plan__state plan__waiting" role="status" aria-live="polite">
           <span class="plan__live-bot" [class.plan__live-bot--queued]="r.status === 'queued'" aria-hidden="true">
             <span class="plan__live-ring"></span>
             <mat-icon>{{ r.status === 'queued' ? 'hourglass_top' : 'smart_toy' }}</mat-icon>
