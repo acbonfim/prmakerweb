@@ -7,6 +7,8 @@ import {
   fileMeta,
   filePreviewKind,
   fileSizeLabel,
+  CASE_FILES_KEY,
+  fileSourceChip,
   fileTextAsMarkdown,
   filesCountLabel,
   filesOfTask,
@@ -131,5 +133,37 @@ describe('0087 — arquivos do card por item', () => {
     expect(counts.get(10)).toBe(2);
     expect(counts.get(11)).toBe(1);
     expect(counts.get(0)).toBe(2);
+  });
+
+  it('origem dos arquivos do plano: evidência do DevOps e anexo de comentário ganham selo próprio', () => {
+    const list = normalizeFiles([
+      { id: 'e', name: 'ev01-descricao-image.png', kind: 'image', source: 'plan', origin: 'evidence' },
+      { id: 'c', name: 'print.png', kind: 'image', source: 'plan', origin: 'comment' },
+      { id: 'p', name: 'analise-us.md', kind: 'analysis', source: 'plan' },
+      { id: 'i', name: 'resumo.md', kind: 'text', origin: 'evidence' }
+    ]);
+    const by = new Map(list.map((x) => [x.id, x]));
+    expect(by.get('e')!.origin).toBe('evidence');
+    expect(by.get('e')!.kind).toBe('attachment');
+    expect(by.get('i')!.origin).toBeNull();           // origem só vale para os do plano
+    expect(fileSourceChip(by.get('e')!)!.label).toBe('DevOps');
+    expect(fileSourceChip(by.get('c')!)!.label).toBe('comentário');
+    expect(fileSourceChip(by.get('p')!)!.label).toBe('plano');
+    expect(fileSourceChip(by.get('i')!)).toBeNull();
+    expect(fileMeta(by.get('e')!)).toContain('do DevOps');
+  });
+
+  it('arquivos da conversa do especialista: origem própria e filtro separado dos planos sem item', () => {
+    const list = normalizeFiles([
+      { id: 'c1', name: 'print.png', kind: 'attachment', source: 'case', workItemNumber: 0, contentUrl: 'CaseChat/77988/files/c1/content' },
+      { id: 'p1', name: 'antiga.md', kind: 'analysis', source: 'plan', workItemNumber: 0 },
+      { id: 'i1', name: 'resumo.md', kind: 'text', workItemNumber: 34 }
+    ]);
+    expect(list.find((x) => x.id === 'c1')!.source).toBe('case');
+    expect(filesOfItem(list, CASE_FILES_KEY).map((x) => x.id)).toEqual(['c1']);
+    expect(filesOfItem(list, 0).map((x) => x.id)).toEqual(['p1']);
+    expect(countFilesByItem(list).get(CASE_FILES_KEY)).toBe(1);
+    expect(fileSourceChip(list.find((x) => x.id === 'c1')!)!.label).toBe('especialista');
+    expect(resolveFileContentUrl('https://api/api/v1/', 0, list.find((x) => x.id === 'c1')!)).toBe('https://api/api/v1/CaseChat/77988/files/c1/content');
   });
 });

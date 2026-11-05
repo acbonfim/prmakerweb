@@ -5,7 +5,10 @@
  */
 
 export type WorkItemFileKind = 'script' | 'analysis' | 'ticket' | 'data' | 'attachment' | 'text';
-export type WorkItemFileSource = 'item' | 'plan';
+/** `case` = arquivo da conversa do Especialista do caso (só na lista do card). */
+export type WorkItemFileSource = 'item' | 'plan' | 'case';
+/** Só nos do plano: evidência do card no DevOps ou anexo de comentário do plano (null = gravado pela skill/tela). */
+export type WorkItemFileOrigin = 'evidence' | 'comment';
 
 export interface WorkItemFile {
   id: string;
@@ -19,6 +22,7 @@ export interface WorkItemFile {
   /** Sub-tarefa que gerou o arquivo. */
   taskNumber?: number | null;
   source?: WorkItemFileSource | null;
+  origin?: WorkItemFileOrigin | null;
   /** Caminho do conteúdo (relativo à API) — obrigatório para os do plano. */
   contentUrl?: string | null;
   description?: string | null;
@@ -90,11 +94,12 @@ export function normalizeFiles(raw: unknown): WorkItemFile[] {
   const out: WorkItemFile[] = [];
   for (const r of list as Partial<WorkItemFile>[]) {
     if (!r || r.id == null || !`${r.name ?? ''}`.trim()) continue;
-    const source: WorkItemFileSource = r.source === 'plan' ? 'plan' : 'item';
+    const source: WorkItemFileSource = r.source === 'plan' || r.source === 'case' ? r.source : 'item';
     const key = `${source}:${r.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ ...r, id: `${r.id}`, name: `${r.name}`.trim(), kind: normalizeFileKind(r.kind), source } as WorkItemFile);
+    const origin = source === 'plan' && (r.origin === 'evidence' || r.origin === 'comment') ? r.origin : null;
+    out.push({ ...r, id: `${r.id}`, name: `${r.name}`.trim(), kind: normalizeFileKind(r.kind), source, origin } as WorkItemFile);
   }
   return out.sort(compareFiles);
 }
@@ -107,23 +112,46 @@ function compareFiles(a: WorkItemFile, b: WorkItemFile): number {
   return a.name.localeCompare(b.name);
 }
 
+export interface FileSourceChip {
+  label: string;
+  tooltip: string;
+  icon: string;
+}
+
+/** Selo de onde veio o arquivo: evidência do DevOps, anexo de comentário, plano ou conversa do especialista; do item = null. */
+export function fileSourceChip(f: Pick<WorkItemFile, 'source' | 'origin'>): FileSourceChip | null {
+  if (f.source === 'case') return { label: 'especialista', tooltip: 'Da conversa com o Especialista do caso', icon: 'psychology' };
+  if (f.source !== 'plan') return null;
+  if (f.origin === 'evidence') return { label: 'DevOps', tooltip: 'Evidência do card no Azure DevOps (anexo ou imagem da descrição/discussion)', icon: 'cloud_download' };
+  if (f.origin === 'comment') return { label: 'comentário', tooltip: 'Anexado num comentário do plano', icon: 'chat_bubble_outline' };
+  return { label: 'plano', tooltip: 'Arquivo do plano ligado ao item', icon: 'account_tree' };
+}
+
 /** Só os arquivos de uma sub-tarefa (`taskNumber`); sem filtro devolve todos. */
 export function filesOfTask(files: readonly WorkItemFile[], taskNumber?: number | null): WorkItemFile[] {
   if (taskNumber == null) return files.slice();
   return files.filter((f) => f.taskNumber != null && Number(f.taskNumber) === Number(taskNumber));
 }
 
-/** 0087: só os arquivos de um item (`0` = os de planos sem item); sem filtro (`undefined`) devolve todos. */
-export function filesOfItem(files: readonly WorkItemFile[], itemNumber?: number | null): WorkItemFile[] {
-  if (itemNumber === undefined || itemNumber === null) return files.slice();
-  return files.filter((f) => Number(f.workItemNumber ?? 0) === Number(itemNumber));
+/** Chave do filtro por item para os arquivos da conversa do especialista (não são de item nem de plano). */
+export const CASE_FILES_KEY = -1;
+
+/** Chave do arquivo no filtro por item: o número do item, `0` = plano sem item, `CASE_FILES_KEY` = conversa do especialista. */
+export function fileItemKey(f: Pick<WorkItemFile, 'source' | 'workItemNumber'>): number {
+  return f.source === 'case' ? CASE_FILES_KEY : Number(f.workItemNumber ?? 0);
 }
 
-/** 0087: quantos arquivos cada item tem (chave = número do item; 0 = sem item). */
+/** 0087: só os arquivos de um item (`0` = os de planos sem item, `-1` = da conversa); sem filtro (`undefined`) devolve todos. */
+export function filesOfItem(files: readonly WorkItemFile[], itemNumber?: number | null): WorkItemFile[] {
+  if (itemNumber === undefined || itemNumber === null) return files.slice();
+  return files.filter((f) => fileItemKey(f) === Number(itemNumber));
+}
+
+/** 0087: quantos arquivos cada item tem (chave = `fileItemKey`). */
 export function countFilesByItem(files: readonly WorkItemFile[]): Map<number, number> {
   const map = new Map<number, number>();
   for (const f of files) {
-    const n = Number(f.workItemNumber ?? 0);
+    const n = fileItemKey(f);
     map.set(n, (map.get(n) ?? 0) + 1);
   }
   return map;
@@ -167,7 +195,8 @@ export function fileMeta(f: WorkItemFile, formatNumber: (n: number) => string = 
     }
   }
   if (f.taskNumber != null) parts.push(`sub-tarefa ${formatNumber(Number(f.taskNumber))}`);
-  if (withSource && f.source === 'plan') parts.push('do plano');
+  if (withSource && f.source === 'plan') parts.push(f.origin === 'evidence' ? 'do DevOps' : f.origin === 'comment' ? 'de comentário' : 'do plano');
+  if (withSource && f.source === 'case') parts.push('da conversa do especialista');
   return parts.join(' · ');
 }
 

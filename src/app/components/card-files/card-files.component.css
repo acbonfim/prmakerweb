@@ -58,27 +58,12 @@
 .cfd__toolbar { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px 18px; border-bottom: 1px solid rgba(255,255,255,.07); }
 .cfd__toolbar .mat-mdc-button-base { height: 32px; font-size: 13px; }
 .cfd__toolbar .mat-icon { font-size: 17px; width: 17px; height: 17px; margin-right: 4px; }
-.cfd__content { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 14px 18px 18px; display: flex; flex-direction: column; }
+.cfd__content { flex: 1 1 auto; min-height: 0; overflow: hidden; overscroll-behavior: contain; display: flex; flex-direction: column; }
+.cfd__viewer { flex: 1 1 auto; min-height: 0; animation: cf-in .2s ease both; }
 .cf__state { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 30px; color: var(--cf-muted); font-size: 13px; text-align: center; }
 .cf__state--err { color: #f2b8b5; }
 .cf__state .mat-icon { font-size: 30px; width: 30px; height: 30px; }
 
-/* Conteúdo renderizado */
-.cf-md { max-width: 920px; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; animation: cf-in .2s ease both; }
-.cf-md ::ng-deep > :first-child { margin-top: 0; }
-.cf-md ::ng-deep > :last-child { margin-bottom: 0; }
-.cf-md ::ng-deep h1, .cf-md ::ng-deep h2 { margin: 18px 0 8px; font-size: 16px; font-weight: 600; }
-.cf-md ::ng-deep h3, .cf-md ::ng-deep h4 { margin: 14px 0 6px; font-size: 14px; font-weight: 600; }
-.cf-md ::ng-deep p { margin: 0 0 10px; }
-.cf-md ::ng-deep ul, .cf-md ::ng-deep ol { margin: 0 0 10px; padding-left: 1.4em; }
-.cf-md ::ng-deep code { color: #e6edf3; padding: 1px 5px; border-radius: 4px; background: rgba(110,118,129,.22); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; }
-.cf-md ::ng-deep pre { padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,.3); overflow-x: auto; }
-.cf-md ::ng-deep pre code { padding: 0; background: none; }
-.cf-md ::ng-deep a { color: var(--mat-sys-primary); }
-.cf-md ::ng-deep hr { border: 0; border-top: 1px solid rgba(255,255,255,.1); margin: 14px 0; }
-.cf-md ::ng-deep img { max-width: 100%; height: auto; }
-.cf-md ::ng-deep table { border-collapse: collapse; margin: 0 0 10px; }
-.cf-md ::ng-deep th, .cf-md ::ng-deep td { padding: 4px 8px; border: 1px solid rgba(255,255,255,.12); }
 
 /* Celular: lista OU arquivo (folha cheia) */
 @media (max-width: 720px) {
@@ -91,7 +76,5 @@
   .cf__back { display: inline-flex; }
   .cfd__head { padding: 10px 14px 6px; }
   .cfd__toolbar { padding: 0 10px 10px 14px; }
-  .cfd__content { padding: 12px 14px 16px; }
-  .cf-md { font-size: 15px; }
 }
-@media (prefers-reduced-motion: reduce) { .cf, .cf-md { animation: none; } .cf__spin { animation: none; } .cf__tab, .cfi { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .cf, .cfd__viewer { animation: none; } .cf__spin { animation: none; } .cf__tab, .cfi { transition: none; } }

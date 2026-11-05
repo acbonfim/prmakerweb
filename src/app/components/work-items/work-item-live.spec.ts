@@ -8,7 +8,7 @@ import {
   isExecutingItem,
   pullRequestLinks,
   requestStatusLabel,
-  sortExecutingFirst,
+  sortByCreation,
   taskOutputLinks,
   waitCodeLabel
 } from './work-item.model';
@@ -31,11 +31,17 @@ describe('sessão de execução — regras puras (0085 ajustes)', () => {
     expect(isExecutingItem(null)).toBeFalse();
   });
 
-  it('itens em execução no topo (por número), o resto na ordem recebida', () => {
-    const list = [item({ number: 1 }), item({ number: 9, status: 'running' }), item({ number: 3, status: 'completed' }), item({ number: 5, status: 'queued' })];
-    expect(sortExecutingFirst(list).map((x) => x.number)).toEqual([5, 9, 1, 3]);
-    expect(executingNumbers(list)).toEqual([5, 9]);
-    expect(sortExecutingFirst([])).toEqual([]);
+  it('lista por criação (mais antigo primeiro), item em execução não sobe; sem data vale o número', () => {
+    const list = [
+      item({ number: 36, status: 'running', createdAt: '2026-11-05T20:27:00Z' }),
+      item({ number: 32, status: 'reverted', createdAt: '2026-11-05T20:20:00Z' }),
+      item({ number: 34, status: 'completed', createdAt: '2026-11-05T20:25:00Z' }),
+      item({ number: 5, status: 'queued', createdAt: '2026-11-05T20:30:00Z' })
+    ];
+    expect(sortByCreation(list).map((x) => x.number)).toEqual([32, 34, 36, 5]);
+    expect(executingNumbers(list)).toEqual([5, 36]);
+    expect(sortByCreation([item({ number: 9 }), item({ number: 3 })]).map((x) => x.number)).toEqual([3, 9]);
+    expect(sortByCreation([])).toEqual([]);
   });
 
   it('motivo da espera traduzido; código desconhecido não some', () => {

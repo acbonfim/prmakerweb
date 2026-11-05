@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, Signal, ViewChild, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, OnDestroy, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -11,8 +11,7 @@ import {
   saveBlob
 } from '../../services/execution-plan.service';
 import { CliipboardService } from '../../services/cliipboard.service';
-import { PlanMarkdownPipe } from './plan-markdown.pipe';
-import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
+import { FileViewKind, FileViewerComponent, fileViewKind } from '../file-viewer/file-viewer.component';
 import { ARTIFACT_GROUPS, ArtifactGroup, ExecutionArtifact } from './execution-plan.model';
 
 export interface PlanFilesDialogData {
@@ -25,41 +24,22 @@ export interface PlanFilesDialogData {
   stepTitle: (key: string) => string | null;
 }
 
-type PreviewKind = 'code' | 'markdown' | 'json' | 'text' | 'image' | 'none';
-
 interface Preview {
   artifact: ExecutionArtifact;
-  kind: PreviewKind;
-  text?: string;
-  html?: string;
-  imageUrl?: string;
+  kind: FileViewKind;
   blob: Blob;
 }
 
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
-const CODE_EXT = /\.(sql|sh|bash|py|ps1|cs|js|ts|xml|ya?ml)$/i;
-const TEXT_EXT = /\.(txt|log|csv|tsv)$/i;
-const MAX_TEXT_PREVIEW = 2 * 1024 * 1024;
-
-/** Palavras-chave destacadas nos .sql. */
-const SQL_KEYWORDS = new Set((
-  'select from where and or not in is null as join inner left right outer full cross on group by order having ' +
-  'insert into values update set delete merge using when matched then else end case begin commit rollback tran ' +
-  'transaction declare exec execute create alter drop table view index procedure function trigger top distinct ' +
-  'union all exists like between with nolock go if while return print cast convert coalesce isnull count sum avg ' +
-  'min max over partition asc desc output inserted deleted primary key foreign references default constraint'
-).split(' '));
-
 /**
- * Visualizador dos arquivos do plano (feature 0023): lista por tipo à esquerda, prévia à direita —
- * SQL/código com números de linha e destaque, markdown renderizado (ou o fonte), JSON formatado,
- * imagem com zoom. Copiar, baixar (nome original, ex.: .sql), abrir a imagem em nova aba e baixar
+ * Visualizador dos arquivos do plano (feature 0023): lista por tipo à esquerda, prévia à direita
+ * (`app-file-viewer` — o mesmo da aba Arquivos da Bancada): SQL/código com números de linha e destaque,
+ * markdown renderizado (ou o fonte), JSON formatado, imagem com zoom. Copiar, baixar (nome original, ex.: .sql), abrir a imagem em nova aba e baixar
  * tudo (.zip). O conteúdo vem pelo HttpClient (x-api-key) como blob.
  */
 @Component({
   selector: 'app-plan-files-dialog',
   standalone: true,
-  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective],
+  imports: [MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, FileViewerComponent],
   template: `
     <div class="pf">
       <div class="pf__header">
@@ -105,61 +85,17 @@ const SQL_KEYWORDS = new Set((
           } @else if (error()) {
             <div class="pf__state pf__state--error"><mat-icon>error_outline</mat-icon> {{ error() }}</div>
           } @else if (preview(); as p) {
-            <div class="pf__bar">
-              <span class="pf__bar-name" [title]="p.artifact.name">{{ p.artifact.name }}</span>
-              @if (p.artifact.description) { <span class="pf__bar-desc">{{ p.artifact.description }}</span> }
-              <span class="pf__spacer"></span>
-              @if (p.kind === 'markdown') {
-                <button mat-button (click)="showSource.set(!showSource())">
-                  <mat-icon>{{ showSource() ? 'visibility' : 'code' }}</mat-icon>{{ showSource() ? 'Renderizado' : 'Fonte' }}
-                </button>
-              }
-              @if (p.kind === 'image') {
-                <button mat-icon-button (click)="zoomOut()" matTooltip="Diminuir" aria-label="Diminuir"><mat-icon>zoom_out</mat-icon></button>
-                <button mat-button class="pf__zoom" (click)="toggleFit()" [matTooltip]="fit() ? 'Tamanho real' : 'Ajustar à tela'">
-                  {{ fit() ? 'Ajustar' : (zoom() * 100).toFixed(0) + '%' }}
-                </button>
-                <button mat-icon-button (click)="zoomIn()" matTooltip="Aumentar" aria-label="Aumentar"><mat-icon>zoom_in</mat-icon></button>
-                <button mat-icon-button (click)="openImage()" matTooltip="Tela cheia" aria-label="Ver em tela cheia"><mat-icon>fullscreen</mat-icon></button>
-              }
-              @if (p.text !== undefined || p.kind === 'image') {
-                <button mat-icon-button (click)="copy()" [matTooltip]="p.kind === 'image' ? 'Copiar imagem' : 'Copiar conteúdo'" aria-label="Copiar">
-                  <mat-icon>content_copy</mat-icon>
-                </button>
-              }
-              <button mat-flat-button color="primary" (click)="download()"><mat-icon>download</mat-icon> Baixar</button>
-            </div>
-
-            <div class="pf__content" #content>
-              @switch (p.kind) {
-                @case ('image') {
-                  <div class="pf__image" [class.pf__image--fit]="fit()">
-                    <img [src]="p.imageUrl" [alt]="p.artifact.name" [style.width]="fit() ? null : (naturalWidth() * zoom()) + 'px'"
-                         (load)="onImageLoad($event)" (click)="toggleFit()" />
-                  </div>
+            <app-file-viewer [name]="p.artifact.name" [contentType]="p.artifact.contentType" [kind]="p.artifact.kind"
+                             [description]="p.artifact.description" [blob]="p.blob" [card]="data.cardNumber" [bar]="true" [actions]="true">
+              <ng-container viewerActions>
+                @if (p.kind !== 'none') {
+                  <button mat-icon-button (click)="copy()" [matTooltip]="p.kind === 'image' ? 'Copiar imagem' : 'Copiar conteúdo'" aria-label="Copiar">
+                    <mat-icon>content_copy</mat-icon>
+                  </button>
                 }
-                @case ('markdown') {
-                  @if (showSource()) {
-                    <pre class="pf__code">@for (line of lines(); track $index) {<span class="pf__line">{{ line }}</span>}</pre>
-                  } @else {
-                    <div class="pf__md" [appCodeRefHost]="data.cardNumber" [innerHTML]="p.text | planMarkdown:'card'"></div>
-                  }
-                }
-                @case ('code') {
-                  <pre class="pf__code">@for (line of highlighted(); track $index) {<span class="pf__line" [innerHTML]="line"></span>}</pre>
-                }
-                @case ('none') {
-                  <div class="pf__state">
-                    <mat-icon>insert_drive_file</mat-icon>
-                    Pré-visualização indisponível para este tipo de arquivo ({{ p.artifact.contentType }}).
-                    <button mat-stroked-button (click)="download()"><mat-icon>download</mat-icon> Baixar</button>
-                  </div>
-                }
-                @default {
-                  <pre class="pf__code">@for (line of lines(); track $index) {<span class="pf__line">{{ line }}</span>}</pre>
-                }
-              }
-            </div>
+                <button mat-flat-button color="primary" (click)="download()"><mat-icon>download</mat-icon> Baixar</button>
+              </ng-container>
+            </app-file-viewer>
           } @else {
             <div class="pf__state"><mat-icon>touch_app</mat-icon> Escolha um arquivo.</div>
           }
@@ -196,34 +132,6 @@ const SQL_KEYWORDS = new Set((
     .pf__item-meta { font-size: 11px; color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent); }
     .pf__empty { padding: 16px; font-size: 13px; color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent); }
     .pf__preview { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-    .pf__bar { flex: none; display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,.06); flex-wrap: wrap; }
-    .pf__bar-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
-    .pf__bar-desc { font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
-    .pf__zoom.mat-mdc-button { min-width: 64px; font-variant-numeric: tabular-nums; }
-    .pf__content { flex: 1 1 auto; min-height: 0; overflow: auto; }
-    .pf__content:fullscreen { background: #111; display: flex; align-items: center; justify-content: center; }
-    .pf__content:fullscreen img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
-    .pf__code { margin: 0; padding: 12px 0; font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 12.5px; line-height: 1.55;
-      counter-reset: line; white-space: pre; tab-size: 4; }
-    .pf__line { display: block; padding: 0 16px 0 0; counter-increment: line; }
-    .pf__line::before { content: counter(line); display: inline-block; width: 44px; margin-right: 14px; padding-right: 8px; text-align: right;
-      color: color-mix(in srgb, var(--mat-sys-on-surface) 30%, transparent); border-right: 1px solid rgba(255,255,255,.06); user-select: none; }
-    .pf__line:hover { background: rgba(255,255,255,.03); }
-    .pf__code ::ng-deep .k { color: #ff7b72; font-weight: 600; }
-    .pf__code ::ng-deep .s { color: #a5d6ff; }
-    .pf__code ::ng-deep .c { color: #8b949e; font-style: italic; }
-    .pf__code ::ng-deep .n { color: #79c0ff; }
-    .pf__md { padding: 16px 22px; font-size: 14px; line-height: 1.6; max-width: 900px; }
-    .pf__md ::ng-deep pre { padding: 8px 10px; border-radius: 6px; background: rgba(0,0,0,.3); overflow-x: auto; }
-    .pf__md ::ng-deep code { color: inherit; font-family: 'Courier New', monospace; font-size: 12.5px; }
-    .pf__code { color: var(--mat-sys-on-surface); }
-    .pf__md ::ng-deep a { color: var(--mat-sys-primary); }
-    .pf__image { min-height: 100%; display: flex; align-items: flex-start; justify-content: center; padding: 12px;
-      background: repeating-conic-gradient(rgba(255,255,255,.04) 0% 25%, transparent 0% 50%) 50% / 20px 20px; }
-    .pf__image img { display: block; cursor: zoom-in; image-rendering: auto; }
-    .pf__image--fit { height: 100%; box-sizing: border-box; align-items: center; }
-    .pf__image--fit img { max-width: 100%; max-height: 100%; object-fit: contain; }
     .pf__state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px;
       text-align: center; font-size: 13px; color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); }
     .pf__state--error { color: var(--mat-sys-error, #f2b8b5); }
@@ -253,10 +161,6 @@ export class PlanFilesDialogComponent implements OnDestroy {
   readonly preview = signal<Preview | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
-  readonly showSource = signal(false);
-  readonly fit = signal(true);
-  readonly zoom = signal(1);
-  readonly naturalWidth = signal(0);
   readonly zipping = signal(false);
 
   readonly list = computed(() => {
@@ -264,15 +168,7 @@ export class PlanFilesDialogComponent implements OnDestroy {
     return this.all().filter((a) => group.kinds.includes(a.kind)).sort((a, b) => a.name.localeCompare(b.name));
   });
 
-  readonly lines = computed(() => (this.preview()?.text ?? '').replace(/\r\n/g, '\n').split('\n'));
-  readonly highlighted = computed(() => {
-    const p = this.preview();
-    const isSql = !!p && /\.sql$/i.test(p.artifact.name);
-    return this.lines().map((l) => (isSql ? highlightSql(l) : escapeHtml(l)));
-  });
-
   private sub?: Subscription;
-  private objectUrl?: string;
 
   constructor() {
     // Seleção inicial e arquivo atualizado pela skill (sha mudou) → recarrega a prévia.
@@ -306,16 +202,12 @@ export class PlanFilesDialogComponent implements OnDestroy {
     this.selectedId.set(a.id);
     this.loading.set(true);
     this.error.set(null);
-    this.showSource.set(false);
-    this.fit.set(true);
-    this.zoom.set(1);
     this.sub?.unsubscribe();
     // Anexo de comentário pode ser do outro plano do card (0031).
     this.sub = this.api.content(a.planId || this.data.planId, a.id).subscribe({
-      next: async (blob) => {
-        const preview = await this.buildPreview(a, blob);
+      next: (blob) => {
         if (this.selectedId() !== a.id) return;
-        this.preview.set(preview);
+        this.preview.set({ artifact: a, kind: fileViewKind(a.name, a.contentType || blob.type, blob.size, a.kind), blob });
         this.loading.set(false);
       },
       error: () => {
@@ -323,47 +215,6 @@ export class PlanFilesDialogComponent implements OnDestroy {
         this.error.set('Não foi possível carregar o arquivo.');
       }
     });
-  }
-
-  private async buildPreview(a: ExecutionArtifact, blob: Blob): Promise<Preview> {
-    this.revoke();
-    const type = (a.contentType || blob.type || '').toLowerCase();
-    if (a.kind === 'image' || type.startsWith('image/') || IMAGE_EXT.test(a.name)) {
-      // SVG vira <img> (não executa scripts).
-      this.objectUrl = URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: a.contentType }));
-      return { artifact: a, kind: 'image', imageUrl: this.objectUrl, blob };
-    }
-    const isText = type.startsWith('text/') || type.includes('json') || type.includes('xml') ||
-      CODE_EXT.test(a.name) || TEXT_EXT.test(a.name) || /\.(md|json)$/i.test(a.name);
-    if (!isText || blob.size > MAX_TEXT_PREVIEW) return { artifact: a, kind: 'none', blob };
-
-    let text = await blob.text();
-    if (/\.md$/i.test(a.name) || type.includes('markdown')) return { artifact: a, kind: 'markdown', text, blob };
-    if (/\.json$/i.test(a.name) || type.includes('json')) {
-      try { text = JSON.stringify(JSON.parse(text), null, 2); } catch { /* mostra como veio */ }
-      return { artifact: a, kind: 'json', text, blob };
-    }
-    return { artifact: a, kind: CODE_EXT.test(a.name) ? 'code' : 'text', text, blob };
-  }
-
-  onImageLoad(event: Event): void {
-    this.naturalWidth.set((event.target as HTMLImageElement).naturalWidth || 0);
-  }
-
-  toggleFit(): void {
-    if (this.fit()) { this.fit.set(false); this.zoom.set(1); } else { this.fit.set(true); }
-  }
-  zoomIn(): void { this.fit.set(false); this.zoom.update((z) => Math.min(8, +(z * 1.25).toFixed(2))); }
-  zoomOut(): void { this.fit.set(false); this.zoom.update((z) => Math.max(0.1, +(z / 1.25).toFixed(2))); }
-
-  @ViewChild('content') private contentRef?: ElementRef<HTMLElement>;
-
-  /** Tela cheia dentro do app (no PWA uma nova aba com blob sai do app); Esc volta. */
-  openImage(): void {
-    const el = this.contentRef?.nativeElement;
-    if (el?.requestFullscreen) {
-      el.requestFullscreen().catch(() => this.snackBar.open('Não foi possível abrir em tela cheia.', 'Fechar', { duration: 4000 }));
-    }
   }
 
   async copy(): Promise<void> {
@@ -379,7 +230,7 @@ export class PlanFilesDialogComponent implements OnDestroy {
       }
       return;
     }
-    this.clipboard.copyFullDescriptionToClipboard(p.text ?? '');
+    this.clipboard.copyFullDescriptionToClipboard(await p.blob.text());
   }
 
   download(): void {
@@ -422,33 +273,7 @@ export class PlanFilesDialogComponent implements OnDestroy {
     return ARTIFACT_GROUPS.find((g) => all.some((a) => g.kinds.includes(a.kind)))?.id ?? 'scripts';
   }
 
-  private revoke(): void {
-    if (this.objectUrl) URL.revokeObjectURL(this.objectUrl);
-    this.objectUrl = undefined;
-  }
-
   ngOnDestroy(): void {
     this.sub?.unsubscribe();
-    this.revoke();
   }
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-/** Destaque simples de SQL por linha: comentários, strings, números e palavras-chave. */
-function highlightSql(line: string): string {
-  const out: string[] = [];
-  const re = /(--.*$)|('(?:[^']|'')*'?)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_][A-Za-z0-9_]*)|([^A-Za-z0-9_'-]+|-)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(line)) !== null) {
-    if (m[1] !== undefined) out.push(`<span class="c">${escapeHtml(m[1])}</span>`);
-    else if (m[2] !== undefined) out.push(`<span class="s">${escapeHtml(m[2])}</span>`);
-    else if (m[3] !== undefined) out.push(`<span class="n">${m[3]}</span>`);
-    else if (m[4] !== undefined) out.push(SQL_KEYWORDS.has(m[4].toLowerCase()) ? `<span class="k">${m[4]}</span>` : escapeHtml(m[4]));
-    else out.push(escapeHtml(m[0]));
-    if (m[0] === '') re.lastIndex++;
-  }
-  return out.join('');
 }

@@ -35,7 +35,7 @@ import {
   matchesFilter,
   originIcon,
   originLabel,
-  sortExecutingFirst,
+  sortByCreation,
   taskStatusLook,
   userTaskActions
 } from './work-item.model';
@@ -426,10 +426,7 @@ export class WorkItemListComponent {
   readonly executing = computed(() => executingNumbers(this.items()));
   readonly sessionVisible = computed(() => this.sessionOpen() && this.sessionTabs().length > 0);
 
-  readonly visible = computed(() => {
-    const list = this.items().filter((it) => matchesFilter(it, this.filter()));
-    return this.sessionVisible() ? sortExecutingFirst(list) : list;
-  });
+  readonly visible = computed(() => this.items().filter((it) => matchesFilter(it, this.filter())));
   readonly counts = computed(() => {
     const all = this.items();
     return {
@@ -619,8 +616,7 @@ export class WorkItemListComponent {
         if (seq !== this.loadSeq || card !== this.currentCard) return;
         const first = !this.items().length;
         const countChanged = (list ?? []).length !== this.items().length;
-        const sorted = (list ?? []).map((it) => ({ ...it, tasks: (it.tasks ?? []).slice().sort((a, b) => a.order - b.order), links: it.links ?? [] }))
-          .sort((a, b) => a.number - b.number);
+        const sorted = sortByCreation((list ?? []).map((it) => ({ ...it, tasks: (it.tasks ?? []).slice().sort((a, b) => a.order - b.order), links: it.links ?? [] })));
         this.items.set(sorted);
         const known = new Set(sorted.map((x) => x.number));
         if (this.sessionTabs().some((n) => !known.has(n))) {
