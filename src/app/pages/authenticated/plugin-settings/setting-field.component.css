@@ -45,7 +45,9 @@
 .sf__warn { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45;
   color: #d29922; background: rgba(210, 153, 34, .10); }
 .sf__warn mat-icon { flex: none; font-size: 18px; width: 18px; height: 18px; }
-.sf__editor { min-width: 0; }
+/* Campos mais baixos que o padrão do Material (muitas chaves por tela). */
+.sf__editor { min-width: 0; --mat-form-field-container-height: 40px; --mat-form-field-container-vertical-padding: 8px;
+  --mat-form-field-container-text-size: 14px; }
 .sf__editor[inert] { opacity: .6; }
 .sf__error { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--mat-sys-error, #f2b8b5); }
 .sf__error mat-icon { font-size: 16px; width: 16px; height: 16px; }
