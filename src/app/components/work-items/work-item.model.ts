@@ -137,6 +137,10 @@ export interface WorkItemCatalog {
 }
 
 export interface WorkTaskInput {
+  /** Número da sub-tarefa existente (editar sem recriar); ausente = nova. */
+  number?: number | null;
+  /** Etapa do plano ligada (sub-tarefas de item de plano). */
+  stepKey?: string | null;
   title: string;
   description?: string | null;
   kind: TaskKind;

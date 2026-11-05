@@ -39,6 +39,9 @@ export type WorkItemEditorDialogResult = WorkItem | undefined;
 
 interface TaskDraft {
   uid: number;
+  /** Sub-tarefa existente (editar mantém o número — o servidor não recria). */
+  number: number | null;
+  stepKey: string | null;
   title: string;
   description: string;
   kind: string;
@@ -51,9 +54,14 @@ interface TaskDraft {
 let uidSeq = 0;
 
 /** Rascunho a partir de uma sub-tarefa (do item ou do modelo). */
-export function toTaskDraft(t: { title: string; description?: string | null; kind: string; executor?: WorkTaskExecutor | null; params?: Record<string, string> | null }): TaskDraft {
+export function toTaskDraft(t: {
+  number?: number | null; stepKey?: string | null; title: string; description?: string | null; kind: string;
+  executor?: WorkTaskExecutor | null; params?: Record<string, string> | null;
+}): TaskDraft {
   return {
     uid: ++uidSeq,
+    number: t.number ?? null,
+    stepKey: t.stepKey ?? null,
     title: t.title ?? '',
     description: t.description ?? '',
     kind: t.kind,
@@ -67,7 +75,11 @@ export function toTaskDraft(t: { title: string; description?: string | null; kin
 export function toTaskInput(d: TaskDraft): WorkTaskInput {
   const params: Record<string, string> = {};
   for (const [k, v] of Object.entries(d.params)) if (`${v ?? ''}`.trim()) params[k] = `${v}`.trim();
-  return { title: d.title.trim(), description: d.description.trim() || null, kind: d.kind, executor: d.executor, params };
+  return {
+    ...(d.number ? { number: d.number } : {}),
+    ...(d.stepKey ? { stepKey: d.stepKey } : {}),
+    title: d.title.trim(), description: d.description.trim() || null, kind: d.kind, executor: d.executor, params
+  };
 }
 
 /**
@@ -136,6 +148,7 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
             <div class="wie__task">
               <div class="wie__task-head">
                 <span class="wie__order">{{ i + 1 }}</span>
+                @if (t.number) { <span class="wi-num wie__tnum">{{ num(t.number) }}</span> }
                 <mat-icon class="wie__kind-ico">{{ kindOf(t.kind).icon }}</mat-icon>
                 <select class="wi-select wie__kind" [(ngModel)]="t.kind" (ngModelChange)="touch()" aria-label="Tipo da sub-tarefa">
                   @for (k of kinds(); track k.kind) { <option [ngValue]="k.kind">{{ k.label }}</option> }
@@ -197,6 +210,7 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
     .wie__tasks-head { display: flex; align-items: center; }
     .wie__task { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); background: color-mix(in srgb, var(--surface-2, #2e343f) 55%, transparent); }
     .wie__task-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .wie__tnum { font-size: 11.5px; }
     .wie__order { min-width: 18px; font-weight: 600; color: var(--cc-text-3); text-align: center; }
     .wie__kind-ico { font-size: 18px; width: 18px; height: 18px; color: var(--cc-text-2); }
     .wie__kind { width: auto; min-width: 140px; flex: 0 1 200px; padding: 4px 8px; }
@@ -276,7 +290,7 @@ export class WorkItemEditorDialogComponent {
     this.title = t.title;
     this.description = t.description ?? '';
     if (t.type) this.type.set(t.type);
-    this.tasks.set(t.tasks.map((x) => toTaskDraft({ ...x, kind: `${x.kind}` })));
+    this.tasks.set(t.tasks.map((x) => toTaskDraft({ ...x, number: null, stepKey: null, kind: `${x.kind}` })));
   }
 
   /** Sinaliza mudança num rascunho mutado no lugar (zoneless: o array novo redesenha). */
