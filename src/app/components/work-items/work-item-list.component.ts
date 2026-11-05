@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, TemplateRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -10,7 +11,8 @@ import { WorkItemsService } from '../../services/work-items.service';
 import { ExecutionPlanService } from '../../services/execution-plan.service';
 import { WsService } from '../../services/ws.service';
 import { ExecutionPlanSummary } from '../execution-plan/execution-plan.model';
-import { registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel } from '../../helpers/work-item-type-icons';
+import { registerWorkItemTypeIcons } from '../../helpers/work-item-type-icons';
+import { WiTypeIconComponent } from './wi-type-icon.component';
 import {
   TASK_ACTION_LABELS,
   WorkItem,
@@ -65,12 +67,13 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
  *
  * API pública: `[card]`, `[cardType]` ('bug' | 'user-story', padrão do item novo), `[openItem]` (número — abre o modal
  * do item; vem do `?item=`), `(countChange)` (quantidade de itens do card a cada carga), `(executingChange)` (números
- * dos itens em execução — na fila, rodando, esperando ou desfazendo — a cada mudança).
+ * dos itens em execução — na fila, rodando, esperando ou desfazendo — a cada mudança), `[barExtra]` (template com
+ * botões extras na barra — rodada 4: "Ferramentas" da Bancada). O ícone do item é o do **tipo do item** (rodada 4).
  */
 @Component({
   selector: 'app-work-item-list',
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, WorkItemExecutionComponent],
+  imports: [NgTemplateOutlet, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, WorkItemExecutionComponent, WiTypeIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wil">
@@ -79,6 +82,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
         <button mat-stroked-button class="wil__ask" (click)="askSpecialist()" [disabled]="!card()" matTooltip="O especialista do caso monta o item pelas regras do PRMake">
           <mat-icon>psychology</mat-icon>Pedir ao especialista
         </button>
+        @if (barExtra(); as extra) { <ng-container [ngTemplateOutlet]="extra" /> }
         @if (!sessionVisible() && (sessionTabs().length || executing().length)) {
           <button mat-stroked-button class="wil__reopen" (click)="openSession()" matTooltip="Reabrir a sessão de execução ao lado da lista">
             <mat-icon [class.wil__bot]="executing().length">smart_toy</mat-icon>Sessão de execução
@@ -158,7 +162,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                         [attr.aria-label]="(isExpanded(it.number) ? 'Recolher ' : 'Expandir ') + num(it.number)" [disabled]="!it.tasks.length">
                   <mat-icon>{{ isExpanded(it.number) ? 'expand_more' : 'chevron_right' }}</mat-icon>
                 </button>
-                <mat-icon class="wil__type" [svgIcon]="typeIcon(it.type)" [matTooltip]="typeLabel(it.type)"></mat-icon>
+                <app-wi-type-icon class="wil__type" [type]="it.type" [catalog]="catalog()" />
                 <button class="wil__title" (click)="openItemDialog(it.number, it)" [title]="it.title">
                   <span class="wil__num">{{ num(it.number) }}</span><span class="wil__title-text">{{ it.title }}</span>
                 </button>
@@ -361,6 +365,8 @@ export class WorkItemListComponent {
   readonly card = input<string | null>();
   readonly cardType = input<'bug' | 'user-story'>('bug');
   readonly openItem = input<number | null>(null);
+  /** Rodada 4: botões extras da barra, ao lado de "+ Novo item" / "Pedir ao especialista" (ex.: Ferramentas da Bancada). */
+  readonly barExtra = input<TemplateRef<unknown> | null>(null);
   readonly countChange = output<number>();
   /** Números dos itens em execução (na fila, rodando, esperando ou desfazendo) — a cada mudança. */
   readonly executingChange = output<number[]>();
@@ -414,8 +420,6 @@ export class WorkItemListComponent {
   readonly origin = originLabel;
   readonly originIco = originIcon;
   readonly executor = executorLabel;
-  readonly typeIcon = workItemTypeIcon;
-  readonly typeLabel = workItemTypeLabel;
   readonly look = (it: WorkItem) => itemStatusLook(it.status);
   readonly progress = (it: WorkItem) => itemProgress(it);
   readonly busy = (it: WorkItem) => isItemBusy(it);
