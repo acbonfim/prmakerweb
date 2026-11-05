@@ -67,17 +67,27 @@
         </button>
 
         @if (draft.expanded) {
-          @if (isTeams(draft)) {
-            <!-- 0007: a URL do Workflow do grupo é a credencial pessoal do Teams -->
-            <div class="integration__help">
-              <mat-icon>info</mat-icon>
+          <!-- 0083: passo a passo de onde tirar cada token/chave (links montados da configuração do plugin) -->
+          <button type="button" class="guide-toggle" (click)="toggleGuide(draft)" [attr.aria-expanded]="draft.showGuide">
+            <mat-icon>{{ draft.showGuide ? 'expand_less' : 'help_outline' }}</mat-icon>
+            {{ draft.showGuide ? 'Ocultar o passo a passo' : 'Como obter — passo a passo' }}
+          </button>
+          @if (draft.showGuide) {
+            <div class="integration__help integration__help--guide">
+              <mat-icon>{{ draft.guide.icon }}</mat-icon>
               <div>
-                Para pedir aprovação de PR no Teams{{ teamsGroup(draft) ? ' (' + teamsGroup(draft) + ')' : '' }}:
+                <p class="guide__why" [innerHTML]="draft.guide.why"></p>
                 <ol>
-                  <li>No grupo do Teams, abra <strong>⋯ &gt; Workflows</strong> e escolha <strong>"Enviar alertas de webhook para um chat"</strong>.</li>
-                  <li>Conclua o assistente com o grupo de destino e copie a <strong>URL</strong> gerada.</li>
-                  <li>Cole em <strong>WebhookUrl</strong> abaixo e salve.</li>
+                  @for (step of draft.guide.steps; track $index) { <li [innerHTML]="step"></li> }
                 </ol>
+                @if (draft.guide.note) { <p class="guide__note" [innerHTML]="draft.guide.note"></p> }
+                @if (draft.guide.links.length) {
+                  <div class="guide__links">
+                    @for (l of draft.guide.links; track l.url) {
+                      <a [href]="l.url" target="_blank" rel="noopener"><mat-icon>open_in_new</mat-icon>{{ l.label }}</a>
+                    }
+                  </div>
+                }
               </div>
             </div>
           } @else if (draft.integration.optional && !draft.integration.configured) {
