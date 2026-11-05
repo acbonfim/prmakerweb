@@ -1241,6 +1241,25 @@
   .plan__spec { padding: 0 4px; }
 }
 
+/* 0082: versão em tela (botão que abre o histórico) + as etapas dela na barra */
+.vbar { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 14px 4px; min-width: 0; }
+.vbar__ver { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 5px 6px 5px 10px; border-radius: 12px; cursor: pointer;
+  font: inherit; color: inherit; text-align: left; background: color-mix(in srgb, var(--plan-c, var(--mat-sys-primary)) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--plan-c, var(--mat-sys-primary)) 32%, transparent); transition: background .15s, border-color .15s; }
+.vbar__ver--analysis { --plan-c: #79c0ff; }
+.vbar__ver--correction { --plan-c: #d2a8ff; }
+.vbar__ver:hover { background: color-mix(in srgb, var(--plan-c) 18%, transparent); }
+.vbar__ver:focus-visible { outline: 2px solid var(--plan-c); outline-offset: 2px; }
+.vbar__ver > .mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--plan-c); }
+.vbar__ver-text { display: flex; flex-direction: column; line-height: 1.2; }
+.vbar__ver-text b { font-size: 13px; font-weight: 600; }
+.vbar__ver-text small { font-size: 10.5px; color: var(--plan-muted); }
+.vbar__caret.mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--plan-muted); }
+.vbar .journey { flex: 1 1 auto; min-width: 0; padding: 2px 0; }
+@media (max-width: 576px) {
+  .vbar { flex-wrap: wrap; }
+  .vbar .journey { flex-basis: 100%; }
+}
 .journey { flex: none; display: flex; align-items: center; gap: 0; padding: 10px 14px 4px; overflow-x: auto; scrollbar-width: none; }
 .journey__node { display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: inherit; font: inherit; padding: 4px 6px;
   border-radius: 10px; white-space: nowrap; cursor: pointer; text-align: left; }

@@ -238,18 +238,30 @@
     </div>
   }
 
-  @if (plan() && journey().length) {
-    <!-- 0080 (M2): a jornada do card no lugar das abas Análise/Correção -->
-    <nav class="journey" data-tour="plan-journey" aria-label="Em que etapa do tratamento o card está">
-      @for (n of journey(); track n.key; let last = $last) {
-        <button type="button" class="journey__node journey__node--{{ n.state }}" [class.journey__node--current]="n.current"
-                [disabled]="!n.phase" (click)="n.phase && selectPhase(n.phase)" [attr.aria-current]="n.current ? 'step' : null">
-          <span class="journey__dot"><mat-icon>{{ n.icon }}</mat-icon></span>
-          <span class="journey__text"><b>{{ n.label }}</b>@if (n.sub) {<small>{{ n.sub }}</small>}</span>
-        </button>
-        @if (!last) { <span class="journey__line" aria-hidden="true"></span> }
+  @if (plan(); as p) {
+    <!-- 0082: a versão em tela num botão (troca pelo histórico) e, na barra, só as etapas dela -->
+    <div class="vbar">
+      <button type="button" class="vbar__ver vbar__ver--{{ p.phase }}" data-tour="plan-version"
+              cdkOverlayOrigin #versionOrigin="cdkOverlayOrigin" (click)="historyPanel.open(versionOrigin)"
+              [attr.aria-label]="'Versão em tela: ' + versionLabel() + ' — trocar de versão'"
+              [matTooltip]="history().length > 1 ? 'Trocar de versão (' + history().length + ' no card)' : 'Versões do plano'">
+        <mat-icon>{{ p.phase === 'correction' ? 'build' : 'troubleshoot' }}</mat-icon>
+        <span class="vbar__ver-text"><b>{{ versionLabel() }}</b><small>{{ isOlderVersion() ? 'versão anterior' : 'mais recente' }}</small></span>
+        <mat-icon class="vbar__caret">unfold_more</mat-icon>
+      </button>
+      @if (journey().length) {
+        <nav class="journey" data-tour="plan-journey" [attr.aria-label]="'Etapas da ' + versionLabel()">
+          @for (n of journey(); track n.key; let last = $last) {
+            <button type="button" class="journey__node journey__node--{{ n.state }}" [class.journey__node--current]="n.current"
+                    (click)="goToStep(n.stepKey)" [matTooltip]="n.hint ?? ''" [attr.aria-current]="n.current ? 'step' : null">
+              <span class="journey__dot"><mat-icon>{{ n.icon }}</mat-icon></span>
+              <span class="journey__text"><b>{{ n.label }}</b>@if (n.sub) {<small>{{ n.sub }}</small>}</span>
+            </button>
+            @if (!last) { <span class="journey__line" aria-hidden="true"></span> }
+          }
+        </nav>
       }
-    </nav>
+    </div>
   }
 
   @if (askOpen()) {
@@ -349,6 +361,11 @@
               @if (h.run) {
                 <button mat-stroked-button (click)="runFromHeadline()" [disabled]="!!busy()"><mat-icon>play_arrow</mat-icon>{{ h.run }}</button>
               }
+              <!-- 0082: a análise / o plano de correção inteiro desta versão, a qualquer momento -->
+              <button mat-stroked-button data-tour="plan-document" (click)="openDocument()">
+                <mat-icon>{{ p.phase === 'correction' ? 'assignment' : 'article' }}</mat-icon>
+                {{ p.phase === 'correction' ? 'Ver o plano completo' : 'Ver a análise completa' }}
+              </button>
               <span class="plan__spacer"></span>
               <button type="button" class="hero__more" (click)="showDetails.set(!showDetails())" [attr.aria-expanded]="showDetails()">
                 {{ showDetails() ? 'esconder detalhes' : 'situação, sugestões e textos' }}
