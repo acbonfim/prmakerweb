@@ -35,10 +35,10 @@ import {
 import { FullscreenPanel } from '../../helpers/fullscreen-panel';
 import { BackNavigationService } from '../../services/back-navigation.service';
 import { PlanMarkdownPipe } from './plan-markdown.pipe';
-import { PlanFilesDialogComponent, PlanFilesDialogData } from './plan-files-dialog.component';
+import { PLAN_DOCUMENT_ID, PlanFilesDialogComponent, PlanFilesDialogData, PlanFilesDocument } from './plan-files-dialog.component';
 import { PlanNotesComponent } from './plan-notes.component';
 import { PlanHistoryComponent } from './plan-history.component';
-import { PlanDocumentService, isEmptyVersion } from './plan-document.service';
+import { PlanDocumentService, isEmptyVersion, planDocumentFileName } from './plan-document.service';
 import { isUsPlan, planTerms } from './plan-terms';
 import { MARKDOWN_VIEW_DIALOG, MarkdownViewDialogComponent, MarkdownViewDialogData } from '../markdown-view/markdown-view-dialog.component';
 import { openCaseChat } from '../case-chat/open-case-chat';
@@ -276,10 +276,10 @@ export class ExecutionPlanComponent implements OnDestroy {
    */
   readonly compactActions = input(false);
   /**
-   * 0085 (rodada 5): faixa fixa "Arquivos do plano" (análise, scripts, chamados… — abrir/baixar) + "Ver o plano
-   * completo", sempre visível (não só no "Em que pé está"). Padrão: sem a faixa (tela de PR).
+   * Bancada (telas menores): sem o botão "Especialista do caso" no cabeçalho (nem o fixo do celular) — o especialista já
+   * fica na lateral/aba da própria Bancada. Padrão: com o botão (tela de PR).
    */
-  readonly showFilesBar = input(false);
+  readonly showSpecialist = input(true);
 
   readonly fullscreen = new FullscreenPanel({
     host: () => this.hostRef.nativeElement,
@@ -944,16 +944,6 @@ export class ExecutionPlanComponent implements OnDestroy {
     });
   }
 
-  /** 0085 (rodada 5): faixa "Arquivos do plano" — os da skill (análise, scripts, chamados…), na ordem do tipo. */
-  readonly barArtifacts = computed(() => {
-    const order: Record<string, number> = { analysis: 0, script: 1, ticket: 2, data: 3, image: 4, attachment: 5 };
-    const list = this.planArtifacts()
-      .filter((a) => !a.noteId)
-      .sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9) || a.number - b.number);
-    const max = 8;
-    return { shown: list.slice(0, max), more: Math.max(0, list.length - max), total: list.length };
-  });
-
   artifactIcon(kind: string): string {
     return kind === 'script' ? 'code' : kind === 'ticket' ? 'confirmation_number' : kind === 'analysis' ? 'description'
       : kind === 'image' ? 'image' : kind === 'data' ? 'dataset' : 'attach_file';
@@ -968,8 +958,28 @@ export class ExecutionPlanComponent implements OnDestroy {
     const artifacts = this.planArtifacts();
     const map: Record<string, number> = {};
     for (const g of ARTIFACT_GROUPS) map[g.id] = artifacts.filter((a) => g.kinds.includes(a.kind)).length;
+    // O plano completo (montado na hora) é o primeiro arquivo de Análises.
+    if (this.plan()) map['analyses'] = (map['analyses'] ?? 0) + 1;
     return map;
   });
+
+  /** O plano completo como arquivo do plano: primeiro da aba Análises em "Arquivos e textos" (mesmo conteúdo do "Ver o plano completo"). */
+  private planDocumentFile(): PlanFilesDocument | undefined {
+    const plan = this.plan();
+    if (!plan) return undefined;
+    const correction = plan.phase === 'correction';
+    const history = this.hideVersions() ? [] : this.history();
+    const us = this.usPlan();
+    return {
+      artifact: {
+        id: PLAN_DOCUMENT_ID, planId: plan.id, number: 0, name: planDocumentFileName(plan.phase, us, this.itemNumber()),
+        kind: 'analysis', contentType: 'text/markdown', size: 0, sha256: plan.updatedAt,
+        description: correction ? `${this.terms().fixPlan} completo` : 'Análise completa',
+        createdBy: plan.createdBy, createdAt: plan.createdAt, updatedAt: plan.updatedAt
+      },
+      load: () => this.documents.build(plan, history, { us })
+    };
+  }
 
   private _cardNumber: string | null = null;
   @Input()
@@ -1829,15 +1839,18 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   // ── Arquivos ────────────────────────────────────────────────────────────────────────────────────
 
-  openFiles(group?: ArtifactGroup, artifact?: ExecutionArtifact): void {
+  /** `document`: abre já no plano completo. */
+  openFiles(group?: ArtifactGroup, artifact?: ExecutionArtifact, document = false): void {
     const plan = this.plan();
     if (!plan || this.filesDialogOpen) return;
+    const doc = this.planDocumentFile();
     const data: PlanFilesDialogData = {
       planId: plan.id,
       cardNumber: plan.cardNumber,
       artifacts: this.artifactsSignal,
-      groupId: group?.id ?? (artifact ? ARTIFACT_GROUPS.find((g) => g.kinds.includes(artifact.kind))?.id : undefined),
-      artifactId: artifact?.id,
+      document: doc,
+      groupId: document ? 'analyses' : group?.id ?? (artifact ? ARTIFACT_GROUPS.find((g) => g.kinds.includes(artifact.kind))?.id : undefined),
+      artifactId: document ? doc?.artifact.id : artifact?.id,
       stepTitle: (key) => this.plan()?.steps.find((s) => s.key === key)?.title ?? null
     };
     this.filesDialogOpen = true;

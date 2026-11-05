@@ -29,9 +29,9 @@ import { CardAssistantService, formatHours, serverMessage } from '../../services
       } @else if (st?.effort; as e) {
         <span class="hr__facts">
           <span class="hr__label">Horas</span>
-          <span class="hr__fact" matTooltip="Original Estimate">Original <strong>{{ h(e.originalEstimate) }}</strong></span>
-          <span class="hr__fact" matTooltip="Completed Work">Completed <strong>{{ h(e.completedWork) }}</strong></span>
-          <span class="hr__fact" matTooltip="Remaining Work">Remaining <strong>{{ h(e.remainingWork) }}</strong></span>
+          <span class="hr__fact hr__fact--orig" matTooltip="Original Estimate">Original <strong>{{ h(e.originalEstimate) }}</strong></span>
+          <span class="hr__fact hr__fact--done" matTooltip="Completed Work">Completed <strong>{{ h(e.completedWork) }}</strong></span>
+          <span class="hr__fact hr__fact--rem" matTooltip="Remaining Work">Remaining <strong>{{ h(e.remainingWork) }}</strong></span>
           @if (average(); as avg) { <span class="hr__fact hr__avg" matTooltip="Média de horas por card do time (Skills Configurations)">média do time {{ h(avg) }}</span> }
         </span>
         <span class="hr__bar" [class.hr__bar--over]="over()" role="progressbar" aria-label="Completed sobre Original"

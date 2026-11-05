@@ -1,4 +1,5 @@
 import {
+  planDocumentFiles,
   countFilesByItem,
   filesOfItem,
   WorkItemFile,
@@ -165,5 +166,27 @@ describe('0087 — arquivos do card por item', () => {
     expect(countFilesByItem(list).get(CASE_FILES_KEY)).toBe(1);
     expect(fileSourceChip(list.find((x) => x.id === 'c1')!)!.label).toBe('especialista');
     expect(resolveFileContentUrl('https://api/api/v1/', 0, list.find((x) => x.id === 'c1')!)).toBe('https://api/api/v1/CaseChat/77988/files/c1/content');
+  });
+});
+
+describe('planDocumentFiles (plano completo na aba Arquivos)', () => {
+  const at = '2026-11-05T10:00:00';
+  it('um arquivo por item com plano, gerado na hora, no filtro do item', () => {
+    const docs = planDocumentFiles([
+      { number: 55, planId: null, planPhase: null, title: 'Sem plano', updatedAt: at },
+      { number: 56, planId: 'p56', planPhase: 'correction', title: 'Implementação', updatedAt: at },
+      { number: 54, planId: 'p54', planPhase: 'analysis', title: 'Análise inicial', updatedAt: at }
+    ], false);
+    expect(docs.map((d) => d.name)).toEqual(['plano-de-correcao-completo-item-56.md', 'analise-completa-item-54.md']);
+    expect(docs[0].source).toBe('document');
+    expect(docs[0].planId).toBe('p56');
+    expect(filesOfItem(docs, 56).length).toBe(1);
+    expect(filePreviewKind(docs[0])).toBe('markdown');
+    expect(fileSourceChip(docs[0])!.label).toBe('gerado');
+  });
+
+  it('em User Story o plano é de implementação', () => {
+    const [doc] = planDocumentFiles([{ number: 2, planId: 'p2', planPhase: 'correction', title: 'US', updatedAt: at }], true);
+    expect(doc.name).toBe('plano-de-implementacao-completo-item-2.md');
   });
 });

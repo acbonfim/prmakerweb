@@ -4,9 +4,15 @@
  * (agrupamento, rótulos, prévia) — testadas em `work-item-files.spec.ts`.
  */
 
+import { planDocumentFileName, planTerms } from '../execution-plan/plan-terms';
+import { WorkItem } from './work-item.model';
+
 export type WorkItemFileKind = 'script' | 'analysis' | 'ticket' | 'data' | 'attachment' | 'text';
-/** `case` = arquivo da conversa do Especialista do caso (só na lista do card). */
-export type WorkItemFileSource = 'item' | 'plan' | 'case';
+/**
+ * `case` = arquivo da conversa do Especialista do caso (só na lista do card); `document` = o plano completo de um item
+ * (não existe no servidor: montado na hora pelo `PlanDocumentService`, só na lista do card).
+ */
+export type WorkItemFileSource = 'item' | 'plan' | 'case' | 'document';
 /** Só nos do plano: evidência do card no DevOps ou anexo de comentário do plano (null = gravado pela skill/tela). */
 export type WorkItemFileOrigin = 'evidence' | 'comment';
 
@@ -120,11 +126,34 @@ export interface FileSourceChip {
 
 /** Selo de onde veio o arquivo: evidência do DevOps, anexo de comentário, plano ou conversa do especialista; do item = null. */
 export function fileSourceChip(f: Pick<WorkItemFile, 'source' | 'origin'>): FileSourceChip | null {
+  if (f.source === 'document') return { label: 'gerado', tooltip: 'Montado na hora a partir do plano do item: etapas, documentos, scripts e o código que muda', icon: 'auto_awesome' };
   if (f.source === 'case') return { label: 'especialista', tooltip: 'Da conversa com o Especialista do caso', icon: 'psychology' };
   if (f.source !== 'plan') return null;
   if (f.origin === 'evidence') return { label: 'DevOps', tooltip: 'Evidência do card no Azure DevOps (anexo ou imagem da descrição/discussion)', icon: 'cloud_download' };
   if (f.origin === 'comment') return { label: 'comentário', tooltip: 'Anexado num comentário do plano', icon: 'chat_bubble_outline' };
   return { label: 'plano', tooltip: 'Arquivo do plano ligado ao item', icon: 'account_tree' };
+}
+
+/**
+ * O plano completo de cada item com plano, como arquivo (aba Arquivos da Bancada): "plano-de-correcao-completo-item-56.md".
+ * O conteúdo vem do `PlanDocumentService.buildById(planId)`.
+ */
+export function planDocumentFiles(items: readonly Pick<WorkItem, 'number' | 'planId' | 'planPhase' | 'title' | 'updatedAt'>[], us: boolean): WorkItemFile[] {
+  return items
+    .filter((i) => !!i.planId)
+    .sort((a, b) => b.number - a.number)
+    .map((i) => ({
+      id: `doc:${i.planId}`,
+      name: planDocumentFileName(i.planPhase, us, i.number),
+      kind: 'analysis' as WorkItemFileKind,
+      contentType: 'text/markdown',
+      source: 'document' as WorkItemFileSource,
+      workItemNumber: i.number,
+      planId: i.planId,
+      description: `${(i.planPhase ?? 'analysis') === 'correction' ? planTerms(us).fixPlan + ' completo' : 'Análise completa'} do item: ${i.title}`,
+      createdAt: i.updatedAt,
+      updatedAt: i.updatedAt
+    }));
 }
 
 /** Só os arquivos de uma sub-tarefa (`taskNumber`); sem filtro devolve todos. */
@@ -197,6 +226,7 @@ export function fileMeta(f: WorkItemFile, formatNumber: (n: number) => string = 
   if (f.taskNumber != null) parts.push(`sub-tarefa ${formatNumber(Number(f.taskNumber))}`);
   if (withSource && f.source === 'plan') parts.push(f.origin === 'evidence' ? 'do DevOps' : f.origin === 'comment' ? 'de comentário' : 'do plano');
   if (withSource && f.source === 'case') parts.push('da conversa do especialista');
+  if (withSource && f.source === 'document') parts.push('gerado do plano');
   return parts.join(' · ');
 }
 

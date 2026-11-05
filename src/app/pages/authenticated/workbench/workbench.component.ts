@@ -48,6 +48,7 @@ import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workben
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
 import { CardFilesComponent } from '../../../components/card-files/card-files.component';
 import { CardFilesStore } from '../../../components/work-items/card-files.store';
+import { planDocumentFiles } from '../../../components/work-items/work-item-files';
 import {
   registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel, workItemTypeOf
 } from '../../../helpers/work-item-type-icons';
@@ -137,6 +138,16 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
  * `app-execution-plan` recebe `[planId]` + `[hideVersions]`. Item fechado = aviso com "+ Novo item" / "Pedir ao
  * especialista". `?item=<n>&focus=plan` abre a aba já no plano daquele item.
  */
+const EXEC_ABOUT_KEY = 'wb.execAbout.hidden';
+
+function readFlag(key: string): boolean {
+  try { return localStorage.getItem(key) === '1'; } catch { return false; }
+}
+
+function writeFlag(key: string, on: boolean): void {
+  try { if (on) localStorage.setItem(key, '1'); else localStorage.removeItem(key); } catch { /* sem armazenamento: vale só nesta sessão */ }
+}
+
 @Component({
   selector: 'app-workbench',
   standalone: true,
@@ -296,7 +307,11 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   /** 0087: arquivos do card inteiro (aba Arquivos) e o filtro por item. */
   readonly cardFiles = new CardFilesStore();
   readonly filesItem = signal<number | undefined>(undefined);
+  /** Contagem da aba Arquivos: os do servidor + o plano completo de cada item com plano (montado na hora). */
+  readonly filesCount = computed(() => this.cardFiles.count() + planDocumentFiles(this.planItems(), false).length);
   readonly cancelling = signal(false);
+  /** Aviso "Aqui você acompanha…" da Execução: fechado fica lembrado neste navegador; o ⓘ do plano mostra de novo. */
+  readonly execAboutHidden = signal(readFlag(EXEC_ABOUT_KEY));
   readonly chatFlash = signal(false);
 
   // ── Execução do item (0085, rodada 3): a versão é o item de trabalho ────────────────────────
@@ -854,6 +869,11 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
         this.snack.open(planApiError(err, 'Não foi possível pedir a análise.'), 'Fechar', { duration: 8000 });
       }
     });
+  }
+
+  setExecAboutHidden(hidden: boolean): void {
+    this.execAboutHidden.set(hidden);
+    writeFlag(EXEC_ABOUT_KEY, hidden);
   }
 
   /** "Cancelar e desfazer" do plano (ação da Bancada; o componente do plano não muda). */

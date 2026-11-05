@@ -189,9 +189,9 @@
 
         <!-- Como na tela de PR: a timeline abre em tela cheia (o componente fica montado fora da tela) -->
         <button mat-stroked-button type="button" class="wb-act" data-tour="wb-timeline-btn"
-                (click)="openTimeline($any($event.currentTarget))"
+                (click)="openTimeline($any($event.currentTarget))" aria-label="Linha do tempo"
                 matTooltip="Linha do tempo do card (comentários, Teams, publicações) — abre em tela cheia">
-          <mat-icon>forum</mat-icon>Linha do tempo
+          <mat-icon>forum</mat-icon><span class="wb-act__label">Linha do tempo</span>
           @if (timelineCount(); as n) { <span class="wb-act__count">{{ n }}</span> }
         </button>
 
@@ -262,7 +262,7 @@
     <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'files'" [attr.aria-selected]="mtab === 'files'"
             (click)="selectMobile('files')">
       <mat-icon>folder_open</mat-icon><span>Arquivos</span>
-      @if (cardFiles.count()) { <span class="wb-count">{{ cardFiles.count() }}</span> }
+      @if (filesCount()) { <span class="wb-count">{{ filesCount() }}</span> }
     </button>
     <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'chat'" [attr.aria-selected]="mtab === 'chat'"
             (click)="selectMobile('chat')">
@@ -282,26 +282,26 @@
         <div class="wb-seg" role="tablist" aria-label="Itens de trabalho, execução do item ou card">
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'items'"
                   [attr.aria-selected]="main === 'items'" (click)="selectMain('items')">
-            <mat-icon>checklist</mat-icon>Itens de trabalho
+            <mat-icon>checklist</mat-icon><span class="wb-seg__label"><span class="wb-seg__long">Itens de trabalho</span><span class="wb-seg__short">Itens</span></span>
             @if (itemCount()) { <span class="wb-count">{{ itemCount() }}</span> }
           </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'plan'"
                   [attr.aria-selected]="main === 'plan'" (click)="selectMain('plan')"
                   matTooltip="Acompanhar a execução: o que o Claude está fazendo num item de trabalho, ao vivo — passos, perguntas e respostas"
                   matTooltipShowDelay="600">
-            <mat-icon>account_tree</mat-icon>Execução
+            <mat-icon>account_tree</mat-icon><span class="wb-seg__label">Execução</span>
             @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you" [matTooltip]="n + ' aguardando você'">{{ n }}</span> }
           </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'files'" data-tour="wb-files-tab"
                   [attr.aria-selected]="main === 'files'" (click)="selectMain('files')"
                   matTooltip="Todos os arquivos do card — análises, chamados, scripts, dados e anexos — com filtro por item de trabalho"
                   matTooltipShowDelay="600">
-            <mat-icon>folder_open</mat-icon>Arquivos
-            @if (cardFiles.count()) { <span class="wb-count">{{ cardFiles.count() }}</span> }
+            <mat-icon>folder_open</mat-icon><span class="wb-seg__label">Arquivos</span>
+            @if (filesCount()) { <span class="wb-count">{{ filesCount() }}</span> }
           </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'card'" data-tour="wb-card-tab"
                   [attr.aria-selected]="main === 'card'" (click)="selectMain('card')">
-            <mat-icon>description</mat-icon>Card
+            <mat-icon>description</mat-icon><span class="wb-seg__label">Card</span>
           </button>
         </div>
         <!-- Linha de horas do card (a mesma do assistente), sempre à vista ao lado das abas -->
@@ -348,13 +348,18 @@
       <div class="wb-pane wb-pane--plan" [class.wb-hidden]="main !== 'plan'" data-tour="wb-plan">
         <!-- Execução do item (rodada 3): a versão é o item de trabalho — o seletor troca entre os itens que têm plano -->
         @let sel = selectedPlanItem();
-        <p class="wb-exec__about" data-tour="wb-exec-about">
-          <mat-icon>info_outline</mat-icon>
-          <span>Aqui você <b>acompanha</b> o que o Claude está fazendo num item de trabalho: os passos, as perguntas que ele faz (e as suas respostas)
-            e o que acontece agora, ao vivo. Itens, arquivos e dados do card ficam nas outras abas.</span>
-        </p>
+        <!-- O aviso pode ser fechado (fica lembrado); depois volta pelo ícone ⓘ no cabeçalho do plano -->
+        @if (!execAboutHidden()) {
+          <p class="wb-exec__about" data-tour="wb-exec-about">
+            <mat-icon>info_outline</mat-icon>
+            <span>Aqui você <b>acompanha</b> o que o Claude está fazendo num item de trabalho: os passos, as perguntas que ele faz (e as suas respostas)
+              e o que acontece agora, ao vivo. Itens, arquivos e dados do card ficam nas outras abas.</span>
+            <button mat-icon-button type="button" class="wb-exec__about-x" (click)="setExecAboutHidden(true)"
+                    matTooltip="Fechar — o ⓘ no cabeçalho do plano mostra de novo" aria-label="Fechar o aviso"><mat-icon>close</mat-icon></button>
+          </p>
+        }
         <div class="wb-exec" data-tour="wb-exec-item">
-          <span class="wb-exec__label"><mat-icon>play_circle</mat-icon>Execução do item</span>
+          <span class="wb-exec__label"><mat-icon>play_circle</mat-icon><span class="wb-exec__label-text">Execução do item</span></span>
           @if (planItemOptions().length) {
             <button mat-stroked-button type="button" class="wb-exec__pick" [matMenuTriggerFor]="execMenu"
                     [attr.aria-label]="'Item em tela: ' + (sel?.label ?? 'nenhum') + ' — trocar de item'"
@@ -380,8 +385,8 @@
               }
             </mat-menu>
             <button mat-button type="button" class="wb-exec__files" (click)="showItemFiles(sel?.number)"
-                    matTooltip="Abre a aba Arquivos filtrada por este item" [disabled]="!sel">
-              <mat-icon>folder_open</mat-icon>Arquivos do item
+                    matTooltip="Arquivos do item — abre a aba Arquivos filtrada por este item" aria-label="Arquivos do item" [disabled]="!sel">
+              <mat-icon>folder_open</mat-icon><span class="wb-exec__files-label">Arquivos do item</span>
             </button>
           } @else {
             <span class="wb-exec__none">Nenhum item de trabalho com execução ainda.</span>
@@ -399,24 +404,28 @@
           </div>
         }
 
-        @if (canCancelPlan() && !closedPlanItem()) {
-          <div class="wb-plan-bar">
-            <span class="wb-plan-bar__hint">Errou o caminho? Cancele {{ sel ? 'o item #' + sel.number : 'o plano' }} e, se quiser, desfaça o que já foi feito.</span>
-            <button mat-stroked-button type="button" class="wb-cancel" data-tour="wb-cancel-plan" [disabled]="cancelling()"
-                    matTooltip="Cancela o plano e os itens dele; opcionalmente desfaz PRs, branches e estado do card"
-                    (click)="cancelPlan()">
-              <mat-icon>undo</mat-icon>Cancelar e desfazer
-            </button>
-          </div>
-        }
+        <!-- Telas menores: sem a faixa de arquivos (o "Arquivos e textos" do cabeçalho tem tudo, inclusive o plano completo) e
+             sem o botão do especialista (ele já está na lateral). O ⓘ e o "Cancelar e desfazer" moram no cabeçalho do plano. -->
         <app-execution-plan class="wb-plan" [cardNumber]="card()" [planId]="selectedPlanId()" [hideVersions]="true"
-                            [compactActions]="true" [showFilesBar]="true"
-                            [itemNumber]="sel?.number ?? null" (headline)="onHeadline($event)"></app-execution-plan>
+                            [compactActions]="true" [showSpecialist]="false"
+                            [itemNumber]="sel?.number ?? null" (headline)="onHeadline($event)">
+          @if (execAboutHidden()) {
+            <button planHeadLead mat-icon-button type="button" class="wb-plan-icon" (click)="setExecAboutHidden(false)"
+                    matTooltip="O que é esta aba? Aqui você acompanha, ao vivo, o que o Claude faz num item de trabalho — clique para ver o aviso"
+                    aria-label="Mostrar o aviso sobre a aba Execução"><mat-icon>info_outline</mat-icon></button>
+          }
+          @if (canCancelPlan() && !closedPlanItem()) {
+            <button planHeadActions mat-icon-button type="button" class="wb-plan-icon wb-cancel" data-tour="wb-cancel-plan"
+                    [disabled]="cancelling()" (click)="cancelPlan()"
+                    [matTooltip]="'Cancelar e desfazer — cancela ' + (sel ? 'o item #' + sel.number : 'o plano') + ' e, se quiser, desfaz PRs, branches e estado do card'"
+                    aria-label="Cancelar e desfazer"><mat-icon>undo</mat-icon></button>
+          }
+        </app-execution-plan>
       </div>
 
       <!-- 0087: Arquivos do card inteiro (qualquer item), com filtro por item de trabalho. Montada para a contagem ficar viva. -->
       <div class="wb-pane wb-pane--files" [class.wb-hidden]="main !== 'files'" data-tour="wb-files">
-        <app-card-files [store]="cardFiles" [card]="card()" [items]="planItems()" [(selected)]="filesItem"></app-card-files>
+        <app-card-files [store]="cardFiles" [card]="card()" [cardType]="cardType()" [items]="planItems()" [(selected)]="filesItem"></app-card-files>
       </div>
 
       <!-- Aba Card (desktop e celular): horas + lançar horas, dados principais, anexos/links e o texto do card -->
