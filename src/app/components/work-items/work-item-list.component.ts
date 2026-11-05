@@ -10,6 +10,7 @@ import { WorkItemsService } from '../../services/work-items.service';
 import { ExecutionPlanService } from '../../services/execution-plan.service';
 import { WsService } from '../../services/ws.service';
 import { ExecutionPlanSummary } from '../execution-plan/execution-plan.model';
+import { planTerms } from '../execution-plan/plan-terms';
 import { registerWorkItemTypeIcons } from '../../helpers/work-item-type-icons';
 import { WiTypeIconComponent } from './wi-type-icon.component';
 import {
@@ -63,6 +64,10 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
  * à esquerda os itens (os em execução no topo, com animação de "trabalhando"), à direita a sessão de execução
  * (`app-work-item-execution`), com abas quando há vários itens rodando. A sessão fecha (volta à lista inteira) e reabre
  * pelo botão "Sessão de execução" da barra. Abaixo de 1024 px (ou com a lista estreita) a sessão fica em cima da lista.
+ *
+ * Card 77988 — **itens da análise**: com a análise mais recente concluída e sem plano de implementação/correção (a pessoa
+ * respondeu "só a análise por enquanto"), um aviso no topo oferece "Criar e iniciar" / "Criar sem iniciar" — o Claude do
+ * tratamento monta o plano (que vira o item de trabalho) pela fila (`ExecutionQueue/card/{card}/delivery`).
  *
  * API pública: `[card]`, `[cardType]` ('bug' | 'user-story', padrão do item novo), `[openItem]` (número — abre o modal
  * do item; vem do `?item=`), `(countChange)` (quantidade de itens do card a cada carga), `(executingChange)` (números
@@ -133,6 +138,19 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
         </aside>
       }
       <div class="wil__main">
+      @if (analysisDone() && !loading()) {
+        <div class="wil__deliver" role="status">
+          <mat-icon class="wil__deliver-ico">lightbulb</mat-icon>
+          <p><b>A análise terminou sem os itens de {{ terms().fix }}.</b>
+            <span>O Claude monta o {{ terms().fixPlanLower }} com a solução decidida na análise — ele vira o item de trabalho.</span></p>
+          <div class="wil__deliver-actions">
+            <button mat-flat-button color="primary" (click)="fromAnalysis(true)" [disabled]="delivering()"
+                    matTooltip="Monta o plano e já começa a executar"><mat-icon>play_arrow</mat-icon>Criar e iniciar</button>
+            <button mat-stroked-button (click)="fromAnalysis(false)" [disabled]="delivering()"
+                    matTooltip="Monta o plano e deixa pausado — você inicia pelo Executar do item"><mat-icon>playlist_add</mat-icon>Criar sem iniciar</button>
+          </div>
+        </div>
+      }
       @if (loading() && !items().length) {
         <div class="wil__msg"><mat-icon class="wil__spin">autorenew</mat-icon>Carregando itens…</div>
       } @else if (!items().length && !loadError()) {
@@ -245,6 +263,13 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
     .wil__filters button.on { background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent); color: var(--mat-sys-on-surface); }
     .wil__msg { display: flex; align-items: center; gap: 8px; padding: 10px 4px; color: var(--cc-text-2); font-size: 12.5px; }
     .wil__msg--err { color: #f85149; }
+    .wil__deliver { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 40%, transparent); background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent); }
+    .wil__deliver-ico { color: var(--mat-sys-primary); flex: none; }
+    .wil__deliver p { margin: 0; flex: 1 1 260px; line-height: 1.45; }
+    .wil__deliver p span { display: block; color: var(--cc-text-2); font-size: 12.5px; }
+    .wil__deliver-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .wil__deliver-actions mat-icon { margin-right: 4px; }
     .wil__empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 28px 12px;
       border: 1px dashed var(--cc-surface-border-strong, rgba(255,255,255,.18)); border-radius: 12px; }
     .wil__empty p { margin: 0; line-height: 1.5; max-width: 520px; }
@@ -386,6 +411,10 @@ export class WorkItemListComponent {
   /** Plano de correção do card (vazio → "Gerar itens a partir do plano"). */
   readonly correctionPlan = signal<ExecutionPlanSummary | null>(null);
   readonly generating = signal(false);
+  /** Card 77988: a análise mais recente terminou sem plano de implementação/correção — oferece criar os itens dela. */
+  readonly analysisDone = signal<ExecutionPlanSummary | null>(null);
+  readonly delivering = signal(false);
+  readonly terms = computed(() => planTerms(this.cardType() === 'user-story'));
 
   /** Itens na sessão de execução (abas), na ordem em que entraram. */
   readonly sessionTabs = signal<number[]>([]);
@@ -434,6 +463,7 @@ export class WorkItemListComponent {
   /** A pessoa fechou a sessão: item novo em execução não reabre sozinho (só entra nas abas). */
   private sessionClosedByUser = false;
   private lastExecuting = '';
+  private deliveryRequestedFor: string | null = null;
 
   constructor() {
     registerWorkItemTypeIcons(inject(MatIconRegistry), inject(DomSanitizer));
@@ -565,6 +595,7 @@ export class WorkItemListComponent {
     this.items.set([]);
     this.loadError.set(null);
     this.correctionPlan.set(null);
+    this.analysisDone.set(null);
     this.catalog.set(null);
     this.expanded.set(new Set());
     this.sessionTabs.set([]);
@@ -587,6 +618,7 @@ export class WorkItemListComponent {
       next: (list) => {
         if (seq !== this.loadSeq || card !== this.currentCard) return;
         const first = !this.items().length;
+        const countChanged = (list ?? []).length !== this.items().length;
         const sorted = (list ?? []).map((it) => ({ ...it, tasks: (it.tasks ?? []).slice().sort((a, b) => a.order - b.order), links: it.links ?? [] }))
           .sort((a, b) => a.number - b.number);
         this.items.set(sorted);
@@ -601,6 +633,7 @@ export class WorkItemListComponent {
         if (first) this.restoreExpanded(card, sorted);
         this.countChange.emit(sorted.length);
         if (!sorted.length) this.findCorrectionPlan(card);
+        if (first || countChanged) this.findAnalysisDone(card);
       },
       error: (e) => {
         if (seq !== this.loadSeq || card !== this.currentCard) return;
@@ -621,6 +654,32 @@ export class WorkItemListComponent {
       },
       error: () => {}
     });
+  }
+
+  /** O plano mais recente do card é a análise concluída (sem plano de entrega depois dela)? */
+  private findAnalysisDone(card: string): void {
+    this.plans.history(card).subscribe({
+      next: (list) => {
+        if (card !== this.currentCard) return;
+        const latest = (list ?? [])[0];
+        const done = latest?.phase === 'analysis' && latest.status === 'completed' && latest.id !== this.deliveryRequestedFor;
+        this.analysisDone.set(done ? latest : null);
+      },
+      error: () => {}
+    });
+  }
+
+  async fromAnalysis(start: boolean): Promise<void> {
+    const card = this.currentCard;
+    if (!card || this.delivering()) return;
+    this.delivering.set(true);
+    const ok = await this.actions.fromAnalysis(card, start, this.terms().fix);
+    this.delivering.set(false);
+    if (ok) {
+      // O pedido está na fila: o aviso não volta nas recargas até o plano de entrega aparecer.
+      this.deliveryRequestedFor = this.analysisDone()?.id ?? null;
+      this.analysisDone.set(null);
+    }
   }
 
   // ── expansão ─────────────────────────────────────────────────────────────────────────────────

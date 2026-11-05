@@ -29,6 +29,17 @@ export class ExecutionQueueService {
     });
   }
 
+  /**
+   * Card 77988: "Criar itens da análise" — a análise respondida sem plano de implementação/correção vira o plano (e o item
+   * de trabalho dele) na máquina de quem pediu; `start=false` deixa o plano pausado até o Executar do item.
+   */
+  delivery(cardNumber: string, start: boolean, note?: string | null): Observable<ExecutionRequest> {
+    return this.http.post<ExecutionRequest>(`${this.queueUrl}/card/${encodeURIComponent(cardNumber)}/delivery`, {
+      start,
+      note: note?.trim() || null
+    });
+  }
+
   card(cardNumber: string): Observable<ExecutionCardQueue> {
     return this.http.get<ExecutionCardQueue>(`${this.queueUrl}/card/${encodeURIComponent(cardNumber)}`);
   }
