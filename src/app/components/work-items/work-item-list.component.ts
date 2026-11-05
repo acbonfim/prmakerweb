@@ -65,7 +65,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
   template: `
     <div class="wil">
       <div class="wil__bar">
-        <button mat-flat-button color="primary" class="wil__new" (click)="create()" [disabled]="!card()"><mat-icon>add</mat-icon>Novo item</button>
+        <button mat-flat-button color="primary" class="wil__new" data-tour="wi-new" (click)="create()" [disabled]="!card()"><mat-icon>add</mat-icon>Novo item</button>
         <button mat-stroked-button class="wil__ask" (click)="askSpecialist()" [disabled]="!card()" matTooltip="O especialista do caso monta o item pelas regras do PRMake">
           <mat-icon>psychology</mat-icon>Pedir ao especialista
         </button>
@@ -132,7 +132,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                         <mat-icon class="wil__spin">autorenew</mat-icon><span class="wil__running-text">{{ it.activity || (it.status === 'queued' ? 'Na fila' : it.status === 'reverting' ? 'Desfazendo' : 'Executando') }}</span>
                       </span>
                     } @else {
-                      <button mat-stroked-button class="wil__run" (click)="execute(it)" [disabled]="!canRun(it) || pending().has(it.number)"
+                      <button mat-stroked-button class="wil__run" data-tour="wi-run" (click)="execute(it)" [disabled]="!canRun(it) || pending().has(it.number)"
                               [matTooltip]="canRun(it) ? 'Executar este item (roda em paralelo aos outros)' : 'Só itens pendentes ou que falharam'">
                         <mat-icon>play_arrow</mat-icon>Executar
                       </button>
