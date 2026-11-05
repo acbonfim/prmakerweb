@@ -32,6 +32,8 @@ import {
   CancelWorkDialogComponent, CancelWorkDialogData, CancelWorkDialogResult
 } from '../../../components/work-items/cancel-work-dialog.component';
 import { workDialogConfig } from '../../../components/work-items/work-dialog-config';
+import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workbench-prs.component';
+import { CardHoursInsightComponent } from '../../../components/card-hours-insight/card-hours-insight.component';
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
 import {
   registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel, workItemTypeOf
@@ -75,7 +77,7 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
 
 /**
  * 0085: Bancada do card — onde o card é trabalhado: itens de trabalho (com sub-tarefas), o plano do Claude, o
- * Especialista do caso, o texto do card e a timeline. Estado próprio em signals (não usa o `CardPrStateService`, que é
+ * Especialista do caso, os PRs (com as ações do GitHub/DevOps), as horas, o texto do card e a timeline. Estado próprio em signals (não usa o `CardPrStateService`, que é
  * da tela de PR). Desktop: coluna principal (Itens | Plano) + coluna lateral; celular: abas Itens | Plano |
  * Especialista | Card. URL: `?card=` (+ `item=`, `focus=plan|items|timeline|chat`).
  */
@@ -85,7 +87,7 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
   imports: [
     FormsModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatTooltipModule,
     CardAlertBarComponent, CardPanelComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent,
-    WorkItemListComponent
+    WorkItemListComponent, WorkbenchPrsComponent, CardHoursInsightComponent
   ],
   templateUrl: './workbench.component.html',
   styleUrl: './workbench.component.scss'
@@ -190,6 +192,8 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     return !!h && isPlanActive(h.status as any);
   });
 
+  /** PRs do card (contados pelo `app-workbench-prs`). */
+  readonly prCount = signal<number | null>(null);
   /** `?item=` repassado para a lista abrir o modal do item. */
   readonly openItem = signal<number | null>(null);
   readonly analyzing = signal(false);
@@ -289,6 +293,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     if (!force && card === this.card() && this.cardState() !== 'error') return;
     if (card !== this.card()) {
       this.itemCount.set(null);
+      this.prCount.set(null);
       this.planHeadline.set(null);
       this.pickedTab.set(null);
       this.pickedMobileTab.set(null);

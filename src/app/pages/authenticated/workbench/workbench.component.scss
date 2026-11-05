@@ -288,7 +288,7 @@
 .wb-cardtext {
   flex: 0 1 auto;
   height: auto;
-  max-height: 30%;
+  max-height: 38%;
   min-height: 56px;
   display: block;
 
@@ -297,10 +297,8 @@
   ::ng-deep .panel__title { font-size: 13px; }
   ::ng-deep .panel__body { padding: 0; }
 }
-.wb-cardtext--closed {
-  ::ng-deep .panel__body { display: none; }
-  ::ng-deep .panel__header { border-bottom: none; }
-}
+.wb-hours { margin-bottom: 8px; &:empty { display: none; } }
+.wb-prs { display: inline-flex; align-items: center; }
 .wb-panel-action.mat-mdc-icon-button {
   width: 32px;
   height: 32px;

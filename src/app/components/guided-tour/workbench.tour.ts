@@ -42,6 +42,19 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'fica desligado (continue pelo próprio plano).'
     },
     {
+      id: 'prs', anchor: 'wb-prs', group: 'O card', since: 1, phase: 'card', side: 'bottom', align: 'end', optional: true,
+      title: 'PRs e ações do card',
+      body: '<b>PRs</b> mostra os pull requests do card e reúne as ações do GitHub (abrir PR) e do DevOps (mover o card, publicar textos).',
+      detail: 'O número ao lado conta os PRs do card. No modal ficam a lista com o status de cada PR, o "Abrir PR" manual e as ' +
+        'ações do GitHub e do DevOps — as mesmas da tela de Pull Request.'
+    },
+    {
+      id: 'hours', anchor: 'wb-hours', group: 'O card', since: 1, phase: 'card', side: 'left', align: 'start', optional: true, prepare: 'tab:card',
+      title: 'Horas do card',
+      body: 'No Bug, as horas lançadas comparadas com a média dos bugs (acima ou abaixo); na US, o planejado × o realizado.',
+      detail: 'Os números vêm dos campos de horas do DevOps. Serve para ver cedo quando o card está passando do esperado.'
+    },
+    {
       id: 'items', anchor: 'wb-items', group: 'Itens de trabalho', since: 1, phase: 'card', side: 'right', align: 'start', prepare: 'tab:items',
       title: 'Itens de trabalho',
       body: 'Cada item é uma entrega do card (ex.: <i>PR para release-version</i>) com sub-tarefas em ordem. Clique para expandir.',

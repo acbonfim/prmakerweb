@@ -61,6 +61,11 @@
         </button>
       }
       <span class="wb-spacer"></span>
+      <!-- PRs do card + ações do GitHub e do DevOps (botão "PRs (n)" que abre o modal) -->
+      <span class="wb-prs" data-tour="wb-prs">
+        <app-workbench-prs [card]="card()" [cardType]="cardType()" [cardFull]="cf"
+                           (countChange)="prCount.set($event)" (devopsChanged)="reload()"></app-workbench-prs>
+      </span>
       <button mat-stroked-button type="button" class="wb-analyze" data-tour="wb-analyze"
               [disabled]="analyzing() || planActive()"
               [matTooltip]="planActive() ? 'Já há um plano em andamento — continue pelo plano' : 'Pede ao Claude a análise deste card (fila de execução)'"
@@ -168,23 +173,26 @@
         <app-case-compact class="wb-chat__box" [card]="card()"></app-case-compact>
       </div>
 
-      <app-card-panel class="wb-cardtext" [class.wb-hidden]="!showCardSide()" [class.wb-cardtext--closed]="!cardTextOpen()"
-                      [title]="cardType() === 'user-story' ? 'Card · descrição e critérios' : 'Card · repro steps'" icon="description">
+      <app-card-panel class="wb-cardtext" [class.wb-hidden]="!showCardSide()" title="Card" icon="description">
         <button panel-actions mat-icon-button type="button" class="wb-panel-action"
-                [matTooltip]="cardTextOpen() ? 'Recolher' : 'Mostrar'" [attr.aria-expanded]="cardTextOpen()"
+                [matTooltip]="cardTextOpen() ? 'Recolher o texto do card' : 'Mostrar o texto do card'" [attr.aria-expanded]="cardTextOpen()"
                 (click)="cardTextOpen.set(!cardTextOpen())">
           <mat-icon>{{ cardTextOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
         </button>
-        @if (cardTextOpen()) {
-          <div class="wb-cardtext__scroll">
+        <div class="wb-cardtext__scroll">
+          <!-- Horas do card: Bug = Completed × média dos bugs; US = planejado × realizado -->
+          <div class="wb-hours" data-tour="wb-hours">
+            <app-card-hours-insight [card]="card()" [cardType]="cardType()"></app-card-hours-insight>
+          </div>
+          @if (cardTextOpen()) {
             @for (s of cardSections(); track s.title) {
               <h4 class="wb-cardtext__h">{{ s.title }}</h4>
               <div class="wb-rich" [innerHTML]="s.html"></div>
             } @empty {
               <p class="wb-muted">{{ cardType() === 'user-story' ? 'A US não tem descrição nem critérios de aceite.' : 'O bug não tem Repro Steps.' }}</p>
             }
-          </div>
-        }
+          }
+        </div>
       </app-card-panel>
 
       <div class="wb-timeline" [class.wb-hidden]="!showCardSide()" data-tour="wb-timeline">
