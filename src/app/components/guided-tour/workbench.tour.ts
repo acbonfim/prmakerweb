@@ -16,10 +16,12 @@ import { TourDefinition } from './tour.model';
  * v6 (rodada 5): botão **Card** abre o card num modal (mesma animação da timeline); aba Card sem espaços vazios; na
  * Execução, Pausar/Continuar no menu ⋮ do plano e a faixa fixa **Arquivos do plano** + "Ver o plano completo"; na barra,
  * quem iniciou o card no PRMake.
+ * v7 (0087): a **Execução** é só acompanhamento (o que o Claude faz num item, perguntas/respostas, ao vivo) e a nova aba
+ * **Arquivos** mostra todos os arquivos do card com filtro por item; itens e sub-tarefas trazem código/linha com popover.
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 6,
+  version: 7,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -134,14 +136,30 @@ export const WORKBENCH_TOUR: TourDefinition = {
         '"Sessão de execução (n)" volta para ela. Sub-tarefas suas (ex.: validar) esperam você marcar como feitas.'
     },
     {
-      id: 'plan', anchor: 'wb-plan', group: 'Execução', since: 4, phase: 'card', side: 'right', align: 'start', prepare: 'tab:plan',
-      title: 'Execução do item',
-      body: 'Cada item de trabalho tem a sua execução: escolha o item no seletor (<i>#30 Análise inicial do bug · concluído</i>) e ' +
-        'veja o plano dele — etapas, perguntas, arquivos e registro, ao vivo.',
-      detail: 'Não há mais "Análise v1 / Correção v2": a versão é o próprio item, analisado e refinado. O seletor abre no item em ' +
-        'andamento (ou no mais recente); o "Abrir plano" de um item leva direto a ele. Item concluído ou cancelado é uma versão ' +
-        'fechada — para mudar, cancele o item ou crie outro (+ Novo item, ou peça ao especialista). Perguntas do plano são ' +
-        'respondidas na própria etapa.'
+      id: 'plan', anchor: 'wb-plan', group: 'Execução', since: 7, phase: 'card', side: 'right', align: 'start', prepare: 'tab:plan',
+      title: 'Execução: só acompanha',
+      body: 'Esta aba <b>mostra ao vivo</b> o que o Claude está fazendo num item de trabalho — os passos, as <b>perguntas</b> dele e as ' +
+        '<b>suas respostas</b>. Escolha o item no seletor. Organizar o trabalho é nos <b>itens</b>; os arquivos, na aba <b>Arquivos</b>.',
+      detail: 'A Execução não organiza nada: ela exibe a execução de um item de trabalho (etapas, perguntas e respostas, atividade do ' +
+        'Claude em tempo real). Não há mais "Análise v1 / Correção v2": a versão é o próprio item, analisado e refinado. O seletor abre ' +
+        'no item em andamento (ou no mais recente); o "Abrir plano" de um item leva direto a ele. Item concluído ou cancelado é uma ' +
+        'versão fechada — para mudar, cancele o item ou crie outro (+ Novo item, ou peça ao especialista).'
+    },
+    {
+      id: 'files', anchor: 'wb-files-tab', group: 'Arquivos', since: 7, phase: 'card', side: 'bottom', align: 'start',
+      title: 'Todos os arquivos do card',
+      body: 'Análises, chamados, scripts, dados e anexos de <b>qualquer item</b>, num lugar só. Os chips filtram por item de trabalho; ' +
+        'cada item também mostra só os seus (aba <b>Arquivos</b> do item) e a Execução tem o atalho <b>Arquivos do item</b>.',
+      detail: 'A aba Arquivos lista tudo o que foi gerado ou anexado no card, inclusive os arquivos de versões antigas do plano ' +
+        '(grupo "Sem item"). Abra no visualizador (código, markdown, imagem), baixe ou copie; o chamado tem destaque com "Copiar chamado".'
+    },
+    {
+      id: 'rich-items', anchor: 'wb-items', group: 'Itens de trabalho', since: 7, phase: 'card', side: 'right', align: 'start', prepare: 'tab:items',
+      title: 'Cada item diz o que será feito',
+      body: 'Abra um item para ver <b>cada passo e cada alteração</b>: o arquivo e a linha (clique no link para ver o código e o diff), ' +
+        'as regras da Base Solvace e os arquivos e imagens do item.',
+      detail: 'Itens e sub-tarefas de código trazem a descrição do que muda, o link <code>caminho:linhas</code> que abre o popover com o ' +
+        'código atual e o diff, os itens da engenharia reversa (<code>modulo#RN-012</code>) e os arquivos do item na visão geral.'
     },
     {
       id: 'plan-files', anchor: 'plan-files-bar', group: 'Execução', since: 6, phase: 'card', side: 'bottom', align: 'start',

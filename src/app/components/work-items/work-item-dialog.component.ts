@@ -5,6 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
+import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { WorkItemsService } from '../../services/work-items.service';
 import { WsService } from '../../services/ws.service';
 import { WiTypeIconComponent } from './wi-type-icon.component';
@@ -57,10 +58,11 @@ export interface WorkItemDialogData {
 @Component({
   selector: 'app-work-item-dialog',
   standalone: true,
-  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent, WorkItemFilesComponent],
+  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WiTypeIconComponent, WorkItemFilesComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
-    <div class="wi-dlg">
+    <!-- 0087: links de código (ref:) e de itens da engenharia reversa/Base Solvace abrem o popover aqui também -->
+    <div class="wi-dlg" [appCodeRefHost]="data.card">
       <header class="wi-dlg__head">
         <app-wi-type-icon class="wi-type wid__type" [type]="item()?.type" [catalog]="data.catalog" [size]="20" />
         <div class="wi-dlg__head-main">
@@ -98,6 +100,13 @@ export interface WorkItemDialogData {
                 @if (it.description) { <div class="wi-md" [innerHTML]="it.description | planMarkdown:'card'"></div> }
                 @else { <p class="wi-muted wid__p">Sem descrição.</p> }
               </section>
+              @if (files.count()) {
+                <!-- 0087: o que ajuda a entender o item (análise, mocks, scripts, chamado, imagens) à vista na visão geral -->
+                <section class="wi-sec">
+                  <h4 class="wi-sec__title">Arquivos do item <small class="wi-muted">{{ files.count() }}</small></h4>
+                  <app-work-item-files [store]="files" [card]="data.card" [compact]="true" [allowUpload]="false" />
+                </section>
+              }
               @if (it.links.length) {
                 <section class="wi-sec">
                   <h4 class="wi-sec__title">Links</h4>
@@ -139,6 +148,13 @@ export interface WorkItemDialogData {
                     <span class="wi-chip">{{ executor(t.executor) }}</span>
                     @for (a of quick(t); track a) {
                       <button mat-icon-button class="wid__qa" [disabled]="busyTask() === t.number" (click)="taskAct(t, a)" [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
+                    }
+                    @if (t.description) {
+                      <!-- 0087: o que será feito, com o código (caminho:linhas → popover) e as regras da Base Solvace -->
+                      <details class="wid__task-desc">
+                        <summary>O que será feito</summary>
+                        <div class="wi-md" [innerHTML]="t.description | planMarkdown:'card'"></div>
+                      </details>
                     }
                   </li>
                 }
@@ -194,7 +210,10 @@ export interface WorkItemDialogData {
     .wid__btnchip { background: transparent; cursor: pointer; font: inherit; font-size: 11px; }
     .wid__btnchip:hover { border-color: var(--mat-sys-primary); color: var(--mat-sys-on-surface); }
     .wid__tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-    .wid__task { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 8px; }
+    .wid__task { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 8px; }
+    .wid__task-desc { flex: 1 0 100%; padding: 0 0 4px 30px; font-size: 12.5px; }
+    .wid__task-desc summary { cursor: pointer; color: var(--mat-sys-primary); font-size: 12px; width: fit-content; }
+    .wid__task-desc[open] summary { margin-bottom: 4px; }
     .wid__task:hover { background: rgba(255,255,255,.04); }
     .wid__st { font-size: 17px; width: 17px; height: 17px; flex: none; }
     .wid__task-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 2px 0; }

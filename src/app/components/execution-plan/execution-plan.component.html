@@ -370,10 +370,15 @@
   <div class="plan__body">
     <div class="plan__steps" #stepsBody data-keep-scroll data-tour="plan-steps">
       @if (isLoading()) {
-        @for (w of ['70%', '55%', '80%', '45%', '65%']; track $index) {
-          <div class="step step--skeleton" aria-hidden="true">
-            <div class="step__rail"><span class="step__node skeleton"></span></div>
-            <div class="step__main"><div class="skeleton skeleton--line" [style.width]="w"></div></div>
+        <!-- 0087: o skeleton só aparece se a leitura demorar (skeletonVisible); leitura rápida não pisca -->
+        @if (skeletonVisible()) {
+          <div class="plan__skeleton" role="status" aria-label="Carregando o plano">
+            @for (w of ['70%', '55%', '80%', '45%', '65%']; track $index) {
+              <div class="step step--skeleton" aria-hidden="true">
+                <div class="step__rail"><span class="step__node skeleton"></span></div>
+                <div class="step__main"><div class="skeleton skeleton--line" [style.width]="w"></div></div>
+              </div>
+            }
           </div>
         }
       } @else if (loadError()) {
@@ -387,12 +392,59 @@
           <mat-icon>account_tree</mat-icon>
           <span>Busque um card para ver o plano de execução.</span>
         </div>
+      } @else if (!plan() && activeRequest(); as r) {
+        <!-- 0087: o Claude já foi chamado e o plano ainda não nasceu — um estado contínuo (na fila → começando → plano),
+             sem voltar ao "nenhum plano". Quando o plano chega, esta área é só trocada pelo plano. -->
+        <div class="plan__state plan__live" role="status" aria-live="polite">
+          <span class="plan__live-bot" [class.plan__live-bot--queued]="r.status === 'queued'" aria-hidden="true">
+            <span class="plan__live-ring"></span>
+            <mat-icon>{{ r.status === 'queued' ? 'hourglass_top' : 'smart_toy' }}</mat-icon>
+          </span>
+          <strong class="plan__live-title">
+            @if (r.status === 'queued') { Na fila do Claude } @else { O Claude está trabalhando }
+          </strong>
+          @if (r.status === 'queued') {
+            <span class="plan__live-sub">{{ r.waitReason || 'Começa em instantes' }}.</span>
+          } @else if (liveActivity(); as a) {
+            <span class="plan__live-now">
+              <mat-icon>{{ activityIcon(a.tool) }}</mat-icon>{{ a.label }}<small>{{ activityAge(a.at) }}</small>
+            </span>
+          } @else {
+            <span class="plan__live-sub plan__live-sub--think">Lendo o card e preparando o plano<span class="plan__dots" aria-hidden="true"><i></i><i></i><i></i></span></span>
+          }
+          <span class="plan__live-hint">
+            O plano aparece aqui assim que o Claude montar — você acompanha cada passo, responde as perguntas dele e vê o que ele está fazendo, ao vivo.
+          </span>
+          @if (recentActivities().length) {
+            <ol class="plan__live-log" aria-label="Últimas atividades do Claude">
+              @for (a of recentActivities().slice(-4); track a.at + a.label) {
+                <li><mat-icon>{{ activityIcon(a.tool) }}</mat-icon><span>{{ a.label }}</span><time>{{ formatTime(a.at) }}</time></li>
+              }
+            </ol>
+          }
+          <span class="plan__live-actions">
+            @if (r.waitCode === 'budget') { <button mat-button (click)="forceRequest(r)" [disabled]="!!busy()">Rodar mesmo assim</button> }
+            @if (r.waitCode === 'gathering') { <button mat-button (click)="startNow()" [disabled]="!!busy()">Começar agora</button> }
+            @if (r.waitCode === 'no-worker' || r.waitCode === 'offline' || r.waitCode === 'paused') {
+              <button mat-button (click)="openExecutors()">Meus executores</button>
+            }
+            <button mat-stroked-button (click)="cancelRequest(r)" [disabled]="!!busy()">
+              <mat-icon>{{ r.status === 'queued' ? 'close' : 'stop' }}</mat-icon>{{ r.status === 'queued' ? 'Cancelar pedido' : 'Parar' }}
+            </button>
+          </span>
+        </div>
       } @else if (!plan()) {
         <div class="plan__state">
           <mat-icon>smart_toy</mat-icon>
           @if (hasWorkers()) {
-            <span>Nenhum plano de execução para este card.<br />
-              O Claude roda a análise na sua máquina, sem abrir o terminal — acompanhe aqui, ao vivo:</span>
+            @if (hideVersions()) {
+              <span>Nada em execução neste card ainda.<br />
+                Esta tela só <b>acompanha</b> o que o Claude faz num item de trabalho — passos, perguntas e respostas, ao vivo.
+                Para começar, peça a análise (ela cria os itens) ou execute um item.</span>
+            } @else {
+              <span>Nenhum plano de execução para este card.<br />
+                O Claude roda a análise na sua máquina, sem abrir o terminal — acompanhe aqui, ao vivo:</span>
+            }
             @if (!activeRequest()) {
               <button mat-flat-button color="primary" (click)="openAsk()" [disabled]="!!busy()">
                 <mat-icon>rocket_launch</mat-icon> Analisar com Claude

@@ -191,6 +191,19 @@ export class WorkItemsService {
     );
   }
 
+  /**
+   * 0087: todos os arquivos do card (itens, planos ligados e planos sem item — `workItemNumber` 0). Servidor sem o
+   * endpoint (404/405) → lista vazia com `unavailable`.
+   */
+  cardFiles(card: string): Observable<WorkItemFilesResult> {
+    return this.http.get<unknown>(`${this.apiUrl}/card/${encodeURIComponent(card)}/files`).pipe(
+      map((raw): WorkItemFilesResult => ({ files: normalizeFiles(raw), unavailable: false })),
+      catchError((err) => (err instanceof HttpErrorResponse && (err.status === 404 || err.status === 405)
+        ? of<WorkItemFilesResult>({ files: [], unavailable: true })
+        : throwError(() => toWorkItemError(err, `Não foi possível carregar os arquivos do card #${card}.`))))
+    );
+  }
+
   /** Conteúdo do arquivo (blob, com a x-api-key do interceptor) — os do plano pelo `contentUrl`. */
   fileContent(number: number, file: Pick<WorkItemFile, 'id' | 'contentUrl'>): Observable<Blob> {
     return this.http.get(resolveFileContentUrl(this.base, number, file), { responseType: 'blob' })

@@ -13,6 +13,22 @@
   }
 </div>
 
+<!-- 0087: tela em desligamento — o aviso fica fixo no topo e o tour (abre sozinho) ensina a Bancada -->
+<div class="pr-deprecation" role="alert" data-tour="pr-deprecation">
+  <mat-icon class="pr-deprecation__icon" aria-hidden="true">warning_amber</mat-icon>
+  <div class="pr-deprecation__text">
+    <strong>Esta tela será desligada.</strong>
+    <span>Todo o tratamento do card passa a ser feito pela <b>Bancada</b> — itens de trabalho, execução do Claude ao vivo, arquivos, PRs,
+      Especialista do caso e linha do tempo, numa tela só.</span>
+  </div>
+  <span class="pr-deprecation__actions">
+    <button mat-flat-button type="button" color="primary" data-tour="pr-deprecation-go" (click)="openWorkbench()">
+      <mat-icon>handyman</mat-icon>{{ cardNumber ? 'Abrir o card #' + cardNumber + ' na Bancada' : 'Abrir a Bancada' }}
+    </button>
+    <button mat-stroked-button type="button" (click)="showDeprecationTour()"><mat-icon>tour</mat-icon>Ver como funciona</button>
+  </span>
+</div>
+
 @if (integrationsBlocked) {
   <!-- Integrações pessoais pendentes (feature 0002): a tela depende do GitHub/Azure DevOps do usuário -->
   <div class="integrations-block">

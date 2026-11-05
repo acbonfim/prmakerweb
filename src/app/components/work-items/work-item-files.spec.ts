@@ -1,4 +1,6 @@
 import {
+  countFilesByItem,
+  filesOfItem,
   WorkItemFile,
   fileIcon,
   fileKindLook,
@@ -104,5 +106,30 @@ describe('0085 r5 — arquivos do item', () => {
     expect(guessUploadKind('dados.csv')).toBe('data');
     expect(guessUploadKind('chamado-77988.md')).toBe('ticket');
     expect(guessUploadKind('print.png', 'image/png')).toBe('attachment');
+  });
+});
+
+describe('0087 — arquivos do card por item', () => {
+  const list = [
+    f({ id: 'a', workItemNumber: 10 }), f({ id: 'b', workItemNumber: 10, source: 'plan' }),
+    f({ id: 'c', workItemNumber: 11 }), f({ id: 'd', workItemNumber: 0, source: 'plan' }), f({ id: 'e' })
+  ];
+
+  it('sem filtro devolve todos', () => {
+    expect(filesOfItem(list, undefined).length).toBe(5);
+    expect(filesOfItem(list, null).length).toBe(5);
+  });
+
+  it('filtra pelo item e 0 pega os de plano sem item (e os sem número)', () => {
+    expect(filesOfItem(list, 10).map((x) => x.id)).toEqual(['a', 'b']);
+    expect(filesOfItem(list, 11).map((x) => x.id)).toEqual(['c']);
+    expect(filesOfItem(list, 0).map((x) => x.id)).toEqual(['d', 'e']);
+  });
+
+  it('conta os arquivos por item', () => {
+    const counts = countFilesByItem(list);
+    expect(counts.get(10)).toBe(2);
+    expect(counts.get(11)).toBe(1);
+    expect(counts.get(0)).toBe(2);
   });
 });

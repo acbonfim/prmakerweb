@@ -204,6 +204,14 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly history = signal<ExecutionPlanSummary[]>([]);
   readonly logs = signal<ExecutionLog[]>([]);
   readonly isLoading = signal(false);
+  /**
+   * 0087: a carga só vira skeleton se demorar (>220 ms) — leitura rápida não pisca — e só na primeira leitura do plano
+   * em tela; atualização (tempo real, polling, "Analisar com Claude") nunca volta ao skeleton.
+   */
+  readonly skeletonVisible = signal(false);
+  private skeletonTimer?: ReturnType<typeof setTimeout>;
+  /** O plano em tela (ou a certeza de que ele ainda não existe) já foi lido — a partir daí só atualiza em silêncio. */
+  private readonly hasLoaded = signal(false);
   readonly loadError = signal(false);
   /** Card buscado (o que está carregado — não o que está sendo digitado). */
   readonly loadedCard = signal<string | null>(null);
@@ -240,12 +248,19 @@ export class ExecutionPlanComponent implements OnDestroy {
     if (id === this.fixedPlanId()) return;
     this.fixedPlanId.set(id);
     if (this.pinnedPlanId() === id) return;
+    const hadPlan = !!this.plan();
     this.pinnedPlanId.set(id);
     // Sem card carregado, o load() leva o plano fixo; com card, troca já.
     if (!this.loadedCard()) return;
+    // 0087: o plano acabou de nascer (a tela mostrava "Claude preparando…"): troca em silêncio, sem skeleton.
+    if (!hadPlan && this.hasLoaded()) {
+      this.fetch({ silent: true });
+      return;
+    }
     this.selectedKey.set(null);
     this.plan.set(null);
     this.logs.set([]);
+    this.hasLoaded.set(false);
     this.fetch({ silent: false });
   }
   get planId(): string | null {
@@ -1057,6 +1072,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.loadedCard.set(normalized);
     this.switchGroup(normalized);
     if (changed) {
+      this.hasLoaded.set(false);
       this.plan.set(null);
       this.queue.set(null);
       this.askOpen.set(false);
@@ -1102,6 +1118,8 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.pinnedPlanId.set(this.fixedPlanId());
     this.selectedKey.set(null);
     this.isLoading.set(false);
+    this.endSkeleton();
+    this.hasLoaded.set(false);
     this.loadError.set(false);
     this.confirmCancelPlan.set(false);
     this.skipKey.set(null);
@@ -1110,10 +1128,13 @@ export class ExecutionPlanComponent implements OnDestroy {
   private fetch(options: { silent: boolean }): void {
     const card = this.loadedCard();
     if (!card) return;
-    const silent = options.silent && !!this.plan();
+    // 0087: "silencioso" vale sempre que esta tela já leu o plano (ou a ausência dele) — antes só valia com plano em tela,
+    // e cada evento num card sem plano ainda (ex.: logo depois de "Analisar com Claude") voltava ao skeleton e piscava.
+    const silent = options.silent && this.hasLoaded();
     if (!silent) {
       this.isLoading.set(true);
       this.loadError.set(false);
+      this.beginSkeleton();
     }
 
     this.loadQueue(card);
@@ -1124,16 +1145,30 @@ export class ExecutionPlanComponent implements OnDestroy {
       next: (plan) => {
         if (this.loadedCard() !== card) return;
         this.isLoading.set(false);
+        this.endSkeleton();
+        this.hasLoaded.set(true);
         this.applyPlan(plan ?? null);
         this.loadHistory(card);
       },
       error: () => {
         if (this.loadedCard() !== card) return;
         this.isLoading.set(false);
+        this.endSkeleton();
         // Numa atualização discreta a tela mantém o que já mostra.
         if (!silent) this.loadError.set(true);
       }
     });
+  }
+
+  /** Skeleton só depois de 220 ms de espera (leituras rápidas não piscam). */
+  private beginSkeleton(): void {
+    clearTimeout(this.skeletonTimer);
+    this.skeletonTimer = setTimeout(() => { if (this.isLoading()) this.skeletonVisible.set(true); }, 220);
+  }
+
+  private endSkeleton(): void {
+    clearTimeout(this.skeletonTimer);
+    this.skeletonVisible.set(false);
   }
 
   private applyPlan(plan: ExecutionPlan | null): void {
@@ -1941,6 +1976,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.resyncSub?.unsubscribe();
     this.queueSub?.unsubscribe();
     clearTimeout(this.refreshTimer);
+    clearTimeout(this.skeletonTimer);
     clearTimeout(this.flashTimer);
     clearInterval(this.pollTimer);
     clearInterval(this.clockTimer);

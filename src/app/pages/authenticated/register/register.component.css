@@ -456,3 +456,15 @@
   0%, 60% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 75%, transparent); }
   100% { box-shadow: 0 0 0 2px transparent; }
 }
+
+/* 0087: aviso de desligamento da tela */
+.pr-deprecation { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin: 0 0 10px; padding: 12px 16px; border-radius: 12px;
+  background: color-mix(in srgb, #d29922 14%, transparent); border: 1px solid color-mix(in srgb, #d29922 55%, transparent);
+  animation: pr-deprecation-in .3s ease both; }
+.pr-deprecation__icon { color: #d29922; font-size: 26px; width: 26px; height: 26px; flex: none; }
+.pr-deprecation__text { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.45; }
+.pr-deprecation__text strong { font-size: 14px; }
+.pr-deprecation__actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.pr-deprecation__actions .mat-icon { margin-right: 4px; }
+@keyframes pr-deprecation-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pr-deprecation { animation: none; } }
