@@ -488,10 +488,17 @@ export function executingNumbers(items: readonly Pick<WorkItem, 'status' | 'numb
   return items.filter((x) => isExecutingItem(x)).map((x) => x.number).sort((a, b) => a - b);
 }
 
-/** Os itens em execução no topo (em ordem de número); o resto mantém a ordem recebida. */
-export function sortExecutingFirst<T extends Pick<WorkItem, 'status' | 'number'>>(items: readonly T[]): T[] {
-  const live = items.filter((x) => isExecutingItem(x)).sort((a, b) => a.number - b.number);
-  return [...live, ...items.filter((x) => !isExecutingItem(x))];
+/**
+ * Ordem da lista: criação, do mais antigo ao mais novo (novos por último), com ou sem a sessão de execução aberta —
+ * item em execução não sobe. Sem data válida, vale o número (sequência global, também na ordem de criação).
+ */
+export function sortByCreation<T extends Pick<WorkItem, 'createdAt' | 'number'>>(items: readonly T[]): T[] {
+  const time = (s: string | null | undefined) => { const t = s ? Date.parse(s) : NaN; return isNaN(t) ? null : t; };
+  return items.slice().sort((a, b) => {
+    const ta = time(a.createdAt), tb = time(b.createdAt);
+    if (ta !== null && tb !== null && ta !== tb) return ta - tb;
+    return a.number - b.number;
+  });
 }
 
 const WAIT_CODE_LABELS: Record<string, string> = {

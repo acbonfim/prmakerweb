@@ -3,6 +3,7 @@ import { Subscription } from 'rxjs';
 import { WorkItemsService } from '../../services/work-items.service';
 import { WsService } from '../../services/ws.service';
 import { EXECUTION_PLAN_EVENT } from '../execution-plan/execution-plan.model';
+import { CASE_CHAT_EVENT } from '../case-chat/case-chat.model';
 import { WorkItemFile } from './work-item-files';
 import { listenWorkItems } from './work-items-live';
 
@@ -24,7 +25,8 @@ export interface FilesSource {
 /**
  * 0087: todos os arquivos do card (`GET WorkItems/card/{card}/files`) — análises, chamados, scripts, dados e anexos de
  * todos os itens e planos —, ao vivo: mudança de item/arquivo (`workItemsUpdated`) e artefato novo do plano
- * (`executionPlanUpdated` action `artifact`) recarregam sem piscar (a lista só é trocada quando a resposta chega).
+ * (`executionPlanUpdated` action `artifact`) e mensagem da conversa do especialista (`caseChatUpdated` — os anexos da
+ * conversa também entram) recarregam sem piscar (a lista só é trocada quando a resposta chega).
  * Criar dentro de um contexto de injeção; `watch(card)` é idempotente e desliga com o dono.
  */
 export class CardFilesStore implements FilesSource {
@@ -51,6 +53,12 @@ export class CardFilesStore implements FilesSource {
     this.scheduleLoad();
   };
 
+  private readonly onCaseEvent = (p: { cardNumber?: string | number; action?: string }) => {
+    if (!this.card || `${p?.cardNumber ?? ''}`.trim() !== this.card) return;
+    if (p.action !== 'message' && p.action !== 'deleted') return;
+    this.scheduleLoad();
+  };
+
   constructor() {
     inject(DestroyRef).onDestroy(() => this.stop());
   }
@@ -71,6 +79,7 @@ export class CardFilesStore implements FilesSource {
       this.scheduleLoad();
     }, 400);
     this.ws.on(EXECUTION_PLAN_EVENT, this.onPlanEvent);
+    this.ws.on(CASE_CHAT_EVENT, this.onCaseEvent);
   }
 
   load(): void {
@@ -112,6 +121,7 @@ export class CardFilesStore implements FilesSource {
     this.stopLive?.();
     this.stopLive = null;
     this.ws.off(EXECUTION_PLAN_EVENT, this.onPlanEvent);
+    this.ws.off(CASE_CHAT_EVENT, this.onCaseEvent);
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.sub?.unsubscribe();
