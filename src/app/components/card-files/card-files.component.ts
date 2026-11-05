@@ -1,116 +1,358 @@
-import { ChangeDetectionStrategy, Component, computed, input, model } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, model, signal, untracked
+} from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatButtonModule } from '@angular/material/button';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { firstValueFrom } from 'rxjs';
+import { WorkItemsService } from '../../services/work-items.service';
+import { saveBlob } from '../../services/execution-plan.service';
+import { CliipboardService } from '../../services/cliipboard.service';
+import { renderMarkdown } from '../../helpers/markdown-ext';
+import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { CardFilesStore } from '../work-items/card-files.store';
-import { WorkItem, formatWorkNumber, itemStatusLook } from '../work-items/work-item.model';
-import { WorkItemFilesComponent } from '../work-items/work-item-files.component';
-import { countFilesByItem } from '../work-items/work-item-files';
+import { WorkItem, formatWorkNumber } from '../work-items/work-item.model';
+import {
+  FILE_KIND_LOOKS, WorkItemFile, WorkItemFileKind, countFilesByItem, fileIcon, fileKindLook, fileMeta, filePreviewKind,
+  fileTextAsMarkdown, filesOfItem, isTextFile, normalizeFileKind
+} from '../work-items/work-item-files';
 
-interface ItemChip {
-  /** Número do item (0 = arquivos de planos sem item). */
-  number: number;
-  label: string;
-  title: string;
-  count: number;
-  icon: string;
-  color: string;
+type KindTab = 'all' | WorkItemFileKind;
+
+interface FileView {
+  status: 'loading' | 'ready' | 'error' | 'none';
+  html: string;
 }
 
+const NARROW = '(max-width: 720px)';
+
 /**
- * 0087: **Arquivos do card** — tudo o que foi gerado ou anexado no card (análises, chamados, scripts, dados, anexos),
- * fora de qualquer execução. "Todos" mostra o card inteiro; escolher um item mostra só os arquivos dele. É a mesma lista
- * de cada item de trabalho (cada item continua mostrando só os seus), vista de cima.
+ * 0087: **Arquivos do card** no mesmo formato do modal "Textos do card": a lista de arquivos à esquerda e a
+ * visualização à direita, com abas por tipo (Todos · Textos · Análises · Chamados · Scripts · Dados · Anexos) e o filtro
+ * por item de trabalho. Mostra tudo o que foi gerado ou anexado no card, de qualquer item — o item continua mostrando só
+ * os seus arquivos na própria tela. No celular vira lista OU arquivo (com "voltar").
  */
 @Component({
   selector: 'app-card-files',
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatTooltipModule, WorkItemFilesComponent],
+  imports: [MatButtonModule, MatIconModule, MatTooltipModule, CodeRefHostDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="cf" aria-label="Arquivos do card">
-      <p class="cf__intro">
-        <mat-icon>folder_open</mat-icon>
-        <span>Todos os arquivos do card — análises, chamados, scripts, dados e anexos —, de qualquer item de trabalho.
-          Escolha um item para ver só os dele; cada item também mostra os seus na própria tela.</span>
-      </p>
-
-      <div class="cf__chips" role="tablist" aria-label="Filtrar por item de trabalho">
-        <button type="button" role="tab" class="cf__chip" [class.cf__chip--on]="selected() === undefined"
-                [attr.aria-selected]="selected() === undefined" (click)="selected.set(undefined)">
-          <mat-icon>folder_copy</mat-icon>Todos <span class="cf__n">{{ store().count() }}</span>
-        </button>
-        @for (c of chips(); track c.number) {
-          <button type="button" role="tab" class="cf__chip" [class.cf__chip--on]="selected() === c.number"
-                  [attr.aria-selected]="selected() === c.number" (click)="selected.set(c.number)"
-                  [matTooltip]="c.title" matTooltipShowDelay="500">
-            <mat-icon [style.color]="c.color">{{ c.icon }}</mat-icon>
-            <span class="cf__label">{{ c.label }}</span><span class="cf__n">{{ c.count }}</span>
+    <div class="cf" [class.cf--detail]="narrow() && showDetail()">
+      <div class="cf__tabs" role="tablist" aria-label="Tipos de arquivo">
+        @for (t of tabs(); track t.id) {
+          <button type="button" role="tab" class="cf__tab" [class.cf__tab--on]="kindTab() === t.id" [attr.aria-selected]="kindTab() === t.id"
+                  (click)="kindTab.set(t.id)">
+            <mat-icon [style.color]="t.color">{{ t.icon }}</mat-icon>{{ t.label }}<span class="cf__n">{{ t.count }}</span>
           </button>
         }
       </div>
 
-      @if (selected() !== undefined && selectedChip(); as sc) {
-        <p class="cf__scope" role="status">
-          <mat-icon>filter_alt</mat-icon>
-          <span>Mostrando só os arquivos de <b>{{ sc.number ? sc.label : 'versões antigas do plano (sem item)' }}</b>.</span>
-          <button mat-button type="button" (click)="selected.set(undefined)">Ver todos</button>
-        </p>
-      }
+      <div class="cf__body">
+        <nav class="cf__list" aria-label="Arquivos do card">
+          <div class="cf__filters">
+            <label class="cf__field" matTooltip="Mostrar só os arquivos de um item de trabalho" matTooltipShowDelay="500">
+              <mat-icon>filter_alt</mat-icon>
+              <select class="cf__select" aria-label="Filtrar por item de trabalho" (change)="onItem($any($event.target).value)">
+                <option value="all" [selected]="selected() === undefined">Todos os itens ({{ store().count() }})</option>
+                @for (o of itemOptions(); track o.number) {
+                  <option [value]="o.number" [selected]="selected() === o.number">{{ o.label }} ({{ o.count }})</option>
+                }
+              </select>
+            </label>
+            <label class="cf__field cf__field--search">
+              <mat-icon>search</mat-icon>
+              <input class="cf__input" type="search" placeholder="Buscar pelo nome" aria-label="Buscar arquivo pelo nome"
+                     [value]="query()" (input)="query.set($any($event.target).value)" />
+            </label>
+          </div>
 
-      <app-work-item-files [store]="store()" [card]="card()" [filterItem]="selected()" [showItem]="selected() === undefined"
-                           [allowUpload]="false"></app-work-item-files>
-    </section>
+          @if (store().unavailable()) {
+            <div class="cf__empty"><mat-icon>info_outline</mat-icon>Os arquivos do card ainda não estão disponíveis neste servidor.</div>
+          } @else if (store().error(); as e) {
+            <div class="cf__empty cf__empty--err"><mat-icon>error_outline</mat-icon>{{ e }}
+              <button type="button" class="cf__link" (click)="store().load()">Tentar de novo</button></div>
+          }
+
+          @for (f of visible(); track key(f)) {
+            <button type="button" class="cfi" [class.cfi--on]="current() && key(current()!) === key(f)" (click)="select(f)"
+                    [attr.aria-current]="current() && key(current()!) === key(f) ? 'true' : null">
+              <mat-icon class="cfi__icon" [style.color]="look(f).color" aria-hidden="true">{{ icon(f) }}</mat-icon>
+              <span class="cfi__text">
+                <span class="cfi__name" [title]="f.name">{{ f.name }}</span>
+                <span class="cfi__meta">
+                  <span>{{ look(f).label }}</span>
+                  @if (meta(f); as m) { <span>{{ m }}</span> }
+                </span>
+                <span class="cfi__where">
+                  <mat-icon>{{ f.workItemNumber ? 'checklist' : 'history' }}</mat-icon>{{ whereOf(f) }}
+                  @if (f.source === 'plan') { <span class="cfi__chip">plano</span> }
+                </span>
+              </span>
+            </button>
+          } @empty {
+            @if (!store().unavailable() && !store().error()) {
+              <div class="cf__empty">
+                @if (!store().loaded()) { <mat-icon class="cf__spin">progress_activity</mat-icon>Buscando os arquivos do card… }
+                @else if (!store().count()) { Nenhum arquivo neste card ainda — análises, chamados, scripts, dados e anexos aparecem aqui assim que são gerados. }
+                @else { Nenhum arquivo com esse filtro. <button type="button" class="cf__link" (click)="clearFilters()">Limpar filtros</button> }
+              </div>
+            }
+          }
+        </nav>
+
+        <section class="cf__detail" aria-live="polite">
+          @if (current(); as f) {
+            @if (narrow()) {
+              <button type="button" class="cf__back" (click)="back()"><mat-icon>arrow_back</mat-icon>Voltar para a lista</button>
+            }
+            <div class="cfd__head">
+              <mat-icon class="cfd__icon" [style.color]="look(f).color">{{ icon(f) }}</mat-icon>
+              <div class="cfd__titles">
+                <h2 class="cfd__title">{{ f.name }}</h2>
+                <div class="cfd__meta">
+                  <span class="cfd__fact">{{ look(f).label }}</span>
+                  @if (meta(f, true); as m) { <span class="cfd__fact">{{ m }}</span> }
+                  <span class="cfd__fact cfd__where"><mat-icon>{{ f.workItemNumber ? 'checklist' : 'history' }}</mat-icon>{{ whereOf(f) }}</span>
+                  @if (f.createdBy) { <span class="cfd__fact">por {{ f.createdBy }}</span> }
+                </div>
+              </div>
+            </div>
+            <div class="cfd__toolbar" role="toolbar" aria-label="Ações do arquivo">
+              @if (f.kind === 'ticket' && isText(f)) {
+                <button mat-flat-button color="primary" type="button" (click)="copy(f, true)" [disabled]="busy() === key(f)">
+                  <mat-icon>{{ copied() === key(f) ? 'check' : 'confirmation_number' }}</mat-icon>Copiar chamado
+                </button>
+              }
+              @if (isText(f) && f.kind !== 'ticket') {
+                <button mat-stroked-button type="button" (click)="copy(f, false)" [disabled]="busy() === key(f)">
+                  <mat-icon>{{ copied() === key(f) ? 'check' : 'content_copy' }}</mat-icon>Copiar texto
+                </button>
+              }
+              <button mat-stroked-button type="button" (click)="download(f)" [disabled]="busy() === key(f)"><mat-icon>download</mat-icon>Baixar</button>
+              <span class="cf__spacer"></span>
+            </div>
+            <div class="cfd__content">
+              @switch (view().status) {
+                @case ('loading') { <div class="cf__state" role="status"><mat-icon class="cf__spin">progress_activity</mat-icon> Carregando o arquivo…</div> }
+                @case ('error') {
+                  <div class="cf__state cf__state--err" role="alert"><mat-icon>error_outline</mat-icon> Não foi possível carregar o arquivo.
+                    <button mat-stroked-button type="button" (click)="reload()">Tentar de novo</button></div>
+                }
+                @case ('none') {
+                  <div class="cf__state"><mat-icon>draft</mat-icon>Este tipo de arquivo não tem visualização aqui.
+                    <button mat-stroked-button type="button" (click)="download(f)"><mat-icon>download</mat-icon>Baixar {{ f.name }}</button></div>
+                }
+                @default { <div class="cf-md" [appCodeRefHost]="card()" [innerHTML]="view().html"></div> }
+              }
+            </div>
+          } @else {
+            <div class="cf__state"><mat-icon>touch_app</mat-icon> Escolha um arquivo.</div>
+          }
+        </section>
+      </div>
+    </div>
   `,
-  styles: [`
-    :host { display: block; }
-    .cf { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px 12px; animation: cf-in .22s ease both; }
-    @keyframes cf-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-    .cf__intro { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--cc-text-3); }
-    .cf__intro mat-icon { font-size: 18px; width: 18px; height: 18px; flex: none; margin-top: 1px; }
-    .cf__chips { display: flex; flex-wrap: wrap; gap: 6px; }
-    .cf__chip { display: inline-flex; align-items: center; gap: 5px; max-width: 280px; padding: 3px 10px 3px 8px; border-radius: 999px;
-      border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); background: transparent; color: var(--cc-text-2);
-      font: inherit; font-size: 12px; cursor: pointer; transition: background-color .15s, border-color .15s, color .15s; }
-    .cf__chip:hover { background: rgba(255,255,255,.05); }
-    .cf__chip--on { color: var(--mat-sys-on-surface); border-color: var(--mat-sys-primary);
-      background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent); }
-    .cf__chip mat-icon { font-size: 15px; width: 15px; height: 15px; flex: none; }
-    .cf__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .cf__n { font-size: 11px; opacity: .75; font-variant-numeric: tabular-nums; }
-    .cf__scope { display: flex; align-items: center; gap: 6px; margin: 0; padding: 4px 6px 4px 10px; border-radius: 8px; font-size: 12px;
-      background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent); color: var(--cc-text-2); }
-    .cf__scope mat-icon { font-size: 16px; width: 16px; height: 16px; flex: none; }
-    .cf__scope span { flex: 1; min-width: 0; }
-    @media (prefers-reduced-motion: reduce) { .cf { animation: none; } .cf__chip { transition: none; } }
-  `]
+  styleUrl: './card-files.component.css'
 })
 export class CardFilesComponent {
   readonly store = input.required<CardFilesStore>();
   readonly card = input<string | null>(null);
-  /** Itens do card (os que têm arquivos viram filtro). */
+  /** Itens do card (os que têm arquivos viram opção do filtro). */
   readonly items = input<WorkItem[]>([]);
-  /** Filtro: `undefined` = todos; número = só os arquivos desse item (0 = sem item). */
+  /** Filtro por item: `undefined` = todos; número = só os arquivos desse item (0 = sem item). */
   readonly selected = model<number | undefined>(undefined);
 
-  readonly chips = computed<ItemChip[]>(() => {
-    const counts = countFilesByItem(this.store().files());
-    const selected = this.selected();
-    const out: ItemChip[] = [];
-    for (const item of [...this.items()].sort((a, b) => b.number - a.number)) {
-      const count = counts.get(item.number) ?? 0;
-      if (!count && selected !== item.number) continue;
-      const look = itemStatusLook(item.status);
-      out.push({
-        number: item.number, label: `${formatWorkNumber(item.number)} ${item.title}`, title: `${formatWorkNumber(item.number)} ${item.title} · ${look.label}`,
-        count, icon: look.icon, color: look.color
-      });
-    }
-    const orphans = counts.get(0) ?? 0;
-    if (orphans || selected === 0) {
-      out.push({ number: 0, label: 'Sem item', title: 'Arquivos de versões antigas do plano, anteriores aos itens de trabalho', count: orphans, icon: 'history', color: '#8b949e' });
+  private api = inject(WorkItemsService);
+  private snack = inject(MatSnackBar);
+  private clipboard = inject(CliipboardService);
+
+  readonly kindTab = signal<KindTab>('all');
+  readonly query = signal('');
+  private readonly pickedKey = signal<string | null>(null);
+  readonly narrow = signal(window.matchMedia?.(NARROW).matches ?? false);
+  readonly showDetail = signal(false);
+  readonly busy = signal<string | null>(null);
+  readonly copied = signal<string | null>(null);
+  private readonly cache = new Map<string, FileView>();
+  private readonly objectUrls: string[] = [];
+  private seq = 0;
+  readonly view = signal<FileView>({ status: 'loading', html: '' });
+
+  readonly key = (f: WorkItemFile) => `${f.source ?? 'item'}:${f.id}`;
+  readonly look = (f: WorkItemFile) => fileKindLook(f.kind);
+  readonly icon = fileIcon;
+  readonly isText = isTextFile;
+
+  /** Arquivos do filtro de item (antes das abas e da busca) — as abas contam sobre ele. */
+  private readonly ofItem = computed(() => filesOfItem(this.store().files(), this.selected()));
+
+  readonly tabs = computed(() => {
+    const files = this.ofItem();
+    const counts = new Map<string, number>();
+    for (const f of files) counts.set(normalizeFileKind(f.kind), (counts.get(normalizeFileKind(f.kind)) ?? 0) + 1);
+    const out = [{ id: 'all' as KindTab, label: 'Todos', icon: 'folder_copy', color: '', count: files.length }];
+    // Textos, Análises, Chamados, Scripts, Dados, Anexos — só as abas que têm arquivo (e a que está aberta).
+    const order: WorkItemFileKind[] = ['text', 'analysis', 'ticket', 'script', 'data', 'attachment'];
+    for (const kind of order) {
+      const count = counts.get(kind) ?? 0;
+      if (!count && this.kindTab() !== kind) continue;
+      const look = FILE_KIND_LOOKS.find((k) => k.kind === kind)!;
+      out.push({ id: kind, label: look.group, icon: look.icon, color: look.color, count });
     }
     return out;
   });
-  readonly selectedChip = computed(() => this.chips().find((c) => c.number === this.selected()) ?? null);
+
+  readonly visible = computed(() => {
+    const tab = this.kindTab();
+    const q = this.query().trim().toLowerCase();
+    return this.ofItem().filter((f) => (tab === 'all' || normalizeFileKind(f.kind) === tab) && (!q || f.name.toLowerCase().includes(q)));
+  });
+
+  /** Arquivo aberto: o escolhido; no desktop, sem escolha vale o primeiro da lista (no celular, só depois de tocar). */
+  readonly current = computed<WorkItemFile | null>(() => {
+    const list = this.visible();
+    const picked = this.pickedKey();
+    const hit = picked ? list.find((f) => this.key(f) === picked) : null;
+    if (hit) return hit;
+    return this.narrow() ? null : list[0] ?? null;
+  });
+
+  readonly itemOptions = computed(() => {
+    const counts = countFilesByItem(this.store().files());
+    const selected = this.selected();
+    const out: { number: number; label: string; count: number }[] = [];
+    for (const item of [...this.items()].sort((a, b) => b.number - a.number)) {
+      const count = counts.get(item.number) ?? 0;
+      if (!count && selected !== item.number) continue;
+      out.push({ number: item.number, label: `${formatWorkNumber(item.number)} ${item.title}`, count });
+    }
+    const orphans = counts.get(0) ?? 0;
+    if (orphans || selected === 0) out.push({ number: 0, label: 'Sem item (versões antigas do plano)', count: orphans });
+    return out;
+  });
+
+  private readonly mq = window.matchMedia?.(NARROW);
+  private readonly onNarrow = (e: MediaQueryListEvent) => this.narrow.set(e.matches);
+
+  constructor() {
+    this.mq?.addEventListener('change', this.onNarrow);
+    inject(DestroyRef).onDestroy(() => {
+      this.mq?.removeEventListener('change', this.onNarrow);
+      this.objectUrls.forEach((u) => URL.revokeObjectURL(u));
+    });
+
+    // Carrega o conteúdo do arquivo aberto (com cache por versão do arquivo — recarga da lista não pisca a leitura).
+    effect(() => {
+      const f = this.current();
+      untracked(() => this.load(f, false));
+    });
+    // Filtro por item que muda (ex.: "Arquivos do item" da Execução): volta para "Todos" as abas que ficaram sem arquivo.
+    effect(() => {
+      const tab = this.kindTab();
+      if (tab === 'all') return;
+      const has = this.ofItem().some((f) => normalizeFileKind(f.kind) === tab);
+      if (!has && this.store().loaded()) untracked(() => this.kindTab.set('all'));
+    });
+  }
+
+  select(f: WorkItemFile): void {
+    this.pickedKey.set(this.key(f));
+    this.showDetail.set(true);
+  }
+
+  back(): void {
+    this.showDetail.set(false);
+  }
+
+  onItem(value: string): void {
+    this.selected.set(value === 'all' ? undefined : Number(value));
+    this.pickedKey.set(null);
+    this.showDetail.set(false);
+  }
+
+  clearFilters(): void {
+    this.selected.set(undefined);
+    this.kindTab.set('all');
+    this.query.set('');
+  }
+
+  whereOf(f: WorkItemFile): string {
+    const n = Number(f.workItemNumber ?? 0);
+    if (!n) return 'Versão antiga do plano';
+    const item = this.items().find((i) => i.number === n);
+    return item ? `${formatWorkNumber(n)} ${item.title}` : formatWorkNumber(n);
+  }
+
+  meta(f: WorkItemFile, full = false): string {
+    return fileMeta({ ...f, taskNumber: full ? f.taskNumber : null }, (n) => formatWorkNumber(n), false);
+  }
+
+  private numberOf(f: WorkItemFile): number {
+    return Number(f.workItemNumber ?? 0);
+  }
+
+  private cacheKey(f: WorkItemFile): string {
+    return `${this.key(f)}|${f.updatedAt ?? f.createdAt ?? ''}|${f.size ?? ''}`;
+  }
+
+  reload(): void {
+    const f = this.current();
+    if (f) this.load(f, true);
+  }
+
+  private load(f: WorkItemFile | null, force: boolean): void {
+    const s = ++this.seq;
+    if (!f) { this.view.set({ status: 'ready', html: '' }); return; }
+    const kind = filePreviewKind(f);
+    if (kind === 'none') { this.view.set({ status: 'none', html: '' }); return; }
+    const ck = this.cacheKey(f);
+    const cached = force ? undefined : this.cache.get(ck);
+    if (cached) { this.view.set(cached); return; }
+    // Só mostra "Carregando…" se não houver nada do arquivo anterior para manter; a troca é direta quando a leitura é rápida.
+    this.view.set({ status: 'loading', html: '' });
+    firstValueFrom(this.api.fileContent(this.numberOf(f), f)).then(async (blob) => {
+      let md: string;
+      if (kind === 'image') {
+        const url = URL.createObjectURL(blob);
+        this.objectUrls.push(url);
+        md = `![${f.name.replace(/[[\]]/g, '')}](${url})`;
+      } else {
+        md = fileTextAsMarkdown(f, await blob.text());
+      }
+      const view: FileView = { status: 'ready', html: renderMarkdown(md, { codeRefs: true, reRefs: true }) };
+      this.cache.set(ck, view);
+      if (s === this.seq) this.view.set(view);
+    }, () => { if (s === this.seq) this.view.set({ status: 'error', html: '' }); });
+  }
+
+  async download(f: WorkItemFile): Promise<void> {
+    this.busy.set(this.key(f));
+    try {
+      saveBlob(await firstValueFrom(this.api.fileContent(this.numberOf(f), f)), f.name);
+    } catch (e) {
+      this.snack.open((e as Error)?.message || 'Não foi possível baixar o arquivo.', 'Fechar', { duration: 6000 });
+    } finally {
+      this.busy.set(null);
+    }
+  }
+
+  /** Copia o texto (chamado/markdown vai também formatado — cola bonito no sistema de chamados). */
+  async copy(f: WorkItemFile, rich: boolean): Promise<void> {
+    const id = this.key(f);
+    this.busy.set(id);
+    try {
+      const text = await (await firstValueFrom(this.api.fileContent(this.numberOf(f), f))).text();
+      if (!text.trim()) { this.snack.open('O arquivo está vazio.', 'Ok', { duration: 3000 }); return; }
+      if (rich && filePreviewKind(f) === 'markdown') await this.clipboard.copyRichToClipboard(renderMarkdown(text, { codeRefs: false }), text);
+      else this.clipboard.copyFullDescriptionToClipboard(text);
+      this.copied.set(id);
+      setTimeout(() => { if (this.copied() === id) this.copied.set(null); }, 1600);
+    } catch (e) {
+      this.snack.open((e as Error)?.message || 'Não foi possível copiar o arquivo.', 'Fechar', { duration: 6000 });
+    } finally {
+      this.busy.set(null);
+    }
+  }
 }
