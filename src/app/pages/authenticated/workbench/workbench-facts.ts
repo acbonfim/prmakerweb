@@ -13,6 +13,8 @@ export interface WorkbenchFactsInput {
   card: CardFull | null;
   plan: PlanHeadline | null;
   situation: CardSituation | null;
+  /** Rodada 5: card US — o plano de entrega é "Implementação" (não "Correção"). */
+  us?: boolean;
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -75,7 +77,7 @@ export function workbenchFacts(input: WorkbenchFactsInput): InfoFact[] {
 
   const plan = input.plan;
   if (plan) {
-    const phase = plan.phase === 'correction' ? 'Correção' : 'Análise';
+    const phase = plan.phase === 'correction' ? (input.us ? 'Implementação' : 'Correção') : 'Análise';
     const yours = plan.userPending ?? 0;
     const extra = yours ? ` · aguardando você (${yours})` : plan.openQuestions ? ` · ${plan.openQuestions} pergunta(s)` : plan.waiting ? ' · aguardando' : '';
     facts.push({

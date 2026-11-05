@@ -5,6 +5,7 @@ import { CodeRefService } from '../code-ref/code-ref.service';
 import { CodeRef, changeMeta, linesLabel } from '../code-ref/code-ref.model';
 import { generatedTextLabel } from '../generated-texts/generated-texts.model';
 import { ExecutionArtifact, ExecutionPlan, ExecutionPlanSummary, PLAN_STATUS_LABEL } from './execution-plan.model';
+import { isUsPlan, planTerms } from './plan-terms';
 
 const STEP_LABEL: Record<string, string> = {
   pending: 'pendente', running: 'em andamento', waiting: 'aguardando', paused: 'pausada',
@@ -31,7 +32,8 @@ export class PlanDocumentService {
   private api = inject(ExecutionPlanService);
   private codeRefs = inject(CodeRefService);
 
-  async build(plan: ExecutionPlan, history: ExecutionPlanSummary[]): Promise<string> {
+  /** `opts.us` (0085, rodada 5): plano de US — "Plano de implementação" no lugar de "Plano de correção". */
+  async build(plan: ExecutionPlan, history: ExecutionPlanSummary[], opts?: { us?: boolean }): Promise<string> {
     const phase = plan.phase ?? 'analysis';
     const versionOf = (id: string | null | undefined) => history.find((h) => h.id === id)?.versionNumber ?? null;
     const out: string[] = [];
@@ -47,7 +49,7 @@ export class PlanDocumentService {
     }
 
     const v = versionOf(shown.id);
-    const kind = phase === 'correction' ? 'Plano de correção' : 'Análise';
+    const kind = phase === 'correction' ? planTerms(!!opts?.us || isUsPlan(shown, history)).fixPlan : 'Análise';
     out.push(`# ${kind}${v ? ' v' + v : ''} — ${shown.title}`, '');
     const parent = phase === 'correction' && shown.parentPlanId ? versionOf(shown.parentPlanId) : null;
     out.push([

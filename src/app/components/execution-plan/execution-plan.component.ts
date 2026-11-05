@@ -39,6 +39,7 @@ import { PlanFilesDialogComponent, PlanFilesDialogData } from './plan-files-dial
 import { PlanNotesComponent } from './plan-notes.component';
 import { PlanHistoryComponent } from './plan-history.component';
 import { PlanDocumentService, isEmptyVersion } from './plan-document.service';
+import { isUsPlan, planTerms } from './plan-terms';
 import { MARKDOWN_VIEW_DIALOG, MarkdownViewDialogComponent, MarkdownViewDialogData } from '../markdown-view/markdown-view-dialog.component';
 import { openCaseChat } from '../case-chat/open-case-chat';
 import { CaseChatStatusService } from '../../services/case-chat-status.service';
@@ -254,6 +255,16 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly hideVersions = input(false);
   /** Número do item de trabalho do plano em tela — nos textos no lugar do "v1" ("a correção #25"). */
   readonly itemNumber = input<number | null>(null);
+  /**
+   * 0085 (rodada 5): Pausar / Continuar / "Analisar ou Continuar com Claude" saem da barra do cabeçalho e vão para o
+   * menu ⋮ do plano (Bancada). Padrão: como sempre (tela de PR).
+   */
+  readonly compactActions = input(false);
+  /**
+   * 0085 (rodada 5): faixa fixa "Arquivos do plano" (análise, scripts, chamados… — abrir/baixar) + "Ver o plano
+   * completo", sempre visível (não só no "Em que pé está"). Padrão: sem a faixa (tela de PR).
+   */
+  readonly showFilesBar = input(false);
 
   readonly fullscreen = new FullscreenPanel({
     host: () => this.hostRef.nativeElement,
@@ -491,6 +502,10 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   readonly phase = computed(() => this.plan()?.phase ?? 'analysis');
 
+  /** 0085 (rodada 5): plano de US fala em "implementação"; Bug, em "correção" (kicker, títulos, histórico, documento). */
+  readonly usPlan = computed(() => isUsPlan(this.plan(), [this.pairPlan(), ...this.history()]));
+  readonly terms = computed(() => planTerms(this.usPlan()));
+
   // ── 0080: Especialista do caso, jornada, "Em que pé está", decisões ──────────────────────────────
 
   private readonly caseStatusApi = inject(CaseChatStatusService);
@@ -543,7 +558,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly versionLabel = computed(() => {
     const plan = this.plan();
     if (!plan) return '';
-    return `${(plan.phase ?? 'analysis') === 'correction' ? 'Correção' : 'Análise'}${this.versionSuffix(plan.id)}`;
+    return `${(plan.phase ?? 'analysis') === 'correction' ? this.terms().Fix : 'Análise'}${this.versionSuffix(plan.id)}`;
   });
 
   /** " v2" (versões do card) ou, com `hideVersions`, " #30" (o item de trabalho) / nada. */
@@ -588,7 +603,8 @@ export class ExecutionPlanComponent implements OnDestroy {
   readonly headlineText = computed<PlanHeadlineText | null>(() => {
     const plan = this.plan();
     if (!plan) return null;
-    const phaseName = (plan.phase ?? 'analysis') === 'correction' ? 'correção' : 'análise';
+    const terms = this.terms();
+    const phaseName = (plan.phase ?? 'analysis') === 'correction' ? terms.fix : 'análise';
     const name = `${phaseName}${this.versionSuffix(plan.id)}`;
     if (this.isOlderVersion()) {
       const latest = this.latestOf(plan.phase ?? 'analysis');
@@ -617,10 +633,10 @@ export class ExecutionPlanComponent implements OnDestroy {
     const steps = this.steps();
     const work = steps.filter((s) => s.kind === 'code' || s.kind === 'pr');
     if ((plan.phase ?? 'analysis') === 'correction' && this.isActive() && !req && work.length && work.every((s) => s.status === 'pending'))
-      return { tone: 'ok', text: `**Plano de correção pronto — nada foi alterado no código ainda.** Execute quando quiser (o Claude só abre PRs, nunca faz merge).`,
-        run: 'Executar a correção', chat: 'Ajustar com o especialista' };
+      return { tone: 'ok', text: `**${terms.fixPlan} pronto — nada foi alterado no código ainda.** Execute quando quiser (o Claude só abre PRs, nunca faz merge).`,
+        run: `Executar a ${terms.fix}`, chat: 'Ajustar com o especialista' };
     if ((plan.phase ?? 'analysis') === 'analysis' && this.decisions().length && !this.openQuestions().length && !this.pair()?.correctionId && plan.status !== 'completed')
-      return { tone: 'ok', text: `**Análise decidida** (${this.decisions().length} decisões). O próximo passo é montar o plano de correção.`, run: 'Montar a correção' };
+      return { tone: 'ok', text: `**Análise decidida** (${this.decisions().length} decisões). O próximo passo é montar o ${terms.fixPlanLower}.`, run: `Montar a ${terms.fix}` };
     if (plan.status === 'completed') return { tone: 'ok', text: `A **${name}** está concluída.` };
     if (plan.status === 'paused') return { tone: 'info', text: `A **${name}** está pausada${plan.statusChangedBy ? ' por ' + plan.statusChangedBy : ''}.` };
     const current = this.currentStep();
@@ -652,11 +668,11 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.dialog.open(MarkdownViewDialogComponent, {
       ...MARKDOWN_VIEW_DIALOG,
       data: {
-        title: correction ? `Plano de correção${v} completo` : `Análise${v} completa`,
+        title: correction ? `${this.terms().fixPlan}${v} completo` : `Análise${v} completa`,
         subtitle: plan.title,
         icon: correction ? 'build' : 'troubleshoot',
         card: plan.cardNumber,
-        load: () => this.documents.build(plan, history),
+        load: () => this.documents.build(plan, history, { us: this.usPlan() }),
       } satisfies MarkdownViewDialogData,
     });
   }
@@ -911,6 +927,26 @@ export class ExecutionPlanComponent implements OnDestroy {
       next: (blob) => saveBlob(blob, a.name),
       error: () => this.snackBar.open(`Não foi possível baixar ${a.name}.`, 'Fechar', { duration: 6000 })
     });
+  }
+
+  /** 0085 (rodada 5): faixa "Arquivos do plano" — os da skill (análise, scripts, chamados…), na ordem do tipo. */
+  readonly barArtifacts = computed(() => {
+    const order: Record<string, number> = { analysis: 0, script: 1, ticket: 2, data: 3, image: 4, attachment: 5 };
+    const list = this.planArtifacts()
+      .filter((a) => !a.noteId)
+      .sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9) || a.number - b.number);
+    const max = 8;
+    return { shown: list.slice(0, max), more: Math.max(0, list.length - max), total: list.length };
+  });
+
+  artifactIcon(kind: string): string {
+    return kind === 'script' ? 'code' : kind === 'ticket' ? 'confirmation_number' : kind === 'analysis' ? 'description'
+      : kind === 'image' ? 'image' : kind === 'data' ? 'dataset' : 'attach_file';
+  }
+
+  artifactKindLabel(kind: string): string {
+    return kind === 'script' ? 'Script' : kind === 'ticket' ? 'Chamado' : kind === 'analysis' ? 'Análise'
+      : kind === 'image' ? 'Imagem' : kind === 'data' ? 'Dados' : 'Anexo';
   }
 
   readonly artifactCounts = computed(() => {
@@ -1546,7 +1582,9 @@ export class ExecutionPlanComponent implements OnDestroy {
     const plan = this.plan();
     if (!plan) return;
     const openPrs = (plan.links ?? []).filter((l) => l.kind === 'pr' && (l.status ?? 'open') === 'open').map((l) => l.title || l.url);
-    const data: CancelPlanDialogData = { phase: plan.phase ?? 'analysis', versionNumber: this.hideVersions() ? null : this.versionOf(plan.id), openPrs };
+    const data: CancelPlanDialogData = {
+      phase: plan.phase ?? 'analysis', versionNumber: this.hideVersions() ? null : this.versionOf(plan.id), openPrs, us: this.usPlan()
+    };
     this.dialog.open<CancelPlanDialogComponent, CancelPlanDialogData, CancelPlanDialogResult>(CancelPlanDialogComponent,
       { data, width: '560px', maxWidth: '96vw', autoFocus: false })
       .afterClosed().subscribe((r) => {

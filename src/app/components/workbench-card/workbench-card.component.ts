@@ -59,6 +59,11 @@ interface CardDatum {
  * - **Dados principais** do `CardFull` (estado, área, iteração, responsável, prioridade, datas, tags) e as contagens de
  *   anexos/links que o DevOps já manda nos campos (`System.AttachedFileCount`…).
  * - **Texto do card**: Repro Steps (Bug) ou Descrição + Critérios de aceite (US).
+ *
+ * Rodada 5: layout denso, sem sobra — faixa de cima com Horas (compacta; +1h/+2h/+4h/outro numa linha) e Dados do card
+ * em grade de 2–3 colunas (pela largura do próprio cartão) com os contadores em chips numa linha; o texto do card ocupa
+ * a largura toda (US: descrição e critérios lado a lado quando cabem). Serve à aba Card e ao modal
+ * (`openWorkbenchCard`, workbench-card-dialog.component.ts).
  */
 @Component({
   selector: 'app-workbench-card',
@@ -68,146 +73,159 @@ interface CardDatum {
     @let st = effort();
     @let us = cardType() === 'user-story';
     <div class="wc">
-      <!-- Horas -->
-      <section class="wc-box wc-box--hours" aria-label="Horas do card" data-tour="wb-hours">
-        <app-card-hours-insight [card]="card()" [cardType]="cardType()"></app-card-hours-insight>
+      <!-- Faixa de cima: horas (compacta) + dados do card em grade (usa a largura toda, sem cartões estreitos) -->
+      <div class="wc-top">
+        <section class="wc-box wc-box--hours" aria-label="Horas do card" data-tour="wb-hours">
+          <app-card-hours-insight [card]="card()" [cardType]="cardType()"></app-card-hours-insight>
 
-        <div class="wc-log" role="group" aria-label="Lançar horas em Completed">
-          <span class="wc-log__label">Lançar em Completed</span>
-          <span class="wc-log__quick">
+          <div class="wc-log" role="group" aria-label="Lançar horas em Completed">
+            <span class="wc-log__label" matTooltip="Lançar horas: soma em Completed e tira do Remaining (com confirmação)"
+                  aria-label="Lançar horas">
+              <mat-icon>more_time</mat-icon>
+            </span>
             @for (q of quick; track q) {
               <button type="button" class="wc-btn" [class.wc-btn--on]="pending() === q && confirming()"
                       [disabled]="!card() || !!busy()" (click)="ask(q)"
                       [matTooltip]="'Lançar ' + h(q) + ' em Completed e tirar ' + h(q) + ' do Remaining'">+{{ h(q) }}</button>
             }
-          </span>
-          <span class="wc-log__other">
-            <input class="wc-input" type="text" inputmode="decimal" autocomplete="off" placeholder="outro"
-                   aria-label="Outro valor de horas (0,5 a 24)" [(ngModel)]="other" [disabled]="!card() || !!busy()"
-                   (keyup.enter)="askOther()" (ngModelChange)="otherError.set(null)"/>
-            <span class="wc-log__unit">h</span>
-            <button type="button" class="wc-btn" [disabled]="!card() || !!busy() || !other" (click)="askOther()">Lançar</button>
-          </span>
+            <span class="wc-log__other">
+              <input class="wc-input" type="text" inputmode="decimal" autocomplete="off" placeholder="outro"
+                     aria-label="Outro valor de horas (0,5 a 24)" [(ngModel)]="other" [disabled]="!card() || !!busy()"
+                     (keyup.enter)="askOther()" (ngModelChange)="otherError.set(null)"/>
+              <span class="wc-log__unit">h</span>
+              <button type="button" class="wc-btn" [disabled]="!card() || !!busy() || !other" (click)="askOther()"
+                      matTooltip="Lançar o valor digitado">OK</button>
+            </span>
+          </div>
           @if (noEstimate()) {
-            <button type="button" class="wc-link" [disabled]="!!busy()" (click)="estimate()">
+            <button type="button" class="wc-link wc-link--start" [disabled]="!!busy()" (click)="estimate()">
               {{ busy() === 'estimate' ? 'Registrando…' : 'Registrar estimativa inicial' }}
             </button>
           }
-        </div>
-        @if (otherError(); as err) { <p class="wc-hint wc-hint--bad" role="alert">{{ err }}</p> }
+          @if (otherError(); as err) { <p class="wc-hint wc-hint--bad" role="alert">{{ err }}</p> }
 
-        @if (confirming() && pending(); as hrs) {
-          <div class="wc-confirm" role="alertdialog" aria-label="Confirmar o lançamento de horas">
-            <span>
-              Lançar <strong>+{{ h(hrs) }}</strong> em Completed
-              @if (st?.effort; as e) {
-                ({{ h(e.completedWork ?? 0) }} → {{ h((e.completedWork ?? 0) + hrs) }}) e −{{ h(hrs) }} no Remaining
-                ({{ h(e.remainingWork ?? 0) }} → {{ h(remainingAfter(hrs)) }})?
-              } @else {
-                e tirar {{ h(hrs) }} do Remaining?
-              }
-            </span>
-            <span class="wc-confirm__actions">
-              <button type="button" class="wc-link" (click)="cancelLog()" [disabled]="!!busy()">Cancelar</button>
-              <button type="button" class="wc-btn wc-btn--primary" (click)="log()" [disabled]="!!busy()">
-                {{ busy() === 'log' ? 'Lançando…' : 'Lançar' }}
-              </button>
-            </span>
-          </div>
-        }
-        @if (message(); as m) {
-          <div class="wc-msg" [class.wc-msg--error]="!m.ok" role="status">
-            <mat-icon>{{ m.ok ? 'check_circle' : 'error_outline' }}</mat-icon><span>{{ m.text }}</span>
-            <button type="button" class="wc-x" (click)="message.set(null)" aria-label="Fechar o aviso"><mat-icon>close</mat-icon></button>
-          </div>
-        }
-      </section>
-
-      <!-- Dados principais -->
-      <section class="wc-box" aria-label="Dados do card">
-        <header class="wc-h"><mat-icon>info_outline</mat-icon>Dados do card
-          <span class="wc-spacer"></span>
-          @if (cardFull()) {
-            <button type="button" class="wc-link" (click)="openDetails.emit()"
-                    matTooltip="Todos os campos, o histórico e os comentários">Ver tudo</button>
-          }
-        </header>
-        @if (!cardFull()) {
-          <p class="wc-muted">Não foi possível ler o card no DevOps — os dados aparecem quando ele responder.</p>
-        } @else {
-          <dl class="wc-data">
-            @for (d of data(); track d.key) {
-              <div class="wc-data__row" [matTooltip]="d.tooltip || ''" [matTooltipDisabled]="!d.tooltip">
-                <dt><mat-icon>{{ d.icon }}</mat-icon>{{ d.label }}</dt>
-                <dd>{{ d.value }}</dd>
-              </div>
-            }
-          </dl>
-          @if (tags().length) {
-            <div class="wc-tags" aria-label="Tags">
-              @for (t of tags(); track t) { <span class="wc-tag">{{ t }}</span> }
+          @if (confirming() && pending(); as hrs) {
+            <div class="wc-confirm" role="alertdialog" aria-label="Confirmar o lançamento de horas">
+              <span>
+                Lançar <strong>+{{ h(hrs) }}</strong> em Completed
+                @if (st?.effort; as e) {
+                  ({{ h(e.completedWork ?? 0) }} → {{ h((e.completedWork ?? 0) + hrs) }}) e −{{ h(hrs) }} no Remaining
+                  ({{ h(e.remainingWork ?? 0) }} → {{ h(remainingAfter(hrs)) }})?
+                } @else {
+                  e tirar {{ h(hrs) }} do Remaining?
+                }
+              </span>
+              <span class="wc-confirm__actions">
+                <button type="button" class="wc-link" (click)="cancelLog()" [disabled]="!!busy()">Cancelar</button>
+                <button type="button" class="wc-btn wc-btn--primary" (click)="log()" [disabled]="!!busy()">
+                  {{ busy() === 'log' ? 'Lançando…' : 'Lançar' }}
+                </button>
+              </span>
             </div>
           }
-          <div class="wc-links" aria-label="Anexos e links no DevOps">
-            @for (l of links(); track l.label) {
-              <span class="wc-chip" [class.wc-chip--zero]="!l.count" [matTooltip]="l.tooltip">
-                <mat-icon>{{ l.icon }}</mat-icon>{{ l.count }} {{ l.label }}
-              </span>
-            }
-          </div>
-        }
-      </section>
+          @if (message(); as m) {
+            <div class="wc-msg" [class.wc-msg--error]="!m.ok" role="status">
+              <mat-icon>{{ m.ok ? 'check_circle' : 'error_outline' }}</mat-icon><span>{{ m.text }}</span>
+              <button type="button" class="wc-x" (click)="message.set(null)" aria-label="Fechar o aviso"><mat-icon>close</mat-icon></button>
+            </div>
+          }
+        </section>
 
-      <!-- Texto do card -->
-      <section class="wc-box wc-box--text" [attr.aria-label]="us ? 'Descrição e critérios de aceite' : 'Repro Steps'">
+        <section class="wc-box wc-box--data" aria-label="Dados do card">
+          <header class="wc-h"><mat-icon>info_outline</mat-icon>Dados do card
+            <span class="wc-spacer"></span>
+            @if (cardFull()) {
+              <button type="button" class="wc-link" (click)="openDetails.emit()"
+                      matTooltip="Todos os campos, o histórico e os comentários">Ver tudo</button>
+            }
+          </header>
+          @if (!cardFull()) {
+            <p class="wc-muted">Não foi possível ler o card no DevOps — os dados aparecem quando ele responder.</p>
+          } @else {
+            <dl class="wc-data">
+              @for (d of data(); track d.key) {
+                <div class="wc-data__row"
+                     [matTooltip]="d.tooltip || ''" [matTooltipDisabled]="!d.tooltip">
+                  <dt><mat-icon>{{ d.icon }}</mat-icon>{{ d.label }}</dt>
+                  <dd>{{ d.value }}</dd>
+                </div>
+              }
+            </dl>
+            <div class="wc-foot">
+              <div class="wc-links" aria-label="Anexos e links no DevOps">
+                @for (l of links(); track l.label) {
+                  <span class="wc-chip" [class.wc-chip--zero]="!l.count" [matTooltip]="l.tooltip">
+                    <mat-icon>{{ l.icon }}</mat-icon><b>{{ l.count }}</b> {{ l.label }}
+                  </span>
+                }
+              </div>
+              @if (tags().length) {
+                <div class="wc-tags" aria-label="Tags">
+                  <mat-icon class="wc-tags__icon">sell</mat-icon>
+                  @for (t of tags(); track t) { <span class="wc-tag">{{ t }}</span> }
+                </div>
+              }
+            </div>
+          }
+        </section>
+      </div>
+
+      <!-- Texto do card na largura toda (US: descrição e critérios lado a lado quando cabem) -->
+      <div class="wc-text" [class.wc-text--two]="sections().length > 1">
         @for (s of sections(); track s.title) {
-          <header class="wc-h"><mat-icon>{{ s.icon }}</mat-icon>{{ s.title }}</header>
-          <div class="wc-rich" [innerHTML]="s.html"></div>
+          <section class="wc-box wc-box--text" [attr.aria-label]="s.title">
+            <header class="wc-h"><mat-icon>{{ s.icon }}</mat-icon>{{ s.title }}</header>
+            <div class="wc-rich" [innerHTML]="s.html"></div>
+          </section>
         } @empty {
-          <header class="wc-h"><mat-icon>notes</mat-icon>{{ us ? 'Descrição e critérios de aceite' : 'Repro Steps' }}</header>
-          <p class="wc-muted">{{ !cardFull() ? 'Texto indisponível sem o DevOps.' : us ? 'A US não tem descrição nem critérios de aceite.' : 'O bug não tem Repro Steps.' }}</p>
+          <section class="wc-box wc-box--text" [attr.aria-label]="us ? 'Descrição e critérios de aceite' : 'Repro Steps'">
+            <header class="wc-h"><mat-icon>notes</mat-icon>{{ us ? 'Descrição e critérios de aceite' : 'Repro Steps' }}</header>
+            <p class="wc-muted">{{ !cardFull() ? 'Texto indisponível sem o DevOps.' : us ? 'A US não tem descrição nem critérios de aceite.' : 'O bug não tem Repro Steps.' }}</p>
+          </section>
         }
-      </section>
+      </div>
     </div>
   `,
   styles: [`
-    :host { display: block; min-width: 0; font-size: 13px; color: var(--cc-text-1); }
-    .wc { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 10px; align-items: start; }
-    .wc-box { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px;
+    :host { display: block; min-width: 0; font-size: 13px; color: var(--cc-text-1); container-type: inline-size; container-name: wcard; }
+    .wc { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+    .wc-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: stretch; }
+    @container wcard (min-width: 760px) { .wc-top { grid-template-columns: minmax(290px, 31%) minmax(0, 1fr); } }
+    .wc-box { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 14px; border-radius: 10px;
       background: var(--surface-1, #262b33); border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); }
-    .wc-box--text { grid-column: 1 / -1; }
     .wc-h { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
       text-transform: uppercase; color: var(--cc-text-2); }
     .wc-h .mat-icon { font-size: 16px; width: 16px; height: 16px; color: var(--cc-text-3); }
-    .wc-box--text .wc-rich + .wc-h { margin-top: 6px; }
     .wc-spacer { flex: 1 1 auto; }
     .wc-muted { margin: 0; color: var(--cc-text-3); }
 
-    /* Lançar horas */
-    .wc-log { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding-top: 8px;
+    /* Lançar horas: uma linha (+1h +2h +4h outro OK) */
+    .wc-log { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 8px;
       border-top: 1px dashed var(--cc-surface-border, rgba(255,255,255,.08)); }
-    .wc-log__label { font-size: 12px; color: var(--cc-text-2); }
-    .wc-log__quick, .wc-log__other { display: inline-flex; align-items: center; gap: 6px; }
-    .wc-log__unit { color: var(--cc-text-3); font-size: 12px; margin-left: -2px; }
-    .wc-btn { flex: none; height: 28px; padding: 0 10px; border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18));
+    .wc-log__label { display: inline-flex; align-items: center; gap: 4px; margin-right: 2px; font-size: 12px; color: var(--cc-text-2); cursor: default; }
+    .wc-log__label .mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--cc-text-3); }
+    .wc-log__other { display: inline-flex; align-items: center; gap: 4px; }
+    .wc-log__unit { color: var(--cc-text-3); font-size: 12px; }
+    .wc-btn { flex: none; height: 28px; padding: 0 7px; border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18));
       border-radius: 7px; background: transparent; color: #79c0ff; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
       font-variant-numeric: tabular-nums; }
     .wc-btn:hover:not(:disabled), .wc-btn--on { background: color-mix(in srgb, #58a6ff 14%, transparent); border-color: color-mix(in srgb, #58a6ff 45%, transparent); }
     .wc-btn:disabled { opacity: .5; cursor: default; }
     .wc-btn--primary { background: var(--mat-sys-primary); border-color: transparent; color: var(--mat-sys-on-primary); }
     .wc-btn--primary:hover:not(:disabled) { background: var(--mat-sys-primary); filter: brightness(1.08); }
-    .wc-input { width: 64px; height: 28px; box-sizing: border-box; padding: 0 8px; border-radius: 7px; font: inherit; font-size: 12.5px;
+    .wc-input { width: 50px; height: 28px; box-sizing: border-box; padding: 0 8px; border-radius: 7px; font: inherit; font-size: 12.5px;
       color: var(--cc-text-1); background: var(--surface-input, #1a1f28); border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); }
     .wc-input:focus { outline: none; border-color: var(--mat-sys-primary); }
     .wc-link { padding: 0 2px; border: 0; background: none; color: var(--mat-sys-primary); font: inherit; font-size: 12px; cursor: pointer;
       text-transform: none; letter-spacing: 0; font-weight: 500; }
+    .wc-link--start { align-self: flex-start; }
     .wc-link:hover:not(:disabled) { text-decoration: underline; }
     .wc-link:disabled { opacity: .5; cursor: default; }
     .wc-hint { margin: 0; font-size: 12px; }
     .wc-hint--bad { color: #f2b8b5; }
     .wc-confirm { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 7px 8px 7px 10px; border-radius: 8px;
       background: color-mix(in srgb, #58a6ff 9%, transparent); border: 1px solid color-mix(in srgb, #58a6ff 28%, transparent); }
-    .wc-confirm > span:first-child { flex: 1 1 240px; line-height: 1.45; }
+    .wc-confirm > span:first-child { flex: 1 1 220px; line-height: 1.45; }
     .wc-confirm__actions { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
     .wc-msg { display: flex; align-items: flex-start; gap: 6px; padding: 6px 6px 6px 9px; border-radius: 8px;
       color: color-mix(in srgb, #3fb950 75%, white); background: color-mix(in srgb, #3fb950 9%, transparent); }
@@ -217,19 +235,31 @@ interface CardDatum {
     .wc-x { flex: none; display: inline-flex; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; opacity: .7; }
     .wc-x .mat-icon { font-size: 15px; width: 15px; height: 15px; }
 
-    /* Dados */
-    .wc-data { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 14px; }
+    /* Dados: pares rótulo/valor em 2–3 colunas (pela largura do próprio cartão) */
+    .wc-box--data { container-type: inline-size; container-name: wdata; }
+    .wc-data { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 18px; }
+    @container wdata (min-width: 340px) { .wc-data { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @container wdata (min-width: 470px) { .wc-data { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     .wc-data__row { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-    .wc-data dt { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--cc-text-3); }
-    .wc-data dt .mat-icon { font-size: 13px; width: 13px; height: 13px; }
-    .wc-data dd { margin: 0; color: var(--cc-text-1); overflow-wrap: anywhere; }
-    .wc-tags, .wc-links { display: flex; flex-wrap: wrap; gap: 6px; }
+    .wc-data dt { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--cc-text-3); white-space: nowrap; }
+    .wc-data dt .mat-icon { flex: none; font-size: 13px; width: 13px; height: 13px; }
+    .wc-data dd { margin: 0; color: var(--cc-text-1); line-height: 1.35; overflow-wrap: anywhere; }
+    .wc-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: auto; padding-top: 8px;
+      border-top: 1px dashed var(--cc-surface-border, rgba(255,255,255,.08)); }
+    .wc-tags, .wc-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+    .wc-tags__icon { font-size: 15px; width: 15px; height: 15px; color: var(--cc-text-3); }
     .wc-tag { padding: 1px 8px; border-radius: 999px; font-size: 11.5px; color: var(--cc-text-2);
       background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent); }
-    .wc-chip { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px;
-      color: var(--cc-text-1); border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); cursor: default; }
+    .wc-chip { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px;
+      color: var(--cc-text-1); border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); cursor: default; white-space: nowrap; }
+    .wc-chip b { font-weight: 700; font-variant-numeric: tabular-nums; }
     .wc-chip .mat-icon { font-size: 14px; width: 14px; height: 14px; color: var(--cc-text-3); }
     .wc-chip--zero { color: var(--cc-text-3); }
+    .wc-chip--zero b { font-weight: 500; }
+
+    /* Texto do card na largura toda; US com duas seções lado a lado quando cabe */
+    .wc-text { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: start; }
+    @container wcard (min-width: 720px) { .wc-text--two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
     /* HTML do DevOps (Repro Steps / Descrição / Critérios de aceite) */
     .wc-rich { line-height: 1.55; overflow-wrap: anywhere; color: var(--cc-text-1); }
@@ -432,7 +462,7 @@ function dateText(iso: string): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function who(date: string, name: string): string {

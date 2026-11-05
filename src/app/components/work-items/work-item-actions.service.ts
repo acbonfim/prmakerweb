@@ -19,6 +19,7 @@ import { workDialogConfig } from './work-dialog-config';
 import { CancelWorkDialogComponent, CancelWorkDialogData, CancelWorkDialogResult } from './cancel-work-dialog.component';
 import { WorkItemEditorDialogComponent, WorkItemEditorDialogData, WorkItemEditorDialogResult } from './work-item-editor-dialog.component';
 import { WorkTaskDialogComponent, WorkTaskDialogData } from './work-task-dialog.component';
+import { WorkItemFilesDialogComponent, WorkItemFilesDialogData } from './work-item-files-dialog.component';
 import { WorkPromptDialogComponent, WorkPromptDialogData, WorkPromptDialogResult } from './work-prompt-dialog.component';
 
 /** Catálogo guardado por card por pouco tempo (o editor e os modais abrem várias vezes). */
@@ -167,6 +168,12 @@ export class WorkItemActionsService {
   openTask(card: string, item: WorkItem, taskNumber: number, catalog?: WorkItemCatalog | null): MatDialogRef<WorkTaskDialogComponent> {
     const data: WorkTaskDialogData = { card, itemNumber: item.number, taskNumber, item, catalog: catalog ?? null };
     return this.dialog.open(WorkTaskDialogComponent, workDialogConfig(data, '640px'));
+  }
+
+  /** Rodada 5: arquivos do item num modal (chip "Arquivos" da sessão de execução). */
+  openFiles(card: string, number: number, title?: string | null, taskNumber?: number | null): MatDialogRef<WorkItemFilesDialogComponent> {
+    const data: WorkItemFilesDialogData = { card, number, title: title ?? null, taskNumber: taskNumber ?? null };
+    return this.dialog.open(WorkItemFilesDialogComponent, workDialogConfig(data, '680px'));
   }
 
   /** Materializa o item de um plano de correção (cards antigos). */
