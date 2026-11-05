@@ -256,6 +256,11 @@
       <mat-icon>account_tree</mat-icon><span>Execução</span>
       @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you">{{ n }}</span> }
     </button>
+    <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'files'" [attr.aria-selected]="mtab === 'files'"
+            (click)="selectMobile('files')">
+      <mat-icon>folder_open</mat-icon><span>Arquivos</span>
+      @if (cardFiles.count()) { <span class="wb-count">{{ cardFiles.count() }}</span> }
+    </button>
     <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'chat'" [attr.aria-selected]="mtab === 'chat'"
             (click)="selectMobile('chat')">
       <mat-icon>psychology</mat-icon><span>Especialista</span>
@@ -279,10 +284,17 @@
           </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'plan'"
                   [attr.aria-selected]="main === 'plan'" (click)="selectMain('plan')"
-                  matTooltip="Execução do item: o plano do Claude de cada item de trabalho (passos, perguntas, arquivos e registro)"
+                  matTooltip="Acompanhar a execução: o que o Claude está fazendo num item de trabalho, ao vivo — passos, perguntas e respostas"
                   matTooltipShowDelay="600">
             <mat-icon>account_tree</mat-icon>Execução
             @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you" [matTooltip]="n + ' aguardando você'">{{ n }}</span> }
+          </button>
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'files'" data-tour="wb-files-tab"
+                  [attr.aria-selected]="main === 'files'" (click)="selectMain('files')"
+                  matTooltip="Todos os arquivos do card — análises, chamados, scripts, dados e anexos — com filtro por item de trabalho"
+                  matTooltipShowDelay="600">
+            <mat-icon>folder_open</mat-icon>Arquivos
+            @if (cardFiles.count()) { <span class="wb-count">{{ cardFiles.count() }}</span> }
           </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'card'" data-tour="wb-card-tab"
                   [attr.aria-selected]="main === 'card'" (click)="selectMain('card')">
@@ -333,6 +345,11 @@
       <div class="wb-pane wb-pane--plan" [class.wb-hidden]="main !== 'plan'" data-tour="wb-plan">
         <!-- Execução do item (rodada 3): a versão é o item de trabalho — o seletor troca entre os itens que têm plano -->
         @let sel = selectedPlanItem();
+        <p class="wb-exec__about" data-tour="wb-exec-about">
+          <mat-icon>info_outline</mat-icon>
+          <span>Aqui você <b>acompanha</b> o que o Claude está fazendo num item de trabalho: os passos, as perguntas que ele faz (e as suas respostas)
+            e o que acontece agora, ao vivo. Itens, arquivos e dados do card ficam nas outras abas.</span>
+        </p>
         <div class="wb-exec" data-tour="wb-exec-item">
           <span class="wb-exec__label"><mat-icon>play_circle</mat-icon>Execução do item</span>
           @if (planItemOptions().length) {
@@ -359,8 +376,12 @@
                 </button>
               }
             </mat-menu>
+            <button mat-button type="button" class="wb-exec__files" (click)="showItemFiles(sel?.number)"
+                    matTooltip="Abre a aba Arquivos filtrada por este item" [disabled]="!sel">
+              <mat-icon>folder_open</mat-icon>Arquivos do item
+            </button>
           } @else {
-            <span class="wb-exec__none">Plano atual do card — nenhum item de trabalho com plano ainda.</span>
+            <span class="wb-exec__none">Nenhum item de trabalho com execução ainda.</span>
           }
         </div>
 
@@ -388,6 +409,11 @@
         <app-execution-plan class="wb-plan" [cardNumber]="card()" [planId]="selectedPlanId()" [hideVersions]="true"
                             [compactActions]="true" [showFilesBar]="true"
                             [itemNumber]="sel?.number ?? null" (headline)="onHeadline($event)"></app-execution-plan>
+      </div>
+
+      <!-- 0087: Arquivos do card inteiro (qualquer item), com filtro por item de trabalho. Montada para a contagem ficar viva. -->
+      <div class="wb-pane" [class.wb-hidden]="main !== 'files'" data-tour="wb-files">
+        <app-card-files [store]="cardFiles" [card]="card()" [items]="planItems()" [(selected)]="filesItem"></app-card-files>
       </div>
 
       <!-- Aba Card (desktop e celular): horas + lançar horas, dados principais, anexos/links e o texto do card -->

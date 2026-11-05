@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
+import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { WorkItemsService } from '../../services/work-items.service';
 import { WsService } from '../../services/ws.service';
 import {
@@ -47,10 +48,11 @@ export interface WorkTaskDialogData {
 @Component({
   selector: 'app-work-task-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, WorkItemFilesComponent],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WorkItemFilesComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
-    <div class="wi-dlg">
+    <!-- 0087: links de código (ref:) e de itens da engenharia reversa/Base Solvace abrem o popover aqui também -->
+    <div class="wi-dlg" [appCodeRefHost]="data.card">
       <header class="wi-dlg__head">
         <mat-icon class="wtd__kind">{{ kind().icon }}</mat-icon>
         <div class="wi-dlg__head-main">

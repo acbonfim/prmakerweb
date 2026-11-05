@@ -18,13 +18,14 @@ import {
   fileMeta,
   filePreviewKind,
   fileTextAsMarkdown,
+  filesOfItem,
   filesOfTask,
   groupFiles,
   guessUploadKind,
   isTextFile,
   normalizeFiles
 } from './work-item-files';
-import { WorkItemFilesStore } from './work-item-files.store';
+import { FilesSource } from './card-files.store';
 
 /** Limite do servidor por arquivo (10 MB; 50 MB por item) — recusado já na tela. */
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -75,6 +76,11 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
                   <span class="wif__name">{{ f.name }}</span>
                   <span class="wif__meta">{{ meta(f) }}</span>
                 </button>
+                @if (showItem()) {
+                  <span class="wif__chip wif__chip--item" [matTooltip]="f.workItemNumber ? 'Arquivo do item de trabalho ' + num(f.workItemNumber) : 'Arquivo de uma versão antiga do plano, sem item de trabalho'">
+                    <mat-icon>checklist</mat-icon>{{ f.workItemNumber ? num(f.workItemNumber) : 'sem item' }}
+                  </span>
+                }
                 @if (f.source === 'plan') { <span class="wif__chip wif__chip--plan" matTooltip="Arquivo do plano ligado ao item"><mat-icon>account_tree</mat-icon>plano</span> }
                 <span class="wif__acts">
                   <button mat-icon-button (click)="open(f)" [matTooltip]="canOpen(f) ? 'Abrir' : 'Baixar'" [attr.aria-label]="'Abrir ' + f.name"><mat-icon>{{ canOpen(f) ? 'visibility' : 'download' }}</mat-icon></button>
@@ -96,6 +102,8 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
           <p class="wif__empty">
             @if (!store().loaded()) { Carregando os arquivos… }
             @else if (taskNumber() != null) { Nenhum arquivo desta sub-tarefa ainda. }
+            @else if (filterItem() !== undefined && store().files().length) { Este item ainda não tem arquivos. }
+            @else if (showItem()) { Nenhum arquivo neste card ainda — análises, chamados, scripts, dados e anexos aparecem aqui assim que são gerados. }
             @else { Nenhum arquivo neste item ainda — scripts, análises, chamados e anexos gerados aparecem aqui. }
           </p>
         }
@@ -144,6 +152,7 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
     .wif__chip { display: inline-flex; align-items: center; gap: 3px; padding: 0 7px; border-radius: 999px; font-size: 11px; line-height: 18px; flex: none;
       border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); color: var(--cc-text-2); font-variant-numeric: tabular-nums; }
     .wif__chip mat-icon { font-size: 12px; width: 12px; height: 12px; }
+    .wif__chip--item { color: var(--cc-text-2); }
     .wif__chip--plan { color: var(--mat-sys-primary); border-color: color-mix(in srgb, var(--mat-sys-primary) 40%, transparent); }
     .wif__acts { display: inline-flex; flex: none; }
     .wif__acts .mat-mdc-icon-button { width: 30px; height: 30px; padding: 3px; }
@@ -161,7 +170,11 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 })
 export class WorkItemFilesComponent {
   /** Estado (lista ao vivo) — do modal/sessão que usa o componente. */
-  readonly store = input.required<WorkItemFilesStore>();
+  readonly store = input.required<FilesSource>();
+  /** 0087: só os arquivos deste item (`0` = planos sem item); `undefined` = todos (lista do card). */
+  readonly filterItem = input<number | null | undefined>(undefined);
+  /** 0087: mostra de qual item é cada arquivo (lista do card). */
+  readonly showItem = input(false);
   readonly card = input<string | null>(null);
   /** Só os arquivos desta sub-tarefa (e o upload ligado a ela). */
   readonly taskNumber = input<number | null>(null);
@@ -178,7 +191,7 @@ export class WorkItemFilesComponent {
   readonly busyId = signal<string | null>(null);
   readonly copiedId = signal<string | null>(null);
 
-  readonly files = computed(() => filesOfTask(this.store().files(), this.taskNumber()));
+  readonly files = computed(() => filesOfTask(filesOfItem(this.store().files(), this.filterItem()), this.taskNumber()));
   readonly groups = computed(() => groupFiles(this.files()));
   /** Chamado mais recente (destaque com "Copiar chamado"). */
   readonly ticket = computed(() => this.files().find((f) => f.kind === 'ticket' && isTextFile(f)) ?? null);
@@ -193,6 +206,11 @@ export class WorkItemFilesComponent {
 
   private get itemNumber(): number {
     return this.store().itemNumber ?? 0;
+  }
+
+  /** Item dono do arquivo (na lista do card vem em cada um; o `contentUrl` do servidor já resolve o conteúdo). */
+  private numberOf(f: WorkItemFile): number {
+    return this.itemNumber || Number(f.workItemNumber ?? 0);
   }
 
   /** Abre no visualizador (markdown/código/imagem); sem prévia → baixa. */
@@ -210,7 +228,7 @@ export class WorkItemFilesComponent {
       reRefs: kind === 'markdown' && !!this.card(),
       note: f.kind === 'ticket' ? 'Chamado completo — copie (texto e formatado) e abra no sistema de chamados.' : null,
       load: async () => {
-        const blob = await firstValueFrom(this.api.fileContent(this.itemNumber, f));
+        const blob = await firstValueFrom(this.api.fileContent(this.numberOf(f), f));
         if (kind === 'image') {
           objectUrl = URL.createObjectURL(blob);
           return `![${f.name.replace(/[[\]]/g, '')}](${objectUrl})`;
@@ -226,7 +244,7 @@ export class WorkItemFilesComponent {
     const id = this.key(f);
     this.busyId.set(id);
     try {
-      saveBlob(await firstValueFrom(this.api.fileContent(this.itemNumber, f)), f.name);
+      saveBlob(await firstValueFrom(this.api.fileContent(this.numberOf(f), f)), f.name);
     } catch (e) {
       this.snack.open((e as Error)?.message || 'Não foi possível baixar o arquivo.', 'Fechar', { duration: 6000 });
     } finally {
@@ -239,7 +257,7 @@ export class WorkItemFilesComponent {
     const id = this.key(f);
     this.busyId.set(id);
     try {
-      const text = await (await firstValueFrom(this.api.fileContent(this.itemNumber, f))).text();
+      const text = await (await firstValueFrom(this.api.fileContent(this.numberOf(f), f))).text();
       if (!text.trim()) { this.snack.open('O arquivo está vazio.', 'Ok', { duration: 3000 }); return; }
       if (rich && filePreviewKind(f) === 'markdown') await this.clipboard.copyRichToClipboard(renderMarkdown(text, { codeRefs: false }), text);
       else this.clipboard.copyFullDescriptionToClipboard(text);

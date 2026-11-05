@@ -476,6 +476,45 @@
 
 @keyframes plan-spin { to { transform: rotate(360deg); } }
 
+/* 0087: o conteúdo de cada estado entra com um fade curto (nada de troca seca) */
+.plan__skeleton, .plan__state { animation: plan-fade-in .24s ease both; }
+@keyframes plan-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* 0087: "Claude já foi chamado, o plano ainda não nasceu" — estado vivo e contínuo */
+.plan__live { gap: 12px; }
+.plan__live-bot { position: relative; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%;
+  background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent); color: var(--mat-sys-primary); }
+.plan__live-bot > .mat-icon { font-size: 32px; width: 32px; height: 32px; animation: plan-live-bob 2.4s ease-in-out infinite; }
+.plan__live-bot--queued > .mat-icon { animation: none; }
+.plan__live-ring { position: absolute; inset: -5px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--mat-sys-primary) 55%, transparent);
+  animation: plan-live-ring 2s ease-out infinite; }
+.plan__live-bot--queued .plan__live-ring { animation-duration: 3.2s; opacity: .6; }
+@keyframes plan-live-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes plan-live-ring { 0% { transform: scale(.9); opacity: .9; } 100% { transform: scale(1.35); opacity: 0; } }
+.plan__live-title { font-size: 15px; font-weight: 600; color: var(--mat-sys-on-surface); }
+.plan__live-sub { color: color-mix(in srgb, var(--mat-sys-on-surface) 70%, transparent); }
+.plan__live-now { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 5px 12px; border-radius: 999px; font-size: 12.5px;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 7%, transparent); color: var(--mat-sys-on-surface); animation: plan-fade-in .3s ease both; }
+.plan__live-now .mat-icon { font-size: 16px; width: 16px; height: 16px; flex: none; color: var(--mat-sys-primary); }
+.plan__live-now small { opacity: .6; font-size: 11px; }
+.plan__live-hint { max-width: 430px; font-size: 12px; opacity: .8; }
+.plan__live-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; width: min(100%, 420px); text-align: left; font-size: 12px; }
+.plan__live-log li { display: flex; align-items: center; gap: 6px; opacity: .75; animation: plan-fade-in .3s ease both; }
+.plan__live-log li:last-child { opacity: 1; }
+.plan__live-log .mat-icon { font-size: 14px; width: 14px; height: 14px; flex: none; }
+.plan__live-log span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan__live-log time { font-size: 11px; opacity: .6; font-variant-numeric: tabular-nums; }
+.plan__live-actions { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+.plan__dots { display: inline-flex; gap: 3px; margin-left: 4px; vertical-align: middle; }
+.plan__dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: plan-live-dot 1.2s ease-in-out infinite; }
+.plan__dots i:nth-child(2) { animation-delay: .15s; }
+.plan__dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes plan-live-dot { 0%, 80%, 100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1.15); } }
+@media (prefers-reduced-motion: reduce) {
+  .plan__skeleton, .plan__state, .plan__live-now, .plan__live-log li { animation: none; }
+  .plan__live-bot > .mat-icon, .plan__live-ring, .plan__dots i { animation: none; }
+}
+
 /* Skeleton da carga */
 .step--skeleton { display: flex; gap: 10px; padding: 6px 4px; }
 .step--skeleton .step__rail { padding-top: 4px; }

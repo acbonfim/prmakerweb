@@ -46,6 +46,8 @@ import { WorkbenchCardComponent } from '../../../components/workbench-card/workb
 import { openWorkbenchCard } from '../../../components/workbench-card/workbench-card-dialog.component';
 import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workbench-prs.component';
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
+import { CardFilesComponent } from '../../../components/card-files/card-files.component';
+import { CardFilesStore } from '../../../components/work-items/card-files.store';
 import {
   registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel, workItemTypeOf
 } from '../../../helpers/work-item-type-icons';
@@ -86,7 +88,7 @@ export function defaultPlanItem(items: readonly WorkItem[]): WorkItem | null {
 }
 
 /** Aba da coluna principal (desktop) — Itens de trabalho | Execução (plano do item) | Card. */
-export type WorkbenchMainTab = 'items' | 'plan' | 'card';
+export type WorkbenchMainTab = 'items' | 'plan' | 'files' | 'card';
 /** Aba no celular (< 1024 px) — Itens | Plano | Especialista | Card. */
 export type WorkbenchMobileTab = WorkbenchMainTab | 'chat' | 'card';
 type CardState = 'idle' | 'loading' | 'found' | 'missing' | 'error';
@@ -141,7 +143,7 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
     MatInputModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
     CardAlertBarComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
     CardSituationComponent, CardAssistantComponent, CardHoursComponent, WorkItemListComponent, WorkbenchPrsComponent,
-    WorkbenchCardComponent
+    WorkbenchCardComponent, CardFilesComponent
   ],
   templateUrl: './workbench.component.html',
   styleUrl: './workbench.component.scss'
@@ -282,6 +284,9 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   /** `?item=` repassado para a lista abrir o modal do item. */
   readonly openItem = signal<number | null>(null);
   readonly analyzing = signal(false);
+  /** 0087: arquivos do card inteiro (aba Arquivos) e o filtro por item. */
+  readonly cardFiles = new CardFilesStore();
+  readonly filesItem = signal<number | undefined>(undefined);
   readonly cancelling = signal(false);
   readonly chatFlash = signal(false);
 
@@ -446,6 +451,18 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       });
     });
 
+    // 0087: arquivos do card inteiro (aba Arquivos) — lê ao abrir o card e acompanha o tempo real.
+    let filesCard: string | null = null;
+    effect(() => {
+      const card = this.hasBody() ? this.card() : null;
+      untracked(() => {
+        // Outro card: o filtro por item não vale mais (item é do card anterior).
+        if (filesCard && card !== filesCard) this.filesItem.set(undefined);
+        filesCard = card;
+        this.cardFiles.watch(card);
+      });
+    });
+
     // Itens com plano (seletor da aba Execução): lê ao abrir o card e acompanha o tempo real dos itens.
     effect(() => {
       const card = this.hasBody() ? this.card() : null;
@@ -500,7 +517,9 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       this.open(card, false);
     }
     const hasItem = !!card && Number.isFinite(item) && item > 0;
-    if (hasItem && focus === 'plan') {
+    if (hasItem && focus === 'files') {
+      this.filesItem.set(item);
+    } else if (hasItem && focus === 'plan') {
       // "Abrir plano" de um item: a aba Execução já no plano daquele item (sem abrir o modal do item).
       this.pickedPlanItem.set(item);
     } else if (hasItem) {
@@ -617,6 +636,12 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** 0087: "Arquivos deste item" (na Execução / no item): abre a aba Arquivos já filtrada pelo item. */
+  showItemFiles(number: number | null | undefined): void {
+    this.filesItem.set(number ?? undefined);
+    this.selectMain('files');
+  }
+
   /** Seletor "Execução do item". */
   pickPlanItem(number: number): void {
     this.pickedPlanItem.set(number);
@@ -658,7 +683,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   private applyFocus(focus: string): void {
-    if (focus === 'items' || focus === 'plan' || focus === 'card') {
+    if (focus === 'items' || focus === 'plan' || focus === 'files' || focus === 'card') {
       this.selectMobile(focus);
     } else if (focus === 'chat') {
       this.selectMobile('chat');

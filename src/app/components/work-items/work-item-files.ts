@@ -113,6 +113,22 @@ export function filesOfTask(files: readonly WorkItemFile[], taskNumber?: number 
   return files.filter((f) => f.taskNumber != null && Number(f.taskNumber) === Number(taskNumber));
 }
 
+/** 0087: só os arquivos de um item (`0` = os de planos sem item); sem filtro (`undefined`) devolve todos. */
+export function filesOfItem(files: readonly WorkItemFile[], itemNumber?: number | null): WorkItemFile[] {
+  if (itemNumber === undefined || itemNumber === null) return files.slice();
+  return files.filter((f) => Number(f.workItemNumber ?? 0) === Number(itemNumber));
+}
+
+/** 0087: quantos arquivos cada item tem (chave = número do item; 0 = sem item). */
+export function countFilesByItem(files: readonly WorkItemFile[]): Map<number, number> {
+  const map = new Map<number, number>();
+  for (const f of files) {
+    const n = Number(f.workItemNumber ?? 0);
+    map.set(n, (map.get(n) ?? 0) + 1);
+  }
+  return map;
+}
+
 export interface FileGroup {
   look: FileKindLook;
   files: WorkItemFile[];
@@ -206,6 +222,7 @@ export function fileTextAsMarkdown(f: Pick<WorkItemFile, 'kind' | 'name' | 'cont
  * relativo a `apiUrl` (que termina com `/api/v1/`). Sem `contentUrl`: `WorkItems/{number}/files/{id}/content`.
  */
 export function resolveFileContentUrl(apiUrl: string, itemNumber: number, f: Pick<WorkItemFile, 'id' | 'contentUrl'>): string {
+  // (0087: na lista do card cada arquivo traz o seu `contentUrl`; `itemNumber` só vale sem ele.)
   const base = apiUrl.endsWith('/') ? apiUrl : `${apiUrl}/`;
   const url = `${f.contentUrl ?? ''}`.trim();
   if (!url) return `${base}WorkItems/${itemNumber}/files/${encodeURIComponent(f.id)}/content`;

@@ -624,3 +624,13 @@
 .run-pop__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px 0; }
 .run-pop__stop .mat-icon { margin-right: 4px; }
 @media (prefers-reduced-motion: reduce) { .run-pop__spin { animation: none; } }
+
+/* 0087: a aba Execução só acompanha — explica o papel da tela e leva aos arquivos do item */
+.wb-exec__about { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; font-size: 12.5px;
+  line-height: 1.45; color: var(--cc-text-2, inherit); background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 22%, transparent); animation: wb-about-in .25s ease both; }
+.wb-exec__about mat-icon { font-size: 18px; width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--mat-sys-primary); }
+.wb-exec__files { margin-left: auto; flex: none; }
+.wb-exec__files mat-icon { margin-right: 4px; }
+@keyframes wb-about-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wb-exec__about { animation: none; } }

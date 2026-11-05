@@ -40,6 +40,7 @@ import { CaseCompactComponent } from '../../../components/case-chat/case-compact
 import { CaseChatStore } from '../../../services/case-chat-store.service';
 import { GuidedTourService } from '../../../components/guided-tour/guided-tour.service';
 import { PR_SCREEN_TOUR } from '../../../components/guided-tour/pr-screen.tour';
+import { PR_DEPRECATION_TOUR } from '../../../components/guided-tour/pr-deprecation.tour';
 import { TourHost } from '../../../components/guided-tour/tour.model';
 import { TourHelpDialogComponent, TourHelpData, TourHelpResult } from '../../../components/guided-tour/tour-help-dialog.component';
 import {ExecutionPlanComponent, PlanHeadline} from '../../../components/execution-plan/execution-plan.component';
@@ -557,10 +558,8 @@ export class RegisterComponent implements OnInit, OnDestroy {
         if (!card || this.integrationsBlocked || card === `${this.cardNumber ?? ''}`.trim()) return;
         this.autoSearchFromQueryParams();
       });
-      // 0081: tour guiado na primeira vez que a pessoa entra na tela (com card na URL, espera o card abrir).
-      if (!this.integrationsBlocked && !this.route.snapshot.queryParamMap.get('card')) {
-        setTimeout(() => { if (this.tabActive()) this.tours.autoStart(PR_SCREEN_TOUR, this.tourHost); }, 700);
-      }
+      // 0087: a tela será desligada — o tour do aviso tem prioridade ao abrir (o tour antigo da tela não abre mais sozinho).
+      setTimeout(() => { if (this.tabActive()) this.tours.autoStart(PR_DEPRECATION_TOUR, this.deprecationTourHost); }, 500);
     }
 
 
@@ -740,11 +739,18 @@ export class RegisterComponent implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     }
   };
-  /** Card aberto (buscado ou vindo da Home): o tour continua/começa com os passos do card. */
-  private readonly tourOnCard = effect(() => {
-    const card = this.prState.cardNumber();
-    if (card && this.tabActive()) untracked(() => this.tours.cardReady(PR_SCREEN_TOUR, this.tourHost));
-  });
+  /** 0087: tour do desligamento da tela — sem fases (todos os passos de uma vez; o balão central não precisa de card). */
+  private readonly deprecationTourHost: TourHost = {};
+
+  /** 0087: leva para a Bancada com o card em tela (ou em branco, sem card). */
+  openWorkbench(): void {
+    const card = `${this.cardNumber ?? ''}`.trim();
+    void this.router.navigate(['/auth/workbench'], { queryParams: /^\d+$/.test(card) ? { card } : {} });
+  }
+
+  showDeprecationTour(): void {
+    this.tours.start(PR_DEPRECATION_TOUR, this.deprecationTourHost);
+  }
 
   openHelp(): void {
     const data: TourHelpData = { tour: PR_SCREEN_TOUR, hasCard: !!this.tourHost.hasCard?.() };
