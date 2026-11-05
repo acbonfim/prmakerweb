@@ -325,7 +325,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
 
     const plan = this.planHeadline;
     if (plan) {
-      const phase = plan.phase === 'correction' ? 'Correção' : 'Análise';
+      const phase = plan.phase === 'correction' ? (this.cardType === 'us' ? 'Implementação' : 'Correção') : 'Análise';
       const yours = plan.userPending ?? 0;
       const extra = yours ? ` · aguardando você (${yours})` : plan.openQuestions ? ` · ${plan.openQuestions} pergunta(s)` : plan.waiting ? ' · aguardando' : '';
       const labels: Record<string, string> = { pending: 'pendente', running: 'em andamento', paused: 'pausado', completed: 'concluído', failed: 'falhou', cancelled: 'cancelado' };
