@@ -1,0 +1,195 @@
+<!-- 0085: Bancada do card — cabeçalho do card, coluna principal (Itens | Plano) e coluna lateral (Especialista, Card, Timeline) -->
+@let found = cardState() === 'found';
+@let cf = cardFull();
+<header class="wb-head">
+  <div class="wb-head__row">
+    <mat-form-field appearance="outline" subscriptSizing="dynamic" class="wb-search" data-tour="wb-search">
+      <mat-icon matPrefix class="wb-search__lead">handyman</mat-icon>
+      <input matInput inputmode="numeric" autocomplete="off" placeholder="Nº do card"
+             aria-label="Número do card" [(ngModel)]="query" (keyup.enter)="search()"/>
+      <button matSuffix mat-icon-button type="button" aria-label="Abrir card" matTooltip="Abrir card (Enter)"
+              [disabled]="!query || cardState() === 'loading'" (click)="search()">
+        <mat-icon>search</mat-icon>
+      </button>
+    </mat-form-field>
+
+    @if (found && cf) {
+      <div class="wb-card" data-tour="wb-card">
+        <mat-icon class="wb-card__type" [svgIcon]="typeIcon()" [matTooltip]="typeLabel()" [attr.aria-label]="typeLabel()"></mat-icon>
+        <span class="wb-card__num">#{{ card() }}</span>
+        <span class="wb-card__title" [matTooltip]="title()" matTooltipShowDelay="600">{{ title() || 'Sem título' }}</span>
+      </div>
+      <div class="wb-chips">
+        @if (state()) {
+          <span class="wb-chip" [class.wb-chip--ok]="stateDone()" matTooltip="Estado no DevOps"><mat-icon>flag</mat-icon>{{ state() }}</span>
+        }
+        @if (area()) {
+          <span class="wb-chip" [matTooltip]="'Área: ' + areaPath()"><mat-icon>folder_open</mat-icon>{{ area() }}</span>
+        }
+        @if (assigned()) {
+          <span class="wb-chip" matTooltip="Responsável no DevOps"><mat-icon>person</mat-icon>{{ assigned() }}</span>
+        }
+      </div>
+    } @else if (cardState() === 'loading') {
+      <div class="wb-card wb-card--loading"><mat-spinner diameter="18"></mat-spinner><span>Abrindo o card #{{ card() }}…</span></div>
+    } @else {
+      <span class="wb-head__title">Bancada do card</span>
+    }
+
+    <span class="wb-spacer"></span>
+    @if (found && cf) {
+      <button mat-icon-button type="button" class="wb-icon-btn" matTooltip="Detalhes do card (campos, histórico, comentários)"
+              aria-label="Detalhes do card" (click)="openDetails()"><mat-icon>info_outline</mat-icon></button>
+      @if (devOpsUrl(); as url) {
+        <a mat-icon-button class="wb-icon-btn" [href]="url" target="_blank" rel="noopener" matTooltip="Abrir no DevOps"
+           aria-label="Abrir no DevOps"><mat-icon>open_in_new</mat-icon></a>
+      }
+    }
+    <button mat-icon-button type="button" class="wb-icon-btn wb-icon-btn--help" data-tour="wb-help"
+            matTooltip="Como usar esta tela (tour guiado e guia completo)" aria-label="Como usar esta tela" (click)="openHelp()">
+      <mat-icon>help_outline</mat-icon>
+    </button>
+  </div>
+
+  @if (found && cf) {
+    <div class="wb-head__row wb-head__row--sub">
+      <app-card-alert-bar [inline]="true" [alerts]="cf.alerts"></app-card-alert-bar>
+      @if (planChip(); as chip) {
+        <button type="button" [class]="'wb-plan-chip wb-plan-chip--' + chip.tone"
+                matTooltip="Ver o plano" (click)="selectMobile('plan')">
+          <mat-icon>account_tree</mat-icon><span>{{ chip.text }}</span>
+        </button>
+      }
+      <span class="wb-spacer"></span>
+      <button mat-stroked-button type="button" class="wb-analyze" data-tour="wb-analyze"
+              [disabled]="analyzing() || planActive()"
+              [matTooltip]="planActive() ? 'Já há um plano em andamento — continue pelo plano' : 'Pede ao Claude a análise deste card (fila de execução)'"
+              (click)="analyze()">
+        @if (analyzing()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon [svgIcon]="typeIcon()"></mat-icon> }
+        {{ cardType() === 'user-story' ? 'Analisar US' : 'Analisar bug' }}
+      </button>
+    </div>
+  }
+</header>
+
+@switch (cardState()) {
+  @case ('idle') {
+    <div class="wb-empty">
+      <mat-icon class="wb-empty__icon">handyman</mat-icon>
+      <h2>Abra um card</h2>
+      <p>Digite o número do card acima para ver os itens de trabalho, o plano, o Especialista do caso e a timeline.</p>
+    </div>
+  }
+  @case ('missing') {
+    <div class="wb-empty">
+      <mat-icon class="wb-empty__icon">search_off</mat-icon>
+      <h2>Card #{{ card() }} não encontrado</h2>
+      <p>O DevOps não tem um card com esse número. Confira o número e tente de novo.</p>
+    </div>
+  }
+  @case ('error') {
+    <div class="wb-empty">
+      <mat-icon class="wb-empty__icon">cloud_off</mat-icon>
+      <h2>Não foi possível ler o card #{{ card() }}</h2>
+      <p>Falha ao consultar o DevOps (confira suas integrações pessoais).</p>
+      <button mat-stroked-button type="button" (click)="reload()"><mat-icon>refresh</mat-icon>Tentar de novo</button>
+    </div>
+  }
+  @case ('loading') {
+    <div class="wb-empty wb-empty--loading"><mat-spinner diameter="32"></mat-spinner></div>
+  }
+}
+
+@if (found && cf) {
+  @let main = visibleMain();
+  @let mtab = mobileTab();
+  <!-- Celular (< 1024): uma seção por vez -->
+  <nav class="wb-mtabs" role="tablist" aria-label="Seções da Bancada">
+    <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'items'" [attr.aria-selected]="mtab === 'items'"
+            (click)="selectMobile('items')">
+      <mat-icon>checklist</mat-icon><span>Itens</span>
+      @if (itemCount()) { <span class="wb-count">{{ itemCount() }}</span> }
+    </button>
+    <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'plan'" [attr.aria-selected]="mtab === 'plan'"
+            (click)="selectMobile('plan')">
+      <mat-icon>account_tree</mat-icon><span>Plano</span>
+      @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you">{{ n }}</span> }
+    </button>
+    <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'chat'" [attr.aria-selected]="mtab === 'chat'"
+            (click)="selectMobile('chat')">
+      <mat-icon>psychology</mat-icon><span>Especialista</span>
+      @if (caseUnread(); as u) { <span class="wb-count">{{ u }}</span> }
+    </button>
+    <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'card'" [attr.aria-selected]="mtab === 'card'"
+            (click)="selectMobile('card')">
+      <mat-icon>description</mat-icon><span>Card</span>
+    </button>
+  </nav>
+
+  <div class="wb-body">
+    <!-- Coluna principal: Itens de trabalho | Plano (os dois ficam montados; troca por visibilidade) -->
+    <section class="wb-main" [class.wb-hidden]="!main">
+      <div class="wb-seg" role="tablist" aria-label="Itens de trabalho ou plano">
+        <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'items'"
+                [attr.aria-selected]="main === 'items'" (click)="selectMain('items')">
+          <mat-icon>checklist</mat-icon>Itens de trabalho
+          @if (itemCount()) { <span class="wb-count">{{ itemCount() }}</span> }
+        </button>
+        <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'plan'"
+                [attr.aria-selected]="main === 'plan'" (click)="selectMain('plan')">
+          <mat-icon>account_tree</mat-icon>Plano
+          @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you" [matTooltip]="n + ' aguardando você'">{{ n }}</span> }
+        </button>
+      </div>
+
+      <div class="wb-pane" [class.wb-hidden]="main !== 'items'" data-tour="wb-items">
+        <app-work-item-list [card]="card()" [cardType]="cardType()" [openItem]="openItem()"
+                            (countChange)="onCountChange($event)"></app-work-item-list>
+      </div>
+
+      <div class="wb-pane wb-pane--plan" [class.wb-hidden]="main !== 'plan'" data-tour="wb-plan">
+        @if (canCancelPlan()) {
+          <div class="wb-plan-bar">
+            <span class="wb-plan-bar__hint">Errou o caminho? Cancele o plano e, se quiser, desfaça o que já foi feito.</span>
+            <button mat-stroked-button type="button" class="wb-cancel" data-tour="wb-cancel-plan" [disabled]="cancelling()"
+                    matTooltip="Cancela o plano e os itens dele; opcionalmente desfaz PRs, branches e estado do card"
+                    (click)="cancelPlan()">
+              <mat-icon>undo</mat-icon>Cancelar e desfazer
+            </button>
+          </div>
+        }
+        <app-execution-plan class="wb-plan" [cardNumber]="card()" (headline)="onHeadline($event)"></app-execution-plan>
+      </div>
+    </section>
+
+    <!-- Coluna lateral: Especialista · Card · Timeline -->
+    <aside class="wb-side" [class.wb-hidden]="!showChat() && !showCardSide()">
+      <div class="wb-chat" [class.wb-hidden]="!showChat()" [class.wb-flash]="chatFlash()" data-tour="wb-chat">
+        <app-case-compact class="wb-chat__box" [card]="card()"></app-case-compact>
+      </div>
+
+      <app-card-panel class="wb-cardtext" [class.wb-hidden]="!showCardSide()" [class.wb-cardtext--closed]="!cardTextOpen()"
+                      [title]="cardType() === 'user-story' ? 'Card · descrição e critérios' : 'Card · repro steps'" icon="description">
+        <button panel-actions mat-icon-button type="button" class="wb-panel-action"
+                [matTooltip]="cardTextOpen() ? 'Recolher' : 'Mostrar'" [attr.aria-expanded]="cardTextOpen()"
+                (click)="cardTextOpen.set(!cardTextOpen())">
+          <mat-icon>{{ cardTextOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
+        </button>
+        @if (cardTextOpen()) {
+          <div class="wb-cardtext__scroll">
+            @for (s of cardSections(); track s.title) {
+              <h4 class="wb-cardtext__h">{{ s.title }}</h4>
+              <div class="wb-rich" [innerHTML]="s.html"></div>
+            } @empty {
+              <p class="wb-muted">{{ cardType() === 'user-story' ? 'A US não tem descrição nem critérios de aceite.' : 'O bug não tem Repro Steps.' }}</p>
+            }
+          </div>
+        }
+      </app-card-panel>
+
+      <div class="wb-timeline" [class.wb-hidden]="!showCardSide()" data-tour="wb-timeline">
+        <app-card-timeline [cardNumber]="card()" [autoLoad]="true"></app-card-timeline>
+      </div>
+    </aside>
+  </div>
+}

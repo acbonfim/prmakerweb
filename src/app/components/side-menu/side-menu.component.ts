@@ -32,6 +32,11 @@ export class SideMenuComponent implements OnInit {
       link: 'auth/dashboard'
     },
     {
+      label: 'Bancada',
+      icon: 'handyman',
+      link: 'auth/workbench'
+    },
+    {
       label: 'Pull Requests',
       icon: 'merge',
       link: 'auth/register'

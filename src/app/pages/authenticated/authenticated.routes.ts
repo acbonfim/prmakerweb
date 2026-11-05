@@ -16,6 +16,13 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadComponent: () => import('./home/home.component').then(m => m.HomeComponent)
       },
       {
+        // 0085: Bancada do card — itens de trabalho, plano, especialista e timeline do card (a tela de PR não muda).
+        path: 'workbench',
+        data: { tab: { title: 'Bancada', icon: 'handyman', card: true } },
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./workbench/workbench.component').then(m => m.WorkbenchComponent)
+      },
+      {
         path: 'register',
         data: { tab: { title: 'Pull Request', icon: 'merge', card: true } },
         canActivate: [AuthGuard],
