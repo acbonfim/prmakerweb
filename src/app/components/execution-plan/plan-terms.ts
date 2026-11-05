@@ -48,3 +48,13 @@ export function isUsPlan(plan: PlanKindLike | null | undefined, others: readonly
   if (plan.parentPlanId && list.some((o) => o.id === plan.parentPlanId && o.kind === US_PLAN_KIND)) return true;
   return list.some((o) => o.kind === US_PLAN_KIND);
 }
+
+/**
+ * O documento do plano como arquivo (em "Arquivos e textos" e na aba Arquivos da Bancada): nome estável por fase/item —
+ * "plano-de-correcao-completo-item-56.md", "analise-completa.md".
+ */
+export function planDocumentFileName(phase: string | null | undefined, us: boolean, itemNumber?: number | null): string {
+  const base = (phase ?? 'analysis') === 'correction' ? `${planTerms(us).fixPlan} completo` : 'Análise completa';
+  const slug = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `${slug}${itemNumber ? '-item-' + itemNumber : ''}.md`;
+}

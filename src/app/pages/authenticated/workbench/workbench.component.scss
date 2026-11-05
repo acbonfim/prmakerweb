@@ -210,38 +210,58 @@
   gap: 8px;
 }
 
-// Linha do segmentado (Itens de trabalho | Plano | Card) + a linha de horas do card à direita
+// Linha do segmentado (Itens de trabalho | Execução | Arquivos | Card) + a linha de horas do card à direita, numa linha só.
+// Quando aperta, a linha se adapta em vez de quebrar: as abas encurtam ("Itens"; depois só o ícone nas não ativas) e as
+// horas perdem primeiro o que é menos útil (rótulo, média do time, barra, Original) — Remaining, Completed e o +1h ficam.
 .wb-segrow {
   flex: none;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px 10px;
   min-width: 0;
   container-type: inline-size;
   container-name: wb-segrow;
 }
 .wb-hoursline {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
+  overflow: hidden;
   padding: 3px 8px;
   border-radius: 10px;
   border: 1px solid var(--wb-border);
   background: var(--surface-1, #262b33);
+  container-type: inline-size;
+  container-name: wb-hours;
 
-  // A linha não quebra por dentro: se não couber ao lado das abas, ela inteira desce para baixo delas.
   ::ng-deep {
     .hr { flex-wrap: nowrap; gap: 4px 8px; }
-    .hr__facts { flex-wrap: nowrap; white-space: nowrap; }
+    .hr__facts { flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
+    .hr__muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .hr__bar { flex-basis: 64px; }
   }
 }
-// Coluna principal mais estreita (ex.: 1440 px com a aba Card): some só o rótulo "HORAS" e o relógio para a linha
-// continuar ao lado das abas; abaixo disso, ela inteira desce para baixo das abas.
-@container wb-segrow (max-width: 950px) {
+@container wb-hours (max-width: 560px) {
+  .wb-hoursline ::ng-deep { .hr__icon, .hr__label { display: none; } }
+}
+@container wb-hours (max-width: 470px) {
+  .wb-hoursline ::ng-deep .hr__avg { display: none; }
+}
+@container wb-hours (max-width: 380px) {
+  .wb-hoursline ::ng-deep .hr__bar { display: none; }
+}
+@container wb-hours (max-width: 300px) {
   .wb-hoursline ::ng-deep {
-    .hr__icon, .hr__label { display: none; }
+    .hr__fact--orig { display: none; }
+    .hr__fact--done::before { content: none; }
   }
+}
+@container wb-segrow (max-width: 900px) {
+  .wb-seg .wb-seg__long { display: none; }
+  .wb-seg .wb-seg__short { display: inline; }
+}
+@container wb-segrow (max-width: 680px) {
+  .wb-seg__btn:not(.wb-seg__btn--on) { padding: 0 9px; }
+  .wb-seg__btn:not(.wb-seg__btn--on) .wb-seg__label { display: none; }
 }
 
 // Controle segmentado Itens de trabalho | Plano | Card
@@ -279,6 +299,9 @@
 
   .mat-icon { color: var(--mat-sys-primary); }
 }
+
+.wb-seg__label { white-space: nowrap; }
+.wb-seg__short { display: none; }
 
 .wb-count {
   min-width: 18px;
@@ -371,14 +394,16 @@
 .wb-pane--plan { overflow: hidden; }
 .wb-plan { display: block; flex: 1 1 auto; min-height: 0; }
 
-// Execução do item (rodada 3): seletor dos itens com plano — a versão é o item de trabalho
+// Execução do item (rodada 3): seletor dos itens com plano — a versão é o item de trabalho. Uma linha só: o título do
+// item trunca e, em largura menor, saem o rótulo "Execução do item" e o texto de "Arquivos do item" (fica o ícone).
 .wb-exec {
   flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
-  flex-wrap: wrap;
+  container-type: inline-size;
+  container-name: wb-exec;
 }
 .wb-exec__label {
   flex: none;
@@ -389,6 +414,7 @@
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--wb-faint);
   .mat-icon { font-size: 17px; width: 17px; height: 17px; }
 }
@@ -403,6 +429,14 @@
   --mdc-outlined-button-outline-color: var(--wb-border);
 
   ::ng-deep .mdc-button__label { display: inline-flex; min-width: 0; }
+}
+@container wb-exec (max-width: 760px) {
+  .wb-exec__label-text, .wb-exec__files-label { display: none; }
+  .wb-exec__files mat-icon { margin-right: 0 !important; }
+  .wb-exec__files.mat-mdc-button { min-width: 0; padding: 0 8px; }
+}
+@container wb-exec (max-width: 520px) {
+  .wb-exec__status { display: none; }
 }
 .wb-exec__sel { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .wb-exec__st { flex: none; font-size: 18px; width: 18px; height: 18px; }
@@ -442,27 +476,17 @@
 }
 @media (prefers-reduced-motion: reduce) { .wb-exec__st--spin { animation: none; } }
 
-.wb-plan-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: var(--surface-1, #262b33);
-  border: 1px solid var(--wb-border);
-}
-.wb-plan-bar__hint { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--wb-faint); }
-.wb-cancel.mat-mdc-outlined-button {
-  flex: none;
-  height: 30px;
-  font-size: 12.5px;
-  border-radius: 8px;
-  color: #ff8b84;
-  --mdc-outlined-button-outline-color: rgba(248, 81, 73, .35);
+// Ícones que a Bancada projeta no cabeçalho do plano: ⓘ (o aviso da aba) e "Cancelar e desfazer"
+.wb-plan-icon.mat-mdc-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 4px;
+  --mdc-icon-button-state-layer-size: 32px;
+  color: var(--wb-muted);
 
-  .mat-icon { font-size: 16px; width: 16px; height: 16px; }
+  .mat-icon { font-size: 19px; width: 19px; height: 19px; }
 }
+.wb-cancel.mat-mdc-icon-button:not(:disabled) { color: #ff8b84; }
 
 // Lateral
 .wb-side {
@@ -493,8 +517,13 @@
 // Itens em execução (sessão ao vivo ao lado do item): a coluna principal ganha largura
 .wb-body--executing { grid-template-columns: minmax(0, 2.6fr) minmax(300px, 1fr); }
 
-// Telas médias: lateral um pouco mais estreita.
+// Telas médias: lateral um pouco mais estreita e, na barra do card, "Linha do tempo" e "Ações DevOps" só com o ícone
+// (o tooltip diz o nome) para as etiquetas do card caberem ao lado.
 @media (max-width: 1360px) and (min-width: 1024px) {
+  .wb-act__label, .wb-prs ::ng-deep .da-trigger__label { display: none; }
+  .wb-act.mat-mdc-outlined-button .mat-icon { margin-right: 0; }
+  .wb-prs ::ng-deep .da-trigger--bar .mat-icon { margin-right: 0; }
+
   .wb-body { grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); }
   .wb-body--executing { grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr); }
 }
@@ -562,7 +591,6 @@
   }
   .wb-main, .wb-side { min-height: calc(100dvh - var(--cime-topbar-total, 70px) - var(--cime-tabs-h, 30px) - var(--wb-tabs-h) - 140px); }
   .wb-pane, .wb-pane--plan { overflow: visible; }
-  .wb-plan-bar__hint { display: none; }
 
   .wb-chat {
     flex: none;
@@ -629,11 +657,22 @@
 .wb-exec__about { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; padding: 8px 12px; border-radius: 10px; font-size: 12.5px;
   line-height: 1.45; color: var(--cc-text-2, inherit); background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent);
   border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 22%, transparent); animation: wb-about-in .25s ease both; }
-.wb-exec__about mat-icon { font-size: 18px; width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--mat-sys-primary); }
-.wb-exec__files { margin-left: auto; flex: none; }
+.wb-exec__about > mat-icon { font-size: 18px; width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--mat-sys-primary); }
+.wb-exec__about > span { flex: 1 1 auto; min-width: 0; }
+.wb-exec__about-x.mat-mdc-icon-button {
+  flex: none; width: 26px; height: 26px; padding: 3px; margin: -3px -6px -3px 0; --mdc-icon-button-state-layer-size: 26px; color: var(--wb-muted);
+  .mat-icon { font-size: 17px; width: 17px; height: 17px; }
+}
+.wb-exec__files { margin-left: auto; flex: none; white-space: nowrap; }
 .wb-exec__files mat-icon { margin-right: 4px; }
 @keyframes wb-about-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .wb-exec__about { animation: none; } }
 
 /* 0087: Arquivos do card no formato do modal "Textos do card" (lista + visualização) ocupam a altura toda */
 .wb-pane--files { overflow: hidden; }
+
+/* A barra de etapas do plano repete a lista de baixo (serve para rolar até a etapa): em telas baixas ou estreitas
+   (notebook) ela some para sobrar espaço; em tela grande e com o plano em tela cheia continua. */
+@media (min-width: 1024px) and (max-height: 880px), (min-width: 1024px) and (max-width: 1280px) {
+  .wb-plan ::ng-deep .plan:not(.plan--expanded) .vbar--steps-only { display: none; }
+}

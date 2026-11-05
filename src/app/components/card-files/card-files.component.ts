@@ -5,17 +5,18 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { firstValueFrom } from 'rxjs';
+import { Observable, firstValueFrom, from, map } from 'rxjs';
 import { WorkItemsService } from '../../services/work-items.service';
 import { saveBlob } from '../../services/execution-plan.service';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { renderMarkdown } from '../../helpers/markdown-ext';
 import { FileViewerComponent } from '../file-viewer/file-viewer.component';
+import { PlanDocumentService } from '../execution-plan/plan-document.service';
 import { CardFilesStore } from '../work-items/card-files.store';
 import { WorkItem, formatWorkNumber } from '../work-items/work-item.model';
 import {
   CASE_FILES_KEY, FILE_KIND_LOOKS, WorkItemFile, WorkItemFileKind, countFilesByItem, fileIcon, fileKindLook, fileMeta, filePreviewKind, fileSourceChip,
-  filesOfItem, isTextFile, normalizeFileKind
+  filesOfItem, isTextFile, normalizeFileKind, planDocumentFiles
 } from '../work-items/work-item-files';
 
 type KindTab = 'all' | WorkItemFileKind;
@@ -55,7 +56,7 @@ const NARROW = '(max-width: 720px)';
             <label class="cf__field" matTooltip="Mostrar só os arquivos de um item de trabalho" matTooltipShowDelay="500">
               <mat-icon>filter_alt</mat-icon>
               <select class="cf__select" aria-label="Filtrar por item de trabalho" (change)="onItem($any($event.target).value)">
-                <option value="all" [selected]="selected() === undefined">Todos os itens ({{ store().count() }})</option>
+                <option value="all" [selected]="selected() === undefined">Todos os itens ({{ allFiles().length }})</option>
                 @for (o of itemOptions(); track o.number) {
                   <option [value]="o.number" [selected]="selected() === o.number">{{ o.label }} ({{ o.count }})</option>
                 }
@@ -95,7 +96,7 @@ const NARROW = '(max-width: 720px)';
             @if (!store().unavailable() && !store().error()) {
               <div class="cf__empty">
                 @if (!store().loaded()) { <mat-icon class="cf__spin">progress_activity</mat-icon>Buscando os arquivos do card… }
-                @else if (!store().count()) { Nenhum arquivo neste card ainda — análises, chamados, scripts, dados e anexos aparecem aqui assim que são gerados. }
+                @else if (!allFiles().length) { Nenhum arquivo neste card ainda — análises, chamados, scripts, dados e anexos aparecem aqui assim que são gerados. }
                 @else { Nenhum arquivo com esse filtro. <button type="button" class="cf__link" (click)="clearFilters()">Limpar filtros</button> }
               </div>
             }
@@ -162,14 +163,17 @@ const NARROW = '(max-width: 720px)';
 export class CardFilesComponent {
   readonly store = input.required<CardFilesStore>();
   readonly card = input<string | null>(null);
-  /** Itens do card (os que têm arquivos viram opção do filtro). */
+  /** Itens do card (os que têm arquivos viram opção do filtro; os que têm plano ganham o "plano completo"). */
   readonly items = input<WorkItem[]>([]);
+  /** Tipo do card: em User Story o plano completo se chama "Plano de implementação completo". */
+  readonly cardType = input<string | null>(null);
   /** Filtro por item: `undefined` = todos; número = só os arquivos desse item (0 = sem item). */
   readonly selected = model<number | undefined>(undefined);
 
   private api = inject(WorkItemsService);
   private snack = inject(MatSnackBar);
   private clipboard = inject(CliipboardService);
+  private documents = inject(PlanDocumentService);
 
   readonly kindTab = signal<KindTab>('all');
   readonly query = signal('');
@@ -188,8 +192,11 @@ export class CardFilesComponent {
   readonly icon = fileIcon;
   readonly isText = isTextFile;
 
+  /** Os do servidor + o plano completo de cada item com plano (primeiro na lista, montado na hora). */
+  readonly allFiles = computed(() => [...planDocumentFiles(this.items(), this.cardType() === 'user-story'), ...this.store().files()]);
+
   /** Arquivos do filtro de item (antes das abas e da busca) — as abas contam sobre ele. */
-  private readonly ofItem = computed(() => filesOfItem(this.store().files(), this.selected()));
+  private readonly ofItem = computed(() => filesOfItem(this.allFiles(), this.selected()));
 
   readonly tabs = computed(() => {
     const files = this.ofItem();
@@ -223,7 +230,7 @@ export class CardFilesComponent {
   });
 
   readonly itemOptions = computed(() => {
-    const counts = countFilesByItem(this.store().files());
+    const counts = countFilesByItem(this.allFiles());
     const selected = this.selected();
     const out: { number: number; label: string; count: number }[] = [];
     for (const item of [...this.items()].sort((a, b) => b.number - a.number)) {
@@ -300,6 +307,15 @@ export class CardFilesComponent {
     return Number(f.workItemNumber ?? 0);
   }
 
+  /** Conteúdo do arquivo: o do servidor ou, no plano completo, o documento montado do plano do item. */
+  private content(f: WorkItemFile): Observable<Blob> {
+    if (f.source === 'document' && f.planId) {
+      return from(this.documents.buildById(f.planId, this.cardType() === 'user-story'))
+        .pipe(map((md) => new Blob([md], { type: 'text/markdown' })));
+    }
+    return this.api.fileContent(this.numberOf(f), f);
+  }
+
   private cacheKey(f: WorkItemFile): string {
     return `${this.key(f)}|${f.updatedAt ?? f.createdAt ?? ''}|${f.size ?? ''}`;
   }
@@ -318,7 +334,7 @@ export class CardFilesComponent {
     if (cached) { this.view.set(cached); return; }
     this.view.set({ status: 'loading' });
     // A prévia (SQL com destaque, markdown, JSON, imagem com zoom) é a do `app-file-viewer` — a mesma de "Arquivos e textos".
-    firstValueFrom(this.api.fileContent(this.numberOf(f), f)).then((blob) => {
+    firstValueFrom(this.content(f)).then((blob) => {
       const view: FileView = { status: 'ready', blob };
       this.cache.set(ck, view);
       if (s === this.seq) this.view.set(view);
@@ -328,7 +344,7 @@ export class CardFilesComponent {
   async download(f: WorkItemFile): Promise<void> {
     this.busy.set(this.key(f));
     try {
-      saveBlob(await firstValueFrom(this.api.fileContent(this.numberOf(f), f)), f.name);
+      saveBlob(await firstValueFrom(this.content(f)), f.name);
     } catch (e) {
       this.snack.open((e as Error)?.message || 'Não foi possível baixar o arquivo.', 'Fechar', { duration: 6000 });
     } finally {
@@ -341,7 +357,7 @@ export class CardFilesComponent {
     const id = this.key(f);
     this.busy.set(id);
     try {
-      const text = await (await firstValueFrom(this.api.fileContent(this.numberOf(f), f))).text();
+      const text = await (await firstValueFrom(this.content(f))).text();
       if (!text.trim()) { this.snack.open('O arquivo está vazio.', 'Ok', { duration: 3000 }); return; }
       if (rich && filePreviewKind(f) === 'markdown') await this.clipboard.copyRichToClipboard(renderMarkdown(text, { codeRefs: false }), text);
       else this.clipboard.copyFullDescriptionToClipboard(text);

@@ -48,10 +48,10 @@ const SNACK = { direction: 'ltr', horizontalPosition: 'right', verticalPosition:
       @if (appearance() === 'bar') {
         <!-- Barra de ações do card (Bancada): o mesmo botão dos vizinhos (Card, Linha do tempo, PRs) -->
         <button mat-stroked-button class="da-trigger da-trigger--bar" cdkOverlayOrigin #origin="cdkOverlayOrigin" data-tour="wb-devops"
-                [disabled]="!cardFull() || cardLoading()" (click)="pop.toggle(origin)">
+                aria-label="Ações DevOps" [disabled]="!cardFull() || cardLoading()" (click)="pop.toggle(origin)">
           @if (running()) { <mat-spinner diameter="16" class="da-trigger-spinner"></mat-spinner> }
           @else { <mat-icon>settings_suggest</mat-icon> }
-          Ações DevOps
+          <span class="da-trigger__label">Ações DevOps</span>
         </button>
       } @else {
         <button mat-raised-button cdkOverlayOrigin #origin="cdkOverlayOrigin"

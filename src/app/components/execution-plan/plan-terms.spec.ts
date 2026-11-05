@@ -1,4 +1,4 @@
-import { isUsPlan, planTerms } from './plan-terms';
+import { isUsPlan, planDocumentFileName, planTerms } from './plan-terms';
 
 describe('plan-terms (0085 rodada 5)', () => {
   it('plano de US fala em implementação; Bug continua em correção', () => {
@@ -14,5 +14,12 @@ describe('plan-terms (0085 rodada 5)', () => {
     expect(isUsPlan({ id: 'c', kind: 'correcao', parentPlanId: 'a' }, [{ id: 'a', kind: 'analisar-us' }])).toBeTrue();
     expect(isUsPlan({ id: 'c', kind: 'correcao', parentPlanId: 'b' }, [{ id: 'b', kind: 'analisar-bug' }])).toBeFalse();
     expect(isUsPlan(null)).toBeFalse();
+  });
+
+  it('nome do plano completo como arquivo: por fase, US e item, sem acento', () => {
+    expect(planDocumentFileName('correction', false, 56)).toBe('plano-de-correcao-completo-item-56.md');
+    expect(planDocumentFileName('correction', true, null)).toBe('plano-de-implementacao-completo.md');
+    expect(planDocumentFileName('analysis', false, 3)).toBe('analise-completa-item-3.md');
+    expect(planDocumentFileName(null, false)).toBe('analise-completa.md');
   });
 });

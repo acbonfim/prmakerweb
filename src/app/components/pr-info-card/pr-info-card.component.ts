@@ -98,7 +98,8 @@ export interface InfoFact {
       border-radius: 10px;
       padding: 8px 12px;
     }
-    .pr-info { display: flex; align-items: center; gap: 10px 18px; width: 100%; min-height: 44px; }
+    /* Sem espaço para as etiquetas ao lado das ações, elas descem para a linha de baixo (nunca se sobrepõem). */
+    .pr-info { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; width: 100%; min-height: 44px; }
     .pr-info__author { display: flex; align-items: center; gap: 10px; flex: none; }
     .pr-info__author--starter { gap: 8px; padding-left: 14px; border-left: 1px solid rgba(255, 255, 255, 0.08); cursor: default; }
     .pr-info__col { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
@@ -109,7 +110,7 @@ export interface InfoFact {
     .pr-info__dates > span { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
     .pr-info__dates .mat-icon { font-size: 13px; width: 13px; height: 13px; color: var(--mat-sys-primary); }
 
-    .pr-info__facts { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    .pr-info__facts { flex: 1 1 200px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
       padding-left: 14px; border-left: 1px solid rgba(255, 255, 255, 0.08); }
     .pr-info__empty { flex: 1; font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 45%, transparent); }
 

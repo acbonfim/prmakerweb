@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Subscription } from 'rxjs';
+import { Subscription, from, map } from 'rxjs';
 import {
   ExecutionPlanService,
   fileNameFromResponse,
@@ -22,7 +22,17 @@ export interface PlanFilesDialogData {
   groupId?: ArtifactGroup['id'];
   artifactId?: string;
   stepTitle: (key: string) => string | null;
+  /** O plano completo como arquivo (montado na hora, primeiro da aba Análises). */
+  document?: PlanFilesDocument;
 }
+
+export interface PlanFilesDocument {
+  artifact: ExecutionArtifact;
+  load: () => Promise<string>;
+}
+
+/** Id do arquivo "plano completo" (não existe no servidor: o conteúdo é montado pelo `PlanDocumentService`). */
+export const PLAN_DOCUMENT_ID = '__plan-document__';
 
 interface Preview {
   artifact: ExecutionArtifact;
@@ -69,7 +79,8 @@ interface Preview {
               <span class="pf__item-text">
                 <span class="pf__item-name">{{ a.name }}</span>
                 <span class="pf__item-meta">
-                  {{ size(a.size) }} · {{ time(a.updatedAt || a.createdAt) }}
+                  @if (a.id === docId) { Gerado na hora: etapas, documentos e o código que muda } @else {
+                  {{ size(a.size) }} · {{ time(a.updatedAt || a.createdAt) }} }
                   @if (a.stepKey && data.stepTitle(a.stepKey); as st) { · {{ st }} }
                 </span>
               </span>
@@ -155,7 +166,8 @@ export class PlanFilesDialogComponent implements OnDestroy {
   private clipboard = inject(CliipboardService);
 
   readonly groups = ARTIFACT_GROUPS;
-  readonly all = this.data.artifacts;
+  readonly docId = PLAN_DOCUMENT_ID;
+  readonly all = computed(() => this.data.document ? [this.data.document.artifact, ...this.data.artifacts()] : this.data.artifacts());
   readonly groupId = signal<ArtifactGroup['id']>(this.data.groupId ?? this.firstGroupWithFiles());
   readonly selectedId = signal<string | null>(this.data.artifactId ?? null);
   readonly preview = signal<Preview | null>(null);
@@ -165,7 +177,9 @@ export class PlanFilesDialogComponent implements OnDestroy {
 
   readonly list = computed(() => {
     const group = ARTIFACT_GROUPS.find((g) => g.id === this.groupId())!;
-    return this.all().filter((a) => group.kinds.includes(a.kind)).sort((a, b) => a.name.localeCompare(b.name));
+    // O plano completo fica no topo; o resto, por nome.
+    return this.all().filter((a) => group.kinds.includes(a.kind))
+      .sort((a, b) => Number(b.id === PLAN_DOCUMENT_ID) - Number(a.id === PLAN_DOCUMENT_ID) || a.name.localeCompare(b.name));
   });
 
   private sub?: Subscription;
@@ -203,8 +217,12 @@ export class PlanFilesDialogComponent implements OnDestroy {
     this.loading.set(true);
     this.error.set(null);
     this.sub?.unsubscribe();
-    // Anexo de comentário pode ser do outro plano do card (0031).
-    this.sub = this.api.content(a.planId || this.data.planId, a.id).subscribe({
+    // Anexo de comentário pode ser do outro plano do card (0031); o plano completo é montado aqui.
+    const doc = this.data.document;
+    const content$ = doc && a.id === PLAN_DOCUMENT_ID
+      ? from(doc.load()).pipe(map((md) => new Blob([md], { type: 'text/markdown' })))
+      : this.api.content(a.planId || this.data.planId, a.id);
+    this.sub = content$.subscribe({
       next: (blob) => {
         if (this.selectedId() !== a.id) return;
         this.preview.set({ artifact: a, kind: fileViewKind(a.name, a.contentType || blob.type, blob.size, a.kind), blob });
@@ -269,7 +287,7 @@ export class PlanFilesDialogComponent implements OnDestroy {
   }
 
   private firstGroupWithFiles(): ArtifactGroup['id'] {
-    const all = this.data.artifacts();
+    const all = this.all();
     return ARTIFACT_GROUPS.find((g) => all.some((a) => g.kinds.includes(a.kind)))?.id ?? 'scripts';
   }
 

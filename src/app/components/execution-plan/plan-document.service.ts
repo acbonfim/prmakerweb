@@ -6,6 +6,7 @@ import { CodeRef, changeMeta, linesLabel } from '../code-ref/code-ref.model';
 import { generatedTextLabel } from '../generated-texts/generated-texts.model';
 import { ExecutionArtifact, ExecutionPlan, ExecutionPlanSummary, PLAN_STATUS_LABEL } from './execution-plan.model';
 import { isUsPlan, planTerms } from './plan-terms';
+export { planDocumentFileName } from './plan-terms';
 
 const STEP_LABEL: Record<string, string> = {
   pending: 'pendente', running: 'em andamento', waiting: 'aguardando', paused: 'pausada',
@@ -113,6 +114,12 @@ export class PlanDocumentService {
       out.push('');
     }
     return out.join('\n');
+  }
+
+  /** O documento de um plano pelo id (aba Arquivos da Bancada: um por item com plano, sem versões). */
+  async buildById(planId: string, us?: boolean): Promise<string> {
+    const plan = await firstValueFrom(this.api.get(planId));
+    return this.build(plan, [], { us: us ?? isUsPlan(plan) });
   }
 
   private async loadTexts(planId: string, files: ExecutionArtifact[]): Promise<Map<string, string>> {

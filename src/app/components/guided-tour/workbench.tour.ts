@@ -18,10 +18,12 @@ import { TourDefinition } from './tour.model';
  * quem iniciou o card no PRMake.
  * v7 (0087): a **Execução** é só acompanhamento (o que o Claude faz num item, perguntas/respostas, ao vivo) e a nova aba
  * **Arquivos** mostra todos os arquivos do card com filtro por item; itens e sub-tarefas trazem código/linha com popover.
+ * v8 (telas menores): a faixa "Arquivos do plano" saiu — o plano completo virou arquivo em **Arquivos e textos** (e na aba
+ * Arquivos); "Cancelar e desfazer" virou ícone no cabeçalho do plano; o aviso da Execução fecha e volta pelo ⓘ.
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 7,
+  version: 8,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -164,18 +166,19 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'código atual e o diff, os itens da engenharia reversa (<code>modulo#RN-012</code>) e os arquivos do item na visão geral.'
     },
     {
-      id: 'plan-files', anchor: 'plan-files-bar', group: 'Execução', since: 6, phase: 'card', side: 'bottom', align: 'start',
+      id: 'plan-files', anchor: 'plan-files', group: 'Execução', since: 8, phase: 'card', side: 'bottom', align: 'end',
       optional: true, prepare: 'tab:plan',
       title: 'Arquivos do plano',
-      body: 'Os arquivos do plano (análise, scripts, chamados) ficam sempre aqui — abra ou baixe — com o <b>Ver o plano completo</b> ao lado.',
-      detail: 'Clique no nome para abrir no visualizador; a seta baixa o arquivo; ".zip" baixa todos. <b>Pausar</b>, ' +
+      body: 'Os arquivos do plano (análise, scripts, chamados) e o <b>plano completo</b> ficam neste botão — abra, copie ou baixe.',
+      detail: 'O plano completo é o primeiro arquivo de Análises (montado na hora: etapas, documentos e o código que muda) e também ' +
+        'aparece na aba <b>Arquivos</b>, um por item. ".zip" baixa todos os arquivos. <b>Pausar</b>, ' +
         '<b>Continuar</b> e <b>Continuar com Claude</b> ficam no menu <b>⋮</b> do cabeçalho do plano. Em User Story o plano ' +
         'se chama <b>Plano de implementação</b>.'
     },
     {
-      id: 'cancel', anchor: 'wb-cancel-plan', group: 'Execução', since: 1, phase: 'card', side: 'bottom', optional: true, prepare: 'tab:plan',
-      title: 'Cancelar e desfazer',
-      body: 'Para o item em execução (o plano e os itens dele) — e, se você marcar, <b>desfaz</b> o que já foi feito (fecha PRs, apaga branches criadas…).',
+      id: 'cancel', anchor: 'wb-cancel-plan', group: 'Execução', since: 8, phase: 'card', side: 'bottom', optional: true, prepare: 'tab:plan',
+      title: 'Cancelar e desfazer (↶)',
+      body: 'O ↶ no cabeçalho do plano para o item em execução (o plano e os itens dele) — e, se você marcar, <b>desfaz</b> o que já foi feito (fecha PRs, apaga branches criadas…).',
       detail: 'O desfazer vira um pedido na fila e roda em ordem reversa. Para só mudar o rumo do plano, prefira conversar com ' +
         'o Especialista do caso.'
     },
