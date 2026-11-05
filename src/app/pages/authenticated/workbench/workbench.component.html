@@ -412,7 +412,7 @@
       </div>
 
       <!-- 0087: Arquivos do card inteiro (qualquer item), com filtro por item de trabalho. Montada para a contagem ficar viva. -->
-      <div class="wb-pane" [class.wb-hidden]="main !== 'files'" data-tour="wb-files">
+      <div class="wb-pane wb-pane--files" [class.wb-hidden]="main !== 'files'" data-tour="wb-files">
         <app-card-files [store]="cardFiles" [card]="card()" [items]="planItems()" [(selected)]="filesItem"></app-card-files>
       </div>
 

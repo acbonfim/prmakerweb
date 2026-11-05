@@ -148,10 +148,11 @@ export const WORKBENCH_TOUR: TourDefinition = {
     {
       id: 'files', anchor: 'wb-files-tab', group: 'Arquivos', since: 7, phase: 'card', side: 'bottom', align: 'start',
       title: 'Todos os arquivos do card',
-      body: 'Análises, chamados, scripts, dados e anexos de <b>qualquer item</b>, num lugar só. Os chips filtram por item de trabalho; ' +
-        'cada item também mostra só os seus (aba <b>Arquivos</b> do item) e a Execução tem o atalho <b>Arquivos do item</b>.',
+      body: 'Como nos <b>Textos do card</b>: a lista de arquivos à esquerda e a visualização à direita. As <b>abas</b> separam textos, análises, ' +
+        'chamados, scripts, dados e anexos, e o filtro mostra só os de um <b>item de trabalho</b>. Cada item também mostra só os seus.',
       detail: 'A aba Arquivos lista tudo o que foi gerado ou anexado no card, inclusive os arquivos de versões antigas do plano ' +
-        '(grupo "Sem item"). Abra no visualizador (código, markdown, imagem), baixe ou copie; o chamado tem destaque com "Copiar chamado".'
+        '(filtro "Sem item"). Escolha um arquivo na lista para ver o conteúdo ao lado (código, markdown, imagem), baixe ou copie; ' +
+        'o chamado tem o botão "Copiar chamado". Na Execução, "Arquivos do item" abre esta aba já filtrada.'
     },
     {
       id: 'rich-items', anchor: 'wb-items', group: 'Itens de trabalho', since: 7, phase: 'card', side: 'right', align: 'start', prepare: 'tab:items',

@@ -634,3 +634,6 @@
 .wb-exec__files mat-icon { margin-right: 4px; }
 @keyframes wb-about-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .wb-exec__about { animation: none; } }
+
+/* 0087: Arquivos do card no formato do modal "Textos do card" (lista + visualização) ocupam a altura toda */
+.wb-pane--files { overflow: hidden; }
