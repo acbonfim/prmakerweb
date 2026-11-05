@@ -5,10 +5,14 @@ import { TourDefinition } from './tour.model';
  * (workbench.component.html) e, quando existir, dos botões da lista de itens (`wi-new`, `wi-run` — opcionais).
  * `prepare: 'tab:<aba>'` pede para a página abrir a aba certa (Itens | Plano | Especialista | Card) antes do passo.
  * Mudou o uso da tela? Ajuste o passo e suba `version` (e o `since` dos passos novos/alterados).
+ * v2 (ajustes da 0085): etiquetas do card, robô/conexão, botão Card (horas + texto), timeline num botão, especialista
+ * na lateral inteira, sugestões (situação/assistente) e a sugestão de análise inicial.
+ * v3: o popover do botão Card virou a aba **Card** da coluna principal (horas, lançar +1h/+2h/+4h/outro, dados e texto
+ * do card) e a linha de horas fica ao lado das abas Itens | Plano | Card.
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 1,
+  version: 3,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -28,11 +32,27 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'um item (<code>&item=</code>) ou a parte da tela (<code>&focus=plan|items|timeline|chat</code>).'
     },
     {
-      id: 'card', anchor: 'wb-card', group: 'O card', since: 1, phase: 'card', side: 'bottom', align: 'start',
+      id: 'card', anchor: 'wb-card', group: 'O card', since: 2, phase: 'card', side: 'bottom', align: 'start',
       title: 'Bug ou User Story',
-      body: 'O ícone mostra o tipo: <b>joaninha</b> = Bug, <b>livrinho</b> = User Story. Ao lado, estado, área e responsável no DevOps.',
+      body: 'O ícone mostra o tipo: <b>joaninha</b> = Bug, <b>livrinho</b> = User Story. À direita, os avisos do card no DevOps.',
       detail: 'O tipo do card decide o texto mostrado (Repro Steps no Bug, critérios de aceite na US), o botão de análise e o tipo ' +
         'padrão dos itens novos. O ⓘ abre todos os campos, o histórico e os comentários; a seta abre o card no DevOps.'
+    },
+    {
+      id: 'facts', anchor: 'wb-facts', group: 'O card', since: 2, phase: 'card', side: 'bottom', align: 'start',
+      title: 'Etiquetas do card',
+      body: 'A mesma barra da tela de PR: quem abriu, <b>estado</b>, ambiente, módulo, produção/release, prioridade, responsável, ' +
+        'horas restantes, <b>plano</b> e <b>situação atual</b>.',
+      detail: 'Passe o mouse numa etiqueta para ver o detalhe (coluna e raia do board, etapa da situação…). As cores avisam: verde ' +
+        'concluído, âmbar pedindo atenção, azul em andamento.'
+    },
+    {
+      id: 'status', anchor: 'wb-status', group: 'O card', since: 2, phase: 'card', side: 'bottom', align: 'end', optional: true,
+      title: 'O Claude está trabalhando?',
+      body: 'O <b>robô</b> se mexe quando o Claude está rodando (ampulheta = na fila). <b>Wi-fi cortado</b> = sem sinal do Claude; ' +
+        '<b>nuvem cortada</b> = a tela perdeu o tempo real.',
+      detail: 'Vale em qualquer aba. Clique no robô para ver o que o Claude está fazendo agora (máquina, atividade ao vivo) ou ir ' +
+        'aos itens em execução. Sem sinal do Claude, o menu do ícone retoma a sessão; sem tempo real, o clique reconecta e recarrega a Bancada.'
     },
     {
       id: 'analyze', anchor: 'wb-analyze', group: 'O card', since: 1, phase: 'card', side: 'bottom', align: 'end', optional: true,
@@ -49,10 +69,38 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'ações do GitHub e do DevOps — as mesmas da tela de Pull Request.'
     },
     {
-      id: 'hours', anchor: 'wb-hours', group: 'O card', since: 1, phase: 'card', side: 'left', align: 'start', optional: true, prepare: 'tab:card',
-      title: 'Horas do card',
-      body: 'No Bug, as horas lançadas comparadas com a média dos bugs (acima ou abaixo); na US, o planejado × o realizado.',
-      detail: 'Os números vêm dos campos de horas do DevOps. Serve para ver cedo quando o card está passando do esperado.'
+      id: 'hours', anchor: 'wb-card-pane', group: 'O card', since: 3, phase: 'card', side: 'left', align: 'start', optional: true,
+      prepare: 'tab:card',
+      title: 'Aba Card: horas e texto',
+      body: 'A aba <b>Card</b> reúne as horas (lance <b>+1h</b>, <b>+2h</b>, <b>+4h</b> ou outro valor), os dados principais e o texto ' +
+        'do card. O botão <b>Card</b> da barra abre esta aba; a linha de horas fica sempre ao lado das abas.',
+      detail: 'No Bug, as horas lançadas comparadas com a média dos bugs (acima ou abaixo); na US, o planejado × o realizado. ' +
+        'Lançar horas pede uma confirmação curta e grava no DevOps (soma em Completed e tira do Remaining). Também ficam aqui ' +
+        'estado, área, iteração, responsável, prioridade, datas, anexos/links e o texto (Repro Steps no Bug; descrição e ' +
+        'critérios de aceite na US). No celular, é a aba "Card".'
+    },
+    {
+      id: 'timeline', anchor: 'wb-timeline-btn', group: 'O card', since: 2, phase: 'card', side: 'bottom', align: 'end',
+      title: 'Linha do tempo',
+      body: 'Tudo o que aconteceu no card, num botão — abre em tela cheia, como na tela de PR.',
+      detail: 'Comentários, publicações, Teams e registros das skills. O número conta as entradas; dá para escrever direto na ' +
+        'timeline pelo rodapé dela. O espaço da lateral agora é todo do Especialista do caso.'
+    },
+    {
+      id: 'first-analysis', anchor: 'wb-first-analysis', group: 'Itens de trabalho', since: 2, phase: 'card', side: 'bottom', align: 'start',
+      optional: true, prepare: 'tab:items',
+      title: 'Comece pela análise inicial',
+      body: 'Card sem plano e sem itens? <b>Começar a análise inicial</b> manda o Claude analisar o bug (ou a US).',
+      detail: 'A análise cria sozinha o item "Análise inicial…" com uma sub-tarefa por etapa e, ao final, os itens de trabalho da ' +
+        'entrega com as sub-tarefas. Tudo aparece na lista, ao vivo.'
+    },
+    {
+      id: 'suggest', anchor: 'wb-suggest', group: 'Itens de trabalho', since: 2, phase: 'card', side: 'bottom', align: 'start',
+      optional: true, prepare: 'tab:items',
+      title: 'Situação e sugestões',
+      body: 'Como na tela de PR: a <b>situação atual</b> do card (o que é aguardado e desde quando) e as <b>sugestões do PRMake</b>.',
+      detail: 'A situação pode ser copiada ou publicada no DevOps; as sugestões (estimativa, publicação, horas) não travam nada. ' +
+        'Na aba Plano elas ficam no próprio plano.'
     },
     {
       id: 'items', anchor: 'wb-items', group: 'Itens de trabalho', since: 1, phase: 'card', side: 'right', align: 'start', prepare: 'tab:items',
@@ -69,10 +117,13 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'não começaram podem ser editados; um item iniciado pode servir de base para um novo.'
     },
     {
-      id: 'run', anchor: 'wi-run', group: 'Itens de trabalho', since: 1, phase: 'card', side: 'bottom', optional: true, prepare: 'tab:items',
-      title: 'Executar',
-      body: '<b>Executar</b> manda o item para o Claude. As sub-tarefas atualizam ao vivo.',
-      detail: 'O item vai para a fila e roda no executor. Sub-tarefas suas (ex.: validar) esperam você marcar como feitas.'
+      id: 'run', anchor: 'wi-run', group: 'Itens de trabalho', since: 2, phase: 'card', side: 'bottom', optional: true, prepare: 'tab:items',
+      title: 'Executar (▶)',
+      body: 'O <b>▶</b> manda o item para o Claude. A <b>sessão de execução</b> abre ao lado, ao vivo: o item fica "trabalhando" e ' +
+        'cada sub-tarefa passa para em andamento / concluída na hora.',
+      detail: 'O item vai para a fila e roda no executor. A sessão de execução mostra tudo o que o Claude está fazendo naquele ' +
+        'item (atividade, sub-tarefas e o registro em tempo real); com vários itens rodando, cada um tem a sua aba e o botão ' +
+        '"Sessão de execução (n)" volta para ela. Sub-tarefas suas (ex.: validar) esperam você marcar como feitas.'
     },
     {
       id: 'plan', anchor: 'wb-plan', group: 'Plano', since: 1, phase: 'card', side: 'right', align: 'start', prepare: 'tab:plan',
@@ -89,17 +140,11 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'o Especialista do caso.'
     },
     {
-      id: 'chat', anchor: 'wb-chat', group: 'Conversa e histórico', since: 1, phase: 'card', side: 'left', align: 'start', prepare: 'tab:chat',
+      id: 'chat', anchor: 'wb-chat', group: 'Conversa e histórico', since: 2, phase: 'card', side: 'left', align: 'start', prepare: 'tab:chat',
       title: 'Especialista do caso',
-      body: 'Dúvidas, discordâncias e pedidos de itens novos vão para o especialista — ele conhece o card, o plano e as regras.',
+      body: 'A lateral é do especialista: dúvidas, discordâncias e pedidos de itens novos — ele conhece o card, o plano e as regras.',
       detail: 'O especialista responde com código, banco (só leitura) e a Base Solvace, e pode propor itens de trabalho ou uma ' +
         'nova versão do plano — nada muda sem você aceitar.'
-    },
-    {
-      id: 'timeline', anchor: 'wb-timeline', group: 'Conversa e histórico', since: 1, phase: 'card', side: 'left', align: 'start', prepare: 'tab:card',
-      title: 'Timeline',
-      body: 'Tudo o que aconteceu no card. O botão do canto abre em tela cheia.',
-      detail: 'Comentários, publicações e registros das skills. Dá para escrever direto na timeline pelo rodapé dela.'
     },
     {
       id: 'help', anchor: 'wb-help', group: 'Começo', since: 1, phase: 'card', side: 'bottom', align: 'end', guide: false,

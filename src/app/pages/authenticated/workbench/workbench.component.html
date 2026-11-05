@@ -1,4 +1,5 @@
-<!-- 0085: Bancada do card — cabeçalho do card, coluna principal (Itens | Plano) e coluna lateral (Especialista, Card, Timeline) -->
+<!-- 0085: Bancada do card — cabeçalho do card + barra de etiquetas, coluna principal (Itens | Plano | Card) e lateral (Especialista).
+     Ajustes: timeline num botão (como na tela de PR); o botão "Card" abre a aba Card (horas, lançar horas, dados e texto). -->
 @let found = cardState() === 'found';
 <!-- DevOps fora do ar/sem integração: a Bancada continua com itens, plano, especialista e timeline (dados do PRMake) -->
 @let body = found || cardState() === 'error';
@@ -21,17 +22,6 @@
         <span class="wb-card__num">#{{ card() }}</span>
         <span class="wb-card__title" [matTooltip]="title()" matTooltipShowDelay="600">{{ title() || 'Sem título' }}</span>
       </div>
-      <div class="wb-chips">
-        @if (state()) {
-          <span class="wb-chip" [class.wb-chip--ok]="stateDone()" matTooltip="Estado no DevOps"><mat-icon>flag</mat-icon>{{ state() }}</span>
-        }
-        @if (area()) {
-          <span class="wb-chip" [matTooltip]="'Área: ' + areaPath()"><mat-icon>folder_open</mat-icon>{{ area() }}</span>
-        }
-        @if (assigned()) {
-          <span class="wb-chip" matTooltip="Responsável no DevOps"><mat-icon>person</mat-icon>{{ assigned() }}</span>
-        }
-      </div>
     } @else if (cardState() === 'loading') {
       <div class="wb-card wb-card--loading"><mat-spinner diameter="18"></mat-spinner><span>Abrindo o card #{{ card() }}…</span></div>
     } @else {
@@ -39,6 +29,47 @@
     }
 
     <span class="wb-spacer"></span>
+    @if (found && cf) {
+      <app-card-alert-bar class="wb-alerts" [inline]="true" [alerts]="cf.alerts"></app-card-alert-bar>
+    }
+
+    @if (body) {
+      <!-- Robô do Claude e conexão: o mesmo indicador do cabeçalho do plano, visível em qualquer aba -->
+      <span class="wb-status" data-tour="wb-status">
+        @if (realtimeDown()) {
+          <button mat-icon-button type="button" class="wb-icon-btn wb-net-off" (click)="reconnect()"
+                  matTooltip="Sem conexão em tempo real — a Bancada não atualiza sozinha. Clique para reconectar e recarregar."
+                  aria-label="Sem conexão em tempo real; reconectar">
+            <mat-icon>cloud_off</mat-icon>
+          </button>
+        }
+        @if (claudeSilentMinutes(); as minutes) {
+          <button mat-icon-button type="button" class="wb-icon-btn wb-signal" [matMenuTriggerFor]="signalMenu"
+                  [matTooltip]="'Sem sinal do Claude há ' + minutes + ' min — a sessão pode ter caído. Clique para retomar.'"
+                  [attr.aria-label]="'Sem sinal do Claude há ' + minutes + ' minutos'">
+            <mat-icon>wifi_off</mat-icon>
+          </button>
+          <mat-menu #signalMenu="matMenu" class="app-menu">
+            <div class="wb-signal-text" (click)="$event.stopPropagation()">
+              <b>Sem sinal do Claude há {{ minutes }} min.</b><br>Se a sessão caiu, retome de onde parou.
+            </div>
+            @if (canAskClaude()) {
+              <button mat-menu-item (click)="resumeClaude()"><mat-icon>rocket_launch</mat-icon><span>{{ askLabel() }}</span></button>
+            }
+            <button mat-menu-item (click)="copyTerminalCommand()"><mat-icon>terminal</mat-icon><span>Copiar o comando do terminal</span></button>
+          </mat-menu>
+        }
+        @let rb = robot();
+        <button mat-icon-button type="button" class="wb-icon-btn wb-robot"
+                [class.wb-robot--running]="rb.mode === 'running'" [class.wb-robot--queued]="rb.mode === 'queued'"
+                [class.wb-robot--idle]="rb.mode === 'idle'"
+                [matTooltip]="rb.tooltip" [attr.aria-label]="rb.tooltip" (click)="openRobot()">
+          <span class="wb-robot__glow" aria-hidden="true"></span>
+          <mat-icon>{{ rb.icon }}</mat-icon>
+        </button>
+      </span>
+    }
+
     @if (found && cf) {
       <button mat-icon-button type="button" class="wb-icon-btn" matTooltip="Detalhes do card (campos, histórico, comentários)"
               aria-label="Detalhes do card" (click)="openDetails()"><mat-icon>info_outline</mat-icon></button>
@@ -52,32 +83,50 @@
       <mat-icon>help_outline</mat-icon>
     </button>
   </div>
-
-  @if (found && cf) {
-    <div class="wb-head__row wb-head__row--sub">
-      <app-card-alert-bar [inline]="true" [alerts]="cf.alerts"></app-card-alert-bar>
-      @if (planChip(); as chip) {
-        <button type="button" [class]="'wb-plan-chip wb-plan-chip--' + chip.tone"
-                matTooltip="Ver o plano" (click)="selectMobile('plan')">
-          <mat-icon>account_tree</mat-icon><span>{{ chip.text }}</span>
-        </button>
-      }
-      <span class="wb-spacer"></span>
-      <!-- PRs do card + ações do GitHub e do DevOps (botão "PRs (n)" que abre o modal) -->
-      <span class="wb-prs" data-tour="wb-prs">
-        <app-workbench-prs [card]="card()" [cardType]="cardType()" [cardFull]="cf"
-                           (countChange)="prCount.set($event)" (devopsChanged)="reload()"></app-workbench-prs>
-      </span>
-      <button mat-stroked-button type="button" class="wb-analyze" data-tour="wb-analyze"
-              [disabled]="analyzing() || planActive()"
-              [matTooltip]="planActive() ? 'Já há um plano em andamento — continue pelo plano' : 'Pede ao Claude a análise deste card (fila de execução)'"
-              (click)="analyze()">
-        @if (analyzing()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon [svgIcon]="typeIcon()"></mat-icon> }
-        {{ cardType() === 'user-story' ? 'Analisar US' : 'Analisar bug' }}
-      </button>
-    </div>
-  }
 </header>
+
+@if (body) {
+  <!-- Etiquetas de status do card (as mesmas da tela de PR) + ações: Card (horas e texto), Linha do tempo, PRs, Analisar -->
+  @let au = author();
+  <app-pr-info-card class="wb-info" data-tour="wb-facts"
+                    [userName]="au.name" [authorLabel]="au.label" [openedAt]="au.openedAt" [updatedAt]="au.updatedAt"
+                    [facts]="facts()">
+    <ng-container ngProjectAs="[info-actions]">
+      <span class="wb-actions">
+        @let hc = hoursChip();
+        <button mat-stroked-button type="button" class="wb-act" data-tour="wb-card-btn"
+                [class.wb-act--on]="visibleMain() === 'card'" [attr.aria-pressed]="visibleMain() === 'card'" (click)="showCard()"
+                [matTooltip]="'Aba Card: horas (lançar +1h, +2h, +4h…), dados e ' + (cardType() === 'user-story' ? 'descrição e critérios de aceite' : 'Repro Steps')">
+          <mat-icon>description</mat-icon>Card
+          @if (hc) { <span class="wb-hours-chip wb-hours-chip--{{ hc.tone }}" [matTooltip]="hc.tooltip">{{ hc.text }}</span> }
+        </button>
+
+        <!-- Como na tela de PR: a timeline abre em tela cheia (o componente fica montado fora da tela) -->
+        <button mat-stroked-button type="button" class="wb-act" data-tour="wb-timeline-btn"
+                (click)="openTimeline($any($event.currentTarget))"
+                matTooltip="Linha do tempo do card (comentários, Teams, publicações) — abre em tela cheia">
+          <mat-icon>forum</mat-icon>Linha do tempo
+          @if (timelineCount(); as n) { <span class="wb-act__count">{{ n }}</span> }
+        </button>
+
+        <!-- PRs do card + ações do GitHub e do DevOps (botão "PRs (n)" que abre o modal) -->
+        @if (found && cf) {
+          <span class="wb-prs" data-tour="wb-prs">
+            <app-workbench-prs [card]="card()" [cardType]="cardType()" [cardFull]="cf"
+                               (countChange)="prCount.set($event)" (devopsChanged)="reload()"></app-workbench-prs>
+          </span>
+          <button mat-stroked-button type="button" class="wb-act wb-analyze" data-tour="wb-analyze"
+                  [disabled]="analyzing() || planActive()"
+                  [matTooltip]="planActive() ? 'Já há um plano em andamento — continue pelo plano' : 'Pede ao Claude a análise deste card (fila de execução)'"
+                  (click)="analyze()">
+            @if (analyzing()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon [svgIcon]="typeIcon()"></mat-icon> }
+            {{ cardType() === 'user-story' ? 'Analisar US' : 'Analisar bug' }}
+          </button>
+        }
+      </span>
+    </ng-container>
+  </app-pr-info-card>
+}
 
 @switch (cardState()) {
   @case ('idle') {
@@ -132,25 +181,65 @@
     </button>
   </nav>
 
-  <div class="wb-body">
-    <!-- Coluna principal: Itens de trabalho | Plano (os dois ficam montados; troca por visibilidade) -->
+  <div class="wb-body" [class.wb-body--executing]="executingItems().length > 0 && main === 'items'">
+    <!-- Coluna principal: Itens de trabalho | Plano (montados; troca por visibilidade) | Card (só quando aberta) -->
     <section class="wb-main" [class.wb-hidden]="!main">
-      <div class="wb-seg" role="tablist" aria-label="Itens de trabalho ou plano">
-        <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'items'"
-                [attr.aria-selected]="main === 'items'" (click)="selectMain('items')">
-          <mat-icon>checklist</mat-icon>Itens de trabalho
-          @if (itemCount()) { <span class="wb-count">{{ itemCount() }}</span> }
-        </button>
-        <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'plan'"
-                [attr.aria-selected]="main === 'plan'" (click)="selectMain('plan')">
-          <mat-icon>account_tree</mat-icon>Plano
-          @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you" [matTooltip]="n + ' aguardando você'">{{ n }}</span> }
-        </button>
+      <div class="wb-segrow">
+        <div class="wb-seg" role="tablist" aria-label="Itens de trabalho, plano ou card">
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'items'"
+                  [attr.aria-selected]="main === 'items'" (click)="selectMain('items')">
+            <mat-icon>checklist</mat-icon>Itens de trabalho
+            @if (itemCount()) { <span class="wb-count">{{ itemCount() }}</span> }
+          </button>
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'plan'"
+                  [attr.aria-selected]="main === 'plan'" (click)="selectMain('plan')">
+            <mat-icon>account_tree</mat-icon>Plano
+            @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you" [matTooltip]="n + ' aguardando você'">{{ n }}</span> }
+          </button>
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'card'" data-tour="wb-card-tab"
+                  [attr.aria-selected]="main === 'card'" (click)="selectMain('card')">
+            <mat-icon>description</mat-icon>Card
+          </button>
+        </div>
+        <!-- Linha de horas do card (a mesma do assistente), sempre à vista ao lado das abas -->
+        <app-card-hours class="wb-hoursline" data-tour="wb-hoursline" [cardNumber]="card()"></app-card-hours>
       </div>
 
       <div class="wb-pane" [class.wb-hidden]="main !== 'items'" data-tour="wb-items">
+        @if (suggestAnalysis()) {
+          <!-- Card sem plano e sem itens: a Bancada sugere a análise inicial (ela cria os itens e as sub-tarefas) -->
+          @let us = cardType() === 'user-story';
+          <section class="wb-first" data-tour="wb-first-analysis" role="region" aria-label="Sugestão de análise inicial">
+            <span class="wb-first__icon" aria-hidden="true"><mat-icon [svgIcon]="typeIcon()"></mat-icon></span>
+            <div class="wb-first__text">
+              <h3>{{ us ? 'Esta US ainda não foi analisada' : 'Este bug ainda não foi analisado' }}</h3>
+              <p>
+                {{ us
+                  ? 'A análise inicial lê a US (descrição e critérios de aceite), a Base Solvace e o código, propõe a solução e cria os itens de trabalho com as sub-tarefas.'
+                  : 'A análise inicial lê o bug, as evidências, a Base Solvace e o código, encontra a causa e cria os itens de trabalho com as sub-tarefas da correção.' }}
+                Você acompanha tudo aqui, ao vivo.
+              </p>
+            </div>
+            <button mat-flat-button type="button" class="wb-first__go" [disabled]="analyzing()" (click)="analyze(true)">
+              <mat-icon>play_arrow</mat-icon>Começar a análise inicial
+            </button>
+          </section>
+        } @else if (analysisWaiting()) {
+          <div class="wb-first-wait" role="status">
+            <mat-icon class="wb-first-wait__bot">smart_toy</mat-icon>
+            <span>Análise pedida — o item <b>"Análise inicial {{ cardType() === 'user-story' ? 'da US' : 'do bug' }} #{{ card() }}"</b>
+              aparece aqui assim que o Claude começar.</span>
+          </div>
+        }
+
+        <!-- Sugestões como na tela de PR (situação do card + assistente do PRMake); na aba Plano o próprio plano mostra -->
+        <div class="wb-sugg" data-tour="wb-suggest">
+          <app-card-situation [cardNumber]="card()"></app-card-situation>
+          <app-card-assistant [cardNumber]="card()"></app-card-assistant>
+        </div>
+
         <app-work-item-list [card]="card()" [cardType]="cardType()" [openItem]="openItem()"
-                            (countChange)="onCountChange($event)"></app-work-item-list>
+                            (countChange)="onCountChange($event)" (executingChange)="onExecuting($event)"></app-work-item-list>
       </div>
 
       <div class="wb-pane wb-pane--plan" [class.wb-hidden]="main !== 'plan'" data-tour="wb-plan">
@@ -166,39 +255,25 @@
         }
         <app-execution-plan class="wb-plan" [cardNumber]="card()" (headline)="onHeadline($event)"></app-execution-plan>
       </div>
+
+      <!-- Aba Card (desktop e celular): horas + lançar horas, dados principais, anexos/links e o texto do card -->
+      @if (main === 'card') {
+        <div class="wb-pane" data-tour="wb-card-pane">
+          <app-workbench-card [card]="card()" [cardType]="cardType()" [cardFull]="cf" (openDetails)="openDetails()"></app-workbench-card>
+        </div>
+      }
     </section>
 
-    <!-- Coluna lateral: Especialista · Card · Timeline -->
-    <aside class="wb-side" [class.wb-hidden]="!showChat() && !showCardSide()">
-      <div class="wb-chat" [class.wb-hidden]="!showChat()" [class.wb-flash]="chatFlash()" data-tour="wb-chat">
+    <!-- Coluna lateral: o Especialista do caso ocupa a altura toda -->
+    <aside class="wb-side" [class.wb-hidden]="!showChat()">
+      <div class="wb-chat" [class.wb-flash]="chatFlash()" data-tour="wb-chat">
         <app-case-compact class="wb-chat__box" [card]="card()"></app-case-compact>
       </div>
-
-      <app-card-panel class="wb-cardtext" [class.wb-hidden]="!showCardSide()" title="Card" icon="description">
-        <button panel-actions mat-icon-button type="button" class="wb-panel-action"
-                [matTooltip]="cardTextOpen() ? 'Recolher o texto do card' : 'Mostrar o texto do card'" [attr.aria-expanded]="cardTextOpen()"
-                (click)="cardTextOpen.set(!cardTextOpen())">
-          <mat-icon>{{ cardTextOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
-        </button>
-        <div class="wb-cardtext__scroll">
-          <!-- Horas do card: Bug = Completed × média dos bugs; US = planejado × realizado -->
-          <div class="wb-hours" data-tour="wb-hours">
-            <app-card-hours-insight [card]="card()" [cardType]="cardType()"></app-card-hours-insight>
-          </div>
-          @if (cardTextOpen()) {
-            @for (s of cardSections(); track s.title) {
-              <h4 class="wb-cardtext__h">{{ s.title }}</h4>
-              <div class="wb-rich" [innerHTML]="s.html"></div>
-            } @empty {
-              <p class="wb-muted">{{ cardType() === 'user-story' ? 'A US não tem descrição nem critérios de aceite.' : 'O bug não tem Repro Steps.' }}</p>
-            }
-          }
-        </div>
-      </app-card-panel>
-
-      <div class="wb-timeline" [class.wb-hidden]="!showCardSide()" data-tour="wb-timeline">
-        <app-card-timeline [cardNumber]="card()" [autoLoad]="true"></app-card-timeline>
-      </div>
     </aside>
+  </div>
+
+  <!-- Montada fora da tela (carrega, rascunho e tempo real continuam); aparece em tela cheia pelo botão "Linha do tempo" -->
+  <div class="wb-timeline-host" aria-hidden="true">
+    <app-card-timeline [cardNumber]="card()" [autoLoad]="true"></app-card-timeline>
   </div>
 }
