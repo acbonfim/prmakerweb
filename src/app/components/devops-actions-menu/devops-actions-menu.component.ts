@@ -45,12 +45,22 @@ const SNACK = { direction: 'ltr', horizontalPosition: 'right', verticalPosition:
   imports: [OverlayModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, CcPopoverComponent],
   template: `
     <span class="da-trigger-wrap" [matTooltip]="triggerTooltip()" matTooltipClass="devops-tooltip">
-      <button mat-raised-button cdkOverlayOrigin #origin="cdkOverlayOrigin"
-              [disabled]="!cardFull() || cardLoading()" (click)="pop.toggle(origin)">
-        Ações DevOps
-        @if (running()) { <mat-spinner diameter="16" class="da-trigger-spinner"></mat-spinner> }
-        @else { <mat-icon>settings_suggest</mat-icon> }
-      </button>
+      @if (appearance() === 'bar') {
+        <!-- Barra de ações do card (Bancada): o mesmo botão dos vizinhos (Card, Linha do tempo, PRs) -->
+        <button mat-stroked-button class="da-trigger da-trigger--bar" cdkOverlayOrigin #origin="cdkOverlayOrigin" data-tour="wb-devops"
+                [disabled]="!cardFull() || cardLoading()" (click)="pop.toggle(origin)">
+          @if (running()) { <mat-spinner diameter="16" class="da-trigger-spinner"></mat-spinner> }
+          @else { <mat-icon>settings_suggest</mat-icon> }
+          Ações DevOps
+        </button>
+      } @else {
+        <button mat-raised-button cdkOverlayOrigin #origin="cdkOverlayOrigin"
+                [disabled]="!cardFull() || cardLoading()" (click)="pop.toggle(origin)">
+          Ações DevOps
+          @if (running()) { <mat-spinner diameter="16" class="da-trigger-spinner"></mat-spinner> }
+          @else { <mat-icon>settings_suggest</mat-icon> }
+        </button>
+      }
     </span>
 
     <cc-popover #pop (opened)="onOpened()" (closed)="confirming.set(null)">
@@ -97,6 +107,9 @@ const SNACK = { direction: 'ltr', horizontalPosition: 'right', verticalPosition:
     :host { display: contents; }
     .da-trigger-wrap { display: inline-block; }
     .da-trigger-spinner { display: inline-block; margin-left: 6px; }
+    .da-trigger--bar.mat-mdc-outlined-button { height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; white-space: nowrap; }
+    .da-trigger--bar .mat-icon { width: 16px; height: 16px; font-size: 16px; }
+    .da-trigger--bar .da-trigger-spinner { margin: 0 6px 0 0; }
 
     .da-list { display: flex; flex-direction: column; gap: 1px; width: 290px; max-width: calc(100vw - 60px); margin: -6px -8px; }
     .da-head {
@@ -135,6 +148,8 @@ export class DevOpsActionsMenuComponent {
   private snackBar = inject(MatSnackBar);
 
   readonly cardNumber = input<string | null>(null);
+  /** `raised` = botão da tela de PR; `bar` = botão da barra de ações do card (Bancada). */
+  readonly appearance = input<'raised' | 'bar'>('raised');
   /** Card do DevOps (null = não encontrado → botão desabilitado). */
   readonly cardFull = input<CardFull | null>(null);
   readonly cardLoading = input(false);

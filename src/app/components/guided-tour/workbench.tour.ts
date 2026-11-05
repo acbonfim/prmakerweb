@@ -70,10 +70,11 @@ export const WORKBENCH_TOUR: TourDefinition = {
     },
     {
       id: 'prs', anchor: 'wb-prs', group: 'O card', since: 1, phase: 'card', side: 'bottom', align: 'end', optional: true,
-      title: 'PRs e ações do card',
-      body: '<b>PRs</b> mostra os pull requests do card e reúne as ações do GitHub (abrir PR) e do DevOps (mover o card, publicar textos).',
-      detail: 'O número ao lado conta os PRs do card. No modal ficam a lista com o status de cada PR, o "Abrir PR" manual e as ' +
-        'ações do GitHub e do DevOps — as mesmas da tela de Pull Request.'
+      title: 'PRs e Ações DevOps',
+      body: '<b>PRs</b> mostra os pull requests do card e abre o modal com a lista, o "Abrir PR" e as ações do GitHub. ' +
+        '<b>Ações DevOps</b> mexe no card: mover o estado, publicar o Root Cause e o resumo, ver os detalhes.',
+      detail: 'O número ao lado de PRs conta os PRs do card. As Ações DevOps ficam na barra do card (e não no modal de PRs) ' +
+        'porque valem para o card inteiro — as mesmas da tela de Pull Request, com as regras do seu usuário.'
     },
     {
       id: 'hours', anchor: 'wb-card-pane', group: 'O card', since: 6, phase: 'card', side: 'left', align: 'start', optional: true,
@@ -163,20 +164,9 @@ export const WORKBENCH_TOUR: TourDefinition = {
       title: 'Especialista do caso',
       body: 'A lateral é do especialista: dúvidas, discordâncias e pedidos de itens novos — ele conhece o card, o plano e as regras.',
       detail: 'O especialista responde com código, banco (só leitura) e a Base Solvace, e pode criar itens de trabalho (sem ' +
-        'repetir os que existem) — é assim que um item fechado ganha a sua continuação. Nada muda sem você aceitar.'
-    },
-    {
-      id: 'tools', anchor: 'wb-tools', group: 'Conversa e histórico', since: 5, phase: 'card', side: 'left', align: 'start', optional: true,
-      prepare: 'tab:chat',
-      title: 'Ferramentas do especialista',
-      body: '<b>Ferramentas</b> abre os atalhos do dia a dia: <i>abrir PR para uma branch</i>, PRs do fluxo, promover para ' +
-        '<b>release-version</b>/<b>hotfix-version</b>/<b>edge</b>, ajuste pós-QA, fechamento, script com chamado… Responda 1 ou 2 ' +
-        'perguntas e o item sai pronto.',
-      detail: 'A lista mostra só as ferramentas que valem para este card (as outras ficam em "mostrar também", com o motivo). ' +
-        'Ao escolher uma, o formulário pede só o necessário — repositório, branch de destino (com os destinos conhecidos do ' +
-        'repositório), estado, PR… — e mostra a prévia das sub-tarefas. <b>Criar item</b> cria o item de trabalho na hora; ' +
-        '<b>Pedir ao especialista</b> manda a ferramenta e as respostas na conversa para ele conferir e criar. O mesmo botão fica ' +
-        'ao lado de "+ Novo item".'
+        'repetir os que existem) — é assim que um item fechado ganha a sua continuação. Nada muda sem você aceitar. Na conversa ' +
+        'grande (ícone de expandir) ficam as <b>Ferramentas</b>: atalhos do dia a dia que criam o item já montado (PR para uma ' +
+        'branch, promoção para release-version/edge, ajuste pós-QA, fechamento, script com chamado…).'
     },
     {
       id: 'help', anchor: 'wb-help', group: 'Começo', since: 1, phase: 'card', side: 'bottom', align: 'end', guide: false,
@@ -189,7 +179,7 @@ export const WORKBENCH_TOUR: TourDefinition = {
     tips: [
       '<b>Uma entrega = um item.</b> Cada item tem sub-tarefas em ordem e roda em paralelo aos outros itens do card.',
       '<b>Dúvida ou pedido novo?</b> Fale com o <b>Especialista do caso</b> — ele cria itens sem repetir os que já existem.',
-      '<b>Tarefa do dia a dia?</b> Use as <b>Ferramentas</b> (PR para uma branch, promoção, fechamento…): o item sai pronto.',
+      '<b>Tarefa do dia a dia?</b> Abra a conversa grande do especialista e use as <b>Ferramentas</b> (PR para uma branch, promoção, fechamento…): o item sai pronto.',
       '<b>A versão é o item.</b> Precisa mudar algo de um item fechado? Crie outro item (na tela ou pelo especialista).',
       '<b>Errou o caminho?</b> "Cancelar e desfazer" fecha PRs e apaga branches criadas, sempre pelo PRMake.'
     ]

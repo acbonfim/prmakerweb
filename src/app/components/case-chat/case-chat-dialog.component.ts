@@ -14,6 +14,7 @@ import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatBadgeModule } from '@angular/material/badge';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -25,6 +26,7 @@ import { planApiError, saveBlob } from '../../services/execution-plan.service';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
+import { SpecialistToolsComponent } from '../specialist-tools/specialist-tools.component';
 import {
   CaseAction,
   CaseFile,
@@ -39,6 +41,13 @@ import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-prop
 
 export interface CaseChatDialogData {
   card: string;
+  /** Tipo do card — as ferramentas do especialista mudam com ele (padrão: bug). */
+  cardType?: 'bug' | 'user-story';
+}
+
+/** Resultado ao fechar: `openItem` = item de trabalho criado/aberto por uma ferramenta (quem hospeda mostra o item). */
+export interface CaseChatDialogResult {
+  openItem?: number;
 }
 
 /** Mesmos limites da API (10 MB por arquivo, 20 por mensagem). */
@@ -67,14 +76,14 @@ const QUICK = [
 @Component({
   selector: 'app-case-chat-dialog',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule,
-    PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent],
+  imports: [DatePipe, DecimalPipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, MatBadgeModule,
+    PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent, SpecialistToolsComponent],
   templateUrl: './case-chat-dialog.component.html',
   styleUrls: ['./case-chat-dialog.component.css']
 })
 export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   readonly data = inject<CaseChatDialogData>(MAT_DIALOG_DATA);
-  private ref = inject(MatDialogRef<CaseChatDialogComponent>);
+  private ref = inject<MatDialogRef<CaseChatDialogComponent, CaseChatDialogResult>>(MatDialogRef);
   private api = inject(CaseChatService);
   private dialog = inject(MatDialog);
   private snack = inject(MatSnackBar);
@@ -93,6 +102,9 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   readonly loadError = this.room.loadError;
   readonly sending = signal(false);
   readonly showHistory = signal(false);
+  /** Ferramentas do especialista (painel sobre a conversa) e quantas se aplicam ao card (contagem do ícone). */
+  readonly toolsOpen = signal(false);
+  readonly toolCount = signal<number | null>(null);
   readonly showAside = signal(window.matchMedia('(min-width: 1000px)').matches);
   readonly typing = this.room.typing;
   readonly now = signal(Date.now());
@@ -190,6 +202,17 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
 
   close(): void {
     this.ref.close();
+  }
+
+  /** Item criado (ou aberto) por uma ferramenta: fecha a conversa e quem hospeda mostra o item. */
+  onToolCreated(n: number): void {
+    this.ref.close({ openItem: n });
+  }
+
+  /** Pedido enviado ao especialista pela ferramenta: volta à conversa para ver a resposta chegar. */
+  onToolAsked(): void {
+    this.toolsOpen.set(false);
+    this.load();
   }
 
   // ── Carga e tempo real ─────────────────────────────────────────────────────────────────────────

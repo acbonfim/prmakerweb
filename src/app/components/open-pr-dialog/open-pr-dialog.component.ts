@@ -33,6 +33,11 @@ export interface OpenPrDialogData {
   defaultRepository: string | null;
   /** Usado quando a lista de repositórios do GitHub não puder ser carregada. */
   repositoryFallback: RepoOption[];
+  /**
+   * Destinos que existem para o repositório (fluxo do card pelo tipo dele: revamp-backend não tem QA). Vazio/`null` =
+   * repositório fora das regras → todos os destinos. Chamado ao abrir e a cada troca de repositório.
+   */
+  targetsForRepository?: (repository: string) => Promise<string[] | null>;
   /** Quando informado, o modal abre em modo edição (3.1): repo/branch somente leitura. */
   pr?: GithubPullRequest | null;
 }
@@ -71,6 +76,8 @@ export class OpenPrDialogComponent implements OnInit {
   readonly branchName = signal(this.data.pr?.branchName ?? this.data.defaultBranchName ?? '');
   readonly repository = signal<RepoOption | string | null>(null);
   readonly target = signal(this.data.pr?.targetBranch ?? this.data.defaultTarget ?? '');
+  /** Destinos oferecidos: os do plugin, restritos aos que o fluxo do repositório escolhido tem (quando as regras o conhecem). */
+  readonly targetChoices = signal<TargetBranchOption[]>(this.data.targetOptions);
   readonly title = signal(this.data.pr?.title ?? '');
   readonly draft = signal(false);
 
@@ -115,6 +122,12 @@ export class OpenPrDialogComponent implements OnInit {
       untracked(() => this.title.set(this.defaultTitle(target)));
     });
 
+    // Destinos do repositório escolhido (só ao abrir PR novo): tira os que o fluxo dele não tem.
+    effect(() => {
+      const repo = this.repositoryValue();
+      untracked(() => void this.applyRepositoryTargets(repo));
+    });
+
     // Autor do PR correspondente (usuário do CIME — no GitHub o autor é a conta do token).
     effect(() => {
       const userId = this.matchingPr()?.userId;
@@ -131,6 +144,21 @@ export class OpenPrDialogComponent implements OnInit {
       this.repository.set(repos[0]);
     }
     this.cdr.markForCheck();
+  }
+
+  private targetsSeq = 0;
+
+  private async applyRepositoryTargets(repo: string | null): Promise<void> {
+    if (this.isEdit || !repo || !this.data.targetsForRepository) return;
+    const seq = ++this.targetsSeq;
+    const allowed = await this.data.targetsForRepository(repo).catch(() => null);
+    if (seq !== this.targetsSeq) return;
+    const all = this.data.targetOptions;
+    const options = allowed?.length
+      ? allowed.map(t => all.find(o => o.value === t) ?? { label: t, value: t })
+      : all;
+    this.targetChoices.set(options);
+    if (!options.some(o => o.value === this.target())) this.target.set(options[0]?.value ?? '');
   }
 
   onTitleInput(value: string): void {
@@ -210,7 +238,7 @@ export class OpenPrDialogComponent implements OnInit {
   }
 
   private defaultTitle(target: string): string {
-    const label = this.data.targetOptions.find(o => o.value === target)?.label ?? target;
+    const label = this.targetChoices().find(o => o.value === target)?.label ?? this.data.targetOptions.find(o => o.value === target)?.label ?? target;
     return `AB#${this.data.cardNumber} ${label.toUpperCase()}`.trim();
   }
 

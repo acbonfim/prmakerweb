@@ -40,7 +40,12 @@
 
 .cc__grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
 .cc__grid--aside { grid-template-columns: minmax(0, 1fr) 310px; }
-.cc__chat { min-height: 0; display: flex; flex-direction: column; }
+.cc__chat { position: relative; min-height: 0; display: flex; flex-direction: column; }
+/* Ferramentas do especialista: painel sobre a coluna da conversa */
+.cc__tools { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; background: var(--surface-1, #2a2a2a); }
+.cc__tools > app-specialist-tools { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.cc__tools--hidden { display: none; }
+.cc__tools-btn--on { color: #b79cff; }
 .cc__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 22px 8px; display: flex; flex-direction: column; gap: 14px; }
 .cc__state { margin: auto; display: flex; align-items: center; gap: 8px; color: var(--cc-muted); }
 .cc__history { align-self: center; display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer; font: inherit; font-size: 12px;

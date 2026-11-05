@@ -1,4 +1,3 @@
-import { HttpClient } from '@angular/common/http';
 import { Component, DestroyRef, Injector, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogConfig, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -6,35 +5,17 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { firstValueFrom } from 'rxjs';
-import { marked } from 'marked';
-import { environment } from '../../../environments/environment';
-import { CardDetailsDialogComponent } from '../card-details-dialog/card-details-dialog.component';
-import { DevOpsActionsMenuComponent } from '../devops-actions-menu/devops-actions-menu.component';
 import { GithubActionsMenuComponent } from '../github-actions-menu/github-actions-menu.component';
 import { GithubPrListComponent } from '../github-pr-list/github-pr-list.component';
 import { OpenPrDialogComponent, OpenPrDialogData } from '../open-pr-dialog/open-pr-dialog.component';
-import { SummaryDialogComponent, SummaryDialogData } from '../summary-dialog/summary-dialog.component';
-import { CardAssistantService } from '../../services/card-assistant.service';
 import { GithubPullRequest } from '../../services/pull-request.service';
 import { TeamsService } from '../../services/teams.service';
-import { TimelineService } from '../../services/timeline.service';
-import { defaultTarget, prCountsLabel, splitBranch } from './workbench-prs.logic';
+import { BranchSuggestion, buildBranchSuggestions, defaultTarget, prCountsLabel, splitBranch } from './workbench-prs.logic';
 import { WorkbenchPrsStore } from './workbench-prs.store';
 
 /** Vigia dos PRs abertos enquanto o modal está aberto (mesmo intervalo da tela de PR — 0025). */
 const PR_WATCH_INTERVAL_MS = 45_000;
 const SNACK = { horizontalPosition: 'right', verticalPosition: 'top' } as const;
-const REPRO_FIELD = 'Microsoft.VSTS.TCM.ReproSteps';
-
-/** Sugestão de branch pelas regras do card: o rótulo do destino e a branch. */
-interface BranchSuggestion {
-  key: string;
-  label: string;
-  branch: string;
-  target: string | null;
-  hint: string;
-}
 
 /** Tamanho dos modais: largos no desktop (até 96vw) e em tela cheia abaixo de 640px. */
 export function workbenchDialogSize(width: string, extra: Partial<MatDialogConfig> = {}): MatDialogConfig {
@@ -47,7 +28,7 @@ export function workbenchDialogSize(width: string, extra: Partial<MatDialogConfi
 /**
  * Modal "Pull requests" da Bancada (feature 0085): os PRs do card (a mesma `app-github-pr-list` da tela de PR,
  * com filtros e atalhos rápidos), **Abrir PR** (o mesmo `OpenPrDialogComponent`, com a branch sugerida pelas
- * regras do card), **Ações GitHub** (`app-github-actions-menu`) e **Ações DevOps** (`app-devops-actions-menu`).
+ * regras do card), e **Ações GitHub** (`app-github-actions-menu`). As **Ações DevOps** ficam na barra do card (`app-workbench-prs`), não aqui.
  *
  * Estado próprio: o `WorkbenchPrsStore` e uma instância local do `CardPrStateService`, providos no
  * `WorkbenchPrsComponent` e herdados aqui (e no modal "Abrir PR") pelo injector do diálogo.
@@ -56,7 +37,7 @@ export function workbenchDialogSize(width: string, extra: Partial<MatDialogConfi
   selector: 'app-workbench-prs-dialog',
   standalone: true,
   imports: [MatDialogModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule,
-    GithubPrListComponent, GithubActionsMenuComponent, DevOpsActionsMenuComponent],
+    GithubPrListComponent, GithubActionsMenuComponent],
   template: `
     @let card = store.card();
     <div class="wpd">
@@ -83,18 +64,6 @@ export function workbenchDialogSize(width: string, extra: Partial<MatDialogConfi
                 [prs]="store.prs()"
                 [targetOptions]="store.targetOptions()"
                 (openPr)="openPr()"></app-github-actions-menu>
-        <app-devops-actions-menu
-                [cardNumber]="card"
-                [cardFull]="store.cardFull()"
-                [cardLoading]="store.cardLoading()"
-                [hasRootCause]="hasRootCause()"
-                [registerSaved]="!!store.register()?.id"
-                [hasSummary]="!!store.register()?.summary"
-                [rootCauseSaving]="rootCauseSaving()"
-                (openDetails)="openCardDetails()"
-                (saveRootCause)="saveRootCauseToDevOps()"
-                (openSummary)="openSummary($event)"
-                (changed)="onDevOpsChanged()"></app-devops-actions-menu>
         @if (store.dirty()) {
           <button mat-stroked-button type="button" class="wpd__save" [disabled]="saving()" (click)="saveContent()"
                   matTooltip="A descrição/Root Cause foram editados no Abrir PR: grava no registro do card no PRMake">
@@ -106,7 +75,7 @@ export function workbenchDialogSize(width: string, extra: Partial<MatDialogConfi
 
       @if (suggestions().length) {
         <div class="wpd__rules" aria-label="Branches pelas regras do card">
-          <span class="wpd__rules-label" matTooltip="Calculadas pelas regras do PRMake para este card (BranchNamePattern e BranchSuffixByTarget)">
+          <span class="wpd__rules-label" matTooltip="Calculadas pelas regras do PRMake para este card (BranchNamePattern — na User Story, BranchNamePatternUserStory — e BranchSuffixByTarget; só os destinos do fluxo do repositório)">
             <mat-icon>rule</mat-icon>Branch pelas regras
           </span>
           @for (s of suggestions(); track s.key) {
@@ -188,38 +157,17 @@ export class WorkbenchPrsDialogComponent {
   private dialog = inject(MatDialog);
   private injector = inject(Injector);
   private ref = inject(MatDialogRef<WorkbenchPrsDialogComponent>);
-  private http = inject(HttpClient);
   private snackBar = inject(MatSnackBar);
   private teams = inject(TeamsService);
-  private timeline = inject(TimelineService);
-  private assistant = inject(CardAssistantService);
 
-  readonly rootCauseSaving = signal(false);
   readonly saving = signal(false);
 
   readonly countsLabel = computed(() => prCountsLabel(this.store.prs()));
   readonly canOpenPr = computed(() => !!this.store.card() && this.store.registerLoaded() && !this.store.registerLoading());
-  readonly hasRootCause = computed(() => !!this.store.pr.rootCause()?.trim());
   private readonly isUs = computed(() => this.store.cardType() === 'user-story');
 
-  /** Branch principal do card e a branch por destino (só os destinos configurados no plugin de PR). */
-  readonly suggestions = computed<BranchSuggestion[]>(() => {
-    const rules = this.store.rules();
-    if (!rules) return [];
-    const list: BranchSuggestion[] = [{
-      key: 'main', label: 'Principal', branch: rules.mainBranch, target: null,
-      hint: 'Branch principal do card (BranchNamePattern) — abre o PR com ela',
-    }];
-    for (const t of this.store.targetOptions()) {
-      const branch = rules.branchesByTarget?.[t.value];
-      if (!branch || branch === rules.mainBranch) continue;
-      list.push({
-        key: t.value, label: t.label || t.value, branch, target: t.value,
-        hint: `Branch para o destino ${t.value} (BranchSuffixByTarget) — abre o PR ${branch} → ${t.value}`,
-      });
-    }
-    return list;
-  });
+  /** Branch principal e branches por destino **do repositório em tratamento** (revamp-backend não tem QA). */
+  readonly suggestions = computed<BranchSuggestion[]>(() => buildBranchSuggestions(this.store.rules(), this.store.targetOptions()));
 
   constructor() {
     void this.init();
@@ -229,7 +177,6 @@ export class WorkbenchPrsDialogComponent {
 
   private async init(): Promise<void> {
     void this.store.loadConfig();
-    void this.store.loadCardFull();
     void this.store.loadRules();
     if (!this.teams.status()) void this.teams.loadStatus();
     // Status no GitHub depois do registro (senão o persistido sobrescreveria o atual).
@@ -260,19 +207,24 @@ export class WorkbenchPrsDialogComponent {
       ?? fromRules
       ?? { prefix: fallbackPrefix, name: card };
 
-    const targets = this.store.targetOptions();
     const repos = this.store.repositoryOptions();
+    const defaultRepository = legacy?.repositoryId ?? this.store.lastRepository() ?? latest?.repositoryId
+      ?? this.store.register()?.repositoryId ?? this.store.rules()?.repository ?? repos[0]?.value ?? null;
+    // Destinos do fluxo do repositório (revamp-backend não tem QA); sem regra para ele, todos os destinos do plugin.
+    const allowed = suggestion?.target ? null : defaultRepository ? await this.store.targetsForRepository(defaultRepository) : null;
+    const all = this.store.targetOptions();
+    const targets = allowed ? allowed.map(v => all.find(o => o.value === v) ?? { label: v, value: v }) : all;
     const data: OpenPrDialogData = {
       cardNumber: card,
       cardType: this.isUs() ? 'us' : 'bug',
       userId: this.store.userId,
-      targetOptions: targets,
+      targetOptions: all,
       defaultTarget: suggestion?.target ?? defaultTarget(targets, this.store.lastTarget() ?? latest?.targetBranch),
       defaultPrefix: branch.prefix,
       defaultBranchName: branch.name,
-      defaultRepository: legacy?.repositoryId ?? this.store.lastRepository() ?? latest?.repositoryId
-        ?? this.store.register()?.repositoryId ?? repos[0]?.value ?? null,
+      defaultRepository,
       repositoryFallback: repos,
+      targetsForRepository: (repository) => this.store.targetsForRepository(repository),
       pr: pr ?? null,
     };
 
@@ -300,66 +252,6 @@ export class WorkbenchPrsDialogComponent {
     } finally {
       this.saving.set(false);
     }
-  }
-
-  openCardDetails(): void {
-    const card = this.store.cardFull();
-    if (!card) return;
-    this.dialog.open(CardDetailsDialogComponent, workbenchDialogSize('1000px', {
-      data: { card, cardNumber: this.store.card() }, height: '80vh',
-    }));
-  }
-
-  /** "Salvar RC no DevOps": o Root Cause (Markdown) vira HTML — o mesmo da tela de PR. */
-  async saveRootCauseToDevOps(): Promise<void> {
-    const card = this.store.card();
-    const markdown = this.store.pr.rootCause() ?? '';
-    if (!card || !markdown.trim() || this.rootCauseSaving()) return;
-    this.rootCauseSaving.set(true);
-    try {
-      marked.setOptions({ gfm: true, breaks: true });
-      const html = marked.parse(markdown) as string;
-      await firstValueFrom(this.http.post(`${environment.apiUrl}Azure/card/${encodeURIComponent(card)}/rootcause`, { rootCause: html }));
-      this.snackBar.open('RCA salvo no DevOps', 'Ok', { ...SNACK, duration: 4000 });
-      this.onDevOpsChanged();
-    } catch {
-      this.snackBar.open('Erro ao tentar salvar o RCA no DevOps', 'Ok', { ...SNACK, duration: 8000 });
-    } finally {
-      this.rootCauseSaving.set(false);
-    }
-  }
-
-  /** Resumo não técnico (0011): o mesmo modal da tela de PR, com a timeline do card no contexto. */
-  async openSummary(prompt: string): Promise<void> {
-    const card = this.store.card();
-    const full = this.store.cardFull();
-    if (!card || !full) return;
-    const timeline = await firstValueFrom(this.timeline.getByCardNumber(card)).catch(() => []);
-    const reg = this.store.register();
-    const data: SummaryDialogData = {
-      cardNumber: card,
-      card: full,
-      reproField: REPRO_FIELD,
-      description: this.store.pr.description() ?? reg?.description ?? '',
-      rootCause: this.store.pr.rootCause() ?? reg?.rootCause ?? '',
-      summary: reg?.summary ?? null,
-      summaryUpdatedAt: reg?.summaryUpdatedAt ?? null,
-      summaryPublishedAt: reg?.summaryPublishedAt ?? null,
-      published: !!reg?.summaryCommentId,
-      timeline: timeline ?? [],
-      githubPrs: this.store.prs(),
-      prompt,
-    };
-    this.dialog.open(SummaryDialogComponent, workbenchDialogSize('1000px', { data, height: '86vh' }))
-      .afterClosed().subscribe(saved => { if (saved) void this.store.reloadRegisterQuiet(); });
-  }
-
-  /** Uma ação do DevOps mudou o card: recarrega o card (pendências), as horas e avisa a Bancada. */
-  onDevOpsChanged(): void {
-    void this.store.loadCardFull(true);
-    const card = this.store.card();
-    if (card) void this.assistant.loadEffort(card).catch(() => undefined);
-    this.store.devopsChanged$.next();
   }
 
   close(): void {

@@ -1,6 +1,6 @@
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MORPH_PANEL_CLASS, canMorphFrom, morphDialogFromOrigin } from '../../helpers/dialog-morph';
-import { CaseChatDialogComponent, CaseChatDialogData } from './case-chat-dialog.component';
+import { CaseChatDialogComponent, CaseChatDialogData, CaseChatDialogResult } from './case-chat-dialog.component';
 
 /**
  * 0080: abre o Especialista do caso (o mesmo modal grande da conversa; tela cheia no celular).
@@ -8,12 +8,12 @@ import { CaseChatDialogComponent, CaseChatDialogData } from './case-chat-dialog.
  * lugar — o mesmo efeito da tela cheia do plano e da linha do tempo (FullscreenPanel). A animação mora em
  * `helpers/dialog-morph.ts` (0085: o modal do card usa a mesma).
  */
-export function openCaseChat(dialog: MatDialog, card: string, origin?: HTMLElement | null): MatDialogRef<CaseChatDialogComponent> {
+export function openCaseChat(dialog: MatDialog, card: string, origin?: HTMLElement | null, cardType: 'bug' | 'user-story' = 'bug'): MatDialogRef<CaseChatDialogComponent, CaseChatDialogResult> {
   const narrow = window.matchMedia('(max-width: 640px)').matches;
-  const open = dialog.openDialogs.find((d) => d.componentInstance instanceof CaseChatDialogComponent) as MatDialogRef<CaseChatDialogComponent> | undefined;
+  const open = dialog.openDialogs.find((d) => d.componentInstance instanceof CaseChatDialogComponent) as MatDialogRef<CaseChatDialogComponent, CaseChatDialogResult> | undefined;
   if (open && open.componentInstance.data.card === card) return open;
   const morph = canMorphFrom(origin) ? origin : null;
-  const data: CaseChatDialogData = { card };
+  const data: CaseChatDialogData = { card, cardType };
   const ref = dialog.open(CaseChatDialogComponent, {
     data,
     width: narrow ? '100vw' : '1280px',
