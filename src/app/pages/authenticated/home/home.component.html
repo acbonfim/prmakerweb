@@ -12,6 +12,11 @@
     </div>
   </div>
 
+  <!-- 0088: Meus cards na Bancada — em destaque, pela última atualização no card; abrem na Bancada -->
+  <app-home-cards scope="workbench" title="Meus cards na Bancada" icon="handyman" [featured]="true" [take]="12"
+                  [class.col-hidden]="!workbenchVisible()"
+                  (visibilityChange)="workbenchVisible.set($event)"></app-home-cards>
+
   <!-- Seus últimos cards + Cards que você participou (duas colunas; uma vazia → a outra ocupa 100%) — 0051 -->
   <div class="recent-columns"
        [class.single]="!(mineVisible() && participatedVisible())">
@@ -23,10 +28,10 @@
                     (visibilityChange)="participatedVisible.set($event)"></app-home-cards>
   </div>
 
-  @if (!mineVisible() && !participatedVisible()) {
+  @if (!workbenchVisible() && !mineVisible() && !participatedVisible()) {
     <div class="home-empty">
       <mat-icon>inbox</mat-icon>
-      <span>Nenhum card por aqui ainda. Busque um card na tela de Pull Requests para começar.</span>
+      <span>Nenhum card por aqui ainda. Abra um card na <a routerLink="/auth/workbench">Bancada</a> para começar.</span>
     </div>
   }
 

@@ -3,11 +3,14 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, of } from 'rxjs';
 import { environment } from '../../environments/environment';
 
-/** Listas da home (0051) — espelho de solvace.prform.Home.HomeCardsResponses no backend. */
-export type HomeCardsScope = 'mine' | 'participated';
+/**
+ * Listas da home (0051) — espelho de solvace.prform.Home.HomeCardsResponses no backend. `workbench` (0088): todos os
+ * cards em que o usuário atuou, pela última atualização no card (abrem na Bancada).
+ */
+export type HomeCardsScope = 'mine' | 'participated' | 'workbench';
 
 /** Como o usuário participou (HomeCardRole no backend). */
-export type HomeCardRole = 'register' | 'pr' | 'timeline' | 'plan' | 'handover';
+export type HomeCardRole = 'register' | 'pr' | 'timeline' | 'plan' | 'handover' | 'workitem';
 
 export interface HomeCardParticipant {
   userId: string | null;
@@ -16,7 +19,7 @@ export interface HomeCardParticipant {
 }
 
 export interface HomeCardActivity {
-  kind: 'register' | 'pr' | 'timeline' | 'note' | 'plan' | 'handover';
+  kind: 'register' | 'pr' | 'timeline' | 'note' | 'plan' | 'handover' | 'workitem';
   text: string;
   userId: string | null;
   userName: string | null;
@@ -61,6 +64,15 @@ export interface HomeCardEntry {
   number: number | null;
 }
 
+/** Itens de trabalho da Bancada no card (0088). */
+export interface HomeCardWorkItems {
+  count: number;
+  /** Não concluídos, cancelados nem desfeitos. */
+  open: number;
+  /** O em andamento mais recente; sem nenhum, o último mexido. */
+  current: { number: number; title: string; type: string; status: string; updatedAt: string } | null;
+}
+
 export interface HomeCard {
   cardNumber: string;
   repositoryId: string | null;
@@ -80,6 +92,9 @@ export interface HomeCard {
   timeline: { count: number; last: HomeCardEntry | null };
   notes: { count: number; last: HomeCardEntry | null };
   handover: { userId: string | null; at: string } | null;
+  /** 0088: última atualização no card, de qualquer pessoa (atividades + andamento do plano e dos itens). */
+  updatedAt: string | null;
+  workItems: HomeCardWorkItems;
 }
 
 /** Resumo do card no DevOps (AzureCardSummaryResponse). */

@@ -18,6 +18,7 @@ import {
 } from '../../services/home-cards.service';
 import { AvatarStackComponent, AvatarStackPerson } from '../avatar-stack/avatar-stack.component';
 import { situationChip } from '../card-situation/card-situation.service';
+import { formatWorkNumber, itemStatusLook, StatusLook } from '../work-items/work-item.model';
 
 /** Tempo real das listas de recentes da home (PullRequestRealTimeEvents no backend, 0021). */
 const RECENT_GROUP = 'pullrequest-recent';
@@ -26,7 +27,15 @@ const RECENT_EVENT = 'pullRequestRecentUpdated';
 const POLL_MS = 120_000;
 const TAKE = 10;
 
-type PanelFocus = 'plan' | 'timeline' | 'prs';
+type PanelFocus = 'plan' | 'timeline' | 'prs' | 'items';
+
+/** Painel da tela do card → `focus` da Bancada (a Bancada não tem foco de PRs: abre o card). */
+const WORKBENCH_FOCUS: Record<PanelFocus, string | undefined> = {
+  plan: 'plan',
+  timeline: 'timeline',
+  prs: undefined,
+  items: 'items',
+};
 
 /** Fotos por externalId, compartilhadas entre as duas listas da home (uma consulta por pessoa). */
 const photoCache = new Map<string, string>();
@@ -37,6 +46,7 @@ const ROLE_LABELS: Record<HomeCardRole, string> = {
   timeline: 'Escreveu na Timeline',
   plan: 'Interagiu no plano',
   handover: 'Salvou o handover',
+  workitem: 'Criou item na Bancada',
 };
 
 const PLAN_STATUS: Record<string, { label: string; tone: string }> = {
@@ -50,6 +60,7 @@ const PLAN_STATUS: Record<string, { label: string; tone: string }> = {
 
 /**
  * Lista de cards da home (0051): "Seus últimos cards" (scope=mine) e "Cards que você participou" (scope=participated).
+ * 0088: "Meus cards na Bancada" (scope=workbench, `featured`) — ordenada pela última atualização no card e aberta na Bancada.
  * Cada cartão mostra quem está envolvido (avatares sobrepostos), estado no DevOps, plano de execução, PRs, última
  * entrada da Timeline e último comentário do plano, com atalhos direto para cada painel da tela do card.
  */
@@ -75,6 +86,9 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
   @Input() title = '';
   @Input() icon = 'history';
   @Input() emptyText = '';
+  @Input() take = TAKE;
+  /** 0088: lista em destaque (cartões em grade, cabeçalho maior). */
+  @Input() featured = false;
 
   /** Emite se a seção tem conteúdo (carregando ou com itens): o pai dá 100% da largura ao outro bloco quando este fica vazio. */
   @Output() visibilityChange = new EventEmitter<boolean>();
@@ -132,7 +146,7 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
   private load(silent = false) {
     if (!silent) this.loading.set(true);
     this.emitVisibility();
-    this.api.getCards(this.scope, TAKE).subscribe({
+    this.api.getCards(this.scope, this.take).subscribe({
       next: (cards) => {
         this.cards.set(cards ?? []);
         this.loading.set(false);
@@ -189,23 +203,26 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
 
   // ── Navegação ──
 
-  /** Abre o card na tela de PR; com `focus`, já no painel (plano, Timeline ou PRs). */
-  open(card: HomeCard, focus?: PanelFocus, event?: Event) {
+  /**
+   * Abre o card na tela de PR — ou na Bancada (lista da Bancada e itens de trabalho, 0088); com `focus`, já no painel
+   * (plano, Timeline, PRs ou itens). `item` abre aquele item de trabalho.
+   */
+  open(card: HomeCard, focus?: PanelFocus, event?: Event, item?: number) {
     event?.stopPropagation();
-    const queryParams = {
-      card: card.cardNumber,
-      repositoryId: card.repositoryId ?? undefined,
-      focus: focus ?? undefined,
-    };
+    const workbench = this.scope === 'workbench' || focus === 'items';
+    const path = workbench ? '/auth/workbench' : '/auth/register';
+    const queryParams = workbench
+      ? { card: card.cardNumber, focus: focus ? WORKBENCH_FOCUS[focus] : undefined, item: item ?? undefined }
+      : { card: card.cardNumber, repositoryId: card.repositoryId ?? undefined, focus: focus ?? undefined };
     // Ctrl/Cmd+clique ou botão do meio: o card abre numa aba nova (0065); o clique normal usa a aba atual.
     if (event instanceof MouseEvent && (event.ctrlKey || event.metaKey || event.button === 1)) {
       event.preventDefault();
-      this.tabs.open(this.router.serializeUrl(this.router.createUrlTree(['/auth/register'], { queryParams })));
+      this.tabs.open(this.router.serializeUrl(this.router.createUrlTree([path], { queryParams })));
       return;
     }
     // Botão do meio sem o resto do clique (auxclick de outros botões): ignora.
     if (event instanceof MouseEvent && event.type === 'auxclick') return;
-    this.router.navigate(['/auth/register'], { queryParams });
+    this.router.navigate([path], { queryParams });
   }
 
   stop(event: Event) {
@@ -283,7 +300,24 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
   }
 
   hasDetails(card: HomeCard): boolean {
-    return !!(card.plan || card.pullRequests.length || card.timeline.last || card.notes.last);
+    return !!(card.plan || card.workItems.current || card.pullRequests.length || card.timeline.last || card.notes.last);
+  }
+
+  /** Hora do canto do cartão: na Bancada, a última atualização no card (a ordem da lista); nas outras, a última atividade. */
+  timeOf(card: HomeCard): string | null {
+    return this.scope === 'workbench' ? card.updatedAt ?? card.lastActivity?.at ?? null : card.lastActivity?.at ?? null;
+  }
+
+  timeTooltip(card: HomeCard): string {
+    return (this.scope === 'workbench' ? 'Última atualização: ' : 'Última atividade: ') + this.fullDate(this.timeOf(card));
+  }
+
+  itemLook(status: string): StatusLook {
+    return itemStatusLook(status);
+  }
+
+  workNumber(n: number): string {
+    return formatWorkNumber(n);
   }
 
   /** 0075: chip "🎫 chamado · há 3 d" da situação do plano (some quando nada é aguardado). */

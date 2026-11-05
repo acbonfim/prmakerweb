@@ -1,10 +1,14 @@
 @if (loading() || cards().length > 0) {
-<section class="hc-section">
+<section class="hc-section" [class.featured]="featured">
   <div class="section-header">
     <mat-icon class="header-icon">{{ icon }}</mat-icon>
     <span class="section-title">{{ title }}</span>
     @if (!loading() && cards().length > 0) {
       <span class="header-count">{{ cards().length }}</span>
+    }
+    @if (scope === 'workbench') {
+      <!-- 0088: a ordem é a última atualização no card (de qualquer pessoa, inclusive o executor) -->
+      <span class="header-hint">pela última atualização</span>
     }
   </div>
 
@@ -49,10 +53,10 @@
                 }
               </div>
               <div class="hc-title" [class.muted]="!d?.title">
-                {{ d?.title || (c.registered ? 'Card registrado no PRMake' : 'Card sem registro no PRMake') }}
+                {{ d?.title || (scope === 'workbench' ? 'Título do DevOps indisponível' : c.registered ? 'Card registrado no PRMake' : 'Card sem registro no PRMake') }}
               </div>
             </div>
-            <span class="hc-ago" [matTooltip]="'Última atividade: ' + fullDate(c.lastActivity?.at)">{{ ago(c.lastActivity?.at) }}</span>
+            <span class="hc-ago" [matTooltip]="timeTooltip(c)">{{ ago(timeOf(c)) }}</span>
           </header>
 
           <!-- Como você participou (lista "participei") e o que o card já tem -->
@@ -88,6 +92,22 @@
                 }
                 @if (plan.openQuestions > 0) {
                   <span class="chip" data-tone="pending">{{ plan.openQuestions }} pergunta{{ plan.openQuestions > 1 ? 's' : '' }}</span>
+                }
+              </button>
+            }
+
+            <!-- Itens de trabalho da Bancada (0088): o em andamento mais recente (ou o último mexido) -->
+            @if (c.workItems.current; as wi) {
+              @let look = itemLook(wi.status);
+              <button type="button" class="hc-row" (click)="open(c, 'items', $event, wi.number)" matTooltip="Abrir o item na Bancada">
+                <mat-icon class="row-icon">handyman</mat-icon>
+                <span class="row-label nowrap">{{ workNumber(wi.number) }}</span>
+                <span class="ellipsis">{{ wi.title }}</span>
+                <span class="chip chip-item" [style.--item-color]="look.color">
+                  <mat-icon [class.spin]="look.spin">{{ look.icon }}</mat-icon>{{ look.label }}
+                </span>
+                @if (c.workItems.count > 1) {
+                  <span class="muted nowrap" [matTooltip]="c.workItems.open + ' aberto(s) de ' + c.workItems.count">+{{ c.workItems.count - 1 }}</span>
                 }
               </button>
             }
@@ -139,6 +159,12 @@
               @if (c.lastActivity) { <mat-icon>bolt</mat-icon>{{ lastText(c) }} }
             </span>
             <div class="hc-actions">
+              @if (scope === 'workbench' || c.workItems.count) {
+                <button type="button" class="qa" (click)="open(c, 'items', $event)"
+                        [matTooltip]="c.workItems.count ? 'Itens de trabalho: ' + c.workItems.open + ' aberto(s) de ' + c.workItems.count : 'Itens de trabalho'">
+                  <mat-icon>handyman</mat-icon>@if (c.workItems.count) {<span>{{ c.workItems.count }}</span>}
+                </button>
+              }
               <button type="button" class="qa" (click)="open(c, 'plan', $event)" [matTooltip]="c.plan ? 'Plano de execução' : 'Sem plano ainda'">
                 <mat-icon>checklist</mat-icon>
               </button>

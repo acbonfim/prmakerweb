@@ -17,6 +17,7 @@
 }
 
 /* O bloco vazio é removido do fluxo (não ocupa coluna). */
+.col-hidden,
 .recent-columns .col-hidden {
   display: none;
 }
@@ -105,6 +106,8 @@
   color: color-mix(in srgb, var(--mat-sys-on-surface) 65%, transparent);
   background: var(--surface-1, #262b33);
 }
+
+.home-empty a { color: var(--mat-sys-primary); }
 
 .home-empty mat-icon {
   font-size: 40px;
