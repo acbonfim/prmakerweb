@@ -1,0 +1,129 @@
+@let f = field();
+<div class="sf" [id]="'sf-' + f.id" [class.sf--dirty]="dirty()" [class.sf--error]="!!error()" [class.sf--highlight]="highlight()"
+     [class.sf--removing]="removing()" [class.sf--orphan]="f.pluginId == null">
+  <div class="sf__head">
+    <div class="sf__titles">
+      <span class="sf__label">{{ f.label || f.key }}</span>
+      <span class="sf__meta">
+        <span class="sf__plugin" matTooltip="Plugin onde o valor fica gravado">{{ f.pluginName }}</span>
+        <span class="sf__key">{{ f.key }}</span>
+        @for (r of readers(); track r.key) {
+          <mat-icon class="sf__reader" [matTooltip]="r.tooltip" [attr.aria-label]="r.tooltip">{{ r.icon }}</mat-icon>
+        }
+      </span>
+    </div>
+
+    <div class="sf__badges">
+      @if (removing()) {
+        <span class="sf__badge sf__badge--error"><mat-icon>delete</mat-icon>será removida</span>
+      } @else if (dirty()) {
+        <span class="sf__badge sf__badge--dirty" matTooltip="Alteração ainda não salva"><mat-icon>edit</mat-icon>não salvo</span>
+      }
+      @if (f.obsolete) {
+        <span class="sf__badge sf__badge--muted" matTooltip="Nenhuma parte do código lê mais esta chave">obsoleta</span>
+      }
+      @if (missing() && !dirty()) {
+        <span class="sf__badge sf__badge--muted"
+              matTooltip="A chave não existe no plugin: o código usa o padrão. Grave para fixar o valor.">usando o padrão</span>
+      } @else if (changedFromDefault()) {
+        <span class="sf__badge sf__badge--changed" [matTooltip]="'Padrão do código: ' + (f.default || '(vazio)')">alterado do padrão</span>
+      }
+      @if (f.personal; as p) {
+        <span class="sf__badge sf__badge--personal"
+              [matTooltip]="p.userFills ? 'Plugin pessoal: cada usuário preenche este campo em Minhas integrações' + (p.required ? ' (obrigatório)' : ' (opcional)') : 'Plugin pessoal: este campo é fixo para todos, com o valor daqui'">
+          <mat-icon>{{ p.userFills ? 'person' : 'push_pin' }}</mat-icon>{{ p.userFills ? 'Usuário preenche' : 'Fixo' }}
+        </span>
+      }
+    </div>
+
+    <div class="sf__actions">
+      @if (missing() && !dirty()) {
+        <button mat-stroked-button class="sf__write" (click)="writeDefault()"
+                matTooltip="Grava a chave no plugin com o valor padrão">
+          <mat-icon>save_alt</mat-icon> Gravar
+        </button>
+      }
+      @if (hasDefault() && changedFromDefault() && !removing()) {
+        <button mat-icon-button (click)="restore()" [disabled]="disabled()" matTooltip="Restaurar padrão">
+          <mat-icon>settings_backup_restore</mat-icon>
+        </button>
+      }
+      @if (dirty()) {
+        <button mat-icon-button (click)="discard()" matTooltip="Desfazer a alteração deste campo">
+          <mat-icon>undo</mat-icon>
+        </button>
+      }
+      @if (f.pluginId != null) {
+        <button mat-icon-button (click)="openHistory()" matTooltip="Histórico de alterações">
+          <mat-icon>history</mat-icon>
+        </button>
+      }
+      @if ((f.obsolete || f.uncataloged) && f.exists && f.pluginId != null) {
+        <button mat-icon-button class="sf__remove" (click)="toggleRemove()"
+                [matTooltip]="removing() ? 'Manter a chave' : 'Remover a chave do plugin (ao salvar a seção)'">
+          <mat-icon>{{ removing() ? 'restore_from_trash' : 'delete' }}</mat-icon>
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (f.help) { <div class="sf__help">{{ f.help }}</div> }
+
+  @if (f.pluginId == null) {
+    <div class="sf__warn">
+      <mat-icon>extension_off</mat-icon>
+      <span>O plugin <strong>{{ f.pluginName }}</strong> não está cadastrado — crie-o em <em>Plugins (avançado)</em> para editar esta chave.</span>
+    </div>
+  }
+
+  @if (personalCaption(); as caption) { <span class="sf__caption">{{ caption }}</span> }
+
+  <div class="sf__editor" [attr.inert]="disabled() ? '' : null">
+    @switch (f.type) {
+      @case ('textarea') {
+        <app-setting-textarea-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('secret') {
+        <app-setting-secret-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('bool') {
+        <app-setting-bool-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('number') {
+        <app-setting-number-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('enum') {
+        <app-setting-enum-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('list') {
+        <app-setting-list-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('steps') {
+        <app-setting-steps-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()"
+                                  [steps]="stepOptions()" />
+      }
+      @case ('table') {
+        <app-setting-table-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('map') {
+        <app-setting-map-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('json') {
+        <app-setting-json-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('pattern') {
+        <app-setting-prompt-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @case ('prompt') {
+        <app-setting-prompt-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+      @default {
+        <app-setting-text-editor [field]="f" [value]="value()" (valueChange)="onValue($event)" (invalid)="onInvalid($event)" [disabled]="disabled()" />
+      }
+    }
+  </div>
+
+  @if (error(); as err) {
+    <div class="sf__error" role="alert"><mat-icon>error_outline</mat-icon>{{ err }}</div>
+  }
+</div>
