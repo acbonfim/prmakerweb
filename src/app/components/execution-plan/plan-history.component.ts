@@ -7,6 +7,7 @@ import { CcPopoverComponent } from '../popover/cc-popover.component';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import { MOTION_CSS } from '../../pages/authenticated/promotion/promotion-motion';
 import { ExecutionPlanSummary, PLAN_STATUS_LABEL } from './execution-plan.model';
+import { isUsPlan, planTerms } from './plan-terms';
 
 type PhaseFilter = 'all' | 'analysis' | 'correction';
 
@@ -175,6 +176,8 @@ export class PlanHistoryComponent {
   readonly items = input<ExecutionPlanSummary[]>([]);
   readonly currentId = input<string | null>(null);
   readonly cardNumber = input<string | null>(null);
+  /** 0085 (rodada 5): versões de US falam em "Implementação" (pelo `kind` dos planos do card). */
+  readonly terms = computed(() => planTerms(this.items().some((i) => isUsPlan(i))));
   readonly picked = output<ExecutionPlanSummary>();
 
   readonly statusLabel = PLAN_STATUS_LABEL;
@@ -207,7 +210,7 @@ export class PlanHistoryComponent {
         return {
           item,
           version,
-          phaseLabel: item.phase === 'correction' ? 'Correção' : 'Análise',
+          phaseLabel: item.phase === 'correction' ? this.terms().Fix : 'Análise',
           isLatest: item.id === latestId,
           parent: parent ? { id: parent.item.id, label: `Análise v${parent.version}` } : null,
           changedBy: this.changedBy(item),
@@ -230,7 +233,7 @@ export class PlanHistoryComponent {
   readonly filters = computed(() => [
     { key: 'all' as PhaseFilter, label: 'Todas', count: this.counts().all },
     { key: 'analysis' as PhaseFilter, label: 'Análise', count: this.counts().analysis },
-    { key: 'correction' as PhaseFilter, label: 'Correção', count: this.counts().correction }
+    { key: 'correction' as PhaseFilter, label: this.terms().Fix, count: this.counts().correction }
   ]);
 
   readonly subtitle = computed(() => {
@@ -238,7 +241,7 @@ export class PlanHistoryComponent {
     const card = this.cardNumber() ? `Card ${this.cardNumber()} · ` : '';
     const parts: string[] = [];
     if (c.analysis) parts.push(`${c.analysis} ${c.analysis === 1 ? 'análise' : 'análises'}`);
-    if (c.correction) parts.push(`${c.correction} ${c.correction === 1 ? 'correção' : 'correções'}`);
+    if (c.correction) parts.push(`${c.correction} ${c.correction === 1 ? this.terms().fix : this.terms().fixes}`);
     return `${card}${c.all} ${c.all === 1 ? 'versão' : 'versões'}${parts.length ? ` (${parts.join(', ')})` : ''}`;
   });
 

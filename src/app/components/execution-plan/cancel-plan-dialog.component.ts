@@ -9,6 +9,8 @@ export interface CancelPlanDialogData {
   versionNumber?: number | null;
   /** PRs abertos do plano (avisa que continuam abertos). */
   openPrs: string[];
+  /** 0085 (rodada 5): plano de US — "implementação" no lugar de "correção". */
+  us?: boolean;
 }
 
 /** `talk` = "Conversar primeiro" (abre o Especialista do caso); `{ reason }` = cancelar com o motivo. */
@@ -34,7 +36,7 @@ const REASONS = [
     <div class="cpd">
       <header class="cpd__head">
         <mat-icon class="cpd__icon">stop_circle</mat-icon>
-        <span class="cpd__title">Cancelar {{ data.phase === 'correction' ? 'a correção' : 'a análise' }}{{ data.versionNumber ? ' v' + data.versionNumber : '' }}?</span>
+        <span class="cpd__title">Cancelar {{ data.phase === 'correction' ? (data.us ? 'a implementação' : 'a correção') : 'a análise' }}{{ data.versionNumber ? ' v' + data.versionNumber : '' }}?</span>
         <button mat-icon-button mat-dialog-close aria-label="Fechar"><mat-icon>close</mat-icon></button>
       </header>
       <div class="cpd__body">
@@ -89,12 +91,14 @@ const REASONS = [
 export class CancelPlanDialogComponent {
   readonly data = inject<CancelPlanDialogData>(MAT_DIALOG_DATA);
   readonly ref = inject(MatDialogRef<CancelPlanDialogComponent, CancelPlanDialogResult>);
-  readonly reasons = REASONS;
+  readonly reasons = this.data.us
+    ? REASONS.map((r) => r.key === 'nao-resolve' ? { ...r, label: 'A implementação não atende o que a US pede' } : r)
+    : REASONS;
   readonly choice = signal<string | null>(null);
   detail = '';
 
   confirm(): void {
-    const r = REASONS.find((x) => x.key === this.choice());
+    const r = this.reasons.find((x) => x.key === this.choice());
     if (!r) return;
     const detail = this.detail.trim();
     const reason = r.key === 'outro' ? (detail || 'Outro motivo') : detail ? `${r.label}: ${detail}` : r.label;

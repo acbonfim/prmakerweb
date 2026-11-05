@@ -76,7 +76,7 @@
               }
               @if (r.attempts > 0) { <dt>Tentativa</dt><dd>{{ r.status === 'queued' ? r.attempts + 1 : r.attempts }}/{{ r.maxAttempts }}</dd> }
               <dt>Pedido</dt><dd>{{ sourceLabel[r.source] || r.source }} — {{ r.requestedBy }}</dd>
-              @if (r.newSession) { <dt>Sessão</dt><dd>correção numa sessão nova (só o resumo da análise)</dd> }
+              @if (r.newSession) { <dt>Sessão</dt><dd>{{ terms().fix }} numa sessão nova (só o resumo da análise)</dd> }
             </dl>
             @if (liveActivity(); as a) {
               <div class="run-pop__now">
@@ -152,24 +152,26 @@
         @if (caseStatus()?.unread; as u) { <span class="plan__spec-badge">{{ u }}</span> }
       </button>
     }
-    @if (plan(); as p) {
-      @if (p.status === 'running' || p.status === 'pending') {
-        <button mat-button class="plan__btn" data-tour="plan-control" (click)="pause()" [disabled]="!!busy()" matTooltip="Pausar — a skill para na próxima checagem e espera">
-          <mat-icon>pause</mat-icon><span class="plan__btn-label">Pausar</span>
+    @if (!compactActions()) {
+      @if (plan(); as p) {
+        @if (p.status === 'running' || p.status === 'pending') {
+          <button mat-button class="plan__btn" data-tour="plan-control" (click)="pause()" [disabled]="!!busy()" matTooltip="Pausar — a skill para na próxima checagem e espera">
+            <mat-icon>pause</mat-icon><span class="plan__btn-label">Pausar</span>
+          </button>
+        }
+        @if (p.status === 'paused' || p.status === 'failed') {
+          <button mat-button class="plan__btn plan__btn--go" data-tour="plan-control" (click)="resume()" [disabled]="!!busy()" matTooltip="Continuar de onde parou">
+            <mat-icon>play_arrow</mat-icon><span class="plan__btn-label">Continuar</span>
+          </button>
+        }
+      }
+      @if (loadedCard() && canAskClaude()) {
+        <!-- 0039: o executor da máquina do usuário roda a skill, sem terminal -->
+        <button mat-button class="plan__btn plan__btn--go" data-tour="plan-control" (click)="openAsk()" [disabled]="!!busy()"
+                [matTooltip]="askLabel() + ' — o executor da sua máquina roda a skill, sem abrir o terminal'">
+          <mat-icon>rocket_launch</mat-icon><span class="plan__btn-label">{{ askLabel() }}</span>
         </button>
       }
-      @if (p.status === 'paused' || p.status === 'failed') {
-        <button mat-button class="plan__btn plan__btn--go" data-tour="plan-control" (click)="resume()" [disabled]="!!busy()" matTooltip="Continuar de onde parou">
-          <mat-icon>play_arrow</mat-icon><span class="plan__btn-label">Continuar</span>
-        </button>
-      }
-    }
-    @if (loadedCard() && canAskClaude()) {
-      <!-- 0039: o executor da máquina do usuário roda a skill, sem terminal -->
-      <button mat-button class="plan__btn plan__btn--go" data-tour="plan-control" (click)="openAsk()" [disabled]="!!busy()"
-              [matTooltip]="askLabel() + ' — o executor da sua máquina roda a skill, sem abrir o terminal'">
-        <mat-icon>rocket_launch</mat-icon><span class="plan__btn-label">{{ askLabel() }}</span>
-      </button>
     }
     @if (plan(); as p) {
       @if (isActive() && p.executor && !hasWorkers() && p.resumePending) {
@@ -198,29 +200,51 @@
     }
     <app-plan-history #historyPanel [items]="history()" [currentId]="plan()?.id ?? null" [cardNumber]="loadedCard()"
                       (picked)="selectHistory($event)"></app-plan-history>
-    @if (plan(); as p) {
+    @if (plan() || (compactActions() && loadedCard() && canAskClaude())) {
+      <!-- 0085 (rodada 5): com compactActions (Bancada), Pausar / Continuar / "… com Claude" moram aqui -->
       <button mat-icon-button class="plan__action plan__more" data-tour="plan-more" [matMenuTriggerFor]="moreMenu" cdkOverlayOrigin #moreOrigin="cdkOverlayOrigin" aria-label="Mais ações do plano"
-              matTooltip="Mais ações">
+              [matTooltip]="compactActions() ? 'Mais ações (pausar, continuar, ' + askLabel().toLowerCase() + '…)' : 'Mais ações'">
         <mat-icon>more_vert</mat-icon>
       </button>
       <mat-menu #moreMenu="matMenu" class="app-menu" xPosition="before">
-        @if (!hideVersions() && history().length > 1) {
-          <button mat-menu-item (click)="historyPanel.open(moreOrigin)">
-            <mat-icon>history</mat-icon><span>Histórico de versões ({{ history().length }})</span>
-          </button>
+        @if (compactActions()) {
+          @if (plan(); as p) {
+            @if (p.status === 'running' || p.status === 'pending') {
+              <button mat-menu-item data-tour="plan-control" (click)="pause()" [disabled]="!!busy()">
+                <mat-icon>pause</mat-icon><span>Pausar (a skill para na próxima checagem)</span>
+              </button>
+            }
+            @if (p.status === 'paused' || p.status === 'failed') {
+              <button mat-menu-item data-tour="plan-control" (click)="resume()" [disabled]="!!busy()">
+                <mat-icon>play_arrow</mat-icon><span>Continuar de onde parou</span>
+              </button>
+            }
+          }
+          @if (loadedCard() && canAskClaude()) {
+            <button mat-menu-item data-tour="plan-control" (click)="openAsk()" [disabled]="!!busy()">
+              <mat-icon>rocket_launch</mat-icon><span>{{ askLabel() }}</span>
+            </button>
+          }
         }
-        <button mat-menu-item (click)="copyTerminalCommand()">
-          <mat-icon>terminal</mat-icon><span>Retomar no Claude (copiar o comando do terminal)</span>
-        </button>
-        @if (isActive() && p.executor && !hasWorkers() && !p.resumePending) {
-          <button mat-menu-item (click)="requestResume()" [disabled]="!!busy()">
-            <mat-icon>smart_toy</mat-icon><span>Continuar sozinho (vigia da máquina)</span>
+        @if (plan(); as p) {
+          @if (!hideVersions() && history().length > 1) {
+            <button mat-menu-item (click)="historyPanel.open(moreOrigin)">
+              <mat-icon>history</mat-icon><span>Histórico de versões ({{ history().length }})</span>
+            </button>
+          }
+          <button mat-menu-item (click)="copyTerminalCommand()">
+            <mat-icon>terminal</mat-icon><span>Retomar no Claude (copiar o comando do terminal)</span>
           </button>
-        }
-        @if (isActive() || p.status === 'failed') {
-          <button mat-menu-item (click)="askCancelPlan()" [disabled]="!!busy()">
-            <mat-icon>stop_circle</mat-icon><span>Cancelar o plano…</span>
-          </button>
+          @if (isActive() && p.executor && !hasWorkers() && !p.resumePending) {
+            <button mat-menu-item (click)="requestResume()" [disabled]="!!busy()">
+              <mat-icon>smart_toy</mat-icon><span>Continuar sozinho (vigia da máquina)</span>
+            </button>
+          }
+          @if (isActive() || p.status === 'failed') {
+            <button mat-menu-item (click)="askCancelPlan()" [disabled]="!!busy()">
+              <mat-icon>stop_circle</mat-icon><span>Cancelar o plano…</span>
+            </button>
+          }
         }
       </mat-menu>
     }
@@ -265,6 +289,44 @@
         </nav>
       }
     </div>
+  }
+
+  @if (showFilesBar()) {
+    @if (plan(); as p) {
+      <!-- 0085 (rodada 5): arquivos do plano num lugar fixo + o plano completo sempre à mão (não só no "Em que pé está") -->
+      @let files = barArtifacts();
+      <div class="pfiles" data-tour="plan-files-bar" role="region" aria-label="Arquivos do plano">
+        <span class="pfiles__label"><mat-icon>folder_open</mat-icon>Arquivos do plano</span>
+        <div class="pfiles__list">
+          @for (a of files.shown; track a.id) {
+            <span class="pfiles__chip pfiles__chip--{{ a.kind }}">
+              <button type="button" class="pfiles__open" (click)="openFiles(undefined, a)"
+                      [matTooltip]="artifactKindLabel(a.kind) + (a.description ? ' — ' + a.description : '') + ' · abrir'" matTooltipShowDelay="400">
+                <mat-icon>{{ artifactIcon(a.kind) }}</mat-icon><span class="pfiles__name">{{ a.name }}</span>
+              </button>
+              <button type="button" class="pfiles__dl" (click)="downloadArtifact(a)" [attr.aria-label]="'Baixar ' + a.name"
+                      matTooltip="Baixar"><mat-icon>download</mat-icon></button>
+            </span>
+          } @empty {
+            <span class="pfiles__empty">Nenhum arquivo ainda — a análise, os scripts e os chamados aparecem aqui.</span>
+          }
+          @if (files.more) {
+            <button type="button" class="pfiles__more" (click)="openFiles()">+{{ files.more }}</button>
+          }
+        </div>
+        <span class="pfiles__acts">
+          @if (files.total > 1) {
+            <button mat-button class="plan__btn" (click)="downloadZip()" [disabled]="busy() === 'zip'" matTooltip="Baixar todos os arquivos (.zip)">
+              <mat-icon>folder_zip</mat-icon><span class="plan__btn-label">.zip</span>
+            </button>
+          }
+          <button mat-stroked-button class="pfiles__doc" data-tour="plan-document-bar" (click)="openDocument()">
+            <mat-icon>{{ p.phase === 'correction' ? 'assignment' : 'article' }}</mat-icon>
+            {{ p.phase === 'correction' ? 'Ver o plano completo' : 'Ver a análise completa' }}
+          </button>
+        </span>
+      </div>
+    }
   }
 
   @if (askOpen()) {
@@ -364,7 +426,7 @@
               @if (h.run) {
                 <button mat-stroked-button (click)="runFromHeadline()" [disabled]="!!busy()"><mat-icon>play_arrow</mat-icon>{{ h.run }}</button>
               }
-              <!-- 0082: a análise / o plano de correção inteiro desta versão, a qualquer momento -->
+              <!-- 0082: a análise / o plano de correção (implementação, na US) inteiro desta versão, a qualquer momento -->
               <button mat-stroked-button data-tour="plan-document" (click)="openDocument()">
                 <mat-icon>{{ p.phase === 'correction' ? 'assignment' : 'article' }}</mat-icon>
                 {{ p.phase === 'correction' ? 'Ver o plano completo' : 'Ver a análise completa' }}
@@ -460,7 +522,7 @@
           </div>
         }
         <div class="plan__meta">
-          <span class="plan__meta-kicker">{{ p.phase === 'correction' ? 'Plano de correção' : 'Plano de análise' }}</span>
+          <span class="plan__meta-kicker">{{ p.phase === 'correction' ? terms().fixPlan : 'Plano de análise' }}</span>
           <span class="plan__meta-title" [matTooltip]="p.title">{{ p.title }}</span>
           @if (expanded() && narrow()) {
             <button type="button" class="plan__summary-btn" (click)="openMobileDetail(null)">
@@ -688,7 +750,7 @@
           <input class="plan__bar-input" [ngModel]="d.url" (ngModelChange)="updateLinkDraft({ url: $event })"
                  placeholder="Link (ex.: chamado no Freshservice, documento, PR)" (keydown.enter)="saveLink()" />
           <input class="plan__bar-input" [ngModel]="d.title" (ngModelChange)="updateLinkDraft({ title: $event })"
-                 placeholder="Título (ex.: #1234 — script de correção)" (keydown.enter)="saveLink()" />
+                 [placeholder]="'Título (ex.: #1234 — script de ' + terms().fix + ')'" (keydown.enter)="saveLink()" />
           <label class="plan-linkform__check">
             <input type="checkbox" [ngModel]="d.blocks" (ngModelChange)="updateLinkDraft({ blocks: $event })" />
             A etapa aguarda este chamado ser resolvido

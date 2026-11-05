@@ -1388,3 +1388,32 @@
 .run-pop__text { margin: 2px 14px 8px; line-height: 1.45; color: color-mix(in srgb, var(--mat-sys-on-surface) 80%, transparent); }
 .run-pop__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px 0; }
 .run-pop__stop mat-icon { margin-right: 4px; }
+
+/* 0085 (rodada 5): faixa fixa "Arquivos do plano" (showFilesBar) — abrir/baixar + "Ver o plano completo". */
+.pfiles { flex: none; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 6px 14px 2px; padding: 6px 8px 6px 10px;
+  border-radius: 10px; background: color-mix(in srgb, var(--mat-sys-on-surface) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mat-sys-on-surface) 9%, transparent); min-width: 0; }
+.pfiles__label { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent); }
+.pfiles__label .mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.pfiles__list { flex: 1 1 260px; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pfiles__chip { --pf-c: color-mix(in srgb, var(--mat-sys-on-surface) 70%, transparent); display: inline-flex; align-items: center; max-width: 260px;
+  height: 26px; border-radius: 13px; border: 1px solid color-mix(in srgb, var(--pf-c) 26%, transparent);
+  background: color-mix(in srgb, var(--pf-c) 8%, transparent); overflow: hidden; }
+.pfiles__chip--analysis { --pf-c: #79c0ff; }
+.pfiles__chip--script { --pf-c: #d2a8ff; }
+.pfiles__chip--ticket { --pf-c: #e3b341; }
+.pfiles__open, .pfiles__dl { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; display: inline-flex; align-items: center; }
+.pfiles__open { gap: 4px; min-width: 0; padding: 0 4px 0 8px; height: 100%; font-size: 12px; color: var(--mat-sys-on-surface); }
+.pfiles__open .mat-icon { flex: none; font-size: 15px; width: 15px; height: 15px; color: var(--pf-c); }
+.pfiles__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pfiles__dl { flex: none; height: 100%; padding: 0 7px 0 5px; border-left: 1px solid color-mix(in srgb, var(--pf-c) 22%, transparent);
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent); }
+.pfiles__dl .mat-icon { font-size: 15px; width: 15px; height: 15px; }
+.pfiles__open:hover, .pfiles__dl:hover { background: color-mix(in srgb, var(--pf-c) 14%, transparent); }
+.pfiles__more { height: 26px; padding: 0 9px; border-radius: 13px; border: 1px dashed color-mix(in srgb, var(--mat-sys-on-surface) 25%, transparent);
+  background: none; color: var(--mat-sys-primary); font: inherit; font-size: 12px; cursor: pointer; }
+.pfiles__empty { font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 50%, transparent); }
+.pfiles__acts { flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.pfiles__doc.mat-mdc-outlined-button { height: 30px; padding: 0 12px; font-size: 12.5px; border-radius: 15px; white-space: nowrap; }
+.pfiles__doc .mat-icon { font-size: 17px; width: 17px; height: 17px; }
