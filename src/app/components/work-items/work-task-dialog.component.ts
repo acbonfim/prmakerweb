@@ -24,6 +24,9 @@ import {
 } from './work-item.model';
 import { listenWorkItems } from './work-items-live';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
+import { WorkItemFilesComponent } from './work-item-files.component';
+import { WorkItemFilesStore } from './work-item-files.store';
+import { filesOfTask } from './work-item-files';
 import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
 import { paramDisplay, paramInput, paramLink, paramOptions } from '../work-item-pickers/param-input';
 
@@ -44,7 +47,7 @@ export interface WorkTaskDialogData {
 @Component({
   selector: 'app-work-task-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, WorkItemFilesComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <div class="wi-dlg">
@@ -110,6 +113,13 @@ export interface WorkTaskDialogData {
             </section>
           }
 
+          @if (taskFiles() || !files.unavailable()) {
+            <section class="wi-sec">
+              <h4 class="wi-sec__title">Arquivos @if (taskFiles()) { <small class="wi-muted">{{ taskFiles() }}</small> }</h4>
+              <app-work-item-files [store]="files" [card]="data.card" [taskNumber]="data.taskNumber" [compact]="true" />
+            </section>
+          }
+
           @if (t.undo) {
             <section class="wi-sec">
               <h4 class="wi-sec__title">Como desfazer</h4>
@@ -161,6 +171,9 @@ export class WorkTaskDialogComponent {
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   resultText = '';
+  /** Rodada 5: arquivos do item (o componente filtra os desta sub-tarefa). */
+  readonly files = new WorkItemFilesStore();
+  readonly taskFiles = computed(() => filesOfTask(this.files.files(), this.data.taskNumber).length);
 
   readonly task = computed(() => this.item()?.tasks?.find((t) => t.number === this.data.taskNumber) ?? null);
   readonly look = computed(() => taskStatusLook(this.task()?.status));
@@ -202,6 +215,7 @@ export class WorkTaskDialogComponent {
   constructor() {
     this.pickers.ensureGithubUrl(this.data.catalog);
     this.reload();
+    this.files.watch(this.data.itemNumber, this.data.card);
     const stop = listenWorkItems(inject(WsService), this.data.card, (p) => {
       if (!p || p.number == null || p.number === this.data.itemNumber || p.taskNumber === this.data.taskNumber) this.reload();
     });

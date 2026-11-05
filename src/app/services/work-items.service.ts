@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Observable, catchError, throwError } from 'rxjs';
+import { Observable, catchError, map, of, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
   CreateWorkItemRequest,
@@ -14,6 +14,14 @@ import {
   formatWorkNumber,
   itemStatusLook
 } from '../components/work-items/work-item.model';
+import {
+  CreateWorkItemTextFileRequest,
+  WorkItemFile,
+  WorkItemFileKind,
+  WorkItemFilesResult,
+  normalizeFiles,
+  resolveFileContentUrl
+} from '../components/work-items/work-item-files';
 
 /** Branch do GitHub (`GET GitHub/branches`). */
 export interface GitHubBranch {
@@ -168,6 +176,41 @@ export class WorkItemsService {
   cancelPlan(planId: string, undo: boolean, reason?: string | null): Observable<unknown> {
     return this.http.post(`${this.planUrl}/${planId}/cancel`, { reason: reason || null, undo })
       .pipe(this.fail('Não foi possível cancelar o plano.'));
+  }
+
+  /**
+   * Rodada 5 (1.2): arquivos do item (os dele e os do plano ligado, `source: 'plan'`). Servidor sem o endpoint (404)
+   * → lista vazia com `unavailable` (a tela mostra um aviso discreto em vez de erro).
+   */
+  files(number: number): Observable<WorkItemFilesResult> {
+    return this.http.get<unknown>(`${this.apiUrl}/${number}/files`).pipe(
+      map((raw): WorkItemFilesResult => ({ files: normalizeFiles(raw), unavailable: false })),
+      catchError((err) => (err instanceof HttpErrorResponse && (err.status === 404 || err.status === 405)
+        ? of<WorkItemFilesResult>({ files: [], unavailable: true })
+        : throwError(() => toWorkItemError(err, `Não foi possível carregar os arquivos do item ${formatWorkNumber(number)}.`))))
+    );
+  }
+
+  /** Conteúdo do arquivo (blob, com a x-api-key do interceptor) — os do plano pelo `contentUrl`. */
+  fileContent(number: number, file: Pick<WorkItemFile, 'id' | 'contentUrl'>): Observable<Blob> {
+    return this.http.get(resolveFileContentUrl(this.base, number, file), { responseType: 'blob' })
+      .pipe(this.fail('Não foi possível baixar o arquivo.'));
+  }
+
+  /** Anexa um arquivo ao item (multipart `file`; `kind`/`taskNumber` opcionais). */
+  uploadFile(number: number, file: File, kind?: WorkItemFileKind | null, taskNumber?: number | null): Observable<WorkItemFile> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    if (kind) form.append('kind', kind);
+    if (taskNumber != null) form.append('taskNumber', `${taskNumber}`);
+    return this.http.post<WorkItemFile>(`${this.apiUrl}/${number}/files`, form)
+      .pipe(this.fail(`Não foi possível anexar "${file.name}".`));
+  }
+
+  /** Grava um texto como arquivo do item (chamado, script, análise gerados). */
+  addTextFile(number: number, req: CreateWorkItemTextFileRequest): Observable<WorkItemFile> {
+    return this.http.post<WorkItemFile>(`${this.apiUrl}/${number}/files`, { ...req, taskNumber: req.taskNumber ?? null })
+      .pipe(this.fail(`Não foi possível gravar "${req.name}".`));
   }
 
   /**

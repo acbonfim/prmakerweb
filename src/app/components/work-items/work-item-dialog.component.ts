@@ -33,8 +33,10 @@ import {
 import { WorkItemActionsService } from './work-item-actions.service';
 import { listenWorkItems } from './work-items-live';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
+import { WorkItemFilesComponent } from './work-item-files.component';
+import { WorkItemFilesStore } from './work-item-files.store';
 
-export type WorkItemDialogTab = 'overview' | 'tasks' | 'history';
+export type WorkItemDialogTab = 'overview' | 'tasks' | 'files' | 'history';
 
 export interface WorkItemDialogData {
   card: string;
@@ -49,13 +51,13 @@ export interface WorkItemDialogData {
 
 /**
  * 0085: modal do item de trabalho — cabeçalho (tipo/#/título/status/origem/quem criou), abas Visão geral · Sub-tarefas ·
- * Histórico e as ações (Executar, Editar ou "Criar novo a partir deste", Cancelar, Desfazer). Atualiza ao vivo pelo
+ * Arquivos (rodada 5: só os do item, ao vivo) · Histórico e as ações (Executar, Editar ou "Criar novo a partir deste", Cancelar, Desfazer). Atualiza ao vivo pelo
  * evento `workItemsUpdated`. Abrir com `workDialogConfig(data, '860px')`.
  */
 @Component({
   selector: 'app-work-item-dialog',
   standalone: true,
-  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent],
+  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent, WorkItemFilesComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <div class="wi-dlg">
@@ -77,6 +79,7 @@ export interface WorkItemDialogData {
       <nav class="wi-tabs" role="tablist">
         <button class="wi-tab" role="tab" [class.wi-tab--on]="tab() === 'overview'" (click)="tab.set('overview')">Visão geral</button>
         <button class="wi-tab" role="tab" [class.wi-tab--on]="tab() === 'tasks'" (click)="tab.set('tasks')">Sub-tarefas<small>{{ item()?.tasks?.length ?? '' }}</small></button>
+        <button class="wi-tab" role="tab" [class.wi-tab--on]="tab() === 'files'" (click)="tab.set('files')">Arquivos<small>{{ files.count() || '' }}</small></button>
         <button class="wi-tab" role="tab" [class.wi-tab--on]="tab() === 'history'" (click)="tab.set('history')">Histórico<small>{{ item()?.logs?.length || '' }}</small></button>
       </nav>
       <div class="wi-dlg__body">
@@ -140,6 +143,9 @@ export interface WorkItemDialogData {
                   </li>
                 }
               </ol>
+            }
+            @case ('files') {
+              <app-work-item-files [store]="files" [card]="data.card" />
             }
             @case ('history') {
               @if (!(it.logs?.length)) { <p class="wi-muted wid__p">Sem registros ainda.</p> }
@@ -217,6 +223,8 @@ export class WorkItemDialogComponent {
   readonly error = signal<string | null>(null);
   readonly acting = signal(false);
   readonly busyTask = signal<number | null>(null);
+  /** Rodada 5: arquivos do item (contagem na aba, lista ao vivo). */
+  readonly files = new WorkItemFilesStore();
 
   readonly look = computed(() => itemStatusLook(this.item()?.status));
   readonly progress = computed(() => { const it = this.item(); return it ? itemProgress(it) : { done: 0, total: 0, pct: 0 }; });
@@ -243,6 +251,7 @@ export class WorkItemDialogComponent {
 
   constructor() {
     this.reload();
+    this.files.watch(this.data.number, this.data.card);
     if (!this.catalog()) this.actions.catalogOrNull(this.data.card).then((c) => c && this.catalog.set(c));
     const stop = listenWorkItems(inject(WsService), this.data.card, (p) => {
       const it = this.item();

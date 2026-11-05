@@ -55,6 +55,7 @@ import {
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
 import { listenWorkItems } from './work-items-live';
+import { WorkItemFilesStore } from './work-item-files.store';
 
 /** Debounce dos eventos do tempo real (rajadas de atividade viram um GET só). */
 const LIVE_DEBOUNCE_MS = 300;
@@ -106,6 +107,13 @@ const FLASH_MS = 1_600;
             }
             @if (elapsed()) { <span class="wie__fact" [matTooltip]="live() ? 'Tempo desde o início' : 'Duração'"><mat-icon>timer</mat-icon>{{ elapsed() }}</span> }
             @if (progress().total) { <span class="wie__fact">{{ progress().done }}/{{ progress().total }} sub-tarefas</span> }
+            @if (!files.unavailable()) {
+              <button class="wie__files" [class.wie__files--new]="filesFlash()" (click)="openFiles()" matTooltip="Arquivos do item (chamados, scripts, análises, anexos)"
+                      [attr.aria-label]="'Arquivos do item: ' + files.count()">
+                <mat-icon>folder_open</mat-icon>Arquivos ({{ files.count() }})
+                @if (hasTicket()) { <mat-icon class="wie__files-ticket" matTooltip="Tem chamado pronto">confirmation_number</mat-icon> }
+              </button>
+            }
           </div>
         </div>
         <button mat-icon-button class="wie__open" (click)="openDetails.emit(number())" matTooltip="Abrir o item (descrição, histórico)" aria-label="Abrir o item">
@@ -242,6 +250,12 @@ const FLASH_MS = 1_600;
     </section>
   `,
   styles: [`
+    .wie__files { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 999px; font: inherit; font-size: 11.5px; line-height: 20px; cursor: pointer;
+      background: transparent; color: var(--cc-text-2); border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); }
+    .wie__files:hover { color: var(--mat-sys-on-surface); border-color: var(--mat-sys-primary); }
+    .wie__files mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .wie__files-ticket { color: #d29922; }
+    .wie__files--new { border-color: var(--mat-sys-primary); color: var(--mat-sys-primary); }
     :host { display: flex; flex-direction: column; min-height: 0; font-size: 13px; color: var(--mat-sys-on-surface); }
     .wie { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; border-radius: 12px; background: var(--surface-1, #262b33);
       border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); overflow: hidden; }
@@ -395,6 +409,14 @@ export class WorkItemExecutionComponent {
   readonly unseen = signal(false);
   private readonly now = signal(Date.now());
 
+  /** Rodada 5: arquivos do item (chip "Arquivos (n)", ao vivo). */
+  readonly files = new WorkItemFilesStore();
+  readonly hasTicket = computed(() => this.files.files().some((f) => f.kind === 'ticket'));
+  /** Destaque curto no chip quando chega arquivo novo. */
+  readonly filesFlash = signal(false);
+  private filesSeen = -1;
+  private filesFlashTimer: ReturnType<typeof setTimeout> | null = null;
+
   private readonly feedEl = viewChild<ElementRef<HTMLElement>>('feedEl');
 
   readonly num = formatWorkNumber;
@@ -508,6 +530,26 @@ export class WorkItemExecutionComponent {
       untracked(() => this.listen(card));
     });
 
+    // Arquivos do item (o card do item quando não veio `[card]`).
+    effect(() => {
+      const n = this.number();
+      const card = ((this.card() ?? '') || (this.item()?.cardNumber ?? '')).trim() || null;
+      untracked(() => this.files.watch(n, card));
+    });
+    effect(() => {
+      const count = this.files.count();
+      const loaded = this.files.loaded();
+      untracked(() => {
+        if (!loaded) { this.filesSeen = -1; return; }
+        if (this.filesSeen >= 0 && count > this.filesSeen) {
+          this.filesFlash.set(true);
+          if (this.filesFlashTimer) clearTimeout(this.filesFlashTimer);
+          this.filesFlashTimer = setTimeout(() => this.filesFlash.set(false), 2400);
+        }
+        this.filesSeen = count;
+      });
+    });
+
     // Feed: rola sozinho só se a pessoa estiver no fim; senão mostra "Novas atividades".
     effect(() => {
       const size = this.feed().length;
@@ -534,6 +576,7 @@ export class WorkItemExecutionComponent {
       this.stopLive?.();
       if (this.flashTimer) clearTimeout(this.flashTimer);
       if (this.celebrateTimer) clearTimeout(this.celebrateTimer);
+      if (this.filesFlashTimer) clearTimeout(this.filesFlashTimer);
     });
   }
 
@@ -678,6 +721,12 @@ export class WorkItemExecutionComponent {
     if (t.executor !== 'user') return [];
     if (t.status === 'pending' && t.number !== this.currentTask()) return [];
     return userTaskActions(t);
+  }
+
+  openFiles(): void {
+    const it = this.item();
+    const card = ((this.card() ?? '') || (it?.cardNumber ?? '')).trim();
+    if (card) this.actions.openFiles(card, this.number(), it?.title ?? null);
   }
 
   openTask(item: WorkItem, t: WorkTask): void {
