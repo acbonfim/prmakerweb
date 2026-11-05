@@ -1,5 +1,5 @@
-<!-- 0085: Bancada do card — cabeçalho do card + barra de etiquetas, coluna principal (Itens | Plano) e lateral (Especialista).
-     Ajustes: timeline e "Card" (horas + texto) viraram botões, como na tela de PR. -->
+<!-- 0085: Bancada do card — cabeçalho do card + barra de etiquetas, coluna principal (Itens | Plano | Card) e lateral (Especialista).
+     Ajustes: timeline num botão (como na tela de PR); o botão "Card" abre a aba Card (horas, lançar horas, dados e texto). -->
 @let found = cardState() === 'found';
 <!-- DevOps fora do ar/sem integração: a Bancada continua com itens, plano, especialista e timeline (dados do PRMake) -->
 @let body = found || cardState() === 'error';
@@ -95,27 +95,11 @@
       <span class="wb-actions">
         @let hc = hoursChip();
         <button mat-stroked-button type="button" class="wb-act" data-tour="wb-card-btn"
-                cdkOverlayOrigin #cardOrigin="cdkOverlayOrigin" [disabled]="!found"
-                [attr.aria-expanded]="cardOpen() || showCardTab()" (click)="toggleCard()"
-                [matTooltip]="cardOpen() ? '' : 'Horas e texto do card (' + (cardType() === 'user-story' ? 'descrição e critérios de aceite' : 'Repro Steps') + ')'">
+                [class.wb-act--on]="visibleMain() === 'card'" [attr.aria-pressed]="visibleMain() === 'card'" (click)="showCard()"
+                [matTooltip]="'Aba Card: horas (lançar +1h, +2h, +4h…), dados e ' + (cardType() === 'user-story' ? 'descrição e critérios de aceite' : 'Repro Steps')">
           <mat-icon>description</mat-icon>Card
           @if (hc) { <span class="wb-hours-chip wb-hours-chip--{{ hc.tone }}" [matTooltip]="hc.tooltip">{{ hc.text }}</span> }
         </button>
-        <ng-template cdkConnectedOverlay [cdkConnectedOverlayOrigin]="cardOrigin" [cdkConnectedOverlayOpen]="cardOpen()"
-                     [cdkConnectedOverlayPositions]="popPositions" [cdkConnectedOverlayHasBackdrop]="true"
-                     cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop" [cdkConnectedOverlayPush]="true"
-                     (backdropClick)="cardOpen.set(false)" (detach)="cardOpen.set(false)" (overlayKeydown)="onCardPopKey($event)">
-          <div class="wb-card-pop" role="dialog" aria-label="Horas e texto do card">
-            <div class="wb-card-pop__head">
-              <mat-icon>description</mat-icon><b>Card #{{ card() }}</b>
-              <span class="wb-spacer"></span>
-              <button mat-icon-button type="button" class="wb-icon-btn" aria-label="Fechar" (click)="cardOpen.set(false)"><mat-icon>close</mat-icon></button>
-            </div>
-            <div class="wb-card-pop__body">
-              <ng-container [ngTemplateOutlet]="cardDetail"></ng-container>
-            </div>
-          </div>
-        </ng-template>
 
         <!-- Como na tela de PR: a timeline abre em tela cheia (o componente fica montado fora da tela) -->
         <button mat-stroked-button type="button" class="wb-act" data-tour="wb-timeline-btn"
@@ -171,19 +155,6 @@
   }
 }
 
-<!-- Horas + texto do card: popover do botão "Card" (desktop) e aba "Card" (celular) -->
-<ng-template #cardDetail>
-  <div class="wb-hours" data-tour="wb-hours">
-    <app-card-hours-insight [card]="card()" [cardType]="cardType()"></app-card-hours-insight>
-  </div>
-  @for (s of cardSections(); track s.title) {
-    <h4 class="wb-cardtext__h">{{ s.title }}</h4>
-    <div class="wb-rich" [innerHTML]="s.html"></div>
-  } @empty {
-    <p class="wb-muted">{{ cardType() === 'user-story' ? 'A US não tem descrição nem critérios de aceite.' : 'O bug não tem Repro Steps.' }}</p>
-  }
-</ng-template>
-
 @if (body) {
   @let main = visibleMain();
   @let mtab = mobileTab();
@@ -211,19 +182,27 @@
   </nav>
 
   <div class="wb-body" [class.wb-body--executing]="executingItems().length > 0 && main === 'items'">
-    <!-- Coluna principal: Itens de trabalho | Plano (os dois ficam montados; troca por visibilidade) -->
+    <!-- Coluna principal: Itens de trabalho | Plano (montados; troca por visibilidade) | Card (só quando aberta) -->
     <section class="wb-main" [class.wb-hidden]="!main">
-      <div class="wb-seg" role="tablist" aria-label="Itens de trabalho ou plano">
-        <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'items'"
-                [attr.aria-selected]="main === 'items'" (click)="selectMain('items')">
-          <mat-icon>checklist</mat-icon>Itens de trabalho
-          @if (itemCount()) { <span class="wb-count">{{ itemCount() }}</span> }
-        </button>
-        <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'plan'"
-                [attr.aria-selected]="main === 'plan'" (click)="selectMain('plan')">
-          <mat-icon>account_tree</mat-icon>Plano
-          @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you" [matTooltip]="n + ' aguardando você'">{{ n }}</span> }
-        </button>
+      <div class="wb-segrow">
+        <div class="wb-seg" role="tablist" aria-label="Itens de trabalho, plano ou card">
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'items'"
+                  [attr.aria-selected]="main === 'items'" (click)="selectMain('items')">
+            <mat-icon>checklist</mat-icon>Itens de trabalho
+            @if (itemCount()) { <span class="wb-count">{{ itemCount() }}</span> }
+          </button>
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'plan'"
+                  [attr.aria-selected]="main === 'plan'" (click)="selectMain('plan')">
+            <mat-icon>account_tree</mat-icon>Plano
+            @if (planHeadline()?.userPending; as n) { <span class="wb-count wb-count--you" [matTooltip]="n + ' aguardando você'">{{ n }}</span> }
+          </button>
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'card'" data-tour="wb-card-tab"
+                  [attr.aria-selected]="main === 'card'" (click)="selectMain('card')">
+            <mat-icon>description</mat-icon>Card
+          </button>
+        </div>
+        <!-- Linha de horas do card (a mesma do assistente), sempre à vista ao lado das abas -->
+        <app-card-hours class="wb-hoursline" data-tour="wb-hoursline" [cardNumber]="card()"></app-card-hours>
       </div>
 
       <div class="wb-pane" [class.wb-hidden]="main !== 'items'" data-tour="wb-items">
@@ -276,14 +255,14 @@
         }
         <app-execution-plan class="wb-plan" [cardNumber]="card()" (headline)="onHeadline($event)"></app-execution-plan>
       </div>
-    </section>
 
-    <!-- Celular: aba Card (horas + texto); no desktop isto é o popover do botão "Card" -->
-    @if (showCardTab()) {
-      <section class="wb-cardtab" aria-label="Horas e texto do card">
-        <ng-container [ngTemplateOutlet]="cardDetail"></ng-container>
-      </section>
-    }
+      <!-- Aba Card (desktop e celular): horas + lançar horas, dados principais, anexos/links e o texto do card -->
+      @if (main === 'card') {
+        <div class="wb-pane" data-tour="wb-card-pane">
+          <app-workbench-card [card]="card()" [cardType]="cardType()" [cardFull]="cf" (openDetails)="openDetails()"></app-workbench-card>
+        </div>
+      }
+    </section>
 
     <!-- Coluna lateral: o Especialista do caso ocupa a altura toda -->
     <aside class="wb-side" [class.wb-hidden]="!showChat()">

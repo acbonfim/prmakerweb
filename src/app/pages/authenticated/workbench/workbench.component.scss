@@ -1,6 +1,7 @@
-// 0085: Bancada do card. Desktop (≥ 1024): coluna principal ≈ 2/3 (Itens | Plano) + lateral ≈ 1/3 (Especialista, a altura
-// toda), a tela ocupa a altura disponível e só as áreas internas rolam. Timeline e "Card" (horas + texto) são botões na
-// barra de etiquetas (como na tela de PR). Celular: abas Itens | Plano | Especialista | Card.
+// 0085: Bancada do card. Desktop (≥ 1024): coluna principal ≈ 2/3 (Itens | Plano | Card, com a linha de horas ao lado)
+// + lateral ≈ 1/3 (Especialista, a altura toda), a tela ocupa a altura disponível e só as áreas internas rolam. A timeline
+// é um botão na barra de etiquetas (como na tela de PR); o botão "Card" abre a aba Card. Celular: abas Itens | Plano |
+// Especialista | Card.
 
 :host {
   display: flex;
@@ -163,34 +164,12 @@
 .wb-hours-chip--ok { --hc: #3fb950; }
 .wb-hours-chip--warn { --hc: #d29922; }
 .wb-hours-chip--bad { --hc: #f85149; }
-
-// Popover "Card" (horas + texto)
-.wb-card-pop {
-  width: min(460px, calc(100vw - 24px));
-  max-height: min(72vh, 640px);
-  display: flex;
-  flex-direction: column;
-  border-radius: 12px;
-  background: var(--surface-2, #323232);
-  color: var(--mat-sys-on-surface);
-  border: 1px solid var(--wb-border, rgba(255, 255, 255, .08));
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
-  --wb-border: var(--cc-surface-border, rgba(255, 255, 255, .08));
-  --wb-muted: var(--cc-text-2, rgba(255, 255, 255, .66));
-  --wb-faint: var(--cc-text-3, rgba(255, 255, 255, .45));
+// Botão "Card" com a aba Card aberta
+.wb-act--on.mat-mdc-outlined-button {
+  color: var(--mat-sys-primary);
+  background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
+  --mdc-outlined-button-outline-color: color-mix(in srgb, var(--mat-sys-primary) 45%, transparent);
 }
-.wb-card-pop__head {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 4px 4px 14px;
-  font-size: 13.5px;
-  border-bottom: 1px solid var(--wb-border);
-
-  > .mat-icon { color: var(--mat-sys-primary); font-size: 18px; width: 18px; height: 18px; }
-}
-.wb-card-pop__body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 14px 14px; }
 
 // ── Estado vazio ─────────────────────────────────────────────────────────────────────────────
 .wb-empty {
@@ -231,10 +210,43 @@
   gap: 8px;
 }
 
-// Controle segmentado Itens de trabalho | Plano
+// Linha do segmentado (Itens de trabalho | Plano | Card) + a linha de horas do card à direita
+.wb-segrow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: wb-segrow;
+}
+.wb-hoursline {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--wb-border);
+  background: var(--surface-1, #262b33);
+
+  // A linha não quebra por dentro: se não couber ao lado das abas, ela inteira desce para baixo delas.
+  ::ng-deep {
+    .hr { flex-wrap: nowrap; gap: 4px 8px; }
+    .hr__facts { flex-wrap: nowrap; white-space: nowrap; }
+    .hr__bar { flex-basis: 64px; }
+  }
+}
+// Coluna principal mais estreita (ex.: 1440 px com a aba Card): some só o rótulo "HORAS" e o relógio para a linha
+// continuar ao lado das abas; abaixo disso, ela inteira desce para baixo das abas.
+@container wb-segrow (max-width: 950px) {
+  .wb-hoursline ::ng-deep {
+    .hr__icon, .hr__label { display: none; }
+  }
+}
+
+// Controle segmentado Itens de trabalho | Plano | Card
 .wb-seg {
   flex: none;
-  align-self: flex-start;
   display: inline-flex;
   padding: 3px;
   gap: 2px;
@@ -247,7 +259,7 @@
   align-items: center;
   gap: 6px;
   height: 30px;
-  padding: 0 14px;
+  padding: 0 12px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -352,6 +364,8 @@
 
   &:empty { display: none; }
   > app-card-situation:empty, > app-card-assistant:empty { display: none; }
+  // A linha de horas do assistente já está ao lado das abas (wb-hoursline): aqui, só na Bancada, fica escondida.
+  ::ng-deep app-card-assistant .as__hours { display: none; }
 }
 .wb-pane--plan { overflow: hidden; }
 .wb-plan { display: block; flex: 1 1 auto; min-height: 0; }
@@ -398,50 +412,12 @@
 .wb-chat__box { flex: 1 1 auto; min-height: 0; }
 .wb-flash { box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 70%, transparent); }
 
-.wb-hours { margin-bottom: 8px; &:empty { display: none; } }
 .wb-prs { display: inline-flex; align-items: center; }
-.wb-cardtext__h {
-  margin: 6px 0 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--wb-faint);
-}
-
-// HTML do DevOps (Repro Steps / Descrição / Critérios de aceite)
-.wb-rich {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--cc-text-1, inherit);
-  overflow-wrap: anywhere;
-
-  ::ng-deep {
-    p, ul, ol { margin: 0 0 6px; }
-    ul, ol { padding-left: 20px; }
-    img { max-width: 100%; height: auto; border-radius: 6px; }
-    table { border-collapse: collapse; max-width: 100%; display: block; overflow-x: auto; }
-    td, th { border: 1px solid var(--wb-border); padding: 2px 6px; }
-    a { color: #79b8ff; }
-    // Cores fixas do editor do DevOps somem no tema escuro.
-    *[style*="color"] { color: inherit !important; }
-    *[style*="background"] { background: transparent !important; }
-  }
-}
-
 // Timeline montada fora da tela (abre em tela cheia pelo botão)
 .wb-timeline-host { display: none; }
 
 // Itens em execução (sessão ao vivo ao lado do item): a coluna principal ganha largura
 .wb-body--executing { grid-template-columns: minmax(0, 2.6fr) minmax(300px, 1fr); }
-
-// Aba "Card" do celular
-.wb-cardtab {
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: var(--surface-1, #262b33);
-  border: 1px solid var(--wb-border);
-}
 
 // Telas médias: lateral um pouco mais estreita.
 @media (max-width: 1360px) and (min-width: 1024px) {
@@ -506,6 +482,10 @@
 
   .wb-body { display: flex; flex-direction: column; gap: 10px; }
   .wb-seg { display: none; }
+  .wb-hoursline ::ng-deep {
+    .hr { flex-wrap: wrap; }
+    .hr__facts { flex-wrap: wrap; white-space: normal; }
+  }
   .wb-main, .wb-side { min-height: calc(100dvh - var(--cime-topbar-total, 70px) - var(--cime-tabs-h, 30px) - var(--wb-tabs-h) - 140px); }
   .wb-pane, .wb-pane--plan { overflow: visible; }
   .wb-plan-bar__hint { display: none; }

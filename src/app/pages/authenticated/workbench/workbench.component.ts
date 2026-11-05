@@ -2,8 +2,6 @@ import {
   Component, DestroyRef, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { NgTemplateOutlet } from '@angular/common';
-import { CdkConnectedOverlay, CdkOverlayOrigin, ConnectedPosition } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -23,6 +21,7 @@ import { CardAlertBarComponent } from '../../../components/card-alert-bar/card-a
 import { CardDetailsDialogComponent } from '../../../components/card-details-dialog/card-details-dialog.component';
 import { CardFull } from '../../../components/card-details-dialog/card-full.model';
 import { CardAssistantComponent } from '../../../components/card-assistant/card-assistant.component';
+import { CardHoursComponent } from '../../../components/card-assistant/card-hours.component';
 import { bugInsight, hasNoEstimate, usInsight } from '../../../components/card-hours-insight/hours-insight';
 import { CardSituationComponent } from '../../../components/card-situation/card-situation.component';
 import { CardSituationService } from '../../../components/card-situation/card-situation.service';
@@ -39,8 +38,8 @@ import {
   CancelWorkDialogComponent, CancelWorkDialogData, CancelWorkDialogResult
 } from '../../../components/work-items/cancel-work-dialog.component';
 import { workDialogConfig } from '../../../components/work-items/work-dialog-config';
+import { WorkbenchCardComponent } from '../../../components/workbench-card/workbench-card.component';
 import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workbench-prs.component';
-import { CardHoursInsightComponent } from '../../../components/card-hours-insight/card-hours-insight.component';
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
 import {
   registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel, workItemTypeOf
@@ -54,8 +53,8 @@ import { WorkItemsService } from '../../../services/work-items.service';
 import { WsService } from '../../../services/ws.service';
 import { cardFieldText, workbenchFacts } from './workbench-facts';
 
-/** Aba da coluna principal (desktop) — Itens de trabalho | Plano. */
-export type WorkbenchMainTab = 'items' | 'plan';
+/** Aba da coluna principal (desktop) — Itens de trabalho | Plano | Card. */
+export type WorkbenchMainTab = 'items' | 'plan' | 'card';
 /** Aba no celular (< 1024 px) — Itens | Plano | Especialista | Card. */
 export type WorkbenchMobileTab = WorkbenchMainTab | 'chat' | 'card';
 type CardState = 'idle' | 'loading' | 'found' | 'missing' | 'error';
@@ -63,9 +62,6 @@ type CardState = 'idle' | 'loading' | 'found' | 'missing' | 'error';
 const BODY_STATES: ReadonlySet<CardState> = new Set<CardState>(['found', 'error']);
 
 const NARROW_QUERY = '(max-width: 1023.98px)';
-const REPRO_FIELD = 'Microsoft.VSTS.TCM.ReproSteps';
-const DESCRIPTION_FIELD = 'System.Description';
-const ACCEPTANCE_FIELD = 'Microsoft.VSTS.Common.AcceptanceCriteria';
 
 /** Tempo real caído por mais que isto vira o ícone de "sem conexão" (evita piscar numa reconexão rápida). */
 const WS_DOWN_AFTER_MS = 6000;
@@ -91,21 +87,24 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
 /**
  * 0085: Bancada do card — onde o card é trabalhado: itens de trabalho (com sub-tarefas), o plano do Claude, o
  * Especialista do caso, os PRs (com as ações do GitHub/DevOps), as horas, o texto do card e a timeline. Estado próprio em signals (não usa o `CardPrStateService`, que é
- * da tela de PR). Desktop: coluna principal (Itens | Plano) + coluna lateral; celular: abas Itens | Plano |
- * Especialista | Card. URL: `?card=` (+ `item=`, `focus=plan|items|timeline|chat`).
+ * da tela de PR). Desktop: coluna principal (Itens | Plano | Card) + coluna lateral; celular: abas Itens | Plano |
+ * Especialista | Card. URL: `?card=` (+ `item=`, `focus=plan|items|card|timeline|chat`).
  *
  * Ajustes (0085): como na tela de PR — barra de etiquetas do card (`app-pr-info-card`), timeline num botão (tela
- * cheia), lateral só do Especialista; horas + texto do card num botão "Card" (popover; no celular, a aba Card);
- * robô do Claude e perda de conexão no cabeçalho; situação/sugestões e a sugestão de análise inicial na aba Itens.
+ * cheia), lateral só do Especialista; robô do Claude e perda de conexão no cabeçalho; situação/sugestões e a sugestão
+ * de análise inicial na aba Itens. A coluna principal tem a aba **Card** (`app-workbench-card`: horas + lançar horas,
+ * dados, texto do card — o botão "Card" da barra abre essa aba; no celular, a aba Card) e a linha de horas do card
+ * (`app-card-hours`) fica ao lado do segmentado Itens | Plano | Card.
  */
 @Component({
   selector: 'app-workbench',
   standalone: true,
   imports: [
-    FormsModule, NgTemplateOutlet, CdkConnectedOverlay, CdkOverlayOrigin, MatButtonModule, MatFormFieldModule, MatIconModule,
+    FormsModule, MatButtonModule, MatFormFieldModule, MatIconModule,
     MatInputModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
     CardAlertBarComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
-    CardSituationComponent, CardAssistantComponent, WorkItemListComponent, WorkbenchPrsComponent, CardHoursInsightComponent
+    CardSituationComponent, CardAssistantComponent, CardHoursComponent, WorkItemListComponent, WorkbenchPrsComponent,
+    WorkbenchCardComponent
   ],
   templateUrl: './workbench.component.html',
   styleUrl: './workbench.component.scss'
@@ -144,20 +143,6 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   readonly typeLabel = computed(() => workItemTypeLabel(this.cardType()));
   readonly title = computed(() => fieldText(this.cardFull(), 'System.Title'));
   readonly devOpsUrl = computed(() => devOpsWebUrl(this.cardFull()?.url));
-
-  /** Texto do card na coluna lateral: Repro Steps (Bug) ou Descrição + Critérios de aceite (US). */
-  readonly cardSections = computed<{ title: string; html: string }[]>(() => {
-    const card = this.cardFull();
-    if (!card) return [];
-    const html = (key: string) => {
-      const v = card.fields?.[key];
-      return typeof v === 'string' ? v.trim() : '';
-    };
-    const sections = this.cardType() === 'user-story'
-      ? [{ title: 'Descrição', html: html(DESCRIPTION_FIELD) }, { title: 'Critérios de aceite', html: html(ACCEPTANCE_FIELD) }]
-      : [{ title: 'Repro Steps', html: html(REPRO_FIELD) || html(DESCRIPTION_FIELD) }];
-    return sections.filter((s) => !!s.html);
-  });
 
   // ── Barra do card (etiquetas como na tela de PR) ────────────────────────────────────────────
   /** Quem abriu o card no DevOps e as datas (o lado esquerdo do `app-pr-info-card`). */
@@ -201,15 +186,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     if (!bug) return null;
     return { text: formatHours(bug.completed), tone: 'neutral', tooltip: `Completed ${formatHours(bug.completed)} — abra para comparar com a média dos bugs` };
   });
-  /** Popover "Card" (desktop): horas + texto do card. */
-  readonly cardOpen = signal(false);
-  readonly popPositions: ConnectedPosition[] = [
-    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
-    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
-    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -6 }
-  ];
-
-  // ── Itens × Plano ───────────────────────────────────────────────────────────────────────────
+  // ── Itens × Plano × Card ───────────────────────────────────────────────────────────────────────────
   /** Itens do card (null = a lista ainda não contou). */
   readonly itemCount = signal<number | null>(null);
   readonly planHeadline = signal<PlanHeadline | null>(null);
@@ -228,15 +205,13 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   private readonly narrowMedia = typeof window !== 'undefined' ? window.matchMedia(NARROW_QUERY) : null;
   private readonly onNarrowChange = (e: MediaQueryListEvent) => this.narrow.set(e.matches);
 
-  /** Painel principal visível agora (no celular, nenhum quando a aba é Especialista/Card). */
+  /** Painel principal visível agora (no celular, nenhum quando a aba é Especialista). */
   readonly visibleMain = computed<WorkbenchMainTab | null>(() => {
     if (!this.narrow()) return this.mainTab();
     const t = this.mobileTab();
-    return t === 'items' || t === 'plan' ? t : null;
+    return t === 'chat' ? null : t;
   });
   readonly showChat = computed(() => !this.narrow() || this.mobileTab() === 'chat');
-  /** Aba "Card" do celular (horas + texto do card); no desktop é o popover do botão "Card". */
-  readonly showCardTab = computed(() => this.narrow() && this.mobileTab() === 'card');
 
   /** Plano em tela (lido do próprio `app-execution-plan`, sem mudar o componente). */
   readonly currentPlan = computed(() => this.planCmp()?.plan() ?? null);
@@ -423,7 +398,6 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     if (card !== this.card()) {
       this.itemCount.set(null);
       this.executingItems.set([]);
-      this.cardOpen.set(false);
       this.prCount.set(null);
       this.planHeadline.set(null);
       this.pickedTab.set(null);
@@ -478,7 +452,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   selectMobile(tab: WorkbenchMobileTab): void {
-    if (tab === 'items' || tab === 'plan') this.pickedTab.set(tab);
+    if (tab !== 'chat') this.pickedTab.set(tab);
     this.pickedMobileTab.set(tab);
   }
 
@@ -491,7 +465,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   private applyFocus(focus: string): void {
-    if (focus === 'items' || focus === 'plan') {
+    if (focus === 'items' || focus === 'plan' || focus === 'card') {
       this.selectMobile(focus);
     } else if (focus === 'chat') {
       this.selectMobile('chat');
@@ -521,20 +495,9 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   /** Entradas da timeline (contador do botão). */
   readonly timelineCount = computed(() => this.timelineCmp()?.entries().length ?? 0);
 
-  /** Botão "Card": popover no desktop; no celular, a aba Card. */
-  toggleCard(): void {
-    if (this.narrow()) {
-      this.selectMobile('card');
-      return;
-    }
-    this.cardOpen.set(!this.cardOpen());
-  }
-
-  onCardPopKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.cardOpen.set(false);
-    }
+  /** Botão "Card" da barra: abre a aba Card (horas, lançar horas, dados e texto do card). */
+  showCard(): void {
+    this.selectMobile('card');
   }
 
   onExecuting(numbers: number[]): void {
@@ -660,7 +623,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** `prepare: 'tab:<aba>'` — abre a aba do passo (no desktop só Itens/Plano mudam algo). */
+  /** `prepare: 'tab:<aba>'` — abre a aba do passo (no desktop só Itens/Plano/Card mudam algo). */
   private prepareTourStep(step: TourStep): 'ready' | 'changed' | 'skip' {
     const tab = step.prepare?.startsWith('tab:') ? step.prepare.slice(4) as WorkbenchMobileTab : null;
     if (!tab) return 'ready';
@@ -669,7 +632,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       this.selectMobile(tab);
       return 'changed';
     }
-    if ((tab === 'items' || tab === 'plan') && this.mainTab() !== tab) {
+    if (tab !== 'chat' && this.mainTab() !== tab) {
       this.selectMain(tab);
       return 'changed';
     }

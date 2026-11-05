@@ -7,10 +7,12 @@ import { TourDefinition } from './tour.model';
  * Mudou o uso da tela? Ajuste o passo e suba `version` (e o `since` dos passos novos/alterados).
  * v2 (ajustes da 0085): etiquetas do card, robô/conexão, botão Card (horas + texto), timeline num botão, especialista
  * na lateral inteira, sugestões (situação/assistente) e a sugestão de análise inicial.
+ * v3: o popover do botão Card virou a aba **Card** da coluna principal (horas, lançar +1h/+2h/+4h/outro, dados e texto
+ * do card) e a linha de horas fica ao lado das abas Itens | Plano | Card.
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 2,
+  version: 3,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -67,11 +69,15 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'ações do GitHub e do DevOps — as mesmas da tela de Pull Request.'
     },
     {
-      id: 'hours', anchor: 'wb-card-btn', group: 'O card', since: 2, phase: 'card', side: 'bottom', align: 'end', optional: true,
-      title: 'Card: horas e texto',
-      body: '<b>Card</b> abre as horas (o número já aparece no botão) e o texto do card — Repro Steps no Bug, descrição e critérios na US.',
+      id: 'hours', anchor: 'wb-card-pane', group: 'O card', since: 3, phase: 'card', side: 'left', align: 'start', optional: true,
+      prepare: 'tab:card',
+      title: 'Aba Card: horas e texto',
+      body: 'A aba <b>Card</b> reúne as horas (lance <b>+1h</b>, <b>+2h</b>, <b>+4h</b> ou outro valor), os dados principais e o texto ' +
+        'do card. O botão <b>Card</b> da barra abre esta aba; a linha de horas fica sempre ao lado das abas.',
       detail: 'No Bug, as horas lançadas comparadas com a média dos bugs (acima ou abaixo); na US, o planejado × o realizado. ' +
-        'No celular, é a aba "Card".'
+        'Lançar horas pede uma confirmação curta e grava no DevOps (soma em Completed e tira do Remaining). Também ficam aqui ' +
+        'estado, área, iteração, responsável, prioridade, datas, anexos/links e o texto (Repro Steps no Bug; descrição e ' +
+        'critérios de aceite na US). No celular, é a aba "Card".'
     },
     {
       id: 'timeline', anchor: 'wb-timeline-btn', group: 'O card', since: 2, phase: 'card', side: 'bottom', align: 'end',
