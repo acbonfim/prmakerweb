@@ -1,5 +1,6 @@
-// 0085: Bancada do card. Desktop (≥ 1024): coluna principal ≈ 2/3 (Itens | Plano) + lateral ≈ 1/3 (Especialista, Card,
-// Timeline), a tela ocupa a altura disponível e só as áreas internas rolam. Celular: abas Itens | Plano | Especialista | Card.
+// 0085: Bancada do card. Desktop (≥ 1024): coluna principal ≈ 2/3 (Itens | Plano) + lateral ≈ 1/3 (Especialista, a altura
+// toda), a tela ocupa a altura disponível e só as áreas internas rolam. Timeline e "Card" (horas + texto) são botões na
+// barra de etiquetas (como na tela de PR). Celular: abas Itens | Plano | Especialista | Card.
 
 :host {
   display: flex;
@@ -37,14 +38,6 @@
   min-height: 44px;
 }
 
-.wb-head__row--sub {
-  min-height: 32px;
-  flex-wrap: wrap;
-  row-gap: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--wb-border);
-}
-
 .wb-head__title { font-size: 17px; font-weight: 500; color: var(--wb-muted); }
 
 .wb-search {
@@ -76,27 +69,6 @@
   white-space: nowrap;
 }
 
-.wb-chips { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; overflow: hidden; }
-.wb-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 200px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--wb-muted);
-  background: color-mix(in srgb, var(--mat-sys-on-surface) 7%, transparent);
-  border: 1px solid var(--wb-border);
-
-  .mat-icon { font-size: 14px; width: 14px; height: 14px; flex: none; opacity: .8; }
-}
-.wb-chip--ok { color: #7ee2a8; border-color: rgba(63, 185, 80, .3); }
-
 .wb-icon-btn.mat-mdc-icon-button {
   flex: none;
   width: 36px;
@@ -107,38 +79,118 @@
 }
 .wb-icon-btn--help.mat-mdc-icon-button { color: var(--mat-sys-primary); }
 
-.wb-plan-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 13px;
-  border: 1px solid var(--wb-border);
-  background: transparent;
-  color: var(--wb-muted);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-  max-width: 100%;
+.wb-alerts { flex: 0 1 auto; min-width: 0; }
 
-  span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mat-icon { font-size: 15px; width: 15px; height: 15px; flex: none; }
-  &:hover { background: color-mix(in srgb, var(--mat-sys-on-surface) 6%, transparent); }
+// Robô do Claude + conexão (o mesmo indicador do cabeçalho do plano)
+.wb-status { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.wb-net-off.mat-mdc-icon-button { color: #ff8b84; }
+.wb-signal.mat-mdc-icon-button { color: #e3b341; }
+.wb-signal-text { padding: 8px 16px 6px; font-size: 12.5px; line-height: 1.45; max-width: 280px; }
+.wb-robot.mat-mdc-icon-button { position: relative; }
+.wb-robot mat-icon { position: relative; }
+.wb-robot__glow { position: absolute; inset: 8px; border-radius: 50%; pointer-events: none; }
+.wb-robot--idle.mat-mdc-icon-button { color: var(--wb-faint); opacity: .7; }
+.wb-robot--running.mat-mdc-icon-button { color: var(--mat-sys-primary); }
+.wb-robot--running .wb-robot__glow {
+  background: color-mix(in srgb, var(--mat-sys-primary) 18%, transparent);
+  animation: wb-run-glow 1.4s ease-in-out infinite;
 }
-.wb-plan-chip--info { color: #79b8ff; border-color: rgba(88, 166, 255, .3); }
-.wb-plan-chip--ok { color: #7ee2a8; border-color: rgba(63, 185, 80, .3); }
-.wb-plan-chip--warn { color: #e3b341; border-color: rgba(210, 153, 34, .35); }
-.wb-plan-chip--bad { color: #ff8b84; border-color: rgba(248, 81, 73, .35); }
+.wb-robot--running .wb-robot__glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--mat-sys-primary);
+  animation: wb-ping 1.4s cubic-bezier(0, 0, .2, 1) infinite;
+}
+.wb-robot--running mat-icon { animation: wb-run-bob 1.4s ease-in-out infinite; }
+.wb-robot--queued.mat-mdc-icon-button { color: #d29922; }
+.wb-robot--queued mat-icon { animation: wb-run-tilt 2.2s ease-in-out infinite; }
+@keyframes wb-run-glow {
+  0%, 100% { opacity: .45; box-shadow: 0 0 0 0 transparent; }
+  50% { opacity: 1; box-shadow: 0 0 12px 3px color-mix(in srgb, var(--mat-sys-primary) 50%, transparent); }
+}
+@keyframes wb-ping {
+  0% { transform: scale(.6); opacity: .9; }
+  80%, 100% { transform: scale(1.8); opacity: 0; }
+}
+@keyframes wb-run-bob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-2px) rotate(-6deg); } 75% { transform: translateY(1px) rotate(6deg); } }
+@keyframes wb-run-tilt { 0%, 40% { transform: rotate(0); } 50% { transform: rotate(180deg); } 90%, 100% { transform: rotate(180deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .wb-robot--running .wb-robot__glow, .wb-robot--running .wb-robot__glow::after, .wb-robot mat-icon { animation: none !important; }
+}
 
-.wb-analyze.mat-mdc-outlined-button {
+// ── Barra de etiquetas do card (app-pr-info-card, como na tela de PR) ──────────────────────────
+.wb-info { flex: none; }
+.wb-actions { display: inline-flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.wb-act.mat-mdc-outlined-button {
   height: 32px;
+  padding: 0 12px;
   border-radius: 8px;
   font-size: 13px;
+  white-space: nowrap;
 
   .mat-icon { width: 16px; height: 16px; font-size: 16px; }
   mat-spinner { display: inline-block; margin-right: 6px; }
 }
+.wb-act__count {
+  margin-left: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  display: inline-block;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 14%, transparent);
+}
+.wb-hours-chip {
+  --hc: color-mix(in srgb, var(--mat-sys-on-surface) 75%, transparent);
+  display: inline-block;
+  margin-left: 8px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--hc);
+  background: color-mix(in srgb, var(--hc) 14%, transparent);
+}
+.wb-hours-chip--ok { --hc: #3fb950; }
+.wb-hours-chip--warn { --hc: #d29922; }
+.wb-hours-chip--bad { --hc: #f85149; }
+
+// Popover "Card" (horas + texto)
+.wb-card-pop {
+  width: min(460px, calc(100vw - 24px));
+  max-height: min(72vh, 640px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: var(--surface-2, #323232);
+  color: var(--mat-sys-on-surface);
+  border: 1px solid var(--wb-border, rgba(255, 255, 255, .08));
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  --wb-border: var(--cc-surface-border, rgba(255, 255, 255, .08));
+  --wb-muted: var(--cc-text-2, rgba(255, 255, 255, .66));
+  --wb-faint: var(--cc-text-3, rgba(255, 255, 255, .45));
+}
+.wb-card-pop__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 14px;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--wb-border);
+
+  > .mat-icon { color: var(--mat-sys-primary); font-size: 18px; width: 18px; height: 18px; }
+}
+.wb-card-pop__body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 10px 14px 14px; }
 
 // ── Estado vazio ─────────────────────────────────────────────────────────────────────────────
 .wb-empty {
@@ -240,6 +292,67 @@
 
   > app-work-item-list { display: block; flex: 1 1 auto; min-height: 0; }
 }
+
+// Sugestão de análise inicial (card sem plano e sem itens)
+.wb-first {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background:
+    linear-gradient(120deg, color-mix(in srgb, var(--mat-sys-primary) 16%, transparent), transparent 70%),
+    var(--surface-1, #262b33);
+  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 40%, transparent);
+  animation: wb-first-in .25s ease-out;
+
+  h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--wb-muted); }
+}
+.wb-first__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent);
+
+  .mat-icon { width: 26px; height: 26px; }
+}
+.wb-first__text { flex: 1 1 auto; min-width: 0; }
+.wb-first__go.mat-mdc-unelevated-button { flex: none; height: 38px; border-radius: 10px; }
+@keyframes wb-first-in { from { opacity: 0; transform: translateY(-4px); } }
+
+.wb-first-wait {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--wb-muted);
+  background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--mat-sys-primary) 35%, transparent);
+}
+.wb-first-wait__bot { flex: none; color: var(--mat-sys-primary); animation: wb-run-bob 1.4s ease-in-out infinite; }
+
+// Situação do card + assistente do PRMake (só na aba Itens; o plano mostra os dele). Altura limitada: a lista de
+// itens continua à vista mesmo com várias sugestões abertas.
+.wb-sugg {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 42%;
+  overflow: auto;
+  scrollbar-width: thin;
+
+  &:empty { display: none; }
+  > app-card-situation:empty, > app-card-assistant:empty { display: none; }
+}
 .wb-pane--plan { overflow: hidden; }
 .wb-plan { display: block; flex: 1 1 auto; min-height: 0; }
 
@@ -275,7 +388,7 @@
 }
 
 .wb-chat {
-  flex: 1 1 46%;
+  flex: 1 1 auto;
   min-height: 300px;
   display: flex;
   flex-direction: column;
@@ -285,34 +398,8 @@
 .wb-chat__box { flex: 1 1 auto; min-height: 0; }
 .wb-flash { box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 70%, transparent); }
 
-.wb-cardtext {
-  flex: 0 1 auto;
-  height: auto;
-  max-height: 38%;
-  min-height: 56px;
-  display: block;
-
-  ::ng-deep .panel { height: auto; max-height: 100%; }
-  ::ng-deep .panel__header { height: 44px; padding: 0 8px 0 14px; }
-  ::ng-deep .panel__title { font-size: 13px; }
-  ::ng-deep .panel__body { padding: 0; }
-}
 .wb-hours { margin-bottom: 8px; &:empty { display: none; } }
 .wb-prs { display: inline-flex; align-items: center; }
-.wb-panel-action.mat-mdc-icon-button {
-  width: 32px;
-  height: 32px;
-  padding: 4px;
-  --mdc-icon-button-state-layer-size: 32px;
-  color: var(--wb-muted);
-}
-.wb-cardtext__scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: 100%;
-  overflow: auto;
-  padding: 8px 14px 12px;
-}
 .wb-cardtext__h {
   margin: 6px 0 4px;
   font-size: 11px;
@@ -342,19 +429,24 @@
   }
 }
 
-.wb-timeline {
-  flex: 1 1 30%;
-  min-height: 220px;
-  display: flex;
-  flex-direction: column;
+// Timeline montada fora da tela (abre em tela cheia pelo botão)
+.wb-timeline-host { display: none; }
 
-  > app-card-timeline { display: block; flex: 1 1 auto; min-height: 0; }
+// Itens em execução (sessão ao vivo ao lado do item): a coluna principal ganha largura
+.wb-body--executing { grid-template-columns: minmax(0, 2.6fr) minmax(300px, 1fr); }
+
+// Aba "Card" do celular
+.wb-cardtab {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-1, #262b33);
+  border: 1px solid var(--wb-border);
 }
 
 // Telas médias: lateral um pouco mais estreita.
 @media (max-width: 1360px) and (min-width: 1024px) {
   .wb-body { grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); }
-  .wb-chips { display: none; }
+  .wb-body--executing { grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr); }
 }
 
 // ── Celular / tablet (< 1024): abas, a tela rola inteira ────────────────────────────────────
@@ -367,7 +459,12 @@
   .wb-head__row { flex-wrap: wrap; row-gap: 6px; }
   .wb-search { width: 140px; }
   .wb-card { flex: 1 1 calc(100% - 200px); }
-  .wb-chips { order: 10; flex: 1 1 100%; flex-wrap: wrap; }
+  .wb-head .wb-spacer { display: none; }
+  // Ações da barra do card: linha própria, quebrando em vez de vazar para o lado.
+  .wb-info ::ng-deep .pr-info__actions { flex: 1 1 100%; min-width: 0; margin-left: 0; }
+  .wb-actions { width: 100%; justify-content: flex-start; }
+  .wb-first { flex-wrap: wrap; }
+  .wb-first__go.mat-mdc-unelevated-button { width: 100%; }
 
   .wb-mtabs {
     position: sticky;
@@ -417,9 +514,6 @@
     flex: none;
     height: calc(100dvh - var(--cime-topbar-total, 70px) - var(--cime-tabs-h, 30px) - var(--wb-tabs-h) - 140px);
   }
-  .wb-cardtext { max-height: none; }
-  .wb-cardtext__scroll { max-height: none; overflow: visible; }
-  .wb-timeline { flex: none; height: 60dvh; }
 }
 
 /* DevOps indisponível: aviso fino em vez de esconder a Bancada */

@@ -2,6 +2,8 @@ import {
   Component, DestroyRef, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { NgTemplateOutlet } from '@angular/common';
+import { CdkConnectedOverlay, CdkOverlayOrigin, ConnectedPosition } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -10,6 +12,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule, MatIconRegistry } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -19,11 +22,15 @@ import { environment } from '../../../../environments/environment';
 import { CardAlertBarComponent } from '../../../components/card-alert-bar/card-alert-bar.component';
 import { CardDetailsDialogComponent } from '../../../components/card-details-dialog/card-details-dialog.component';
 import { CardFull } from '../../../components/card-details-dialog/card-full.model';
-import { CardPanelComponent } from '../../../components/card-panel/card-panel.component';
+import { CardAssistantComponent } from '../../../components/card-assistant/card-assistant.component';
+import { bugInsight, hasNoEstimate, usInsight } from '../../../components/card-hours-insight/hours-insight';
+import { CardSituationComponent } from '../../../components/card-situation/card-situation.component';
+import { CardSituationService } from '../../../components/card-situation/card-situation.service';
 import { CardTimelineComponent } from '../../../components/card-timeline/card-timeline.component';
 import { CaseCompactComponent } from '../../../components/case-chat/case-compact.component';
 import { ExecutionPlanComponent, PlanHeadline } from '../../../components/execution-plan/execution-plan.component';
 import { isPlanActive } from '../../../components/execution-plan/execution-plan.model';
+import { PrInfoCardComponent } from '../../../components/pr-info-card/pr-info-card.component';
 import { GuidedTourService } from '../../../components/guided-tour/guided-tour.service';
 import { TourHelpData, TourHelpDialogComponent, TourHelpResult } from '../../../components/guided-tour/tour-help-dialog.component';
 import { TourHost, TourStep } from '../../../components/guided-tour/tour.model';
@@ -38,11 +45,14 @@ import { WorkItemListComponent } from '../../../components/work-items/work-item-
 import {
   registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel, workItemTypeOf
 } from '../../../helpers/work-item-type-icons';
+import { CardAssistantService, formatHours } from '../../../services/card-assistant.service';
 import { CaseChatStore } from '../../../services/case-chat-store.service';
 import { planApiError } from '../../../services/execution-plan.service';
 import { ExecutionQueueService } from '../../../services/execution-queue.service';
 import { TabsService } from '../../../services/tabs.service';
 import { WorkItemsService } from '../../../services/work-items.service';
+import { WsService } from '../../../services/ws.service';
+import { cardFieldText, workbenchFacts } from './workbench-facts';
 
 /** Aba da coluna principal (desktop) — Itens de trabalho | Plano. */
 export type WorkbenchMainTab = 'items' | 'plan';
@@ -57,17 +67,18 @@ const REPRO_FIELD = 'Microsoft.VSTS.TCM.ReproSteps';
 const DESCRIPTION_FIELD = 'System.Description';
 const ACCEPTANCE_FIELD = 'Microsoft.VSTS.Common.AcceptanceCriteria';
 
-const PLAN_STATUS_LABEL: Record<string, string> = {
-  pending: 'pendente', running: 'em andamento', paused: 'pausado', completed: 'concluído', failed: 'falhou', cancelled: 'cancelado'
-};
+/** Tempo real caído por mais que isto vira o ícone de "sem conexão" (evita piscar numa reconexão rápida). */
+const WS_DOWN_AFTER_MS = 6000;
 
-/** Texto de um campo do DevOps (identidade → nome, sem o e-mail). */
-function fieldText(card: CardFull | null, key: string): string {
-  const v = card?.fields?.[key];
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'object') return `${v.displayName ?? v.name ?? ''}`.trim();
-  const s = `${v}`.trim();
-  return s === '-' ? '' : s;
+const fieldText = cardFieldText;
+
+/** Estado do robô do cabeçalho (o mesmo indicador do cabeçalho do plano, visível em qualquer aba). */
+export interface WorkbenchRobot {
+  mode: 'running' | 'queued' | 'idle';
+  icon: string;
+  tooltip: string;
+  /** Para onde o clique leva: o pedido do plano (abre o popover dele) ou os itens em execução. */
+  target: 'plan' | 'items';
 }
 
 /** Link do card no DevOps: a API devolve a URL REST (`_apis/wit/workItems/N`); a tela abre `_workitems/edit/N`. */
@@ -82,14 +93,19 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
  * Especialista do caso, os PRs (com as ações do GitHub/DevOps), as horas, o texto do card e a timeline. Estado próprio em signals (não usa o `CardPrStateService`, que é
  * da tela de PR). Desktop: coluna principal (Itens | Plano) + coluna lateral; celular: abas Itens | Plano |
  * Especialista | Card. URL: `?card=` (+ `item=`, `focus=plan|items|timeline|chat`).
+ *
+ * Ajustes (0085): como na tela de PR — barra de etiquetas do card (`app-pr-info-card`), timeline num botão (tela
+ * cheia), lateral só do Especialista; horas + texto do card num botão "Card" (popover; no celular, a aba Card);
+ * robô do Claude e perda de conexão no cabeçalho; situação/sugestões e a sugestão de análise inicial na aba Itens.
  */
 @Component({
   selector: 'app-workbench',
   standalone: true,
   imports: [
-    FormsModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatProgressSpinnerModule, MatTooltipModule,
-    CardAlertBarComponent, CardPanelComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent,
-    WorkItemListComponent, WorkbenchPrsComponent, CardHoursInsightComponent
+    FormsModule, NgTemplateOutlet, CdkConnectedOverlay, CdkOverlayOrigin, MatButtonModule, MatFormFieldModule, MatIconModule,
+    MatInputModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
+    CardAlertBarComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
+    CardSituationComponent, CardAssistantComponent, WorkItemListComponent, WorkbenchPrsComponent, CardHoursInsightComponent
   ],
   templateUrl: './workbench.component.html',
   styleUrl: './workbench.component.scss'
@@ -105,6 +121,9 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   private queueApi = inject(ExecutionQueueService);
   private workItems = inject(WorkItemsService);
   private caseStore = inject(CaseChatStore);
+  private situations = inject(CardSituationService);
+  private assistant = inject(CardAssistantService);
+  private ws = inject(WsService);
   private host = inject(ElementRef<HTMLElement>);
   /** Abas internas (0065): só a aba ativa mexe na URL e no nome da aba. */
   private tabScreen = this.tabs.bindScreen(inject(DestroyRef));
@@ -124,11 +143,6 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   readonly typeIcon = computed(() => workItemTypeIcon(this.cardType()));
   readonly typeLabel = computed(() => workItemTypeLabel(this.cardType()));
   readonly title = computed(() => fieldText(this.cardFull(), 'System.Title'));
-  readonly state = computed(() => fieldText(this.cardFull(), 'System.State'));
-  readonly stateDone = computed(() => /closed|done|resolved|removed/i.test(this.state()));
-  readonly areaPath = computed(() => fieldText(this.cardFull(), 'System.AreaPath'));
-  readonly area = computed(() => this.areaPath().split('\\').filter(Boolean).pop() ?? '');
-  readonly assigned = computed(() => fieldText(this.cardFull(), 'System.AssignedTo').replace(/\s*<.*>$/, ''));
   readonly devOpsUrl = computed(() => devOpsWebUrl(this.cardFull()?.url));
 
   /** Texto do card na coluna lateral: Repro Steps (Bug) ou Descrição + Critérios de aceite (US). */
@@ -144,7 +158,56 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       : [{ title: 'Repro Steps', html: html(REPRO_FIELD) || html(DESCRIPTION_FIELD) }];
     return sections.filter((s) => !!s.html);
   });
-  readonly cardTextOpen = signal(true);
+
+  // ── Barra do card (etiquetas como na tela de PR) ────────────────────────────────────────────
+  /** Quem abriu o card no DevOps e as datas (o lado esquerdo do `app-pr-info-card`). */
+  readonly author = computed(() => {
+    const cf = this.cardFull();
+    if (!cf) return { name: '', label: this.cardState() === 'error' ? 'Card não lido no DevOps' : 'Aberto por', openedAt: null, updatedAt: null };
+    const date = (key: string) => fieldText(cf, key) || null;
+    return {
+      name: fieldText(cf, 'System.CreatedBy').replace(/\s*<.*>$/, ''),
+      label: 'Aberto no DevOps por',
+      openedAt: date('System.CreatedDate'),
+      updatedAt: date('System.ChangedDate')
+    };
+  });
+  readonly facts = computed(() => {
+    const c = this.card();
+    return workbenchFacts({
+      card: this.cardFull(),
+      plan: this.planHeadline(),
+      situation: c ? this.situations.situationOf(c)() : null
+    });
+  });
+
+  // ── Horas do card (chip do botão "Card") ────────────────────────────────────────────────────
+  private readonly effort = computed(() => {
+    const c = this.card();
+    return c ? this.assistant.effortOf(c)() : null;
+  });
+  /** "5h" (Bug: Completed) ou "5h / 8h" (US: realizado / planejado); null sem horas no DevOps. */
+  readonly hoursChip = computed<{ text: string; tone: string; tooltip: string } | null>(() => {
+    const e = this.effort()?.effort;
+    if (!e || hasNoEstimate(e)) return null;
+    if (this.cardType() === 'user-story') {
+      const us = usInsight(e, null);
+      if (!us) return null;
+      const text = us.hasPlan ? `${formatHours(us.completed)} / ${formatHours(us.original)}` : formatHours(us.completed);
+      const proj = us.projection === 'overrun' ? ` · projeção estoura ${formatHours(us.projectionDelta)}` : '';
+      return { text, tone: us.tone, tooltip: `Realizado ${formatHours(us.completed)} · planejado ${formatHours(us.original)}${proj}` };
+    }
+    const bug = bugInsight(e, null);
+    if (!bug) return null;
+    return { text: formatHours(bug.completed), tone: 'neutral', tooltip: `Completed ${formatHours(bug.completed)} — abra para comparar com a média dos bugs` };
+  });
+  /** Popover "Card" (desktop): horas + texto do card. */
+  readonly cardOpen = signal(false);
+  readonly popPositions: ConnectedPosition[] = [
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 6 },
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 6 },
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -6 }
+  ];
 
   // ── Itens × Plano ───────────────────────────────────────────────────────────────────────────
   /** Itens do card (null = a lista ainda não contou). */
@@ -172,23 +235,14 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     return t === 'items' || t === 'plan' ? t : null;
   });
   readonly showChat = computed(() => !this.narrow() || this.mobileTab() === 'chat');
-  readonly showCardSide = computed(() => !this.narrow() || this.mobileTab() === 'card');
+  /** Aba "Card" do celular (horas + texto do card); no desktop é o popover do botão "Card". */
+  readonly showCardTab = computed(() => this.narrow() && this.mobileTab() === 'card');
 
   /** Plano em tela (lido do próprio `app-execution-plan`, sem mudar o componente). */
   readonly currentPlan = computed(() => this.planCmp()?.plan() ?? null);
   readonly canCancelPlan = computed(() => {
     const p = this.currentPlan();
     return !!p && (isPlanActive(p.status) || p.status === 'failed');
-  });
-  readonly planChip = computed(() => {
-    const h = this.planHeadline();
-    if (!h) return null;
-    const phase = h.phase === 'correction' ? 'Correção' : 'Análise';
-    const status = PLAN_STATUS_LABEL[h.status] ?? h.status;
-    const progress = h.total ? ` · ${h.done}/${h.total}` : '';
-    const you = h.userPending ? ` · aguardando você (${h.userPending})` : h.openQuestions ? ` · ${h.openQuestions} pergunta(s)` : '';
-    const tone = h.userPending ? 'warn' : h.status === 'failed' ? 'bad' : h.status === 'completed' ? 'ok' : isPlanActive(h.status as any) ? 'info' : 'muted';
-    return { text: `${phase} ${status}${progress}${you}`, tone };
   });
   readonly planActive = computed(() => {
     const h = this.planHeadline();
@@ -208,6 +262,56 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     return c ? this.caseStore.status(c)().unread : 0;
   });
 
+  // ── Robô do Claude + conexão (cabeçalho, qualquer aba) ──────────────────────────────────────
+  /** Itens em execução agora (da lista de itens, `executingChange`). */
+  readonly executingItems = signal<number[]>([]);
+  /** Pedido do Claude na pista principal do card (lido do próprio `app-execution-plan`, sem buscar de novo). */
+  readonly claudeRequest = computed(() => this.planCmp()?.activeRequest() ?? null);
+  /** "Sem sinal do Claude há N min" (plano ativo sem atividade e sem pedido rodando) — o mesmo do cabeçalho do plano. */
+  readonly claudeSilentMinutes = computed(() => {
+    const cmp = this.planCmp();
+    return cmp && !cmp.activeRequest() ? cmp.staleMinutes() : null;
+  });
+  readonly canAskClaude = computed(() => !!this.planCmp()?.canAskClaude());
+  readonly askLabel = computed(() => this.planCmp()?.askLabel() ?? 'Analisar com Claude');
+  readonly robot = computed<WorkbenchRobot>(() => {
+    const cmp = this.planCmp();
+    const r = this.claudeRequest();
+    const items = this.executingItems();
+    const itemsText = items.length === 1 ? `o item #${items[0]}` : `${items.length} itens`;
+    if (r && r.status !== 'queued') {
+      return { mode: 'running', icon: 'smart_toy', target: 'plan',
+        tooltip: (cmp?.runTooltip() ?? 'Claude rodando') + (items.length ? ` · executando ${itemsText}` : '') };
+    }
+    if (items.length) return { mode: 'running', icon: 'smart_toy', target: 'items', tooltip: `Claude executando ${itemsText} (clique para ver)` };
+    if (r) return { mode: 'queued', icon: 'hourglass_top', target: 'plan', tooltip: cmp?.runTooltip() ?? 'Na fila do Claude' };
+    const c = this.card();
+    if (c && this.caseStore.status(c)().working) {
+      return { mode: 'running', icon: 'smart_toy', target: 'plan', tooltip: 'O Especialista do caso está trabalhando numa resposta' };
+    }
+    return { mode: 'idle', icon: 'smart_toy', target: 'plan', tooltip: 'O Claude não está rodando agora neste card' };
+  });
+  /** Tempo real (SignalR) caído há mais de alguns segundos: a tela não atualiza sozinha. */
+  readonly realtimeDown = signal(false);
+  private wsTimer?: ReturnType<typeof setTimeout>;
+
+  // ── Sugestão de análise inicial (card sem plano e sem itens) ────────────────────────────────
+  /** Card em que a análise já foi pedida por esta tela (esconde a sugestão até o plano/item aparecer). */
+  readonly analysisAskedFor = signal<string | null>(null);
+  /** Plano já lido e vazio (sem plano, sem pedido na fila, sem erro). */
+  private readonly planKnownEmpty = computed(() => {
+    const cmp = this.planCmp();
+    const card = this.card();
+    if (!cmp || !card || cmp.loadedCard() !== card || cmp.isLoading() || cmp.loadError()) return false;
+    return !cmp.plan() && !cmp.activeRequest();
+  });
+  readonly suggestAnalysis = computed(() =>
+    this.cardState() === 'found' && this.itemCount() === 0 && this.planKnownEmpty() && !this.analyzing()
+    && this.analysisAskedFor() !== this.card());
+  /** Análise pedida aqui e ainda sem plano/itens: "o item aparece quando o Claude começar". */
+  readonly analysisWaiting = computed(() =>
+    this.analysisAskedFor() === this.card() && this.itemCount() === 0 && !this.planCmp()?.plan());
+
   private cardSub?: Subscription;
   private querySub?: Subscription;
   private flashTimer?: ReturnType<typeof setTimeout>;
@@ -220,6 +324,27 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   constructor() {
     registerWorkItemTypeIcons(inject(MatIconRegistry), inject(DomSanitizer));
     this.narrowMedia?.addEventListener('change', this.onNarrowChange);
+
+    // Tempo real: o ícone de "sem conexão" só aparece se a queda durar (uma reconexão rápida não pisca).
+    const wsSub = this.ws._wsOn.subscribe((on: boolean) => this.onRealtime(on));
+    if (!this.ws.isConnected()) this.onRealtime(false);
+    inject(DestroyRef).onDestroy(() => wsSub.unsubscribe());
+
+    // Horas do card (chip do botão "Card"): acompanha o card aberto e busca as horas se ainda não vieram.
+    let watchedHours: string | null = null;
+    effect(() => {
+      const card = this.cardState() === 'found' ? this.card() : null;
+      untracked(() => {
+        if (card === watchedHours) return;
+        if (watchedHours) this.assistant.unwatch(watchedHours);
+        watchedHours = card;
+        if (!card) return;
+        this.assistant.watch(card);
+        const st = this.assistant.effortOf(card)();
+        if (!st || st.status === 'error') void this.assistant.loadEffort(card).catch(() => undefined);
+      });
+    });
+    inject(DestroyRef).onDestroy(() => { if (watchedHours) this.assistant.unwatch(watchedHours); });
 
     // Busca o plano assim que o componente do plano existe (ele nasce junto com o corpo, depois do card).
     effect(() => {
@@ -258,6 +383,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     this.cardSub?.unsubscribe();
     this.querySub?.unsubscribe();
     clearTimeout(this.flashTimer);
+    clearTimeout(this.wsTimer);
     this.tours.stop(WORKBENCH_TOUR.id);
   }
 
@@ -296,6 +422,8 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     if (!force && card === this.card() && this.cardState() !== 'error') return;
     if (card !== this.card()) {
       this.itemCount.set(null);
+      this.executingItems.set([]);
+      this.cardOpen.set(false);
       this.prCount.set(null);
       this.planHeadline.set(null);
       this.pickedTab.set(null);
@@ -369,11 +497,10 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       this.selectMobile('chat');
       this.flashChat();
     } else if (focus === 'timeline') {
-      this.selectMobile('card');
-      // Espera o card abrir (o corpo nasce depois da leitura do DevOps).
+      // Espera o card abrir (o corpo nasce depois da leitura do DevOps); abre a partir do botão "Linha do tempo".
       const tryOpen = (left: number) => {
         const tl = this.timelineCmp();
-        if (tl && this.hasBody()) this.openTimeline(null);
+        if (tl && this.hasBody()) this.openTimeline(this.host.nativeElement.querySelector('[data-tour="wb-timeline-btn"]'));
         else if (left > 0) setTimeout(() => tryOpen(left - 1), 300);
       };
       setTimeout(() => tryOpen(20), 300);
@@ -391,6 +518,73 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     this.timelineCmp()?.openFrom(origin);
   }
 
+  /** Entradas da timeline (contador do botão). */
+  readonly timelineCount = computed(() => this.timelineCmp()?.entries().length ?? 0);
+
+  /** Botão "Card": popover no desktop; no celular, a aba Card. */
+  toggleCard(): void {
+    if (this.narrow()) {
+      this.selectMobile('card');
+      return;
+    }
+    this.cardOpen.set(!this.cardOpen());
+  }
+
+  onCardPopKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cardOpen.set(false);
+    }
+  }
+
+  onExecuting(numbers: number[]): void {
+    this.executingItems.set(numbers ?? []);
+  }
+
+  // ── Robô / conexão ──────────────────────────────────────────────────────────────────────────
+
+  /** Clique no robô: abre o pedido do Claude no plano (popover do próprio plano) ou os itens em execução. */
+  openRobot(): void {
+    const robot = this.robot();
+    if (robot.target === 'items') {
+      this.selectMobile('items');
+      return;
+    }
+    this.selectMobile('plan');
+    if (this.claudeRequest()) {
+      // O ícone do plano precisa estar visível para o popover se ancorar nele.
+      setTimeout(() => this.planCmp()?.runOpen.set(true), 80);
+    }
+  }
+
+  /** "Sem sinal do Claude": retomar pelo executor (o mesmo diálogo do plano). */
+  resumeClaude(): void {
+    this.selectMobile('plan');
+    setTimeout(() => this.planCmp()?.openAsk(), 80);
+  }
+
+  copyTerminalCommand(): void {
+    this.planCmp()?.copyTerminalCommand();
+  }
+
+  private onRealtime(on: boolean): void {
+    clearTimeout(this.wsTimer);
+    if (on) {
+      this.realtimeDown.set(false);
+      return;
+    }
+    this.wsTimer = setTimeout(() => this.realtimeDown.set(!this.ws.isConnected()), WS_DOWN_AFTER_MS);
+  }
+
+  /** Ícone "sem conexão": tenta reconectar e recarrega o que está na tela. */
+  reconnect(): void {
+    this.ws.startConnection();
+    this.reload();
+    this.planCmp()?.refresh();
+    this.timelineCmp()?.load();
+    this.snack.open('Reconectando o tempo real e recarregando a Bancada…', 'Ok', { duration: 4000 });
+  }
+
   // ── Ações do cabeçalho ──────────────────────────────────────────────────────────────────────
 
   openDetails(): void {
@@ -406,17 +600,21 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     });
   }
 
-  /** "Analisar bug" / "Analisar US": pede a análise pela fila (a API escolhe a skill pelo tipo do card). */
-  analyze(): void {
+  /**
+   * "Analisar bug" / "Analisar US": pede a análise pela fila (a API escolhe a skill pelo tipo do card).
+   * `stay` (sugestão de análise inicial): fica na aba Itens — o item "Análise inicial…" aparece ali ao vivo.
+   */
+  analyze(stay = false): void {
     const card = this.card();
     if (!card || this.analyzing() || this.planActive()) return;
     this.analyzing.set(true);
     this.queueApi.create(card, { kind: 'analyze' }).subscribe({
       next: (r) => {
         this.analyzing.set(false);
+        this.analysisAskedFor.set(card);
         const where = r.waitReason ? ` ${r.waitReason}.` : '';
         this.snack.open(`Análise pedida para o Claude.${where}`, 'Ok', { duration: 6000 });
-        this.selectMain('plan');
+        if (!stay) this.selectMain('plan');
         this.planCmp()?.refresh();
       },
       error: (err) => {
