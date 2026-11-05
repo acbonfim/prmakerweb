@@ -1,6 +1,6 @@
 :host { display: block; flex: none; }
 
-/* Faixa fina (--cime-tabs-h, definida no styles.scss): a tela de PR precisa da altura. */
+/* Altura = --cime-tabs-h (styles.scss): 30px compacta, 46px ampliada; as telas com altura calculada a subtraem. */
 .tabbar {
   display: flex;
   align-items: stretch;
@@ -9,6 +9,14 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   padding: 0 max(6px, env(safe-area-inset-right, 0px)) 0 max(6px, env(safe-area-inset-left, 0px));
   gap: 2px;
+}
+
+/* Faixa rolável + setas por cima das pontas (só aparecem quando há abas escondidas daquele lado). */
+.tabbar__strip {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .tabbar__scroll {
@@ -23,16 +31,35 @@
 }
 .tabbar__scroll::-webkit-scrollbar { display: none; }
 
+.tabbar__arrow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+  border: 0;
+  color: var(--mat-sys-on-surface);
+  cursor: pointer;
+}
+.tabbar__arrow mat-icon { width: 20px; height: 20px; font-size: 20px; border-radius: 50%; }
+.tabbar__arrow:hover mat-icon { background: color-mix(in srgb, var(--mat-sys-on-surface) 16%, transparent); }
+.tabbar__arrow--left { left: 0; background: linear-gradient(to right, rgb(18, 18, 18) 60%, transparent); justify-content: flex-start; }
+.tabbar__arrow--right { right: 0; background: linear-gradient(to left, rgb(18, 18, 18) 60%, transparent); justify-content: flex-end; }
+
 .tab {
   --tab-fg: color-mix(in srgb, var(--mat-sys-on-surface) 68%, transparent);
   position: relative;
   display: flex;
   align-items: center;
   gap: 5px;
-  /* Encolhe até o mínimo e só então a faixa rola; o título é quem trunca. */
-  flex: 0 1 200px;
-  min-width: 96px;
-  max-width: 220px;
+  /* Encolhe até o mínimo e só então a faixa rola (setas); o corpo é quem trunca, o fechar fica sempre visível. */
+  flex: 0 1 250px;
+  min-width: 200px;
+  max-width: 280px;
   padding: 0 4px 0 8px;
   margin-top: 3px;
   border-radius: 7px 7px 0 0;
@@ -68,12 +95,32 @@
 .tab--frozen:hover, .tab--frozen:focus-visible { opacity: 1; }
 
 .tab__icon { flex: none; width: 15px; height: 15px; font-size: 15px; }
-.tab__card { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
-.tab__title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
+.tab__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+}
+.tab__line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tab__card { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* Mínimo para o título não sumir atrás dos indicadores. */
+.tab__title { flex: 1 1 auto; min-width: 48px; overflow: hidden; text-overflow: ellipsis; }
+
+/* A situação também cede (antes era fixa e empurrava o fechar para fora da aba). */
 .tab__status {
-  flex: none;
-  max-width: 80px;
+  flex: 0 1 auto;
+  min-width: 28px;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 2px 6px;
@@ -94,6 +141,8 @@
 .tab__ind--error { color: #e57373; }
 .tab__ind--neutral, .tab__ind--frozen { color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); }
 
+.tab__plan { flex: none; display: inline-flex; align-items: center; gap: 2px; }
+
 .tab__pr {
   flex: none;
   display: inline-flex;
@@ -106,6 +155,16 @@
 .tab__pr--open { color: #81c784; }
 .tab__pr--merged { color: #ba68c8; }
 .tab__pr--closed { color: #e57373; }
+
+.tab__text {
+  flex: none;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent);
+}
+.tab__text--warn { color: #ffb300; font-weight: 600; }
+/* Estado no DevOps: o último a ceder espaço na segunda linha. */
+.tab__state { flex: 0 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .tab__dirty { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #ffb300; }
 
@@ -128,7 +187,25 @@
 .tab__close:hover { opacity: 1; background: color-mix(in srgb, var(--mat-sys-on-surface) 16%, transparent); }
 .tab--active .tab__close, .tab:hover .tab__close { opacity: 0.9; }
 
-.tabbar__add {
+/* Ampliada: abas mais altas e largas (não encolhem — sobrando abas, a faixa rola pelas setas), segunda linha com os detalhes. */
+.tabbar--tall .tab {
+  flex: 0 0 270px;
+  min-width: 0;
+  max-width: none;
+  gap: 7px;
+  padding: 0 6px 0 10px;
+  margin-top: 4px;
+  border-radius: 8px 8px 0 0;
+}
+.tabbar--tall .tab__icon { width: 18px; height: 18px; font-size: 18px; }
+.tabbar--tall .tab__line:first-child { font-size: 12.5px; }
+.tabbar--tall .tab__line--meta { gap: 6px; min-height: 14px; }
+/* Sem detalhes (ex.: Início): o título fica centralizado. */
+.tabbar--tall .tab__line--meta:empty { display: none; }
+.tabbar--tall .tab__close { width: 22px; height: 22px; }
+.tabbar--tall .tab__close mat-icon { width: 15px; height: 15px; font-size: 15px; }
+
+.tabbar__add, .tabbar__density {
   flex: none;
   align-self: center;
   display: inline-flex;
@@ -136,7 +213,6 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-left: 2px;
   padding: 0;
   border: 0;
   border-radius: 6px;
@@ -144,9 +220,11 @@
   color: var(--mat-sys-on-surface);
   cursor: pointer;
 }
-.tabbar__add mat-icon { width: 18px; height: 18px; font-size: 18px; }
-.tabbar__add:hover:not(:disabled) { background: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent); }
+.tabbar__add { margin-left: 2px; }
+.tabbar__add mat-icon, .tabbar__density mat-icon { width: 18px; height: 18px; font-size: 18px; }
+.tabbar__add:hover:not(:disabled), .tabbar__density:hover { background: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent); }
 .tabbar__add:disabled { opacity: 0.35; cursor: not-allowed; }
+.tabbar__density { color: color-mix(in srgb, var(--mat-sys-on-surface) 60%, transparent); }
 
 .tabbar__count {
   flex: none;
@@ -158,6 +236,8 @@
 }
 
 @media (max-width: 768px) {
-  .tab { flex-basis: 150px; min-width: 84px; padding-left: 6px; }
+  .tab { flex-basis: 190px; min-width: 160px; padding-left: 6px; }
+  .tabbar--tall .tab { flex-basis: 220px; }
   .tabbar__count { display: none; }
+  .tabbar__density { margin-left: auto; }
 }

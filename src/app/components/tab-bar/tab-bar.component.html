@@ -1,50 +1,57 @@
-<div class="tabbar" role="tablist" aria-label="Abas abertas">
-  <div class="tabbar__scroll">
-    @for (tab of tabs.tabs(); track tab.id; let i = $index) {
-      <div class="tab"
-           role="tab"
-           tabindex="0"
-           [class.tab--active]="tab.id === tabs.activeId()"
-           [class.tab--frozen]="tab.frozen"
-           [class.tab--waiting]="waiting(tab)"
-           [attr.aria-selected]="tab.id === tabs.activeId()"
-           [attr.data-tab-id]="tab.id"
-           [matTooltip]="tooltip(tab)"
-           matTooltipClass="tab-tooltip"
-           (click)="select(tab)"
-           (auxclick)="auxClick($event, tab)"
-           (keydown.enter)="select(tab)"
-           (keydown.space)="select(tab); $event.preventDefault()"
-           (keydown)="onKey($event, i)">
-        <mat-icon class="tab__icon" aria-hidden="true">{{ tab.icon }}</mat-icon>
-        @if (tab.card) {
-          <span class="tab__card">#{{ tab.card }}</span>
-        }
-        <span class="tab__title">{{ titleOf(tab) }}</span>
-        @if (tab.status; as st) {
-          <span class="tab__status" [class]="'tab__status tab__status--' + st.tone">{{ st.text }}</span>
-        }
-        @if (waiting(tab)) {
-          <mat-icon class="tab__ind tab__ind--warn" aria-label="Aguardando você">hourglass_top</mat-icon>
-        }
-        @if (plan(tab); as p) {
-          <mat-icon class="tab__ind" [class]="'tab__ind tab__ind--' + p.tone" [attr.aria-label]="p.label">{{ p.icon }}</mat-icon>
-        }
-        @if (prs(tab); as pr) {
-          <span class="tab__pr" [class]="'tab__pr tab__pr--' + pr.tone" [attr.aria-label]="pr.label">
-            <mat-icon aria-hidden="true">merge</mat-icon>{{ pr.count }}
-          </span>
-        }
-        @if (tab.frozen) {
-          <mat-icon class="tab__ind tab__ind--frozen" aria-label="Congelada">ac_unit</mat-icon>
-        }
-        @if (tab.dirty) {
-          <span class="tab__dirty" aria-label="Edição não salva"></span>
-        }
-        <button type="button" class="tab__close" tabindex="-1" aria-label="Fechar aba" (click)="closeClick($event, tab)">
-          <mat-icon aria-hidden="true">close</mat-icon>
-        </button>
-      </div>
+<div class="tabbar" [class.tabbar--tall]="tall()" role="tablist" aria-label="Abas abertas">
+  <div class="tabbar__strip">
+    @if (canLeft()) {
+      <button type="button" class="tabbar__arrow tabbar__arrow--left" tabindex="-1" aria-label="Rolar abas para a esquerda"
+              (click)="scrollBy(-1)">
+        <mat-icon aria-hidden="true">chevron_left</mat-icon>
+      </button>
+    }
+    <div class="tabbar__scroll" #strip (scroll)="updateArrows()" (wheel)="onWheel($event)">
+      @for (tab of tabs.tabs(); track tab.id; let i = $index) {
+        <div class="tab"
+             role="tab"
+             tabindex="0"
+             [class.tab--active]="tab.id === tabs.activeId()"
+             [class.tab--frozen]="tab.frozen"
+             [class.tab--waiting]="waiting(tab)"
+             [attr.aria-selected]="tab.id === tabs.activeId()"
+             [attr.data-tab-id]="tab.id"
+             [matTooltip]="tooltip(tab)"
+             matTooltipClass="tab-tooltip"
+             (click)="select(tab)"
+             (auxclick)="auxClick($event, tab)"
+             (keydown.enter)="select(tab)"
+             (keydown.space)="select(tab); $event.preventDefault()"
+             (keydown)="onKey($event, i)">
+          <mat-icon class="tab__icon" aria-hidden="true">{{ tab.icon }}</mat-icon>
+          <!-- O corpo é quem trunca: o botão de fechar fica fora dele e nunca some. -->
+          <div class="tab__body">
+            <div class="tab__line">
+              @if (tab.card) {
+                <span class="tab__card">#{{ tab.card }}</span>
+              }
+              <span class="tab__title">{{ titleOf(tab) }}</span>
+              @if (!tall()) {
+                <ng-container *ngTemplateOutlet="meta; context: { $implicit: tab }"></ng-container>
+              }
+            </div>
+            @if (tall()) {
+              <div class="tab__line tab__line--meta">
+                <ng-container *ngTemplateOutlet="meta; context: { $implicit: tab }"></ng-container>
+              </div>
+            }
+          </div>
+          <button type="button" class="tab__close" tabindex="-1" aria-label="Fechar aba" (click)="closeClick($event, tab)">
+            <mat-icon aria-hidden="true">close</mat-icon>
+          </button>
+        </div>
+      }
+    </div>
+    @if (canRight()) {
+      <button type="button" class="tabbar__arrow tabbar__arrow--right" tabindex="-1" aria-label="Rolar abas para a direita"
+              (click)="scrollBy(1)">
+        <mat-icon aria-hidden="true">chevron_right</mat-icon>
+      </button>
     }
   </div>
   <button type="button" class="tabbar__add"
@@ -55,4 +62,44 @@
     <mat-icon aria-hidden="true">add</mat-icon>
   </button>
   <span class="tabbar__count" aria-hidden="true">{{ tabs.tabs().length }}/{{ tabs.max }}</span>
+  <button type="button" class="tabbar__density"
+          [attr.aria-label]="tall() ? 'Abas compactas' : 'Abas ampliadas'"
+          [matTooltip]="tall() ? 'Abas compactas (uma linha)' : 'Abas ampliadas (mais informações)'"
+          (click)="toggleTall()">
+    <mat-icon aria-hidden="true">{{ tall() ? 'unfold_less' : 'unfold_more' }}</mat-icon>
+  </button>
 </div>
+
+<!-- Indicadores da aba: na mesma linha do título (compacta) ou numa segunda linha (ampliada, com mais detalhes). -->
+<ng-template #meta let-tab>
+  @if (tab.status; as st) {
+    <span class="tab__status" [class]="'tab__status tab__status--' + st.tone">{{ st.text }}</span>
+  }
+  @if (waiting(tab)) {
+    <mat-icon class="tab__ind tab__ind--warn" aria-label="Aguardando você">hourglass_top</mat-icon>
+    @if (tall()) { <span class="tab__text tab__text--warn">Aguardando você</span> }
+  }
+  @if (plan(tab); as p) {
+    <span class="tab__plan">
+      <mat-icon class="tab__ind" [class]="'tab__ind tab__ind--' + p.tone" [attr.aria-label]="p.label">{{ p.icon }}</mat-icon>
+      @if (tall() && steps(tab); as s) { <span class="tab__text">{{ s }}</span> }
+    </span>
+  }
+  @if (prs(tab); as pr) {
+    <span class="tab__pr" [class]="'tab__pr tab__pr--' + pr.tone" [attr.aria-label]="pr.label">
+      <mat-icon aria-hidden="true">merge</mat-icon>{{ pr.count }}
+    </span>
+  }
+  @if (tall() && devopsState(tab); as state) {
+    <span class="tab__text tab__state">{{ state }}</span>
+  }
+  @if (tab.frozen) {
+    <mat-icon class="tab__ind tab__ind--frozen" aria-label="Congelada">ac_unit</mat-icon>
+  }
+  @if (tab.dirty) {
+    <span class="tab__dirty" aria-label="Edição não salva"></span>
+  }
+  @if (tall() && !tab.card && !tab.status && !tab.dirty && !tab.frozen && tab.label) {
+    <span class="tab__text">{{ tab.title }}</span>
+  }
+</ng-template>
