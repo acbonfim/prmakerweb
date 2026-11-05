@@ -10,7 +10,16 @@ export type WorkTaskStatus = 'pending' | 'running' | 'waiting' | 'completed' | '
 export type WorkItemOrigin = 'user' | 'specialist' | 'analysis' | 'correction' | 'template';
 export type WorkTaskExecutor = 'claude' | 'user';
 /** Kinds do catálogo padrão (`WorkItemTaskKinds`); o catálogo é configurável, então qualquer texto é aceito. */
-export type TaskKind = 'branch' | 'cherry-pick' | 'code' | 'pr' | 'devops-state' | 'sql-script' | 'validation' | 'comment' | 'manual' | (string & {});
+export type TaskKind = 'branch' | 'cherry-pick' | 'code' | 'pr' | 'devops-state' | 'sql-script' | 'validation' | 'comment' | 'manual'
+  | 'ticket' | 'notify' | (string & {});
+/**
+ * Controle do parâmetro no editor (rodada 3): `repository`/`branch`/`target-branch` = autocomplete pesquisável,
+ * `state` = estados do card no DevOps, `commits` = seletor de commits, `select` = `options`. Sem `input` no catálogo,
+ * o editor deduz pelo nome do parâmetro (`paramInput` em work-item-pickers).
+ */
+export type TaskParamInput = 'repository' | 'branch' | 'target-branch' | 'state' | 'commits' | 'text' | 'textarea' | 'select';
+/** Opção de um parâmetro `select` (texto simples ou `{value, label}`). */
+export type TaskParamOption = string | { value: string; label?: string | null };
 export type WorkItemLinkKind = 'pr' | 'branch' | 'commit' | 'doc' | 'attachment' | 'timeline' | (string & {});
 /** Ações rápidas da sub-tarefa (`POST WorkItems/tasks/{n}/{action}`). */
 export type WorkTaskAction = 'start' | 'complete' | 'fail' | 'skip';
@@ -103,6 +112,10 @@ export interface TaskKindParam {
   label?: string | null;
   required?: boolean;
   placeholder?: string | null;
+  /** Controle no editor (rodada 3); ausente = deduzido pelo nome. */
+  input?: TaskParamInput | (string & {}) | null;
+  /** Opções do `select`. */
+  options?: TaskParamOption[] | null;
 }
 
 export interface TaskKindInfo {
@@ -134,6 +147,17 @@ export interface WorkItemTemplate {
 export interface WorkItemCatalog {
   taskKinds: TaskKindInfo[];
   templates: WorkItemTemplate[];
+  /** Com `?card=`: o card, o tipo, a branch principal e a branch por destino (`release-version` → `hotfix/77434-rv`). */
+  card?: string | null;
+  type?: WorkItemType | null;
+  mainBranch?: string | null;
+  branchesByTarget?: Record<string, string> | null;
+  /** Destinos dos PRs do fluxo do card ("development, qa") — quando o catálogo trouxer; senão vem do `Skills/rules`. */
+  flowTargets?: string | string[] | null;
+  /** Repositório padrão do card (regras). */
+  defaultRepository?: string | null;
+  /** URL base do GitHub (`https://github.com/<owner>`) para os links de repositório/branch. */
+  githubUrl?: string | null;
 }
 
 export interface WorkTaskInput {
@@ -266,7 +290,9 @@ const KIND_DEFAULTS: Record<string, { label: string; icon: string }> = {
   'sql-script': { label: 'Script SQL', icon: 'storage' },
   validation: { label: 'Validação', icon: 'fact_check' },
   comment: { label: 'Comentário', icon: 'chat_bubble_outline' },
-  manual: { label: 'Manual', icon: 'pan_tool' }
+  manual: { label: 'Manual', icon: 'pan_tool' },
+  ticket: { label: 'Abrir chamado', icon: 'confirmation_number' },
+  notify: { label: 'Avisar', icon: 'campaign' }
 };
 
 export function kindInfo(kind: string | null | undefined, catalog?: WorkItemCatalog | null): { label: string; icon: string } {

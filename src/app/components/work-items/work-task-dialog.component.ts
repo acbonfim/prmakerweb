@@ -24,6 +24,8 @@ import {
 } from './work-item.model';
 import { listenWorkItems } from './work-items-live';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
+import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
+import { paramDisplay, paramInput, paramLink, paramOptions } from '../work-item-pickers/param-input';
 
 export interface WorkTaskDialogData {
   card: string;
@@ -79,7 +81,13 @@ export interface WorkTaskDialogData {
             <section class="wi-sec">
               <h4 class="wi-sec__title">Parâmetros</h4>
               <table class="wi-table"><tbody>
-                @for (p of params(); track p.key) { <tr><td>{{ p.label }}</td><td><code>{{ p.value || '—' }}</code></td></tr> }
+                @for (p of params(); track p.key) {
+                  <tr><td>{{ p.label }}</td><td>
+                    @if (p.url) { <a class="wi-link" [href]="p.url" target="_blank" rel="noopener" matTooltip="Abrir no GitHub"><mat-icon>open_in_new</mat-icon><code>{{ p.display }}</code></a> }
+                    @else if (p.long) { <span class="wtd__long">{{ p.display || '—' }}</span> }
+                    @else { <code>{{ p.display || '—' }}</code> }
+                  </td></tr>
+                }
               </tbody></table>
             </section>
           }
@@ -140,12 +148,14 @@ export interface WorkTaskDialogData {
     .wtd__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; }
     .wtd__small { font-size: 12px; margin: 0; }
     .wi-table code, .wi-note code { font-size: 12px; }
+    .wtd__long { white-space: pre-wrap; }
   `]
 })
 export class WorkTaskDialogComponent {
   readonly data = inject<WorkTaskDialogData>(MAT_DIALOG_DATA);
   private api = inject(WorkItemsService);
   private snack = inject(MatSnackBar);
+  private pickers = inject(WorkItemPickerSource);
 
   readonly item = signal<WorkItem | null>(this.data.item ?? null);
   readonly busy = signal(false);
@@ -156,12 +166,31 @@ export class WorkTaskDialogComponent {
   readonly look = computed(() => taskStatusLook(this.task()?.status));
   readonly kind = computed(() => kindInfo(this.task()?.kind, this.data.catalog));
   readonly actions = computed(() => { const t = this.task(); return t ? userTaskActions(t) : []; });
+  /**
+   * Parâmetros com o rótulo do catálogo (na ordem do catálogo; os de fora no fim), o valor legível (commits "card" =
+   * todos os do card) e o link do GitHub para repositório/branch quando a URL base é conhecida.
+   */
   readonly params = computed(() => {
     const t = this.task();
     if (!t) return [];
     const known = kindParams(t.kind, this.data.catalog);
-    const labels = new Map(known.map((p) => [p.key, p.label || p.key]));
-    return Object.entries(t.params ?? {}).map(([key, value]) => ({ key, label: labels.get(key) ?? key, value }));
+    const values = t.params ?? {};
+    const repo = `${values['repository'] ?? ''}`.trim()
+      || (this.item()?.tasks ?? []).map((x) => `${x.params?.['repository'] ?? ''}`.trim()).find(Boolean) || null;
+    const base = this.pickers.githubUrl();
+    const keys = [...known.map((p) => p.key).filter((k) => k in values), ...Object.keys(values).filter((k) => !known.some((p) => p.key === k))];
+    return keys.map((key) => {
+      const def = known.find((p) => p.key === key) ?? { key, label: key };
+      const input = paramInput(def, t.kind);
+      const value = `${values[key] ?? ''}`;
+      return {
+        key,
+        label: def.label || key,
+        display: paramDisplay(input, value, paramOptions(def)),
+        url: paramLink(input, value, base, repo),
+        long: input === 'textarea' || value.length > 80
+      };
+    });
   });
   readonly outputs = computed(() => outputEntries(this.task()?.output));
   readonly undoParams = computed(() => Object.entries(this.task()?.undo?.params ?? {}));
@@ -171,6 +200,7 @@ export class WorkTaskDialogComponent {
   readonly actionLook = (a: WorkTaskAction) => TASK_ACTION_LABELS[a];
 
   constructor() {
+    this.pickers.ensureGithubUrl(this.data.catalog);
     this.reload();
     const stop = listenWorkItems(inject(WsService), this.data.card, (p) => {
       if (!p || p.number == null || p.number === this.data.itemNumber || p.taskNumber === this.data.taskNumber) this.reload();
