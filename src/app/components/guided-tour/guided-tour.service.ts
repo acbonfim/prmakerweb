@@ -26,10 +26,12 @@ export class GuidedTourService {
   private readonly userId = (inject(StorageService).getAccess()?.user?.externalId ?? 'anon').toLowerCase();
   private active?: { driver: Driver; tour: TourDefinition; mode: TourMode; finished: boolean; skipped: boolean };
   readonly running = signal(false);
+  /** 0083: o guia "Primeiros passos" está decidindo se abre — os tours de tela não abrem sozinhos enquanto isso. */
+  readonly held = signal(false);
 
   /** Primeira vez na tela (ou tour com novidades): abre sozinho. Sem card aberto, só os passos de entrada. */
   autoStart(tour: TourDefinition, host: TourHost): void {
-    if (this.active || this.dialogOpen()) return;
+    if (this.active || this.held() || this.dialogOpen()) return;
     const progress = this.read(tour);
     if (progress.version >= tour.version) return;
     const news = tour.steps.filter((s) => s.since > progress.version);
@@ -51,14 +53,14 @@ export class GuidedTourService {
       // Buscou o card com o balão de entrada aberto: segue direto para o card.
       this.write(tour, { ...progress, entryDone: tour.version });
       this.stop();
-    } else if (this.active || this.dialogOpen()) {
+    } else if (this.active || this.held() || this.dialogOpen()) {
       return;
     }
     const mode: TourMode = this.read(tour).entryDone === tour.version ? 'card' : 'full';
     const news = tour.steps.filter((s) => s.since > progress.version && (mode === 'full' || s.phase === 'card'));
     // Espera o plano e a conversa aparecerem na tela.
     setTimeout(() => {
-      if (!this.active && this.hasCard(host)) this.run(tour, host, news, mode);
+      if (!this.active && !this.held() && this.hasCard(host)) this.run(tour, host, news, mode);
     }, 1200);
   }
 
@@ -145,7 +147,7 @@ export class GuidedTourService {
         side: s.side,
         align: s.align,
         // O botão "próximo" do último passo encerra (o driver só troca o texto quando não há onNextClick próprio).
-        nextBtnText: i < steps.length - 1 ? 'Próximo' : mode === 'entry' ? 'Ok, vou buscar' : 'Concluir tour',
+        nextBtnText: i < steps.length - 1 ? 'Próximo' : mode === 'entry' ? 'Ok, vou buscar' : tour.doneText ?? 'Concluir tour',
         prevBtnText: 'Voltar',
         showButtons: i === 0 ? ['next', 'close'] : ['next', 'previous', 'close']
       }
@@ -169,8 +171,11 @@ export class GuidedTourService {
       onPopoverRender: (popover, { state: st }) => {
         const index = st.activeIndex ?? 0;
         const before = [...skipped].filter((i) => i < index).length;
-        popover.progress.textContent = `${offset + index + 1 - before} de ${totalShown - skipped.size}`;
-        popover.progress.style.display = 'block';
+        const shown = totalShown - skipped.size;
+        popover.progress.textContent = `${offset + index + 1 - before} de ${shown}`;
+        // Balão único (0083: "fica tudo no seu menu"): sem contador nem "Pular tour" — o botão já encerra.
+        popover.progress.style.display = shown > 1 ? 'block' : 'none';
+        if (shown === 1) return;
         // "Pular tour" em todos os passos (o X também pula; Esc também).
         const skip = document.createElement('button');
         skip.type = 'button';

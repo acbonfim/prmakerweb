@@ -7,7 +7,7 @@ import { TourDefinition } from './tour.model';
  */
 export const PR_SCREEN_TOUR: TourDefinition = {
   id: 'pr-screen',
-  version: 1,
+  version: 2,
   title: 'Como usar a tela do card',
   steps: [
     {
@@ -33,11 +33,18 @@ export const PR_SCREEN_TOUR: TourDefinition = {
         'Cada etapa mostra o que foi feito, os arquivos gerados e, quando for o caso, uma pergunta para você.'
     },
     {
-      id: 'journey', anchor: 'plan-journey', group: 'Plano de execução', since: 1, phase: 'card', side: 'bottom', mobileTab: 'plan', optional: true,
-      title: 'Em que fase o card está',
-      body: 'Análise → Decisões → Correção → QA → Fechamento. Cada card tem a sua jornada; clique numa fase para ver aquele plano.',
-      detail: 'A jornada é montada do histórico do próprio card. Uma versão nova do plano aparece como v2, v3…; uma correção ' +
-        'cancelada fica marcada como cancelada. Clique numa fase para ver o plano dela.'
+      id: 'version', anchor: 'plan-version', group: 'Plano de execução', since: 2, phase: 'card', side: 'bottom', mobileTab: 'plan', optional: true,
+      title: 'Qual versão você está vendo',
+      body: 'Análise v2, Correção v1… Clique para trocar de versão — todas as análises e correções do card estão aqui.',
+      detail: 'Análise e correção contam versões separadas. "Mais recente" é a última daquela fase; uma versão antiga ' +
+        'aparece como "versão anterior". Uma análise cancelada sem nada feito não conta como a mais recente.'
+    },
+    {
+      id: 'journey', anchor: 'plan-journey', group: 'Plano de execução', since: 2, phase: 'card', side: 'bottom', mobileTab: 'plan', optional: true,
+      title: 'As etapas desta versão',
+      body: 'A barra mostra só as etapas da versão escolhida, na ordem. Clique numa etapa para abri-la logo abaixo.',
+      detail: 'Verde = concluída, azul = em andamento, amarelo = aguardando (a mão indica que é com você), vermelho = ' +
+        'cancelada ou com falha.'
     },
     {
       id: 'headline', anchor: 'plan-headline', group: 'Plano de execução', since: 1, phase: 'card', side: 'bottom', mobileTab: 'plan', optional: true,
@@ -45,6 +52,12 @@ export const PR_SCREEN_TOUR: TourDefinition = {
       body: 'O resumo em uma frase: o que está acontecendo agora e se alguma coisa <b>espera por você</b>.',
       detail: 'Se o resumo disser que algo espera por você (uma pergunta, uma decisão, um teste), responda na etapa indicada: ' +
         'é isso que faz o plano andar.'
+    },
+    {
+      id: 'document', anchor: 'plan-document', group: 'Plano de execução', since: 2, phase: 'card', side: 'top', mobileTab: 'plan', optional: true,
+      title: 'A análise ou o plano completo',
+      body: 'Abre num documento só tudo o que esta versão tem: resumo, análise e soluções, cada etapa, scripts e o código que muda (hoje × como fica).',
+      detail: 'Dá para copiar o documento inteiro. Na correção entram também as propostas de código feitas na análise de origem.'
     },
     {
       id: 'decisions', anchor: 'plan-decisions', group: 'Plano de execução', since: 1, phase: 'card', side: 'top', mobileTab: 'plan', optional: true,

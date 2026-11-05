@@ -2,7 +2,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -11,6 +11,12 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { UserIntegration, UserIntegrationService } from '../../services/user-integration.service';
 import { TEAMS_PLUGIN_NAME, TeamsService } from '../../services/teams.service';
+import { IntegrationGuide, guideFor } from '../setup-guide/integration-guides';
+
+/** 0083: abrir já numa integração (pelo guia "Primeiros passos"). */
+export interface MyIntegrationsDialogData {
+  focus?: string;
+}
 
 /** Placeholder de um campo não sensível editável (0011: opcionais com padrão ou sugestão). */
 export function fieldPlaceholder(field: { optional: boolean; defaultValue: string | null; hint: string | null }): string {
@@ -59,6 +65,9 @@ interface PluginDraft {
   error: string | null;
   expanded: boolean;
   showFixed: boolean;
+  /** 0083: passo a passo "Como obter" desta integração. */
+  guide: IntegrationGuide;
+  showGuide: boolean;
 }
 
 type IntegrationState = 'ok' | 'pending' | 'optional';
@@ -83,6 +92,7 @@ export class MyIntegrationsDialogComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private teams = inject(TeamsService);
   readonly dialogRef = inject(MatDialogRef<MyIntegrationsDialogComponent>);
+  private readonly data = inject<MyIntegrationsDialogData | null>(MAT_DIALOG_DATA, { optional: true });
 
   readonly drafts = signal<PluginDraft[]>([]);
   readonly loading = signal(true);
@@ -110,13 +120,21 @@ export class MyIntegrationsDialogComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     try {
       const list = await this.service.loadIntegrations();
-      const drafts = list.map(i => this.toDraft(i));
+      const drafts = list.map(i => this.toDraft(i, list));
       // Pendentes (obrigatórias) primeiro, depois opcionais sem configurar, depois as prontas.
       const rank = (d: PluginDraft) => ({ pending: 0, optional: 1, ok: 2 }[this.state(d)]);
       drafts.sort((a, b) => rank(a) - rank(b));
       // Abre as que pedem ação; com uma só integração, abre sempre.
       drafts.forEach(d => (d.expanded = drafts.length === 1 || this.state(d) === 'pending'));
       if (!drafts.some(d => d.expanded) && drafts.length) drafts[0].expanded = true;
+      // 0083: veio do guia "Primeiros passos" para uma integração: ela primeiro, aberta e com o passo a passo.
+      const focus = drafts.find(d => d.integration.description === this.data?.focus);
+      if (focus) {
+        drafts.forEach(d => (d.expanded = d === focus));
+        focus.showGuide = !focus.integration.configured;
+        drafts.splice(drafts.indexOf(focus), 1);
+        drafts.unshift(focus);
+      }
       this.drafts.set(drafts);
     } catch (e: any) {
       this.loadError.set(e?.error?.error ?? 'Não foi possível carregar suas integrações.');
@@ -132,6 +150,11 @@ export class MyIntegrationsDialogComponent implements OnInit {
 
   toggle(draft: PluginDraft): void {
     draft.expanded = !draft.expanded;
+    this.touch();
+  }
+
+  toggleGuide(draft: PluginDraft): void {
+    draft.showGuide = !draft.showGuide;
     this.touch();
   }
 
@@ -203,7 +226,8 @@ export class MyIntegrationsDialogComponent implements OnInit {
     try {
       const saved = await this.service.save(draft.integration.pluginId, values);
       this.drafts.update(list => list.map(d => (d === draft
-        ? { ...this.toDraft(saved), expanded: !saved.configured || draft.expanded, showFixed: draft.showFixed }
+        ? { ...this.toDraft(saved, list.map(d => d.integration)), expanded: !saved.configured || draft.expanded, showFixed: draft.showFixed,
+            showGuide: draft.showGuide && !saved.configured }
         : d)));
       this.snackBar.open(`${saved.description}: integração salva`, 'Ok',
         { horizontalPosition: 'right', verticalPosition: 'top', duration: 4000 });
@@ -222,17 +246,7 @@ export class MyIntegrationsDialogComponent implements OnInit {
     this.dialogRef.close();
   }
 
-  /** Plugin do Teams (0007): mostra o passo a passo para gerar a URL do Workflow. */
-  isTeams(draft: PluginDraft): boolean {
-    return draft.integration.description === TEAMS_PLUGIN_NAME;
-  }
-
-  /** Nome do grupo definido pelo admin (campo fixo GroupName). */
-  teamsGroup(draft: PluginDraft): string {
-    return draft.integration.fields.find(f => f.key === 'GroupName')?.value?.trim() ?? '';
-  }
-
-  private toDraft(integration: UserIntegration): PluginDraft {
+  private toDraft(integration: UserIntegration, list: UserIntegration[]): PluginDraft {
     // Campos fixos ocultos (0011, ex.: prompts longos) não aparecem para o usuário.
     const all = integration.fields.filter(f => !f.hidden).map(f => {
       // Opcionais (0011) não vêm preenchidos com a sugestão: com padrão, vale o global enquanto
@@ -264,6 +278,8 @@ export class MyIntegrationsDialogComponent implements OnInit {
       error: null,
       expanded: false,
       showFixed: false,
+      guide: guideFor(integration, list),
+      showGuide: false,
       fields: all.filter(f => f.editable),
       fixed: all.filter(f => !f.editable),
     };

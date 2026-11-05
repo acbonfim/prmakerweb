@@ -47,6 +47,8 @@ export interface TourDefinition {
   version: number;
   title: string;
   steps: TourStep[];
+  /** Texto do botão do último passo (padrão: "Concluir tour"). */
+  doneText?: string;
   /** 0084: textos do guia "Como usar esta tela" (subtítulo e dicas do topo, HTML simples). */
   help?: { subtitle: string; tips?: string[] };
 }

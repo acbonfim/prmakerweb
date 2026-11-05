@@ -726,12 +726,26 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
     prepare: (step) => this.prepareTourStep(step)
   };
   private tourOffered = false;
+  private readonly hostEl = inject(ElementRef<HTMLElement>);
   /** Primeira vez na tela: o tour abre sozinho quando a base carrega na visão geral (link direto para uma seção não é interrompido). */
   private readonly tourOnEntry = effect(() => {
     if (this.tourOffered || this.loading() || this.selection().type !== 'overview') return;
     this.tourOffered = true;
-    untracked(() => setTimeout(() => this.tours.autoStart(BASE_SOLVACE_TOUR, this.tourHost), 700));
+    untracked(() => setTimeout(() => this.offerTour(), 700));
   });
+
+  /**
+   * Abre o tour quando a tela estiver livre: o guia "Primeiros passos" (0083) segura os tours enquanto decide e pode abrir
+   * um diálogo — espera ele terminar (até ~2 min). A tela precisa ficar livre por 1 s: ao fechar, o guia ainda mostra o
+   * balão do menu do usuário. Saiu da visão geral antes: tenta de novo quando voltar.
+   */
+  private offerTour(attempt = 0, free = false): void {
+    if (!this.hostEl.nativeElement.isConnected || this.selection().type !== 'overview') { this.tourOffered = false; return; }
+    const busy = this.tours.held() || this.tours.running() || !!document.querySelector('.cdk-overlay-container .mat-mdc-dialog-container');
+    if (busy) { if (attempt < 80) setTimeout(() => this.offerTour(attempt + 1), 1500); return; }
+    if (!free) { setTimeout(() => this.offerTour(attempt + 1, true), 1000); return; }
+    this.tours.autoStart(BASE_SOLVACE_TOUR, this.tourHost);
+  }
   /** A tela fica guardada quando a pessoa troca de aba (0065): o tour não pode ficar por cima da outra aba. */
   private readonly tabLeaving = inject(TabsService).leaving$.subscribe(() => this.tours.stop(BASE_SOLVACE_TOUR.id));
 
