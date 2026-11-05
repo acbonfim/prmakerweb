@@ -37,6 +37,8 @@ import { PlanMarkdownPipe } from './plan-markdown.pipe';
 import { PlanFilesDialogComponent, PlanFilesDialogData } from './plan-files-dialog.component';
 import { PlanNotesComponent } from './plan-notes.component';
 import { PlanHistoryComponent } from './plan-history.component';
+import { PlanDocumentService, isEmptyVersion } from './plan-document.service';
+import { MARKDOWN_VIEW_DIALOG, MarkdownViewDialogComponent, MarkdownViewDialogData } from '../markdown-view/markdown-view-dialog.component';
 import { openCaseChat } from '../case-chat/open-case-chat';
 import { CaseChatStatusService } from '../../services/case-chat-status.service';
 import { CancelPlanDialogComponent, CancelPlanDialogData, CancelPlanDialogResult } from './cancel-plan-dialog.component';
@@ -129,6 +131,12 @@ export type StepView = ExecutionStep & {
 };
 
 /** 0080 (M2): um passo da jornada do card (análise → decisões → correção → QA → fechamento). */
+/** 0082: legenda curta de cada etapa na barra da versão. */
+const STEP_VIEW_LABEL: Record<StepView['view'], string> = {
+  pending: 'a fazer', running: 'em andamento', paused: 'pausada', waiting: 'aguardando',
+  completed: 'concluída', failed: 'falhou', cancelled: 'cancelada',
+};
+
 export interface JourneyNode {
   key: string;
   label: string;
@@ -137,6 +145,10 @@ export interface JourneyNode {
   icon: string;
   /** Clicar abre o plano desta fase (quando existe). */
   phase?: 'analysis' | 'correction';
+  /** 0082: a barra mostra as etapas da versão em tela — clicar abre a etapa. */
+  stepKey?: string;
+  /** Texto completo (o rótulo da barra é curto). */
+  hint?: string;
   current?: boolean;
 }
 
@@ -179,6 +191,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   private releaseBusy: (() => void) | null = null;
   private busyKey: string | null = null;
   private dialog = inject(MatDialog);
+  private documents = inject(PlanDocumentService);
   private snackBar = inject(MatSnackBar);
   private clipboard = inject(CliipboardService);
   private hostRef = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -482,11 +495,29 @@ export class ExecutionPlanComponent implements OnDestroy {
     return (planId && this.history().find((h) => h.id === planId)?.versionNumber) || null;
   }
 
+  /** A versão mais nova da fase — a vazia (cancelada sem nenhuma etapa concluída, 0082) não conta. */
   private latestOf(phase: 'analysis' | 'correction'): ExecutionPlanSummary | null {
-    return this.history()
+    const ofPhase = this.history()
       .filter((h) => (h.phase ?? 'analysis') === phase)
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] ?? null;
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    return ofPhase.find((h) => !isEmptyVersion(h)) ?? ofPhase[0] ?? null;
   }
+
+  /** 0082: há versão mais nova desta mesma fase (análise e correção contam separado). */
+  readonly isOlderVersion = computed(() => {
+    const plan = this.plan();
+    if (!plan) return false;
+    const latest = this.latestOf(plan.phase ?? 'analysis');
+    return !!latest && latest.id !== plan.id && Date.parse(latest.createdAt) > Date.parse(plan.createdAt);
+  });
+
+  /** "Análise v2" / "Correção v1" — o botão que troca a versão. */
+  readonly versionLabel = computed(() => {
+    const plan = this.plan();
+    if (!plan) return '';
+    const v = this.versionOf(plan.id);
+    return `${(plan.phase ?? 'analysis') === 'correction' ? 'Correção' : 'Análise'}${v ? ' v' + v : ''}`;
+  });
 
   /** Perguntas respondidas da análise (as decisões que valem para a próxima versão). */
   readonly decisions = computed(() => {
@@ -498,49 +529,23 @@ export class ExecutionPlanComponent implements OnDestroy {
       .map((q) => ({ id: q.id, question: this.shortText(q.text, 90), answer: q.answer!, by: q.answeredBy ?? '' }));
   });
 
+  /**
+   * 0082: a barra horizontal mostra só a versão em tela — as etapas dela, na ordem. Trocar de versão (análise ↔
+   * correção, versões antigas) é pelo botão da versão, que abre o histórico.
+   */
   readonly journey = computed<JourneyNode[]>(() => {
-    const plan = this.plan();
-    if (!plan) return [];
-    const analysis = this.latestOf('analysis');
-    const correction = this.latestOf('correction');
-    const phase = plan.phase ?? 'analysis';
-    const open = (this.analysisPlan()?.questions ?? []).filter((q) => q.status === 'open').length;
-    const decisions = this.decisions().length;
-    const nodes: JourneyNode[] = [];
-    const v = (s: ExecutionPlanSummary | null) => (s?.versionNumber ? ` · v${s.versionNumber}` : '');
-    const when = (s: ExecutionPlanSummary) => new Date(s.statusChangedBy ? s.updatedAt : s.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    const stateOf = (s: ExecutionPlanSummary): JourneyNode['state'] =>
-      s.status === 'completed' ? 'ok' : s.status === 'cancelled' || s.status === 'failed' ? 'bad' : s.status === 'paused' ? 'wait' : 'run';
-
-    if (analysis) {
-      const decided = !!correction || (decisions > 0 && open === 0 && analysis.status !== 'cancelled' && analysis.status !== 'failed');
-      const state = decided && stateOf(analysis) !== 'bad' ? 'ok' : stateOf(analysis);
-      nodes.push({ key: 'analysis', label: `Análise${v(analysis)}`, phase: 'analysis', current: phase === 'analysis', icon: state === 'ok' ? 'check' : state === 'bad' ? 'close' : 'troubleshoot',
-        state, sub: decided && state === 'ok' && analysis.status !== 'completed' ? 'decidida' : `${this.statusLabel[analysis.status].toLowerCase()} · ${when(analysis)}` });
-    } else {
-      nodes.push({ key: 'analysis', label: 'Análise', state: 'todo', icon: 'troubleshoot', sub: 'a fazer' });
-    }
-    nodes.push({ key: 'decisions', label: 'Decisões', icon: open ? 'front_hand' : decisions ? 'how_to_reg' : 'help',
-      state: open ? 'wait' : decisions ? 'ok' : 'todo', sub: open ? `${open} esperando você` : decisions ? `${decisions} ${decisions === 1 ? 'resposta' : 'respostas'}` : 'a responder' });
-    if (correction) {
-      const state = stateOf(correction);
-      nodes.push({ key: 'correction', label: `Correção${v(correction)}`, phase: 'correction', current: phase === 'correction', state,
-        icon: state === 'ok' ? 'check' : state === 'bad' ? 'close' : 'build', sub: `${this.statusLabel[correction.status].toLowerCase()} · ${when(correction)}` });
-      if (state === 'bad')
-        nodes.push({ key: 'correction-next', label: `Correção · v${(correction.versionNumber ?? 1) + 1}`, state: 'next', icon: 'replay', sub: 'a definir' });
-    } else {
-      nodes.push({ key: 'correction', label: 'Correção', state: 'todo', icon: 'build', sub: 'a montar' });
-    }
-    const correctionSteps = this.correctionPlan()?.steps ?? [];
-    const stepState = (key: string): JourneyNode['state'] => {
-      const s = correctionSteps.find((x) => x.key === key);
-      return !s ? 'todo' : s.status === 'completed' ? 'ok' : s.status === 'running' || s.status === 'waiting' ? 'run' : s.status === 'cancelled' ? 'bad' : 'todo';
-    };
-    const qa = stepState('validar-qa');
-    nodes.push({ key: 'qa', label: 'Validar em QA', state: qa, icon: qa === 'ok' ? 'check' : 'fact_check', sub: qa === 'ok' ? 'validado' : 'você' });
-    const close = stepState('fechar-card');
-    nodes.push({ key: 'close', label: 'Fechamento', state: close, icon: close === 'ok' ? 'check' : 'flag', sub: close === 'ok' ? 'concluído' : '' });
-    return nodes;
+    const steps = this.steps();
+    const current = this.currentStep()?.key ?? null;
+    const todoIcon: Record<string, string> = { code: 'code', pr: 'merge', validation: 'fact_check', question: 'help', ticket: 'confirmation_number' };
+    return steps.map((s) => {
+      const state: JourneyNode['state'] =
+        s.view === 'completed' ? 'ok' : s.view === 'running' ? 'run' : s.view === 'waiting' || s.view === 'paused' ? 'wait'
+          : s.view === 'failed' || s.view === 'cancelled' ? 'bad' : 'todo';
+      const icon = state === 'ok' ? 'check' : state === 'bad' ? 'close' : state === 'run' ? 'more_horiz'
+        : state === 'wait' ? (s.you ? 'front_hand' : 'hourglass_top') : todoIcon[s.kind ?? ''] ?? 'radio_button_unchecked';
+      const sub = s.you ? 'você' : (STEP_VIEW_LABEL[s.view] ?? '');
+      return { key: s.key, stepKey: s.key, label: this.shortText(s.title, 26), hint: s.title, sub, state, icon, current: s.key === current };
+    });
   });
 
   readonly headlineText = computed<PlanHeadlineText | null>(() => {
@@ -549,8 +554,10 @@ export class ExecutionPlanComponent implements OnDestroy {
     const phaseName = (plan.phase ?? 'analysis') === 'correction' ? 'correção' : 'análise';
     const v = this.versionOf(plan.id);
     const name = `${phaseName}${v ? ' v' + v : ''}`;
-    if (this.pinnedPlanId())
-      return { tone: 'info', text: `Você está vendo a **${name}**, uma versão anterior — o card tem uma versão mais nova.` };
+    if (this.isOlderVersion()) {
+      const latest = this.latestOf(plan.phase ?? 'analysis');
+      return { tone: 'info', text: `Você está vendo a **${name}**, uma versão anterior — a mais nova é a **${phaseName} v${latest?.versionNumber ?? '?'}** (troque pelo botão da versão).` };
+    }
     const pending = this.pendingCount();
     if (pending)
       return { tone: 'warn', text: `**Aguardando você:** ${pending === 1 ? '1 ação' : pending + ' ações'} logo abaixo — o plano só segue quando você responder.`,
@@ -594,6 +601,24 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   /** Total de arquivos do plano (botão "Arquivos e textos"). */
   readonly artifactTotal = computed(() => Object.values(this.artifactCounts()).reduce((a, b) => a + b, 0));
+
+  /** 0082: a análise completa / o plano de correção completo da versão em tela (documento único, copiável). */
+  openDocument(): void {
+    const plan = this.plan();
+    if (!plan) return;
+    const correction = plan.phase === 'correction';
+    const v = this.versionOf(plan.id);
+    this.dialog.open(MarkdownViewDialogComponent, {
+      ...MARKDOWN_VIEW_DIALOG,
+      data: {
+        title: correction ? `Plano de correção${v ? ' v' + v : ''} completo` : `Análise${v ? ' v' + v : ''} completa`,
+        subtitle: plan.title,
+        icon: correction ? 'build' : 'troubleshoot',
+        card: plan.cardNumber,
+        load: () => this.documents.build(plan, this.history()),
+      } satisfies MarkdownViewDialogData,
+    });
+  }
 
   /** Botão do "Em que pé está": pede ao executor (ou mostra o comando sem executor). */
   runFromHeadline(): void {
