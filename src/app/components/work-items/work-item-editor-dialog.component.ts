@@ -22,14 +22,15 @@ import {
   kindParams
 } from './work-item.model';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
-import { WI_BUG_ICON, WI_US_ICON } from '../../helpers/work-item-type-icons';
+import { WiTypeChipsComponent, WiTypeIconComponent } from './wi-type-icon.component';
+import { defaultItemType, itemTypeLook } from './work-item-types';
 import { WiParamFieldComponent } from '../work-item-pickers/wi-param-field.component';
 import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
 import { BranchSuggestContext } from '../work-item-pickers/param-input';
 
 export interface WorkItemEditorDialogData {
   card: string;
-  /** Tipo do card (padrão do item novo). */
+  /** Tipo do card no DevOps (contexto). O tipo do item novo é `task` ou o do modelo (rodada 4). */
   cardType: WorkItemType;
   /** Editar este item (só `pending`). Sem ele = criar. */
   item?: WorkItem | null;
@@ -94,7 +95,7 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
 @Component({
   selector: 'app-work-item-editor-dialog',
   standalone: true,
-  imports: [FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, MatSelectModule, WiParamFieldComponent],
+  imports: [FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, MatSelectModule, WiParamFieldComponent, WiTypeChipsComponent, WiTypeIconComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <div class="wi-dlg wie">
@@ -125,16 +126,19 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
             <span>Título</span>
             <input class="wi-input" [(ngModel)]="title" maxlength="300" placeholder="Ex.: PR master → release-version">
           </label>
-          @if (!editing) {
+          @if (editing) {
             <div class="wi-field">
               <span>Tipo</span>
-              <div class="wie__seg" role="radiogroup">
-                <button type="button" [class.on]="type() === 'bug'" (click)="type.set('bug')"><mat-icon [svgIcon]="bugIcon" class="wi-type"></mat-icon>Bug</button>
-                <button type="button" [class.on]="type() === 'user-story'" (click)="type.set('user-story')"><mat-icon [svgIcon]="usIcon" class="wi-type"></mat-icon>User Story</button>
-              </div>
+              <span class="wie__type-ro"><app-wi-type-icon [type]="type()" [catalog]="catalog()" [tip]="false" />{{ typeLabel() }}</span>
             </div>
           }
         </div>
+        @if (!editing) {
+          <div class="wi-field">
+            <span>Tipo do item</span>
+            <app-wi-type-chips [value]="type()" (valueChange)="type.set($event)" [catalog]="catalog()" />
+          </div>
+        }
 
         <label class="wi-field">
           <span>Descrição (markdown)</span>
@@ -212,9 +216,6 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
   styles: [WORK_DIALOG_STYLES, `
     .wie__row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
     .wie__grow { flex: 1 1 260px; }
-    .wie__seg { display: inline-flex; border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); border-radius: 8px; overflow: hidden; }
-    .wie__seg button { display: inline-flex; align-items: center; gap: 6px; background: transparent; border: 0; color: var(--cc-text-2); font: inherit; font-size: 12.5px; padding: 6px 10px; cursor: pointer; }
-    .wie__seg button.on { background: color-mix(in srgb, var(--mat-sys-primary) 16%, transparent); color: var(--mat-sys-on-surface); }
     .wie__tasks-head { display: flex; align-items: center; }
     .wie__task { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); background: color-mix(in srgb, var(--surface-2, #2e343f) 55%, transparent); }
     .wie__task-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -232,6 +233,7 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
     .wie__param > span { flex: 0 0 140px; overflow: hidden; text-overflow: ellipsis; padding-top: 8px; }
     .wie__more { align-self: flex-start; background: none; border: 0; color: var(--mat-sys-primary); font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
     .wie__small { margin: 0; font-size: 12px; }
+    .wie__type-ro { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 7px 0; }
     .wie__dup > div { display: flex; flex-direction: column; gap: 6px; flex: 1; }
     @media (max-width: 640px) { .wie__param { flex-direction: column; align-items: stretch; } .wie__param > span { flex: none; } }
   `]
@@ -243,15 +245,15 @@ export class WorkItemEditorDialogComponent {
   private pickers = inject(WorkItemPickerSource);
 
   readonly editing = !!this.data.item;
-  readonly bugIcon = WI_BUG_ICON;
-  readonly usIcon = WI_US_ICON;
   readonly num = formatWorkNumber;
 
   readonly catalog = signal<WorkItemCatalog | null>(this.data.catalog ?? null);
   readonly catalogError = signal<string | null>(null);
   readonly templateKey = signal<string | null>(null);
   readonly template = computed<WorkItemTemplate | null>(() => this.catalog()?.templates?.find((t) => t.key === this.templateKey()) ?? null);
-  readonly type = signal<WorkItemType>(this.data.item?.type ?? this.data.cardType ?? 'bug');
+  /** Tipo do item: o do item (editar), senão `task` / o do modelo — nunca mais o tipo do card. */
+  readonly type = signal<WorkItemType>(this.data.item?.type ?? defaultItemType(null, this.data.catalog));
+  readonly typeLabel = computed(() => itemTypeLook(this.type(), this.catalog()).label);
   readonly tasks = signal<TaskDraft[]>((this.data.item?.tasks ?? []).slice().sort((a, b) => a.order - b.order).map(toTaskDraft));
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
@@ -342,7 +344,7 @@ export class WorkItemEditorDialogComponent {
     if (!t) return;
     this.title = t.title;
     this.description = t.description ?? '';
-    if (t.type) this.type.set(t.type);
+    this.type.set(defaultItemType(t.type, this.catalog()));
     this.tasks.set(t.tasks.map((x) => toTaskDraft({ ...x, number: null, stepKey: null, kind: `${x.kind}` })));
   }
 

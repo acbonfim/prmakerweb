@@ -66,6 +66,20 @@ export interface CardRulesSummary {
 }
 
 /**
+ * 0085 rodada 4: criar o item a partir de uma ferramenta (`POST WorkItems/card/{card}/from-template`) — o servidor
+ * renderiza o modelo com as respostas dos `ask` e cria o item (origem `template`; 409 `duplicate` igual ao criar).
+ */
+export interface FromTemplateRequest {
+  templateKey: string;
+  answers: Record<string, string>;
+  title?: string | null;
+  /** Tipo do item escolhido (padrão no servidor: o do modelo ou `task`). */
+  type?: string | null;
+  allowDuplicate?: boolean;
+  duplicateReason?: string | null;
+}
+
+/**
  * 0085: API dos itens de trabalho do card (`api/v1/WorkItems`) e o cancelar-com-desfazer do plano
  * (`ExecutionPlan/{id}/cancel`). Os erros saem como `WorkItemError` com mensagem pronta para a tela
  * (409 `duplicate` traz o item existente; 409 `notEditable` explica que o item já começou).
@@ -108,6 +122,11 @@ export class WorkItemsService {
 
   create(card: string, req: CreateWorkItemRequest): Observable<WorkItem> {
     return this.http.post<WorkItem>(`${this.apiUrl}/card/${this.card(card)}`, req).pipe(this.fail('Não foi possível criar o item.'));
+  }
+
+  /** Rodada 4: cria o item a partir de uma ferramenta (modelo + respostas). */
+  fromTemplate(card: string, req: FromTemplateRequest): Observable<WorkItem> {
+    return this.http.post<WorkItem>(`${this.apiUrl}/card/${this.card(card)}/from-template`, req).pipe(this.fail('Não foi possível criar o item pela ferramenta.'));
   }
 
   update(number: number, req: UpdateWorkItemRequest): Observable<WorkItem> {

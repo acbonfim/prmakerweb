@@ -45,6 +45,7 @@ import { listenWorkItems } from '../../../components/work-items/work-items-live'
 import { WorkbenchCardComponent } from '../../../components/workbench-card/workbench-card.component';
 import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workbench-prs.component';
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
+import { SpecialistToolsComponent } from '../../../components/specialist-tools/specialist-tools.component';
 import {
   registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel, workItemTypeOf
 } from '../../../helpers/work-item-type-icons';
@@ -139,7 +140,7 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
     MatInputModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
     CardAlertBarComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
     CardSituationComponent, CardAssistantComponent, CardHoursComponent, WorkItemListComponent, WorkbenchPrsComponent,
-    WorkbenchCardComponent
+    WorkbenchCardComponent, SpecialistToolsComponent
   ],
   templateUrl: './workbench.component.html',
   styleUrl: './workbench.component.scss'
@@ -267,6 +268,12 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   readonly analyzing = signal(false);
   readonly cancelling = signal(false);
   readonly chatFlash = signal(false);
+  /** Rodada 4: painel "Ferramentas do especialista" (sobre a coluna do especialista; tela cheia no celular). */
+  readonly toolsOpen = signal(false);
+  /** Ferramentas que se aplicam ao card (contagem do botão). */
+  readonly toolCount = signal<number | null>(null);
+  /** Aba do celular antes de abrir as ferramentas (fechar volta para ela). */
+  private tabBeforeTools: WorkbenchMobileTab | null = null;
 
   // ── Execução do item (0085, rodada 3): a versão é o item de trabalho ────────────────────────
   /** Itens do card que têm plano (lidos aqui para o seletor; a lista de itens tem a sua própria leitura). */
@@ -503,6 +510,8 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     if (!force && card === this.card() && this.cardState() !== 'error') return;
     if (card !== this.card()) {
       this.itemCount.set(null);
+      this.toolsOpen.set(false);
+      this.toolCount.set(null);
       this.executingItems.set([]);
       this.prCount.set(null);
       this.planHeadline.set(null);
@@ -613,6 +622,38 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     if (!card) return;
     const sent = await this.actions.askSpecialist(card, this.cardType());
     if (!sent || this.card() !== card) return;
+    if (this.narrow()) this.selectMobile('chat');
+    this.flashChat();
+  }
+
+  // ── Ferramentas do especialista (rodada 4) ────────────────────────────────────────────────────
+
+  /** Abre o painel de ferramentas; no celular ele cobre a tela (a aba do especialista fica por baixo). */
+  openTools(): void {
+    if (this.narrow()) {
+      this.tabBeforeTools = this.mobileTab();
+      if (this.mobileTab() !== 'chat') this.selectMobile('chat');
+    }
+    this.toolsOpen.set(true);
+  }
+
+  closeTools(restore = true): void {
+    this.toolsOpen.set(false);
+    if (restore && this.narrow() && this.tabBeforeTools && this.tabBeforeTools !== this.mobileTab()) this.selectMobile(this.tabBeforeTools);
+    this.tabBeforeTools = null;
+  }
+
+  /** Item criado por uma ferramenta: fecha o painel, mostra a lista e abre o item. */
+  onToolCreated(n: number): void {
+    this.closeTools(false);
+    this.selectMobile('items');
+    this.openItem.set(null);
+    queueMicrotask(() => this.openItem.set(n));
+  }
+
+  /** Pedido ao especialista enviado: fecha o painel e mostra a conversa. */
+  onToolAsked(): void {
+    this.closeTools(false);
     if (this.narrow()) this.selectMobile('chat');
     this.flashChat();
   }

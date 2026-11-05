@@ -11,10 +11,12 @@ import { TourDefinition } from './tour.model';
  * do card) e a linha de horas fica ao lado das abas Itens | Plano | Card.
  * v4 (rodada 3): a aba Plano virou **Execução** — o plano é por item de trabalho (seletor dos itens com plano, sem
  * "Análise v1 / Correção v2"); item fechado = criar outro item (na tela ou pelo especialista).
+ * v5 (rodada 4): **Ferramentas do especialista** — botão no topo da coluna do especialista (e ao lado de "+ Novo item")
+ * com os atalhos do dia a dia que criam o item já montado.
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 4,
+  version: 5,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -152,6 +154,19 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'repetir os que existem) — é assim que um item fechado ganha a sua continuação. Nada muda sem você aceitar.'
     },
     {
+      id: 'tools', anchor: 'wb-tools', group: 'Conversa e histórico', since: 5, phase: 'card', side: 'left', align: 'start', optional: true,
+      prepare: 'tab:chat',
+      title: 'Ferramentas do especialista',
+      body: '<b>Ferramentas</b> abre os atalhos do dia a dia: <i>abrir PR para uma branch</i>, PRs do fluxo, promover para ' +
+        '<b>release-version</b>/<b>hotfix-version</b>/<b>edge</b>, ajuste pós-QA, fechamento, script com chamado… Responda 1 ou 2 ' +
+        'perguntas e o item sai pronto.',
+      detail: 'A lista mostra só as ferramentas que valem para este card (as outras ficam em "mostrar também", com o motivo). ' +
+        'Ao escolher uma, o formulário pede só o necessário — repositório, branch de destino (com os destinos conhecidos do ' +
+        'repositório), estado, PR… — e mostra a prévia das sub-tarefas. <b>Criar item</b> cria o item de trabalho na hora; ' +
+        '<b>Pedir ao especialista</b> manda a ferramenta e as respostas na conversa para ele conferir e criar. O mesmo botão fica ' +
+        'ao lado de "+ Novo item".'
+    },
+    {
       id: 'help', anchor: 'wb-help', group: 'Começo', since: 1, phase: 'card', side: 'bottom', align: 'end', guide: false,
       title: 'Pronto! A ajuda fica aqui',
       body: 'Reveja o tour ou leia o guia completo em <b>Como usar esta tela</b>.'
@@ -162,6 +177,7 @@ export const WORKBENCH_TOUR: TourDefinition = {
     tips: [
       '<b>Uma entrega = um item.</b> Cada item tem sub-tarefas em ordem e roda em paralelo aos outros itens do card.',
       '<b>Dúvida ou pedido novo?</b> Fale com o <b>Especialista do caso</b> — ele cria itens sem repetir os que já existem.',
+      '<b>Tarefa do dia a dia?</b> Use as <b>Ferramentas</b> (PR para uma branch, promoção, fechamento…): o item sai pronto.',
       '<b>A versão é o item.</b> Precisa mudar algo de um item fechado? Crie outro item (na tela ou pelo especialista).',
       '<b>Errou o caminho?</b> "Cancelar e desfazer" fecha PRs e apaga branches criadas, sempre pelo PRMake.'
     ]

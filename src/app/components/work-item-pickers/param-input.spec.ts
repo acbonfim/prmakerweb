@@ -12,6 +12,7 @@ import {
   paramOptions,
   parseCommits,
   pickerErrorHint,
+  prOptions,
   splitTargets,
   targetSuggestions
 } from './param-input';
@@ -173,6 +174,48 @@ describe('0085 r3 — controles dos parâmetros (param-input)', () => {
       expect(paramLink('branch', 'x', null, 'edv')).toBeNull();
       expect(paramLink('branch', 'x', b, null)).toBeNull();
       expect(paramLink('state', 'Closed', b, 'edv')).toBeNull();
+    });
+  });
+
+  describe('rodada 4 — pull request (kind pr-review)', () => {
+    it('paramInput: input pull-request e reserva pelo nome', () => {
+      expect(paramInput({ key: 'x', input: 'pull-request' })).toBe('pull-request');
+      expect(paramInput({ key: 'pullRequest' })).toBe('pull-request');
+      expect(paramInput({ key: 'focus' })).toBe('textarea');
+    });
+
+    it('paramLink: URL do PR vira link (sem precisar da base)', () => {
+      expect(paramLink('pull-request', 'https://github.com/o/r/pull/12', null)).toBe('https://github.com/o/r/pull/12');
+      expect(paramLink('pull-request', '12', 'https://github.com/o')).toBeNull();
+    });
+
+    const pr = (over: Record<string, unknown>) => ({
+      id: 1, pullRequestRegisterId: 1, cardNumber: '77434', repositoryId: 'edv-solvace', branchPrefix: 'hotfix', branchName: 'hotfix/77434-dev',
+      targetBranch: 'development', number: 10, url: 'https://github.com/o/edv-solvace/pull/10', title: 'Fix OEE', description: '', status: 'OPEN',
+      isDraft: false, statusSyncedAt: null, statusStale: false, alreadyExisted: false, userId: 'u', createdAt: '2026-11-01T10:00:00', updatedAt: null,
+      ...over
+    }) as any;
+
+    it('prOptions: repositório escolhido primeiro, abertos antes, mais novos primeiro; filtra', () => {
+      const list = [
+        pr({ id: 1, number: 10, url: 'u10', repositoryId: 'edv-solvace', status: 'MERGED' }),
+        pr({ id: 2, number: 11, url: 'u11', repositoryId: 'edv-solvace-api', status: 'OPEN' }),
+        pr({ id: 3, number: 12, url: 'u12', repositoryId: 'edv-solvace', status: 'OPEN', createdAt: '2026-11-03T10:00:00' }),
+        pr({ id: 4, number: null, url: '', status: 'LEGACY' })
+      ];
+      const o = prOptions(list, 'edv-solvace');
+      expect(o.map((x) => x.value)).toEqual(['u12', 'u10', 'u11']);
+      expect(o[0].label).toBe('#12 Fix OEE');
+      expect(o[0].hint).toBe('edv-solvace: hotfix/77434-dev → development');
+      expect(o[0].status).toBe('aberto');
+      expect(o[0].open).toBeTrue();
+      expect(o[1].status).toBe('mesclado');
+      expect(prOptions(list, null, '#11').map((x) => x.value)).toEqual(['u11']);
+      expect(prOptions(null)).toEqual([]);
+    });
+
+    it('prOptions: sem URL usa repo#número', () => {
+      expect(prOptions([pr({ url: '', number: 7 })])[0].value).toBe('edv-solvace#7');
     });
   });
 });

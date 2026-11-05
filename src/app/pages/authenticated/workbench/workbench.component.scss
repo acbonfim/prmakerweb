@@ -466,6 +466,7 @@
 
 // Lateral
 .wb-side {
+  position: relative;
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -482,6 +483,39 @@
   transition: box-shadow .3s ease;
 }
 .wb-chat__box { flex: 1 1 auto; min-height: 0; }
+
+// Rodada 4: botão "Ferramentas" (topo do especialista e barra dos itens) e o painel sobre a coluna do especialista
+.wb-chat { container-type: inline-size; }
+.wb-tools-btn.mat-mdc-outlined-button {
+  flex: none;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  --mdc-outlined-button-outline-color: color-mix(in srgb, #8e6cf0 55%, transparent);
+  .mat-icon { font-size: 17px; width: 17px; height: 17px; margin-right: 4px; }
+  .wb-count { margin-left: 6px; }
+}
+.wb-tools-btn--on.mat-mdc-outlined-button { background: color-mix(in srgb, #8e6cf0 22%, transparent); }
+.wb-tools-btn--list.mat-mdc-outlined-button { height: 36px; border-radius: 8px; }
+@container (max-width: 380px) {
+  .wb-tools-btn__label { display: none; }
+  .wb-tools-btn.mat-mdc-outlined-button { padding: 0 8px; min-width: 0; .mat-icon { margin-right: 0; } }
+}
+.wb-tools {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45), 0 0 0 1px color-mix(in srgb, #8e6cf0 35%, transparent);
+  animation: wb-tools-in .18s ease-out;
+  > app-specialist-tools { flex: 1 1 auto; }
+}
+@keyframes wb-tools-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wb-tools { animation: none; } }
 .wb-flash { box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 70%, transparent); }
 
 .wb-prs { display: inline-flex; align-items: center; }
@@ -566,6 +600,8 @@
     flex: none;
     height: calc(100dvh - var(--cime-topbar-total, 70px) - var(--cime-tabs-h, 30px) - var(--wb-tabs-h) - 140px);
   }
+  // Celular: as ferramentas em tela cheia (abaixo dos overlays do Material — autocomplete dos campos fica por cima)
+  .wb-tools { position: fixed; inset: var(--cime-topbar-total, 70px) 0 0 0; z-index: 999; border-radius: 0; box-shadow: none; }
 }
 
 /* DevOps indisponível: aviso fino em vez de esconder a Bancada */

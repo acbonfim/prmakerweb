@@ -1,5 +1,6 @@
 import type { TaskKindParam, TaskParamInput, TaskParamOption } from '../work-items/work-item.model';
 import type { CardStates, GitHubBranch } from '../../services/work-items.service';
+import type { GithubPullRequest } from '../../services/pull-request.service';
 
 /**
  * 0085 rodada 3 — lógica pura dos controles dos parâmetros das sub-tarefas (sem Angular, testada em
@@ -7,7 +8,7 @@ import type { CardStates, GitHubBranch } from '../../services/work-items.service
  * card, o valor dos commits e os links do GitHub.
  */
 
-export const PARAM_INPUTS: readonly TaskParamInput[] = ['repository', 'branch', 'target-branch', 'state', 'commits', 'text', 'textarea', 'select'];
+export const PARAM_INPUTS: readonly TaskParamInput[] = ['repository', 'branch', 'target-branch', 'state', 'commits', 'text', 'textarea', 'select', 'pull-request'];
 
 /** Bases do fluxo Solvace (destinos usuais de PR), na ordem em que aparecem nas sugestões. */
 export const BASE_BRANCHES: readonly string[] = ['release-version', 'hotfix-version', 'qa', 'development', 'master', 'edge'];
@@ -43,6 +44,12 @@ export function paramInput(param: Pick<TaskKindParam, 'key' | 'input' | 'options
       return 'state';
     case 'commits':
       return 'commits';
+    case 'pullrequest':
+    case 'pull-request':
+    case 'pull_request':
+    case 'pr':
+      return 'pull-request';
+    case 'focus':
     case 'description':
     case 'instructions':
     case 'message':
@@ -211,6 +218,7 @@ export function githubBase(url?: string | null, owner?: string | null): string |
 export function paramLink(input: TaskParamInput, value: string | null | undefined, base: string | null | undefined, repository?: string | null): string | null {
   const v = `${value ?? ''}`.trim();
   const b = `${base ?? ''}`.trim();
+  if (input === 'pull-request') return /^https?:\/\//i.test(v) ? v : null;
   if (!v || !b) return null;
   if (input === 'repository') return `${b}/${encodeURIComponent(v)}`;
   const repo = `${repository ?? ''}`.trim();
@@ -231,4 +239,49 @@ export function paramDisplay(input: TaskParamInput, value: string | null | undef
   }
   if (input === 'select') return options?.find((o) => o.value === v)?.label ?? v;
   return v;
+}
+
+/** Opção do seletor de PR (rodada 4, kind `pr-review`). */
+export interface PrOption {
+  /** Valor gravado: a URL do PR (ou "repo#número" sem URL). */
+  value: string;
+  label: string;
+  hint: string | null;
+  status: string;
+  open: boolean;
+  repository: string;
+}
+
+const PR_STATUS_LABEL: Record<string, string> = { open: 'aberto', merged: 'mesclado', closed: 'fechado', draft: 'rascunho', legacy: 'legado' };
+
+/**
+ * PRs do card para o seletor: os do repositório escolhido primeiro, abertos antes dos demais, mais novos primeiro;
+ * filtra pelo texto (número, título, branch, repositório). Registros sem número nem URL (legados) saem.
+ */
+export function prOptions(list: readonly GithubPullRequest[] | null | undefined, repository?: string | null, query?: string | null): PrOption[] {
+  const repo = `${repository ?? ''}`.trim().toLowerCase();
+  const q = `${query ?? ''}`.trim().toLowerCase().replace(/^#/, '');
+  const opts = (list ?? [])
+    .filter((p) => p && (p.url || p.number))
+    .map((p) => {
+      const status = `${p.status ?? ''}`.toLowerCase();
+      const open = status === 'open' || status === 'draft';
+      const value = `${p.url ?? ''}`.trim() || `${p.repositoryId}#${p.number}`;
+      return {
+        value,
+        label: `${p.number ? '#' + p.number + ' ' : ''}${p.title || p.branchName}`.trim(),
+        hint: `${p.repositoryId}: ${p.branchName} → ${p.targetBranch}`,
+        status: PR_STATUS_LABEL[status] ?? (status || '—'),
+        open,
+        repository: `${p.repositoryId ?? ''}`,
+        at: Date.parse(p.updatedAt || p.createdAt || '') || 0
+      };
+    })
+    .filter((o) => !q || `${o.label} ${o.hint} ${o.value}`.toLowerCase().includes(q));
+  opts.sort((a, b) =>
+    Number(b.repository.toLowerCase() === repo) - Number(a.repository.toLowerCase() === repo)
+    || Number(b.open) - Number(a.open)
+    || b.at - a.at);
+  const seen = new Set<string>();
+  return opts.filter((o) => (seen.has(o.value) ? false : (seen.add(o.value), true))).map(({ at: _at, ...o }) => o);
 }

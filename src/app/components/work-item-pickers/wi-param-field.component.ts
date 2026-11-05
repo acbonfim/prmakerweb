@@ -8,6 +8,7 @@ import { WiBranchPickerComponent } from './wi-branch-picker.component';
 import { WiCommitsPickerComponent } from './wi-commits-picker.component';
 import { WiRepoPickerComponent } from './wi-repo-picker.component';
 import { WiStatePickerComponent } from './wi-state-picker.component';
+import { WiPrPickerComponent } from './wi-pr-picker.component';
 import { PICKER_STYLES } from './picker.styles';
 
 /**
@@ -18,7 +19,7 @@ import { PICKER_STYLES } from './picker.styles';
 @Component({
   selector: 'app-wi-param-field',
   standalone: true,
-  imports: [FormsModule, MatIconModule, MatTooltipModule, WiBranchPickerComponent, WiCommitsPickerComponent, WiRepoPickerComponent, WiStatePickerComponent],
+  imports: [FormsModule, MatIconModule, MatTooltipModule, WiBranchPickerComponent, WiCommitsPickerComponent, WiRepoPickerComponent, WiStatePickerComponent, WiPrPickerComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <div class="wip__line">
@@ -34,6 +35,10 @@ import { PICKER_STYLES } from './picker.styles';
         }
         @case ('state') { <app-wi-state-picker [value]="text()" (valueChange)="value.set($event)" [card]="card()" [label]="label()" [placeholder]="param().placeholder ?? null" /> }
         @case ('commits') { <app-wi-commits-picker [value]="text()" (valueChange)="value.set($event)" [repository]="repository()" [branch]="sourceBranch()" [label]="label()" /> }
+        @case ('pull-request') {
+          <app-wi-pr-picker [value]="text()" (valueChange)="value.set($event)" [card]="card()" [repository]="repository()"
+                            [label]="label()" [placeholder]="param().placeholder ?? null" />
+        }
         @case ('select') {
           <select class="wi-select" [ngModel]="text()" (ngModelChange)="value.set($event)" [attr.aria-label]="label()">
             <option value="">—</option>
@@ -53,7 +58,7 @@ import { PICKER_STYLES } from './picker.styles';
       }
     </div>
   `,
-  styles: [PICKER_STYLES, `app-wi-param-field, app-wi-repo-picker, app-wi-branch-picker, app-wi-state-picker, app-wi-commits-picker { display: block; flex: 1; min-width: 0; }`]
+  styles: [PICKER_STYLES, `app-wi-param-field, app-wi-repo-picker, app-wi-branch-picker, app-wi-state-picker, app-wi-commits-picker, app-wi-pr-picker { display: block; flex: 1; min-width: 0; }`]
 })
 export class WiParamFieldComponent {
   readonly param = input.required<TaskKindParam>();
@@ -74,7 +79,7 @@ export class WiParamFieldComponent {
   readonly hasOption = computed(() => this.options().some((o) => o.value === this.text()));
   readonly link = computed(() => {
     const input = this.kindOfInput();
-    if (input !== 'repository' && input !== 'branch' && input !== 'target-branch') return null;
+    if (input !== 'repository' && input !== 'branch' && input !== 'target-branch' && input !== 'pull-request') return null;
     return paramLink(input, this.text(), this.githubUrl(), this.repository());
   });
 }

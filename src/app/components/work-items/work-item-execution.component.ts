@@ -22,7 +22,8 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { WorkItemsService } from '../../services/work-items.service';
 import { WsService } from '../../services/ws.service';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
-import { registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel } from '../../helpers/work-item-type-icons';
+import { registerWorkItemTypeIcons } from '../../helpers/work-item-type-icons';
+import { WiTypeIconComponent } from './wi-type-icon.component';
 import {
   LiveFeedEntry,
   TASK_ACTION_LABELS,
@@ -81,7 +82,7 @@ const FLASH_MS = 1_600;
 @Component({
   selector: 'app-work-item-execution',
   standalone: true,
-  imports: [DatePipe, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe],
+  imports: [DatePipe, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wie" [class.wie--live]="live()" [class.wie--celebrate]="celebrate()" [attr.aria-busy]="live()"
@@ -93,7 +94,7 @@ const FLASH_MS = 1_600;
         </div>
         <div class="wie__head-main">
           <div class="wie__title">
-            @if (item(); as it) { <mat-icon class="wie__type" [svgIcon]="typeIcon(it.type)" [matTooltip]="typeLabel(it.type)"></mat-icon> }
+            @if (item(); as it) { <app-wi-type-icon class="wie__type" [type]="it.type" [catalog]="catalog()" /> }
             <span class="wie__num">{{ num(number()) }}</span>
             <span class="wie__title-text" [title]="item()?.title || ''">{{ item()?.title || 'Carregando…' }}</span>
           </div>
@@ -398,8 +399,6 @@ export class WorkItemExecutionComponent {
 
   readonly num = formatWorkNumber;
   readonly executor = executorLabel;
-  readonly typeIcon = workItemTypeIcon;
-  readonly typeLabel = workItemTypeLabel;
   readonly requestLabel = requestStatusLabel;
   readonly actIcon = activityIcon;
   readonly taskLook = (t: WorkTask) => taskStatusLook(t.status);
