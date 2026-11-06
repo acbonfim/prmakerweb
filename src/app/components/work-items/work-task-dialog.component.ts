@@ -15,6 +15,7 @@ import {
   WorkItem,
   WorkItemCatalog,
   WorkTaskAction,
+  deliverablesOf,
   executorLabel,
   formatWorkNumber,
   kindInfo,
@@ -27,6 +28,7 @@ import { listenWorkItems } from './work-items-live';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
 import { WorkItemFilesComponent } from './work-item-files.component';
 import { WorkItemFilesStore } from './work-item-files.store';
+import { WorkDeliverablesComponent } from './work-deliverables.component';
 import { filesOfTask } from './work-item-files';
 import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
 import { paramDisplay, paramInput, paramLink, paramOptions } from '../work-item-pickers/param-input';
@@ -48,7 +50,7 @@ export interface WorkTaskDialogData {
 @Component({
   selector: 'app-work-task-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WorkItemFilesComponent],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WorkItemFilesComponent, WorkDeliverablesComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <!-- 0087: links de código (ref:) e de itens da engenharia reversa/Base Solvace abrem o popover aqui também -->
@@ -82,6 +84,19 @@ export interface WorkTaskDialogData {
             <section class="wi-sec"><h4 class="wi-sec__title">Descrição</h4><div class="wi-md" [innerHTML]="t.description | planMarkdown:'card'"></div></section>
           }
 
+          @if (showGenerated()) {
+            <!-- 0091: o que a sub-tarefa gerou de fato (PR, branch, código, chamado, card…) + os arquivos dela -->
+            <section class="wi-sec wtd__gen">
+              <h4 class="wi-sec__title">O que foi gerado @if (generatedCount()) { <small class="wi-muted">{{ generatedCount() }}</small> }</h4>
+              <app-work-deliverables [deliverables]="taskDeliverables()" [card]="data.card" [itemNumber]="data.itemNumber" [compact]="true" />
+              @if (taskFiles()) {
+                <h5 class="wtd__subtitle">Arquivos <small class="wi-muted">{{ taskFiles() }}</small></h5>
+                <app-work-item-files [store]="files" [card]="data.card" [taskNumber]="data.taskNumber" [compact]="true" />
+              }
+              @if (!generatedCount()) { <p class="wi-muted wtd__small">Nada registrado nesta sub-tarefa.</p> }
+            </section>
+          }
+
           @if (params().length) {
             <section class="wi-sec">
               <h4 class="wi-sec__title">Parâmetros</h4>
@@ -101,27 +116,6 @@ export interface WorkTaskDialogData {
             <section class="wi-sec"><h4 class="wi-sec__title">Resultado</h4><div class="wi-md" [innerHTML]="t.result | planMarkdown:'card'"></div></section>
           }
 
-          @if (outputs().length) {
-            <section class="wi-sec">
-              <h4 class="wi-sec__title">Saídas</h4>
-              <table class="wi-table"><tbody>
-                @for (o of outputs(); track o.key) {
-                  <tr><td>{{ o.key }}</td><td>
-                    @if (o.url) { <a class="wi-link" [href]="o.value" target="_blank" rel="noopener"><mat-icon>open_in_new</mat-icon>{{ o.value }}</a> }
-                    @else { {{ o.value }} }
-                  </td></tr>
-                }
-              </tbody></table>
-            </section>
-          }
-
-          @if (taskFiles() || !files.unavailable()) {
-            <section class="wi-sec">
-              <h4 class="wi-sec__title">Arquivos @if (taskFiles()) { <small class="wi-muted">{{ taskFiles() }}</small> }</h4>
-              <app-work-item-files [store]="files" [card]="data.card" [taskNumber]="data.taskNumber" [compact]="true" />
-            </section>
-          }
-
           @if (t.undo) {
             <section class="wi-sec">
               <h4 class="wi-sec__title">Como desfazer</h4>
@@ -135,10 +129,29 @@ export interface WorkTaskDialogData {
             <p class="wi-muted wtd__small">Sem informação de desfazer — ao cancelar com desfazer, esta sub-tarefa fica como está.</p>
           }
 
+          @if (outputs().length) {
+            <!-- 0091: a saída crua (JSON da sub-tarefa) fica recolhida; o que importa está em "O que foi gerado" -->
+            <details class="wtd__raw">
+              <summary>Dados brutos</summary>
+              <table class="wi-table"><tbody>
+                @for (o of outputs(); track o.key) {
+                  <tr><td>{{ o.key }}</td><td>
+                    @if (o.url) { <a class="wi-link" [href]="o.value" target="_blank" rel="noopener"><mat-icon>open_in_new</mat-icon>{{ o.value }}</a> }
+                    @else { {{ o.value }} }
+                  </td></tr>
+                }
+              </tbody></table>
+            </details>
+          }
+
           @if (actions().length) {
             <section class="wi-sec wtd__user">
               <h4 class="wi-sec__title">Sua parte</h4>
               <textarea class="wi-textarea" rows="2" [(ngModel)]="resultText" placeholder="Resultado / observação (opcional, markdown)"></textarea>
+              @if (!taskFiles() && !files.unavailable()) {
+                <!-- sem arquivos ainda: o anexar continua à mão (com arquivos, ele fica em "O que foi gerado") -->
+                <app-work-item-files [store]="files" [card]="data.card" [taskNumber]="data.taskNumber" [compact]="true" />
+              }
             </section>
           }
         } @else if (!error()) {
@@ -161,6 +174,10 @@ export interface WorkTaskDialogData {
     .wtd__small { font-size: 12px; margin: 0; }
     .wi-table code, .wi-note code { font-size: 12px; }
     .wtd__long { white-space: pre-wrap; }
+    .wtd__subtitle { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: var(--cc-text-2); }
+    .wtd__raw { font-size: 12.5px; }
+    .wtd__raw summary { cursor: pointer; width: fit-content; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--cc-text-3); }
+    .wtd__raw[open] summary { margin-bottom: 6px; }
   `]
 })
 export class WorkTaskDialogComponent {
@@ -208,6 +225,11 @@ export class WorkTaskDialogComponent {
     });
   });
   readonly outputs = computed(() => outputEntries(this.task()?.output));
+  /** 0091: entregas desta sub-tarefa (vêm no GET do item). */
+  readonly taskDeliverables = computed(() => deliverablesOf(this.item(), this.data.taskNumber));
+  readonly generatedCount = computed(() => this.taskDeliverables().length + this.taskFiles());
+  /** Com entrega ou arquivo, sempre; sem nada, só na concluída ("Nada registrado") — pendente/rodando esconde. */
+  readonly showGenerated = computed(() => this.generatedCount() > 0 || this.task()?.status === 'completed');
   readonly undoParams = computed(() => Object.entries(this.task()?.undo?.params ?? {}));
 
   readonly num = formatWorkNumber;
@@ -218,6 +240,7 @@ export class WorkTaskDialogComponent {
     this.pickers.ensureGithubUrl(this.data.catalog);
     this.reload();
     this.files.watch(this.data.itemNumber, this.data.card);
+    // 0091: `action: 'deliverable'` chega com o `number` do item — recarrega como os demais eventos do item.
     const stop = listenWorkItems(inject(WsService), this.data.card, (p) => {
       if (!p || p.number == null || p.number === this.data.itemNumber || p.taskNumber === this.data.taskNumber) this.reload();
     });

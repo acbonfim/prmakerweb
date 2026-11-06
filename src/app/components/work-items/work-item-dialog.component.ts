@@ -19,7 +19,13 @@ import {
   canCancel,
   canExecute,
   canUndo,
+  DeliverableGroupKey,
+  deliverablesOf,
+  deliverableUrls,
   executorLabel,
+  groupDeliverables,
+  prStatusLabel,
+  pullRequestLinks,
   formatWorkNumber,
   isItemBusy,
   itemProgress,
@@ -36,8 +42,19 @@ import { listenWorkItems } from './work-items-live';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
 import { WorkItemFilesComponent } from './work-item-files.component';
 import { WorkItemFilesStore } from './work-item-files.store';
+import { WorkDeliverablesComponent } from './work-deliverables.component';
 
-export type WorkItemDialogTab = 'overview' | 'tasks' | 'files' | 'history';
+/** Resumo da Visão geral: as entregas que não são PR, por grupo. */
+const SUMMARY_WORDS: Record<DeliverableGroupKey, [string, string]> = {
+  prs: ['texto de PR', 'textos de PR'],
+  code: ['branch/código', 'branches/código'],
+  tickets: ['chamado', 'chamados'],
+  card: ['registro no card', 'registros no card'],
+  other: ['outra entrega', 'outras entregas']
+};
+
+/** 0091: `deliverables` = aba Entregas (o que o item e as sub-tarefas geraram). */
+export type WorkItemDialogTab = 'overview' | 'tasks' | 'deliverables' | 'files' | 'history';
 
 export interface WorkItemDialogData {
   card: string;
@@ -52,13 +69,13 @@ export interface WorkItemDialogData {
 
 /**
  * 0085: modal do item de trabalho — cabeçalho (tipo/#/título/status/origem/quem criou), abas Visão geral · Sub-tarefas ·
- * Arquivos (rodada 5: só os do item, ao vivo) · Histórico e as ações (Executar, Editar ou "Criar novo a partir deste", Cancelar, Desfazer). Atualiza ao vivo pelo
+ * Entregas (0091: o que o item gerou, agrupado, com o `#n` da sub-tarefa) · Arquivos (rodada 5: só os do item, ao vivo) · Histórico e as ações (Executar, Editar ou "Criar novo a partir deste", Cancelar, Desfazer). Atualiza ao vivo pelo
  * evento `workItemsUpdated`. Abrir com `workDialogConfig(data, '860px')`.
  */
 @Component({
   selector: 'app-work-item-dialog',
   standalone: true,
-  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WiTypeIconComponent, WorkItemFilesComponent],
+  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WiTypeIconComponent, WorkItemFilesComponent, WorkDeliverablesComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <!-- 0087: links de código (ref:) e de itens da engenharia reversa/Base Solvace abrem o popover aqui também -->
@@ -81,6 +98,7 @@ export interface WorkItemDialogData {
       <nav class="wi-tabs" role="tablist">
         <button class="wi-tab" role="tab" [class.wi-tab--on]="tab() === 'overview'" (click)="tab.set('overview')">Visão geral</button>
         <button class="wi-tab" role="tab" [class.wi-tab--on]="tab() === 'tasks'" (click)="tab.set('tasks')">Sub-tarefas<small>{{ item()?.tasks?.length ?? '' }}</small></button>
+        <button class="wi-tab" role="tab" [class.wi-tab--on]="tab() === 'deliverables'" (click)="tab.set('deliverables')">Entregas<small>{{ deliverablesCount() || '' }}</small></button>
         <button class="wi-tab" role="tab" [class.wi-tab--on]="tab() === 'files'" (click)="tab.set('files')">Arquivos<small>{{ files.count() || '' }}</small></button>
         <button class="wi-tab" role="tab" [class.wi-tab--on]="tab() === 'history'" (click)="tab.set('history')">Histórico<small>{{ item()?.logs?.length || '' }}</small></button>
       </nav>
@@ -107,11 +125,27 @@ export interface WorkItemDialogData {
                   <app-work-item-files [store]="files" [card]="data.card" [compact]="true" [allowUpload]="false" />
                 </section>
               }
-              @if (it.links.length) {
+              @if (deliverables().length) {
+                <!-- 0091: resumo do que o item gerou (PRs com o estado) — o detalhe fica na aba Entregas -->
+                <section class="wi-sec">
+                  <h4 class="wi-sec__title">Entregas <small class="wi-muted">{{ deliverables().length }}</small></h4>
+                  <div class="wid__gen">
+                    @for (p of prs(); track p.url) {
+                      <a class="wid__pr" [class.wid__pr--reverted]="p.reverted" [href]="p.url" target="_blank" rel="noopener" [matTooltip]="p.deliverable?.title || p.url">
+                        <mat-icon>merge</mat-icon><span class="wid__pr-title">{{ p.title }}</span>
+                        @if (p.status) { <span class="wid__pr-st wid__pr-st--{{ p.status }}">{{ prLabel(p.status) }}</span> }
+                      </a>
+                    }
+                    @if (otherSummary(); as o) { <span class="wi-muted wid__gen-more">{{ o }}</span> }
+                    <button class="wid__linkbtn" (click)="tab.set('deliverables')">Ver todas as entregas<mat-icon>chevron_right</mat-icon></button>
+                  </div>
+                </section>
+              }
+              @if (otherLinks().length) {
                 <section class="wi-sec">
                   <h4 class="wi-sec__title">Links</h4>
                   <div class="wi-links">
-                    @for (l of it.links; track $index) {
+                    @for (l of otherLinks(); track $index) {
                       @if (l.url) { <a class="wi-link" [href]="l.url" target="_blank" rel="noopener"><mat-icon>{{ linkIco(l.kind) }}</mat-icon>{{ l.title || l.url }}</a> }
                       @else { <span class="wi-link wi-muted"><mat-icon>{{ linkIco(l.kind) }}</mat-icon>{{ l.title }}</span> }
                     }
@@ -159,6 +193,19 @@ export interface WorkItemDialogData {
                   </li>
                 }
               </ol>
+            }
+            @case ('deliverables') {
+              @if (!deliverables().length && !files.count()) {
+                <p class="wi-muted wid__p">Este item ainda não gerou nada.</p>
+              } @else {
+                <app-work-deliverables [deliverables]="deliverables()" [card]="data.card" [itemNumber]="data.number" [showTask]="true" [grouped]="true" (openTask)="openTaskNumber($event)" />
+                @if (files.count()) {
+                  <section class="wi-sec">
+                    <h5 class="wid__group-title"><mat-icon>folder_open</mat-icon>Arquivos<small>{{ files.count() }}</small></h5>
+                    <app-work-item-files [store]="files" [card]="data.card" [compact]="true" [allowUpload]="false" />
+                  </section>
+                }
+              }
             }
             @case ('files') {
               <app-work-item-files [store]="files" [card]="data.card" />
@@ -222,6 +269,27 @@ export interface WorkItemDialogData {
     .wid__kind { font-size: 16px; width: 16px; height: 16px; color: var(--cc-text-3); flex: none; }
     .wid__qa.mat-mdc-icon-button { width: 28px; height: 28px; padding: 2px; }
     .wid__qa mat-icon { font-size: 17px; width: 17px; height: 17px; }
+    .wid__gen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+    .wid__pr { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; padding: 2px 6px 2px 8px; border-radius: 999px; font-size: 12px;
+      text-decoration: none; color: var(--mat-sys-primary); border: 1px solid var(--cc-surface-border-strong, rgba(127,127,127,.3)); }
+    .wid__pr:hover { border-color: var(--mat-sys-primary); }
+    .wid__pr mat-icon { font-size: 14px; width: 14px; height: 14px; flex: none; }
+    .wid__pr-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wid__pr--reverted { opacity: .6; }
+    .wid__pr--reverted .wid__pr-title { text-decoration: line-through; }
+    .wid__pr-st { --c: #8b949e; flex: none; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; line-height: 16px;
+      color: color-mix(in srgb, var(--c) 80%, var(--mat-sys-on-surface)); background: color-mix(in srgb, var(--c) 15%, transparent);
+      border: 1px solid color-mix(in srgb, var(--c) 40%, transparent); }
+    .wid__pr-st--open { --c: #2ea043; }
+    .wid__pr-st--merged { --c: #a371f7; }
+    .wid__pr-st--closed { --c: #e5534b; }
+    .wid__gen-more { font-size: 12px; }
+    .wid__linkbtn { display: inline-flex; align-items: center; gap: 0; background: none; border: 0; padding: 0; font: inherit; font-size: 12px; color: var(--mat-sys-primary); cursor: pointer; }
+    .wid__linkbtn:hover { text-decoration: underline; }
+    .wid__linkbtn mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .wid__group-title { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; font-weight: 600; color: var(--cc-text-2); }
+    .wid__group-title mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .wid__group-title small { color: var(--cc-text-3); font-weight: 400; }
     .wid__logs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
     .wid__logs li { display: flex; gap: 10px; font-size: 12.5px; }
     .wid__log-at { flex: none; width: 76px; color: var(--cc-text-3); font-variant-numeric: tabular-nums; }
@@ -251,6 +319,27 @@ export class WorkItemDialogComponent {
   readonly canRun = computed(() => { const it = this.item(); return !!it && canExecute(it); });
   readonly canCancelIt = computed(() => { const it = this.item(); return !!it && canCancel(it); });
   readonly canUndoIt = computed(() => { const it = this.item(); return !!it && canUndo(it); });
+  /** 0091: entregas do item e das sub-tarefas (vêm no GET do item; a lista leve não traz). */
+  readonly deliverables = computed(() => deliverablesOf(this.item()));
+  /** Aba Entregas: entregas + arquivos do item. */
+  readonly deliverablesCount = computed(() => this.deliverables().length + this.files.count());
+  /** PRs das entregas (com o estado) para o resumo da Visão geral. */
+  readonly prs = computed(() => pullRequestLinks({ deliverables: this.deliverables(), links: [], tasks: [] }));
+  /** O resto das entregas em uma linha ("1 chamado · 2 registros no card"). */
+  readonly otherSummary = computed(() => {
+    const prUrls = new Set(this.prs().map((p) => p.url));
+    const rest = this.deliverables().filter((d) => !(d.kind === 'pr' && prUrls.has((d.url ?? '').trim())));
+    return groupDeliverables(rest).map((g) => {
+      const [one, many] = SUMMARY_WORDS[g.key];
+      return `${g.items.length} ${g.items.length === 1 ? one : many}`;
+    }).join(' · ');
+  });
+  /** Links antigos do item que não viraram entrega (mesma URL não repete). */
+  readonly otherLinks = computed(() => {
+    const it = this.item();
+    const urls = deliverableUrls(this.deliverables());
+    return (it?.links ?? []).filter((l) => !l.url || !urls.has(l.url.trim()));
+  });
   /** Histórico do mais recente para o mais antigo. */
   readonly logs = computed(() => (this.item()?.logs ?? []).slice().sort((a, b) => (b.at > a.at ? 1 : b.at < a.at ? -1 : b.id - a.id)));
 
@@ -259,6 +348,7 @@ export class WorkItemDialogComponent {
   readonly originIco = originIcon;
   readonly executor = executorLabel;
   readonly linkIco = linkIcon;
+  readonly prLabel = prStatusLabel;
   readonly taskLook = (t: WorkTask) => taskStatusLook(t.status);
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
   readonly quick = (t: WorkTask) => userTaskActions(t).filter((a) => a === 'complete' || a === 'skip' || a === 'start');
@@ -272,6 +362,7 @@ export class WorkItemDialogComponent {
     this.reload();
     this.files.watch(this.data.number, this.data.card);
     if (!this.catalog()) this.actions.catalogOrNull(this.data.card).then((c) => c && this.catalog.set(c));
+    // 0091: `action: 'deliverable'` vem com o `number` do item — entra no recarregar abaixo como os demais eventos.
     const stop = listenWorkItems(inject(WsService), this.data.card, (p) => {
       const it = this.item();
       if (!p || p.number == null || p.number === this.data.number || (p.taskNumber != null && it?.tasks.some((t) => t.number === p.taskNumber))) this.reload();
@@ -287,8 +378,13 @@ export class WorkItemDialogComponent {
   }
 
   openTask(t: WorkTask): void {
+    this.openTaskNumber(t.number);
+  }
+
+  /** `#n` de uma entrega (aba Entregas) abre a sub-tarefa. */
+  openTaskNumber(taskNumber: number): void {
     const it = this.item();
-    if (it) this.actions.openTask(this.data.card, it, t.number, this.catalog());
+    if (it) this.actions.openTask(this.data.card, it, taskNumber, this.catalog());
   }
 
   async taskAct(t: WorkTask, a: WorkTaskAction): Promise<void> {
