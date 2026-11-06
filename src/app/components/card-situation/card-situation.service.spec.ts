@@ -181,6 +181,7 @@ describe('CardSituationService (0075/F4)', () => {
     expect(situationAgo('2026-11-02T10:00:00Z', now)).toBe('há 2 d');
 
     expect(situationChip('ticket', '2026-11-01T12:00:00Z', now)).toEqual(jasmine.objectContaining({ icon: 'confirmation_number', label: 'chamado · há 3 d' }));
+    expect(situationChip('ticket-open', null, now)).toEqual(jasmine.objectContaining({ icon: 'confirmation_number', label: 'abrir chamado', tone: 'pending', tooltip: 'Situação atual: Aguardando abrir chamado' }));
     expect(situationChip('pr-review', null, now)).toEqual(jasmine.objectContaining({ icon: 'call_merge', label: 'aprovação/merge' }));
     expect(situationChip('qa-validation', '2026-11-04T11:00:00Z', now)).toEqual(jasmine.objectContaining({ icon: 'science', label: 'validar em QA · há 1 h', tone: 'pending' }));
     expect(situationChip('answer', null, now)).toEqual(jasmine.objectContaining({ icon: 'help_outline', label: 'resposta' }));
