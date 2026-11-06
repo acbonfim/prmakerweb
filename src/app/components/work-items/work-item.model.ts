@@ -111,6 +111,8 @@ export interface WorkItem {
   fingerprint: string;
   tasks: WorkTask[];
   logs?: WorkItemLog[] | null;
+  /** O `#n` pedido era de uma sub-tarefa deste item (GET por número — a numeração é a mesma). */
+  matchedTaskNumber?: number | null;
 }
 
 export interface TaskKindParam {

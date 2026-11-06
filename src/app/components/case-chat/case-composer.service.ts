@@ -3,7 +3,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { firstValueFrom } from 'rxjs';
 import { CaseChatService } from '../../services/case-chat.service';
-import { WorkItemsService } from '../../services/work-items.service';
+import { WorkItemSearchHit, WorkItemsService } from '../../services/work-items.service';
 import { planApiError } from '../../services/execution-plan.service';
 import { WorkItemActionsService } from '../work-items/work-item-actions.service';
 import { WorkItem, WorkItemError, canCancel, canUndo, formatWorkNumber } from '../work-items/work-item.model';
@@ -19,6 +19,7 @@ import {
   ComposerTrigger,
   ParsedCommand,
   applySuggestion,
+  crossCardSuggestions,
   detectTrigger,
   hashSuggestions,
   moveActive,
@@ -29,11 +30,28 @@ import {
 /** Itens do card ficam guardados por pouco tempo (o `#` abre várias vezes enquanto a pessoa digita). */
 const ITEMS_TTL_MS = 20_000;
 const LOOKUP_DELAY_MS = 250;
+const SEARCH_DELAY_MS = 250;
+const SEARCH_TTL_MS = 30_000;
 
 type Lookup = ComposerItem | 'loading' | null;
+type Search = ComposerItem[] | 'loading';
 
 function toComposerItem(i: WorkItem): ComposerItem {
-  return { number: i.number, title: i.title, status: i.status, cardNumber: `${i.cardNumber}`, done: (i.tasks ?? []).some((t) => t.status === 'completed') };
+  return { number: i.number, title: i.title, status: i.status, cardNumber: `${i.cardNumber}`, done: (i.tasks ?? []).some((t) => t.status === 'completed'),
+    tasks: (i.tasks ?? []).map((t) => ({ number: t.number, title: t.title, status: t.status })) };
+}
+
+/** O que `#n` aponta: o item ou, se o número era de uma sub-tarefa (`matchedTaskNumber`), a sub-tarefa com o item dono. */
+function citedItem(i: WorkItem): ComposerItem {
+  const item = toComposerItem(i);
+  const task = i.matchedTaskNumber ? (i.tasks ?? []).find((t) => t.number === i.matchedTaskNumber) : undefined;
+  return task ? { number: task.number, title: task.title, status: task.status, cardNumber: item.cardNumber, parentNumber: i.number, parentTitle: i.title } : item;
+}
+
+function searchHitItem(h: WorkItemSearchHit): ComposerItem {
+  return h.kind === 'task'
+    ? { number: h.number, title: h.title, status: h.status, cardNumber: `${h.cardNumber}`, parentNumber: h.itemNumber, parentTitle: h.itemTitle }
+    : { number: h.number, title: h.title, status: h.status, cardNumber: `${h.cardNumber}` };
 }
 
 /**
@@ -53,6 +71,9 @@ export class CaseComposerService {
   private itemsByCard = new Map<string, { at: number; value: WritableSignal<ComposerItem[] | null>; loading: boolean }>();
   private lookups = signal<Record<number, Lookup>>({});
   private lookupTimer?: ReturnType<typeof setTimeout>;
+  private searches = signal<Record<string, Search>>({});
+  private searchedAt = new Map<string, number>();
+  private searchTimer?: ReturnType<typeof setTimeout>;
 
   /** Ferramentas que se aplicam ao card (null = carregando ou ainda não pedidas — chame {@link ensureTools} antes). */
   toolsOf(card: string, cardType: 'bug' | 'user-story'): ComposerTool[] | null {
@@ -119,7 +140,7 @@ export class CaseComposerService {
       if (this.lookups()[n] !== undefined) return;
       this.lookups.update((m) => ({ ...m, [n]: 'loading' }));
       this.items.get(n).subscribe({
-        next: (i) => this.lookups.update((m) => ({ ...m, [n]: toComposerItem(i) })),
+        next: (i) => this.lookups.update((m) => ({ ...m, [n]: citedItem(i) })),
         error: (e) => this.lookups.update((m) => {
           const next = { ...m };
           if (e instanceof WorkItemError && e.code === 'notFound') next[n] = null; else delete next[n];
@@ -127,6 +148,27 @@ export class CaseComposerService {
         })
       });
     }, LOOKUP_DELAY_MS);
+  }
+
+  /** `##`: itens e sub-tarefas de outros cards que batem com `query` (undefined = ainda não pedida). */
+  searchOf(card: string, query: string): Search | undefined {
+    return this.searches()[`${card}|${query.trim()}`];
+  }
+
+  /** Pede (com atraso, para não buscar a cada tecla) a busca do `##` fora do card. Fora de `computed`. */
+  requestSearch(card: string, query: string): void {
+    const q = query.trim();
+    const key = `${card}|${q}`;
+    const fresh = Date.now() - (this.searchedAt.get(key) ?? 0) < SEARCH_TTL_MS;
+    if (this.searches()[key] === 'loading' || (this.searches()[key] !== undefined && fresh)) return;
+    clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      this.searches.update((m) => ({ ...m, [key]: m[key] && m[key] !== 'loading' ? m[key] : 'loading' }));
+      this.items.search(q, card).subscribe({
+        next: (hits) => { this.searchedAt.set(key, Date.now()); this.searches.update((m) => ({ ...m, [key]: hits.map(searchHitItem) })); },
+        error: () => this.searches.update((m) => ({ ...m, [key]: [] }))
+      });
+    }, q ? SEARCH_DELAY_MS : 0);
   }
 
   /** `/clear`: confirma e limpa a conversa para todos. */
@@ -162,6 +204,10 @@ export class CaseComposerService {
       item = await firstValueFrom(this.items.get(n));
     } catch (e) {
       this.snack.open(e instanceof Error ? e.message : `Não foi possível carregar o item ${formatWorkNumber(n)}.`, 'Fechar', { duration: 6000 });
+      return false;
+    }
+    if (item.matchedTaskNumber) {
+      this.snack.open(`${formatWorkNumber(n)} é uma sub-tarefa do item ${formatWorkNumber(item.number)} — cancele o item.`, 'Ok', { duration: 6000 });
       return false;
     }
     if (`${item.cardNumber}`.trim() !== `${card}`.trim()) {
@@ -235,10 +281,17 @@ export class CaseComposer {
     const card = this.card();
     if (!t || !card) return [];
     if (t.kind === 'slash') return slashSuggestions(t.query, this.svc.toolsOf(card, this.cardType()) ?? []);
+    if (t.scope === 'all') return crossCardSuggestions(t, card, this.svc.searchOf(card, t.query));
     const n = /^\d+$/.test(t.query) ? Number(t.query) : 0;
     return hashSuggestions(t, card, this.svc.itemsOf(card), n ? this.svc.lookup(n) : undefined);
   });
   readonly open = computed(() => this.suggestions().length > 0);
+  /** Título da lista. */
+  readonly heading = computed(() => {
+    const t = this.trigger();
+    if (t?.kind === 'slash') return null;
+    return t?.scope === 'all' ? 'Itens de outros cards (referência)' : 'Itens de trabalho e sub-tarefas';
+  });
   /** Carregando a lista do `/` (ferramentas ainda não chegaram). */
   readonly loadingTools = computed(() => {
     const t = this.trigger();
@@ -257,13 +310,16 @@ export class CaseComposer {
     const card = this.card();
     // Antes de ligar o gatilho: as listas precisam existir quando a lista de sugestões for calculada.
     if (t?.kind === 'slash' && card) this.svc.ensureTools(card, this.cardType());
-    if (t?.kind === 'hash' && card) this.svc.ensureItems(card);
+    if (t?.kind === 'hash' && t.scope === 'card' && card) this.svc.ensureItems(card);
+    if (t?.kind === 'hash' && t.scope === 'all' && t.command !== 'cancel' && card) this.svc.requestSearch(card, t.query);
     const prev = this.trigger();
     this.trigger.set(t);
     if (!prev || !t || prev.kind !== t.kind || prev.query !== t.query) this.active.set(0);
-    if (t?.kind === 'hash' && card) {
+    if (t?.kind === 'hash' && t.scope === 'card' && card) {
       const items = this.svc.itemsOf(card);
-      if (/^\d+$/.test(t.query) && !(items ?? []).some((i) => `${i.number}` === `${Number(t.query)}`)) this.svc.requestLookup(Number(t.query));
+      const n = Number(t.query);
+      const known = (items ?? []).some((i) => i.number === n || (i.tasks ?? []).some((x) => x.number === n));
+      if (/^\d+$/.test(t.query) && !known) this.svc.requestLookup(n);
     }
   }
 

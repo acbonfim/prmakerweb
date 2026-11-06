@@ -92,6 +92,20 @@ export interface FromTemplateRequest {
  * (`ExecutionPlan/{id}/cancel`). Os erros saem como `WorkItemError` com mensagem pronta para a tela
  * (409 `duplicate` traz o item existente; 409 `notEditable` explica que o item já começou).
  */
+/** Resultado da busca de itens/sub-tarefas por número, título ou card (`GET WorkItems/search` — o `##` do compositor). */
+export interface WorkItemSearchHit {
+  kind: 'item' | 'task';
+  number: number;
+  title: string;
+  status: string;
+  cardNumber: string;
+  /** Item dono (na sub-tarefa; no item é o próprio). */
+  itemNumber: number;
+  itemTitle: string;
+  itemType: string;
+  updatedAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class WorkItemsService {
   private http = inject(HttpClient);
@@ -109,7 +123,15 @@ export class WorkItemsService {
     return this.http.get<WorkItem[]>(`${this.apiUrl}/card/${this.card(card)}`).pipe(this.fail('Não foi possível carregar os itens de trabalho.'));
   }
 
-  /** Um item com os registros (histórico). */
+  /** Itens e sub-tarefas de qualquer card pelo começo do número, título ou card (`exceptCard` tira os do card). */
+  search(query: string, exceptCard?: string | null, limit = 10): Observable<WorkItemSearchHit[]> {
+    let params = new HttpParams().set('limit', limit);
+    if (query.trim()) params = params.set('q', query.trim());
+    if (exceptCard) params = params.set('exceptCard', exceptCard);
+    return this.http.get<WorkItemSearchHit[]>(`${this.apiUrl}/search`, { params }).pipe(this.fail('Não foi possível buscar os itens de trabalho.'));
+  }
+
+  /** Um item com os registros (histórico). Número de sub-tarefa → o item dono, com `matchedTaskNumber`. */
   get(number: number): Observable<WorkItem> {
     return this.http.get<WorkItem>(`${this.apiUrl}/${number}`).pipe(this.fail(`Não foi possível carregar o item ${formatWorkNumber(number)}.`));
   }

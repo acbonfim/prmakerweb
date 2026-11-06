@@ -282,7 +282,7 @@
             <div class="comp__field">
               @if (composer.open()) {
                 <app-composer-suggest class="comp__suggest" [suggestions]="composer.suggestions()" [active]="composer.active()"
-                                      [heading]="composer.trigger()?.kind === 'slash' ? 'Comandos e ferramentas do especialista' : 'Itens de trabalho'"
+                                      [heading]="composer.heading() ?? 'Comandos e ferramentas do especialista'"
                                       [loading]="composer.loadingTools()" (picked)="pickSuggestion($event)" (hovered)="composer.active.set($event)"></app-composer-suggest>
               } @else if (mentionQuery() !== null && mentionOptions().length) {
                 <div class="comp__mentions" role="listbox">
