@@ -7,6 +7,8 @@ import {
   ExecuteWorkItemResponse,
   UpdateWorkItemRequest,
   WorkItem,
+  WorkDeliverable,
+  WorkDeliverableDiff,
   WorkItemCatalog,
   WorkItemError,
   WorkItemLive,
@@ -120,6 +122,38 @@ export class WorkItemsService {
    */
   live(number: number): Observable<WorkItemLive> {
     return this.http.get<WorkItemLive>(`${this.apiUrl}/${number}/live`).pipe(this.fail(`Não foi possível acompanhar o item ${formatWorkNumber(number)}.`));
+  }
+
+  /**
+   * 0091: entregas do item (as mesmas do `GET WorkItems/{n}`, sozinhas). Servidor sem o endpoint (404/405) → lista
+   * vazia.
+   */
+  deliverables(number: number): Observable<WorkDeliverable[]> {
+    return this.http.get<WorkDeliverable[]>(`${this.apiUrl}/${number}/deliverables`).pipe(
+      map((raw) => (Array.isArray(raw) ? raw : [])),
+      catchError((err) => (err instanceof HttpErrorResponse && (err.status === 404 || err.status === 405)
+        ? of<WorkDeliverable[]>([])
+        : throwError(() => toWorkItemError(err, `Não foi possível carregar as entregas do item ${formatWorkNumber(number)}.`))))
+    );
+  }
+
+  /**
+   * 0091: diff de uma entrega (fotografia gravada ou compare ao vivo no GitHub) — só sob demanda, nunca no GET do item.
+   * O id pode ser sintético (`out:57:pr`, `pr:edv-solvace#123`): vai codificado. 404 (sem diff) → `null`; o GitHub fora
+   * do ar volta com `error` (no corpo 200 ou no erro HTTP).
+   */
+  deliverableDiff(number: number, id: string): Observable<WorkDeliverableDiff | null> {
+    return this.http.get<WorkDeliverableDiff>(`${this.apiUrl}/${number}/deliverables/${encodeURIComponent(id)}/diff`).pipe(
+      map((raw) => raw ?? null),
+      catchError((err) => {
+        if (err instanceof HttpErrorResponse && err.status === 404) return of(null);
+        const body: any = err instanceof HttpErrorResponse ? err.error : null;
+        if (body && typeof body === 'object' && typeof body.error === 'string' && body.error) {
+          return of<WorkDeliverableDiff>({ ...body, files: Array.isArray(body.files) ? body.files : [], error: body.error });
+        }
+        return throwError(() => toWorkItemError(err, 'Não foi possível carregar as alterações.'));
+      })
+    );
   }
 
   /** Kinds de sub-tarefa e modelos (já preenchidos para o card — ex.: branch `hotfix/77434-rv`). */

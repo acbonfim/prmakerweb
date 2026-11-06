@@ -9,10 +9,13 @@ import { WorkItemsService } from '../../services/work-items.service';
 import {
   WorkItem,
   WorkItemError,
+  deliverablesOf,
   formatWorkNumber,
+  isUrl,
   itemProgress,
   itemStatusLook,
   linkIcon,
+  prStatusLabel,
   pullRequestLinks,
   taskStatusLook
 } from './work-item.model';
@@ -174,10 +177,18 @@ export class WorkItemPopoverComponent {
   readonly links = computed(() => {
     const it = this.item();
     if (!it) return [];
-    const prs = pullRequestLinks(it).map((l) => ({ ...l, icon: 'merge' }));
-    const others = (it.links ?? []).filter((l) => !!l.url && l.kind !== 'pr' && !prs.some((p) => p.url === l.url))
+    // 0091: PRs (com o estado) e branches das entregas quando há; senão os links/saídas de antes.
+    const prs = pullRequestLinks(it).map((l) => ({
+      url: l.url, icon: 'merge',
+      title: l.status ? `${l.title} · ${prStatusLabel(l.status).toLowerCase()}` : l.title
+    }));
+    const seen = new Set(prs.map((p) => p.url));
+    const branches = deliverablesOf(it).filter((d) => d.kind === 'branch' && isUrl(d.url) && !seen.has(d.url.trim()))
+      .map((d) => ({ url: d.url!.trim(), title: d.branch || d.title || d.url!, icon: 'call_split' }));
+    branches.forEach((b) => seen.add(b.url));
+    const others = (it.links ?? []).filter((l) => !!l.url && l.kind !== 'pr' && !seen.has(l.url))
       .map((l) => ({ url: l.url!, title: l.title || l.url!, icon: linkIcon(l.kind) }));
-    return [...prs, ...others].slice(0, 8);
+    return [...prs, ...branches, ...others].filter((l, i, all) => all.findIndex((x) => x.url === l.url) === i).slice(0, 8);
   });
 
   private seq = 0;
