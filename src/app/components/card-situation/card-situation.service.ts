@@ -6,7 +6,7 @@ import { WsService } from '../../services/ws.service';
 import { EXECUTION_PLAN_EVENT, executionPlanGroup } from '../execution-plan/execution-plan.model';
 
 /** Tipos de "Situação atual" do card (0075/B4) — o que está sendo aguardado. */
-export type CardSituationKind = 'none' | 'ticket' | 'pr-review' | 'qa-validation' | 'answer' | 'user';
+export type CardSituationKind = 'none' | 'ticket' | 'ticket-open' | 'pr-review' | 'qa-validation' | 'answer' | 'user';
 
 export interface CardSituationPullRequest {
   repository: string | null;
@@ -101,6 +101,7 @@ export interface SituationPostSettings {
  *  tipo (cartão, chip da Home, fato do topo do card). */
 export const SITUATION_META: Record<string, { icon: string; short: string; tone: 'info' | 'pending' | 'ok' }> = {
   ticket: { icon: 'confirmation_number', short: 'chamado', tone: 'info' },
+  'ticket-open': { icon: 'confirmation_number', short: 'abrir chamado', tone: 'pending' },
   'pr-review': { icon: 'call_merge', short: 'aprovação/merge', tone: 'info' },
   'qa-validation': { icon: 'science', short: 'validar em QA', tone: 'pending' },
   answer: { icon: 'help_outline', short: 'resposta', tone: 'pending' },
@@ -110,6 +111,7 @@ export const SITUATION_META: Record<string, { icon: string; short: string; tone:
 /** Título de cada tipo (o mesmo do back, `CardSituationKind.Title`). */
 export const SITUATION_TITLES: Record<string, string> = {
   ticket: 'Aguardando chamado',
+  'ticket-open': 'Aguardando abrir chamado',
   'pr-review': 'Aguardando aprovação e merge',
   'qa-validation': 'Validar em QA',
   answer: 'Aguardando resposta',
