@@ -4,14 +4,15 @@ import { fold } from '../specialist-tools/specialist-tools.logic';
  * 0090 — lógica pura do compositor do Especialista (sem Angular, testada em composer-suggest.spec.ts):
  * - `/` no começo da mensagem → comandos do compositor (`/clear`, `/cancelar-item-de-trabalho`) e as ferramentas do
  *   especialista que se aplicam ao card (nome + o que faz);
- * - `#` + número (ou palavra) no cursor → itens de trabalho (os do card; número de fora busca o item direto);
+ * - `#` + número (ou palavra) no cursor → itens de trabalho e sub-tarefas do card (número de fora busca direto);
+ * - `##` + número, palavra ou card → itens e sub-tarefas de OUTROS cards (referência; a escolha insere `#n`);
  * - ao enviar, `parseCommand` reconhece o comando digitado inteiro.
  */
 
 /** O que está sendo digitado no cursor e abre a lista. `start..end` = o trecho que a escolha substitui. */
 export type ComposerTrigger =
   | { kind: 'slash'; query: string; start: number; end: number }
-  | { kind: 'hash'; query: string; start: number; end: number; command: 'cancel' | null };
+  | { kind: 'hash'; query: string; start: number; end: number; command: 'cancel' | null; scope: 'card' | 'all' };
 
 export const CANCEL_COMMAND = 'cancelar-item-de-trabalho';
 
@@ -44,6 +45,17 @@ export interface ComposerItem {
   cardNumber: string;
   /** Tem sub-tarefa concluída (o cancelar oferece desfazer). */
   done?: boolean;
+  /** Sub-tarefas (mesma numeração dos itens) — entram na lista quando a pessoa digita. */
+  tasks?: readonly ComposerTask[];
+  /** Esta entrada é uma sub-tarefa: número e título do item dono. */
+  parentNumber?: number | null;
+  parentTitle?: string | null;
+}
+
+export interface ComposerTask {
+  number: number;
+  title: string;
+  status: string;
 }
 
 export interface ComposerSuggestion {
@@ -62,6 +74,8 @@ export interface ComposerSuggestion {
   status?: string;
   /** Item de outro card (só informativo). */
   otherCard?: string | null;
+  /** Sub-tarefa: número do item dono. */
+  parentNumber?: number | null;
 }
 
 /** O que a escolha faz no compositor. */
@@ -78,7 +92,7 @@ export type ParsedCommand =
   | { kind: 'unknown'; name: string };
 
 const SLASH_AT_START = /^\/([\p{L}\p{N}_-]*)$/u;
-const HASH_AT_CARET = /(^|[\s(\[,;:])#([\p{L}\p{N}_-]*)$/u;
+const HASH_AT_CARET = /(^|[\s(\[,;:])(#{1,2})([\p{L}\p{N}_-]*)$/u;
 const CANCEL_PREFIX = new RegExp(`^\\/${CANCEL_COMMAND}(?=\\s|$)`, 'iu');
 const MAX_TOOLS = 30;
 const MAX_ITEMS = 8;
@@ -90,8 +104,9 @@ export function detectTrigger(text: string, caret: number): ComposerTrigger | nu
   if (slash) return { kind: 'slash', query: slash[1], start: 0, end: before.length };
   const hash = HASH_AT_CARET.exec(before);
   if (hash) {
-    const start = before.length - hash[2].length - 1;
-    return { kind: 'hash', query: hash[2], start, end: before.length, command: CANCEL_PREFIX.test(text) ? 'cancel' : null };
+    const start = before.length - hash[3].length - hash[2].length;
+    return { kind: 'hash', query: hash[3], start, end: before.length, command: CANCEL_PREFIX.test(text) ? 'cancel' : null,
+      scope: hash[2].length === 2 ? 'all' : 'card' };
   }
   return null;
 }
@@ -124,18 +139,26 @@ function toolScore(t: ComposerTool, q: string): number {
 
 /**
  * Lista do `#`: itens do card cujo número começa com o digitado (ou cujo título contém a palavra), mais recentes
- * primeiro. `lookup` = o item buscado direto pelo número (quando não é do card; `'loading'` enquanto busca, `null` = não
- * existe). No `/cancelar-item-de-trabalho` só entram itens do card que dá para cancelar ou desfazer.
+ * primeiro; com algo digitado, as sub-tarefas do card entram também. `lookup` = o item (ou sub-tarefa) buscado direto
+ * pelo número (quando não é do card; `'loading'` enquanto busca, `null` = não existe). No `/cancelar-item-de-trabalho`
+ * só entram itens do card que dá para cancelar ou desfazer (sub-tarefa não se cancela sozinha).
  */
 export function hashSuggestions(trigger: Extract<ComposerTrigger, { kind: 'hash' }>, card: string, items: readonly ComposerItem[] | null,
   lookup?: ComposerItem | 'loading' | null): ComposerSuggestion[] {
   const q = fold(trigger.query);
   const digits = /^\d+$/.test(q);
   const cancel = trigger.command === 'cancel';
-  const pool = (items ?? []).filter((i) => !cancel || isCancelable(i));
+  const matches = (i: Pick<ComposerItem, 'number' | 'title'>) => !q || (digits ? `${i.number}`.startsWith(q) : fold(i.title).includes(q));
+  const pool: ComposerItem[] = (items ?? []).filter((i) => !cancel || isCancelable(i));
+  if (q && !cancel) {
+    for (const i of items ?? []) {
+      for (const t of i.tasks ?? []) pool.push({ ...t, cardNumber: i.cardNumber, parentNumber: i.number, parentTitle: i.title });
+    }
+  }
+  const exact = (i: ComposerItem) => (digits && `${i.number}` === `${Number(q)}` ? 1 : 0);
   const hits = pool
-    .filter((i) => !q || (digits ? `${i.number}`.startsWith(q) : fold(i.title).includes(q)))
-    .sort((a, b) => b.number - a.number)
+    .filter(matches)
+    .sort((a, b) => exact(b) - exact(a) || b.number - a.number)
     .slice(0, MAX_ITEMS)
     .map((i) => itemSuggestion(i, card));
   if (digits && !hits.some((h) => `${h.number}` === `${Number(q)}`)) {
@@ -145,9 +168,10 @@ export function hashSuggestions(trigger: Extract<ComposerTrigger, { kind: 'hash'
       if (!quiet) hits.push({ id: `info:${q}`, kind: 'info', icon: 'hourglass_top', label: `#${Number(q)}`, detail: 'Buscando o item…' });
     } else if (lookup && lookup.number === Number(q)) {
       const other = `${lookup.cardNumber}`.trim() !== `${card}`.trim();
-      if (!cancel || (!other && isCancelable(lookup))) hits.push(itemSuggestion(lookup, card));
+      if (!cancel || (!other && !lookup.parentNumber && isCancelable(lookup))) hits.push(itemSuggestion(lookup, card));
       else hits.push({ id: `info:${q}`, kind: 'info', icon: 'block', label: `#${lookup.number}`,
-        detail: other ? `É do card ${lookup.cardNumber} — cancele pela conversa daquele card.` : 'Este item não tem o que cancelar nem desfazer.' });
+        detail: other ? `É do card ${lookup.cardNumber} — cancele pela conversa daquele card.`
+          : lookup.parentNumber ? `É uma sub-tarefa do item #${lookup.parentNumber} — cancele o item.` : 'Este item não tem o que cancelar nem desfazer.' });
     } else if (lookup === null && items !== null && !quiet) {
       hits.push({ id: `info:${q}`, kind: 'info', icon: 'search_off', label: `#${Number(q)}`, detail: 'Nenhum item de trabalho com este número.' });
     }
@@ -157,10 +181,31 @@ export function hashSuggestions(trigger: Extract<ComposerTrigger, { kind: 'hash'
   return hits;
 }
 
+/**
+ * Lista do `##`: itens e sub-tarefas de OUTROS cards (busca no servidor por número, título ou card — `results`, `'loading'`
+ * enquanto busca, `null` = ainda não pedida). Só referência: no `/cancelar-item-de-trabalho` avisa que não vale.
+ */
+export function crossCardSuggestions(trigger: Extract<ComposerTrigger, { kind: 'hash' }>, card: string,
+  results: readonly ComposerItem[] | 'loading' | null | undefined): ComposerSuggestion[] {
+  if (trigger.command === 'cancel')
+    return [{ id: 'info:cancel-other', kind: 'info', icon: 'block', label: '##', detail: 'Só dá para cancelar itens deste card — use # (um só).' }];
+  if (results === 'loading' || results === null || results === undefined) {
+    return [{ id: 'info:searching', kind: 'info', icon: 'hourglass_top', label: `##${trigger.query}`,
+      detail: trigger.query ? 'Buscando nos outros cards…' : 'Carregando os itens recentes dos outros cards…' }];
+  }
+  if (!results.length) {
+    return [{ id: 'info:none', kind: 'info', icon: 'search_off', label: `##${trigger.query}`,
+      detail: 'Nenhum item de outro card com este número, título ou card.' }];
+  }
+  return results.slice(0, MAX_ITEMS).map((i) => itemSuggestion(i, card));
+}
+
 function itemSuggestion(i: ComposerItem, card: string): ComposerSuggestion {
   const other = `${i.cardNumber}`.trim() !== `${card}`.trim();
-  return { id: `item:${i.number}`, kind: 'item', icon: 'task_alt', label: `#${i.number}`, detail: i.title || '(sem título)', number: i.number,
-    status: i.status, otherCard: other ? i.cardNumber : null };
+  const task = !!i.parentNumber;
+  return { id: `item:${i.number}`, kind: 'item', icon: task ? 'subdirectory_arrow_right' : 'task_alt', label: `#${i.number}`,
+    detail: (i.title || '(sem título)') + (task ? ` — sub-tarefa de #${i.parentNumber}${i.parentTitle ? ` ${i.parentTitle}` : ''}` : ''),
+    number: i.number, status: i.status, otherCard: other ? i.cardNumber : null, parentNumber: task ? i.parentNumber : null };
 }
 
 /** Dá para cancelar (ainda aberto) ou desfazer (concluído/cancelado com algo feito). */

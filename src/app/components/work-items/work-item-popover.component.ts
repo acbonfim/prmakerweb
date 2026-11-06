@@ -26,7 +26,8 @@ export type WorkItemPopoverMode = 'popover' | 'sheet';
 const MAX_TASKS = 8;
 
 /**
- * 0090: popover de um item de trabalho citado na conversa do especialista (`#123`) — tipo, estado, título, card,
+ * 0090: popover de um item de trabalho citado na conversa do especialista (`#123`; número de sub-tarefa → o item dono
+ * com a sub-tarefa em destaque) — tipo, estado, título, card,
  * progresso, sub-tarefas, PRs/links e o motivo do cancelamento, com "Abrir na Bancada". Mesmo overlay/folha inferior
  * dos outros popovers da `appCodeRefHost`. Estados: carregando, erro e não encontrado.
  */
@@ -54,7 +55,10 @@ const MAX_TASKS = 8;
             @if (otherCard()) { <span class="wip__card" matTooltip="Item de outro card">card {{ it.cardNumber }}</span> }
           }
         </div>
-        @if (item()?.title; as t) { <span class="wip__title">{{ t }}</span> }
+        @if (matchedTask(); as mt) {
+          <span class="wip__title">{{ mt.title }}</span>
+          <span class="wip__parent"><mat-icon>subdirectory_arrow_right</mat-icon>sub-tarefa do item <b>{{ itemLabel() }}</b> · {{ item()?.title }}</span>
+        } @else if (item()?.title; as t) { <span class="wip__title">{{ t }}</span> }
       </div>
       <button mat-icon-button type="button" class="wip__close" (click)="closed.emit()" matTooltip="Fechar (Esc)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
     </header>
@@ -69,7 +73,7 @@ const MAX_TASKS = 8;
         }
         @default {
           @if (item(); as it) {
-            @if (it.description) { <p class="wip__desc">{{ it.description }}</p> }
+            @if ((matchedTask() ? matchedTask()?.description : it.description) || it.description; as d) { <p class="wip__desc">{{ d }}</p> }
             @if (it.activity) { <p class="wip__activity"><mat-icon class="wip__spin">autorenew</mat-icon>{{ it.activity }}</p> }
             @if (it.cancelReason) { <p class="wip__reason"><mat-icon>block</mat-icon>{{ it.cancelReason }}</p> }
             @if (progress().total) {
@@ -79,8 +83,8 @@ const MAX_TASKS = 8;
               </div>
               <ul class="wip__tasks">
                 @for (t of tasks(); track t.id) {
-                  <li><mat-icon [style.color]="taskLook(t.status).color" [class.wip__spin]="taskLook(t.status).spin" [matTooltip]="taskLook(t.status).label">{{ taskLook(t.status).icon }}</mat-icon>
-                    <span>{{ t.title }}</span><small>{{ t.executor === 'user' ? 'pessoa' : 'Claude' }}</small></li>
+                  <li [class.wip__task--on]="t.number === matchedTask()?.number"><mat-icon [style.color]="taskLook(t.status).color" [class.wip__spin]="taskLook(t.status).spin" [matTooltip]="taskLook(t.status).label">{{ taskLook(t.status).icon }}</mat-icon>
+                    <span><b class="wip__tnum">#{{ t.number }}</b> {{ t.title }}</span><small>{{ t.executor === 'user' ? 'pessoa' : 'Claude' }}</small></li>
                 }
                 @if (it.tasks.length > tasks().length) { <li class="wip__more">+ {{ it.tasks.length - tasks().length }} sub-tarefas</li> }
               </ul>
@@ -138,6 +142,12 @@ const MAX_TASKS = 8;
     .wip__tasks li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
     .wip__tasks li small { color: #8b949e; font-size: 11px; }
     .wip__more { color: #8b949e; padding-left: 22px; }
+    .wip__tnum { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 600; font-size: 11.5px; color: #8b949e; }
+    .wip__tasks li.wip__task--on { background: rgba(88,166,255,.14); border-radius: 6px; margin: 0 -6px; padding: 2px 6px; }
+    .wip__task--on .wip__tnum { color: #79c0ff; }
+    .wip__parent { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #8b949e; overflow-wrap: anywhere; }
+    .wip__parent .mat-icon { font-size: 15px; width: 15px; height: 15px; flex: none; }
+    .wip__parent b { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #79c0ff; }
     .wip__links { display: flex; flex-wrap: wrap; gap: 6px; }
     .wip__link { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 8px; border-radius: 999px; border: 1px solid #30363d;
       color: #79c0ff; text-decoration: none; font-size: 12px; }
@@ -165,10 +175,23 @@ export class WorkItemPopoverComponent {
   readonly state = signal<'loading' | 'ready' | 'missing' | 'error'>('loading');
   readonly error = signal('');
   readonly label = computed(() => formatWorkNumber(this.number()));
+  readonly itemLabel = computed(() => formatWorkNumber(this.item()?.number));
+  /** O `#n` citado era de uma sub-tarefa (a numeração é a mesma) — o popover mostra o item dono com ela em destaque. */
+  readonly matchedTask = computed(() => {
+    const it = this.item();
+    return it?.matchedTaskNumber ? (it.tasks ?? []).find((t) => t.number === it.matchedTaskNumber) ?? null : null;
+  });
   readonly type = computed(() => itemTypeLook(this.item()?.type));
   readonly status = computed(() => itemStatusLook(this.item()?.status));
   readonly progress = computed(() => { const it = this.item(); return it ? itemProgress(it) : { done: 0, total: 0, pct: 0 }; });
-  readonly tasks = computed(() => (this.item()?.tasks ?? []).slice().sort((a, b) => a.order - b.order).slice(0, MAX_TASKS));
+  readonly tasks = computed(() => {
+    const all = (this.item()?.tasks ?? []).slice().sort((a, b) => a.order - b.order);
+    const shown = all.slice(0, MAX_TASKS);
+    // A sub-tarefa citada aparece mesmo além das primeiras.
+    const mt = this.matchedTask();
+    if (mt && !shown.some((t) => t.number === mt.number)) shown.splice(MAX_TASKS - 1, 1, mt);
+    return shown;
+  });
   readonly otherCard = computed(() => {
     const it = this.item();
     const c = `${this.card() ?? ''}`.trim();

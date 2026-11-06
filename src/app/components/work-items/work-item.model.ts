@@ -117,6 +117,8 @@ export interface WorkItem {
    * servidor: sub-tarefa, depois `at`. Ausente = servidor antigo (as telas caem nos `links`/`output`).
    */
   deliverables?: WorkDeliverable[] | null;
+  /** O `#n` pedido era de uma sub-tarefa deste item (GET por número — a numeração é a mesma). */
+  matchedTaskNumber?: number | null;
 }
 
 export interface TaskKindParam {
