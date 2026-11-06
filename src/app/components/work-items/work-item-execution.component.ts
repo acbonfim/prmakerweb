@@ -229,7 +229,7 @@ const FLASH_MS = 1_600;
                         <button mat-flat-button color="primary" (click)="saveTicket(t)" [disabled]="!ticketDraft()!.url.trim() || busyTask() === t.number">Anexar</button>
                       </div>
                     }
-                    @if (ticketActs(it, t).length && (ticketDraft()?.task === t.number || openTicket(t))) {
+                    @if (ticketDraft()?.task === t.number) {
                       <small class="wie__ticket-help">A sub-tarefa conclui sozinha quando o chamado for marcado como resolvido.</small>
                     }
                   </div>
@@ -245,12 +245,13 @@ const FLASH_MS = 1_600;
                       }
                     } @else if (ta.length) {
                       <button mat-stroked-button class="wie__ticket-btn" [matMenuTriggerFor]="ticketMenu" [matMenuTriggerData]="{ t: t, acts: ta }"
-                              [disabled]="busyTask() === t.number" matTooltip="Marcar o status do chamado">
+                              [disabled]="busyTask() === t.number" matTooltip="Marcar o status do chamado — resolvido conclui a sub-tarefa sozinha">
                         <mat-icon>confirmation_number</mat-icon>Chamado<mat-icon class="wie__ticket-caret">arrow_drop_down</mat-icon>
                       </button>
                     }
                   }
-                  @for (a of userActions(t); track a) {
+                  <!-- Chamado aberto: o status vai pelo menu "Chamado"; concluir/falhar/pular ficam no detalhe da sub-tarefa -->
+                  @for (a of openTicket(t) ? [] : userActions(t); track a) {
                     <button mat-icon-button class="wie__qa" (click)="taskAct(t, a)" [disabled]="busyTask() === t.number"
                             [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label + ' ' + num(t.number)"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
                   }
