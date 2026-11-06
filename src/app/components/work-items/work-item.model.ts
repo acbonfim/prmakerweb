@@ -49,6 +49,37 @@ export interface WorkItemLink {
   url?: string | null;
 }
 
+/** Chamado na Bancada: status do chamado (`PUT WorkItems/tasks/{n}/ticket`). */
+export type TicketStatus = 'open' | 'resolved' | 'closed';
+export type WorkTaskLinkStatus = TicketStatus | 'merged';
+export type CiStatus = 'pending' | 'success' | 'failure';
+
+/**
+ * Chamado na Bancada: link da sub-tarefa — chamados e PRs da etapa do plano espelhada (ou o chamado anexado na sub-tarefa
+ * de item avulso). Servidor antigo não manda (`links` ausente = nenhum).
+ */
+export interface WorkTaskLink {
+  id?: string | null;
+  kind: 'ticket' | 'pr' | (string & {});
+  title?: string | null;
+  url: string;
+  status?: WorkTaskLinkStatus | null;
+  /** CI do PR (só PR aberto). */
+  checksStatus?: CiStatus | null;
+}
+
+/** Corpo do `POST WorkItems/tasks/{n}/ticket` (anexa o chamado; a sub-tarefa passa a aguardar). */
+export interface AttachTicketRequest {
+  url: string;
+  title?: string | null;
+}
+
+/** Corpo do `PUT WorkItems/tasks/{n}/ticket` (`resolved` conclui a sub-tarefa; `closed` = fechado sem resolução). */
+export interface TicketStatusRequest {
+  status: TicketStatus;
+  linkId?: string | null;
+}
+
 export interface WorkItemUndo {
   action: string;
   params?: Record<string, string> | null;
@@ -71,6 +102,8 @@ export interface WorkTask {
   undo?: WorkItemUndo | null;
   startedAt?: string | null;
   completedAt?: string | null;
+  /** Chamado na Bancada: chamados e PRs ligados à sub-tarefa (ausente = `[]`). */
+  links?: WorkTaskLink[] | null;
 }
 
 export interface WorkItemLog {
@@ -596,11 +629,13 @@ export function pullRequestLinks(item: Pick<WorkItem, 'links' | 'tasks'> | null 
   const seen = new Set<string>();
   const add = (url: string | null | undefined, title: string | null | undefined) => {
     const u = (url ?? '').trim();
-    if (!isUrl(u) || seen.has(u)) return;
-    seen.add(u);
+    if (!isUrl(u) || seen.has(linkKey(u))) return;
+    seen.add(linkKey(u));
     out.push({ title: (title ?? '').trim() || u, url: u });
   };
   for (const l of item.links ?? []) if (l.kind === 'pr' || PR_URL.test(l.url ?? '')) add(l.url, l.title);
+  // Chamado na Bancada: PRs ligados às sub-tarefas (etapas do plano).
+  for (const t of item.tasks ?? []) for (const l of t.links ?? []) if (l?.kind === 'pr') add(l.url, l.title);
   for (const t of item.tasks ?? []) {
     for (const o of outputEntries(t.output)) {
       if (o.url && (PR_URL.test(o.value) || /^pr(url|_url|link)?$/i.test(o.key))) add(o.value, t.title);
@@ -616,4 +651,147 @@ export function taskOutputLinks(task: Pick<WorkTask, 'output'>): { key: string; 
     url: o.value,
     kind: PR_URL.test(o.value) || /^pr/i.test(o.key) ? 'pr' : /branch/i.test(o.key) || /\/tree\/|\/branches|version=GB/i.test(o.value) ? 'branch' : 'link'
   }));
+}
+
+
+// ── Chamado na Bancada: links da sub-tarefa (chamados e PRs) ─────────────────────────────────────────
+
+/** Chave de comparação da URL (sem espaços, barra final nem diferença de caixa) — para não repetir o mesmo link. */
+export function linkKey(url: string | null | undefined): string {
+  return (url ?? '').trim().replace(/\/+$/, '').toLowerCase();
+}
+
+/** Links da sub-tarefa válidos (URL http), sem repetir URL (o primeiro vence); ausente = `[]`. */
+export function taskLinks(task: Pick<WorkTask, 'links'> | null | undefined): WorkTaskLink[] {
+  const out: WorkTaskLink[] = [];
+  const seen = new Set<string>();
+  for (const l of task?.links ?? []) {
+    if (!l || !isUrl(l.url)) continue;
+    const k = linkKey(l.url);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ ...l, url: l.url.trim() });
+  }
+  return out;
+}
+
+/** Saídas-link da sub-tarefa que não repetem um link dela (o link com status já aparece). */
+export function taskExtraOutputLinks(task: Pick<WorkTask, 'output' | 'links'>): ReturnType<typeof taskOutputLinks> {
+  const known = new Set(taskLinks(task).map((l) => linkKey(l.url)));
+  const seen = new Set<string>();
+  return taskOutputLinks(task).filter((o) => {
+    const k = linkKey(o.url);
+    if (known.has(k) || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+export function taskLinkIcon(kind: string | null | undefined): string {
+  return kind === 'ticket' ? 'confirmation_number' : kind === 'pr' ? 'merge' : linkIcon(kind);
+}
+
+const TICKET_STATUS: Record<string, StatusLook> = {
+  open: { label: 'Aberto', icon: 'hourglass_top', color: '#d29922' },
+  resolved: { label: 'Resolvido', icon: 'task_alt', color: '#3fb950' },
+  closed: { label: 'Fechado', icon: 'do_not_disturb_on', color: '#8b949e' }
+};
+
+const PR_STATUS: Record<string, StatusLook> = {
+  open: { label: 'Aberto', icon: 'radio_button_checked', color: '#58a6ff' },
+  merged: { label: 'Mesclado', icon: 'merge', color: '#bc8cff' },
+  closed: { label: 'Fechado', icon: 'block', color: '#8b949e' }
+};
+
+/** Status do link (chamado: Aberto/Resolvido/Fechado · PR: Aberto/Mesclado/Fechado); sem status = aberto. Outros kinds: null. */
+export function taskLinkStatusLook(link: Pick<WorkTaskLink, 'kind' | 'status'>): StatusLook | null {
+  const map = link.kind === 'ticket' ? TICKET_STATUS : link.kind === 'pr' ? PR_STATUS : null;
+  if (!map) return null;
+  return map[link.status || 'open'] ?? { ...UNKNOWN, label: link.status || '—' };
+}
+
+const CI_LABELS: Record<CiStatus, StatusLook> = {
+  pending: { label: 'CI rodando', icon: 'pending', color: '#d29922' },
+  success: { label: 'CI ok', icon: 'check_circle', color: '#3fb950' },
+  failure: { label: 'CI falhou', icon: 'error', color: '#f85149' }
+};
+
+/** CI do PR — só PR aberto com `checksStatus` conhecido. */
+export function taskLinkCiLook(link: Pick<WorkTaskLink, 'kind' | 'status' | 'checksStatus'>): StatusLook | null {
+  if (link.kind !== 'pr' || (link.status && link.status !== 'open') || !link.checksStatus) return null;
+  return CI_LABELS[link.checksStatus] ?? null;
+}
+
+/** Sub-tarefa de chamado da pessoa (`kind: ticket`, executor `user`). */
+export function isTicketTask(task: Pick<WorkTask, 'kind' | 'executor'> | null | undefined): boolean {
+  return !!task && task.kind === 'ticket' && task.executor === 'user';
+}
+
+/** O chamado em foco da sub-tarefa: o último aberto; sem aberto, o último anexado. */
+export function currentTicket(task: Pick<WorkTask, 'links'> | null | undefined): WorkTaskLink | null {
+  const tickets = taskLinks(task).filter((l) => l.kind === 'ticket');
+  if (!tickets.length) return null;
+  return [...tickets].reverse().find((l) => (l.status || 'open') === 'open') ?? tickets[tickets.length - 1];
+}
+
+const FINISHED_TASK: ReadonlySet<string> = new Set(['completed', 'skipped', 'cancelled', 'reverted']);
+/** Item fechado/cancelado/desfeito (ou desfazendo): a Bancada só mostra. */
+const READONLY_ITEM: ReadonlySet<string> = new Set(['completed', 'cancelled', 'reverting', 'reverted']);
+
+/**
+ * É a vez da sub-tarefa: rodando/aguardando/falhou, ou pendente com todas as anteriores (pela ordem) finalizadas
+ * (concluída, pulada, cancelada ou desfeita).
+ */
+export function isTaskTurn(item: Pick<WorkItem, 'tasks'> | null | undefined, task: Pick<WorkTask, 'number' | 'order' | 'status'>): boolean {
+  if (task.status === 'running' || task.status === 'waiting' || task.status === 'failed') return true;
+  if (task.status !== 'pending') return false;
+  return (item?.tasks ?? []).filter((t) => t.number !== task.number && t.order < task.order).every((t) => FINISHED_TASK.has(t.status));
+}
+
+/** Ações de chamado: `attach` (anexar outro), `resolved`, `closed` (sem resolução) e `open` (reabrir). */
+export type TicketAction = 'attach' | TicketStatus;
+
+export const TICKET_ACTION_LABELS: Record<TicketAction, { label: string; icon: string }> = {
+  attach: { label: 'Anexar chamado', icon: 'add_link' },
+  resolved: { label: 'Marcar como resolvido', icon: 'task_alt' },
+  closed: { label: 'Fechado sem resolução', icon: 'do_not_disturb_on' },
+  open: { label: 'Reabrir', icon: 'replay' }
+};
+
+/** Aviso depois de mudar o status do chamado (snackbar). */
+export const TICKET_STATUS_DONE: Record<TicketStatus, string> = {
+  resolved: 'chamado resolvido — sub-tarefa concluída',
+  closed: 'chamado fechado sem resolução — anexe outro ou conclua a sub-tarefa',
+  open: 'chamado reaberto — a sub-tarefa volta a aguardar'
+};
+
+/**
+ * O que a pessoa pode fazer com o chamado da sub-tarefa agora. Só sub-tarefa de chamado da pessoa, na vez dela e não
+ * finalizada, com o item aberto. Sem chamado → anexar; aberto → resolvido/fechado sem resolução; fechado → anexar outro
+ * ou reabrir; resolvido (sub-tarefa ainda não concluída) → reabrir.
+ */
+export function ticketTaskActions(item: Pick<WorkItem, 'status' | 'tasks'> | null | undefined, task: WorkTask | null | undefined): TicketAction[] {
+  if (!item || !task || !isTicketTask(task) || READONLY_ITEM.has(item.status)) return [];
+  if (FINISHED_TASK.has(task.status) || !isTaskTurn(item, task)) return [];
+  const ticket = currentTicket(task);
+  switch (ticket ? ticket.status || 'open' : null) {
+    case null: return ['attach'];
+    case 'open': return ['resolved', 'closed'];
+    case 'closed': return ['attach', 'open'];
+    case 'resolved': return ['open'];
+    default: return ['attach'];
+  }
+}
+
+/**
+ * Rótulo da sub-tarefa pendente que já tem PR (etapa de PR do plano): "PR aberto"/"PR mesclado" no lugar de
+ * "Pendente". Null quando não se aplica.
+ */
+export function taskPrHint(task: Pick<WorkTask, 'status' | 'links'>): string | null {
+  if (task.status !== 'pending') return null;
+  const prs = taskLinks(task).filter((l) => l.kind === 'pr');
+  if (!prs.length) return null;
+  if (prs.some((l) => (l.status || 'open') === 'open')) return prs.length > 1 ? 'PRs abertos' : 'PR aberto';
+  if (prs.every((l) => l.status === 'merged')) return prs.length > 1 ? 'PRs mesclados' : 'PR mesclado';
+  return null;
 }

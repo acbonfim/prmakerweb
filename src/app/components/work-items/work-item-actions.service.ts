@@ -14,6 +14,8 @@ import {
   WorkTask,
   WorkTaskAction,
   TASK_ACTION_LABELS,
+  TICKET_STATUS_DONE,
+  TicketStatus,
   formatWorkNumber
 } from './work-item.model';
 import { workDialogConfig } from './work-dialog-config';
@@ -164,6 +166,30 @@ export class WorkItemActionsService {
     } catch (e) {
       this.fail(e);
       return false;
+    }
+  }
+
+  /** Chamado na Bancada: anexa o chamado à sub-tarefa — devolve o item atualizado (ou undefined se falhou). */
+  async attachTicket(task: Pick<WorkTask, 'number'>, url: string, title?: string | null): Promise<WorkItem | undefined> {
+    try {
+      const it = await firstValueFrom(this.api.attachTicket(task.number, { url, title: title ?? null }));
+      this.ok(`${formatWorkNumber(task.number)}: chamado anexado — a sub-tarefa aguarda o chamado ser resolvido.`);
+      return it;
+    } catch (e) {
+      this.fail(e);
+      return undefined;
+    }
+  }
+
+  /** Chamado na Bancada: muda o status do chamado (resolvido conclui a sub-tarefa) — devolve o item atualizado. */
+  async setTicketStatus(task: Pick<WorkTask, 'number'>, status: TicketStatus, linkId?: string | null): Promise<WorkItem | undefined> {
+    try {
+      const it = await firstValueFrom(this.api.setTicketStatus(task.number, { status, linkId: linkId ?? null }));
+      this.ok(`${formatWorkNumber(task.number)}: ${TICKET_STATUS_DONE[status]}.`);
+      return it;
+    } catch (e) {
+      this.fail(e);
+      return undefined;
     }
   }
 

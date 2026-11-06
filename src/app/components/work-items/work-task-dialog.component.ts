@@ -12,15 +12,27 @@ import { WorkItemsService } from '../../services/work-items.service';
 import { WsService } from '../../services/ws.service';
 import {
   TASK_ACTION_LABELS,
+  TICKET_ACTION_LABELS,
+  TICKET_STATUS_DONE,
+  TicketAction,
+  TicketStatus,
   WorkItem,
   WorkItemCatalog,
   WorkTaskAction,
+  currentTicket,
   executorLabel,
+  isTicketTask,
+  linkKey,
   formatWorkNumber,
   kindInfo,
   kindParams,
   outputEntries,
+  taskLinkCiLook,
+  taskLinkIcon,
+  taskLinkStatusLook,
+  taskLinks,
   taskStatusLook,
+  ticketTaskActions,
   userTaskActions
 } from './work-item.model';
 import { listenWorkItems } from './work-items-live';
@@ -43,7 +55,9 @@ export interface WorkTaskDialogData {
 /**
  * 0085: modal da sub-tarefa (aberto de dentro do item ou da lista): tipo, executor, status, datas, descrição,
  * parâmetros, resultado, saídas e a informação de desfazer. Sub-tarefa do usuário ganha as ações (iniciar/concluir/
- * falhar/pular). Abrir com `workDialogConfig(data, '640px')`.
+ * falhar/pular). Chamado na Bancada: chamados e PRs ligados à sub-tarefa com o status; a de chamado da pessoa ganha
+ * "Anexar chamado" e o status do chamado (resolvido conclui a sub-tarefa sozinha) — "Concluir" fica como ação
+ * secundária. Abrir com `workDialogConfig(data, '640px')`.
  */
 @Component({
   selector: 'app-work-task-dialog',
@@ -94,6 +108,54 @@ export interface WorkTaskDialogData {
                   </td></tr>
                 }
               </tbody></table>
+            </section>
+          }
+
+          @if (links().length) {
+            <section class="wi-sec">
+              <h4 class="wi-sec__title">Chamados e PRs</h4>
+              <div class="wtd__links">
+                @for (l of links(); track l.url) {
+                  <div class="wtd__link">
+                    <mat-icon class="wtd__link-ico">{{ linkIco(l.kind) }}</mat-icon>
+                    <a class="wi-link wtd__link-title" [href]="l.url" target="_blank" rel="noopener" [matTooltip]="l.url">{{ l.title || l.url }}</a>
+                    @if (ciLook(l); as ci) { <span class="wi-chip" [style.color]="ci.color" [style.border-color]="ci.color"><mat-icon>{{ ci.icon }}</mat-icon>{{ ci.label }}</span> }
+                    @if (linkLook(l); as st) { <span class="wi-chip" [style.color]="st.color" [style.border-color]="st.color"><mat-icon>{{ st.icon }}</mat-icon>{{ st.label }}</span> }
+                  </div>
+                }
+              </div>
+            </section>
+          }
+
+          @if (ticketActs().length) {
+            <section class="wi-sec wtd__ticket">
+              <h4 class="wi-sec__title">Chamado</h4>
+              @if (ticket(); as tk) {
+                @if ((tk.status || 'open') === 'open') {
+                  <div class="wi-note wi-note--warn"><mat-icon>hourglass_top</mat-icon>
+                    <span>Aguardando o chamado <b>{{ tk.title || tk.url }}</b>.</span></div>
+                }
+              }
+              @if (ticketActs().includes('attach')) {
+                <div class="wtd__ticket-form">
+                  <label class="wi-field"><span>Link do chamado *</span>
+                    <input class="wi-input" type="url" required [(ngModel)]="ticketUrl" (keydown.enter)="attachTicket()" placeholder="https://… (Freshservice, Jira, DevOps…)" /></label>
+                  <label class="wi-field"><span>Título ou número (opcional)</span>
+                    <input class="wi-input" [(ngModel)]="ticketTitle" (keydown.enter)="attachTicket()" placeholder="Ex.: #1234 — script de correção" /></label>
+                </div>
+              }
+              <div class="wtd__ticket-acts">
+                @for (a of ticketActs(); track a) {
+                  @if (a === 'attach') {
+                    <button mat-flat-button color="primary" [disabled]="busy() || !ticketUrl.trim()" (click)="attachTicket()"><mat-icon>{{ ticketLook(a).icon }}</mat-icon>{{ ticket() ? 'Anexar outro chamado' : ticketLook(a).label }}</button>
+                  } @else if (a === 'resolved') {
+                    <button mat-flat-button color="primary" [disabled]="busy()" (click)="setTicket(a)"><mat-icon>{{ ticketLook(a).icon }}</mat-icon>{{ ticketLook(a).label }}</button>
+                  } @else {
+                    <button mat-stroked-button [disabled]="busy()" (click)="setTicket(a)"><mat-icon>{{ ticketLook(a).icon }}</mat-icon>{{ ticketLook(a).label }}</button>
+                  }
+                }
+              </div>
+              <p class="wi-muted wtd__small">A sub-tarefa conclui sozinha quando o chamado for marcado como resolvido.</p>
             </section>
           }
 
@@ -149,7 +211,12 @@ export interface WorkTaskDialogData {
         <footer class="wi-dlg__foot">
           <span class="wi-dlg__spacer"></span>
           @for (a of actions(); track a) {
-            <button mat-stroked-button [disabled]="busy()" (click)="act(a)"><mat-icon>{{ actionLook(a).icon }}</mat-icon>{{ actionLook(a).label }}</button>
+            @if (ticketTask()) {
+              <!-- chamado na Bancada: concluir sem chamado continua possível, como ação secundária -->
+              <button mat-button [disabled]="busy()" (click)="act(a)"><mat-icon>{{ actionLook(a).icon }}</mat-icon>{{ actionLook(a).label }}</button>
+            } @else {
+              <button mat-stroked-button [disabled]="busy()" (click)="act(a)"><mat-icon>{{ actionLook(a).icon }}</mat-icon>{{ actionLook(a).label }}</button>
+            }
           }
         </footer>
       }
@@ -161,6 +228,14 @@ export interface WorkTaskDialogData {
     .wtd__small { font-size: 12px; margin: 0; }
     .wi-table code, .wi-note code { font-size: 12px; }
     .wtd__long { white-space: pre-wrap; }
+    .wtd__links { display: flex; flex-direction: column; gap: 4px; }
+    .wtd__link { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+    .wtd__link-ico { font-size: 17px; width: 17px; height: 17px; color: var(--cc-text-2); flex: none; }
+    .wtd__link-title { flex: 1 1 200px; min-width: 0; }
+    .wtd__ticket-form { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+    @media (max-width: 560px) { .wtd__ticket-form { grid-template-columns: 1fr; } }
+    .wtd__ticket-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .wtd__ticket-acts .mat-mdc-button-base mat-icon { margin-right: 4px; }
   `]
 })
 export class WorkTaskDialogComponent {
@@ -173,6 +248,9 @@ export class WorkTaskDialogComponent {
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
   resultText = '';
+  /** Chamado na Bancada: formulário "Anexar chamado". */
+  ticketUrl = '';
+  ticketTitle = '';
   /** Rodada 5: arquivos do item (o componente filtra os desta sub-tarefa). */
   readonly files = new WorkItemFilesStore();
   readonly taskFiles = computed(() => filesOfTask(this.files.files(), this.data.taskNumber).length);
@@ -207,12 +285,25 @@ export class WorkTaskDialogComponent {
       };
     });
   });
-  readonly outputs = computed(() => outputEntries(this.task()?.output));
+  /** Saídas da sub-tarefa (sem repetir as URLs que já aparecem em "Chamados e PRs"). */
+  readonly outputs = computed(() => {
+    const known = new Set(this.links().map((l) => linkKey(l.url)));
+    return outputEntries(this.task()?.output).filter((o) => !o.url || !known.has(linkKey(o.value)));
+  });
+  /** Chamado na Bancada: links da sub-tarefa, o chamado em foco e as ações de chamado (item aberto, na vez dela). */
+  readonly links = computed(() => taskLinks(this.task()));
+  readonly ticket = computed(() => currentTicket(this.task()));
+  readonly ticketTask = computed(() => isTicketTask(this.task()));
+  readonly ticketActs = computed(() => ticketTaskActions(this.item(), this.task()));
   readonly undoParams = computed(() => Object.entries(this.task()?.undo?.params ?? {}));
 
   readonly num = formatWorkNumber;
   readonly executor = executorLabel;
   readonly actionLook = (a: WorkTaskAction) => TASK_ACTION_LABELS[a];
+  readonly ticketLook = (a: TicketAction) => TICKET_ACTION_LABELS[a];
+  readonly linkIco = taskLinkIcon;
+  readonly linkLook = taskLinkStatusLook;
+  readonly ciLook = taskLinkCiLook;
 
   constructor() {
     this.pickers.ensureGithubUrl(this.data.catalog);
@@ -245,5 +336,45 @@ export class WorkTaskDialogComponent {
       },
       error: (e) => { this.busy.set(false); this.snack.open(e.message, 'Fechar', { duration: 8000 }); }
     });
+  }
+
+  /** Chamado na Bancada: anexa o chamado (a sub-tarefa passa a aguardar o chamado). */
+  attachTicket(): void {
+    const t = this.task();
+    const url = this.ticketUrl.trim();
+    if (!t || !url || this.busy() || !this.ticketActs().includes('attach')) return;
+    this.busy.set(true);
+    this.api.attachTicket(t.number, { url, title: this.ticketTitle.trim() || null }).subscribe({
+      next: (it) => {
+        this.busy.set(false);
+        this.ticketUrl = '';
+        this.ticketTitle = '';
+        this.snack.open(`${formatWorkNumber(t.number)}: chamado anexado — a sub-tarefa aguarda o chamado ser resolvido.`, 'Ok', { duration: 3500 });
+        this.applyOrReload(it);
+      },
+      error: (e) => { this.busy.set(false); this.snack.open(e.message, 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  /** Chamado na Bancada: status do chamado em foco (resolvido conclui a sub-tarefa). */
+  setTicket(action: TicketAction): void {
+    const t = this.task();
+    if (!t || this.busy() || action === 'attach') return;
+    const status: TicketStatus = action;
+    this.busy.set(true);
+    this.api.setTicketStatus(t.number, { status, linkId: this.ticket()?.id ?? null }).subscribe({
+      next: (it) => {
+        this.busy.set(false);
+        this.snack.open(`${formatWorkNumber(t.number)}: ${TICKET_STATUS_DONE[status]}.`, 'Ok', { duration: 3500 });
+        this.applyOrReload(it);
+      },
+      error: (e) => { this.busy.set(false); this.snack.open(e.message, 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  /** O endpoint devolve o item atualizado: mostra na hora (sem item na resposta, recarrega). */
+  private applyOrReload(it: WorkItem | null | undefined): void {
+    if (it && it.number === this.data.itemNumber && Array.isArray(it.tasks)) { this.item.set(it); this.error.set(null); }
+    else this.reload();
   }
 }
