@@ -304,7 +304,7 @@ const FLASH_MS = 1_600;
     .wie__link { display: inline-flex; align-items: center; gap: 4px; color: var(--mat-sys-primary); text-decoration: none; font-size: 12.5px; overflow-wrap: anywhere; }
     .wie__link:hover { text-decoration: underline; }
     .wie__link mat-icon { font-size: 15px; width: 15px; height: 15px; flex: none; }
-    .wie__sec { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+    .wie__sec { display: flex; flex-direction: column; gap: 6px; flex: none; }
     .wie__sec-title { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--cc-text-3); display: flex; gap: 6px; align-items: baseline; }
     .wie__sec-title small { font-weight: 500; letter-spacing: 0; opacity: .8; }
     .wie__muted { color: var(--cc-text-3); margin: 0; font-size: 12.5px; }
