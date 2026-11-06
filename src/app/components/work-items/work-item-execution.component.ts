@@ -17,6 +17,7 @@ import {
 import { DatePipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule, MatIconRegistry } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { DomSanitizer } from '@angular/platform-browser';
 import { WorkItemsService } from '../../services/work-items.service';
@@ -27,18 +28,22 @@ import { WiTypeIconComponent } from './wi-type-icon.component';
 import {
   LiveFeedEntry,
   TASK_ACTION_LABELS,
+  TICKET_ACTION_LABELS,
+  TicketAction,
   WorkItem,
   WorkItemCatalog,
   WorkItemLive,
   WorkItemsUpdatedPayload,
   WorkTask,
   WorkTaskAction,
+  WorkTaskLink,
   activityIcon,
   buildLiveFeed,
   canCancel,
   canExecute,
   canUndo,
   changedTaskNumbers,
+  currentTicket,
   executorLabel,
   formatElapsed,
   formatWorkNumber,
@@ -49,8 +54,14 @@ import {
   prStatusLabel,
   pullRequestLinks,
   requestStatusLabel,
-  taskDeliverableLinks,
+  taskExtraOutputLinks,
+  taskLinkCiLook,
+  taskLinkIcon,
+  taskLinkStatusLook,
+  taskLinks,
+  taskPrHint,
   taskStatusLook,
+  ticketTaskActions,
   userTaskActions,
   waitCodeLabel
 } from './work-item.model';
@@ -73,6 +84,8 @@ const FLASH_MS = 1_600;
  * com o status ao vivo (pendente → em andamento → concluída, com transição), "agora" (atividade do executor), feed do que
  * foi feito (atividades + registros; o mais novo embaixo, rola sozinho só se a pessoa estiver no fim), saídas das
  * sub-tarefas (PR/branch) e as ações (Cancelar…, Desfazer, Executar de novo). Ao concluir, um resumo final.
+ * Chamado na Bancada: cada sub-tarefa mostra os chamados/PRs ligados a ela com o status; a de chamado da pessoa ganha
+ * "Anexar chamado" e o menu do status (resolvido conclui sozinha; fechado sem resolução; reabrir).
  *
  * Fonte: `GET WorkItems/{number}` (sub-tarefas) + `GET WorkItems/{number}/live`. Tempo real: `workItemsUpdated` no grupo
  * `execplan:{card}` (refaz os GETs do item afetado com debounce de 300 ms; `_resynced` recarrega) + polling de 10 s só
@@ -84,7 +97,7 @@ const FLASH_MS = 1_600;
 @Component({
   selector: 'app-work-item-execution',
   standalone: true,
-  imports: [DatePipe, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent],
+  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wie" [class.wie--live]="live()" [class.wie--celebrate]="celebrate()" [attr.aria-busy]="live()"
@@ -190,8 +203,16 @@ const FLASH_MS = 1_600;
                       <mat-icon class="wie__task-kind" [matTooltip]="kind(t).label">{{ kind(t).icon }}</mat-icon>
                       <span class="wie__task-title">{{ t.title }}</span>
                     </button>
-                    @if (outLinks(t).length) {
+                    @if (links(t).length || outLinks(t).length) {
                       <span class="wie__outs">
+                        <!-- Chamado na Bancada: chamados e PRs ligados à sub-tarefa, com o status -->
+                        @for (l of links(t); track l.url) {
+                          <a class="wie__out wie__out--{{ l.kind }}" [href]="l.url" target="_blank" rel="noopener" [matTooltip]="l.title ? l.title + ' — ' + l.url : l.url">
+                            <mat-icon>{{ linkIco(l.kind) }}</mat-icon><span class="wie__out-text">{{ linkText(l) }}</span>
+                            @if (linkLook(l); as st) { <span class="wie__out-st" [style.color]="st.color">{{ st.label }}</span> }
+                            @if (ciLook(l); as ci) { <span class="wie__out-st" [style.color]="ci.color">{{ ci.label }}</span> }
+                          </a>
+                        }
                         @for (o of outLinks(t); track o.url) {
                           <a class="wie__out" [href]="o.url" target="_blank" rel="noopener" [matTooltip]="(o.title ? o.title + (o.status ? ' · ' + prLabel(o.status).toLowerCase() : '') + ' — ' : '') + o.url">
                             <mat-icon>{{ o.kind === 'pr' ? 'merge' : o.kind === 'branch' ? 'call_split' : 'link' }}</mat-icon>{{ o.kind === 'pr' ? 'PR' : o.kind === 'branch' ? 'Branch' : o.key }}
@@ -199,16 +220,52 @@ const FLASH_MS = 1_600;
                         }
                       </span>
                     }
+                    @if (ticketDraft()?.task === t.number) {
+                      <div class="wie__ticket-form" role="group" [attr.aria-label]="'Anexar chamado em ' + num(t.number)">
+                        <input class="wie__input" type="url" required [value]="ticketDraft()!.url" (input)="draftField('url', $any($event.target).value)"
+                               (keydown.enter)="saveTicket(t)" (keydown.escape)="ticketDraft.set(null)" placeholder="Link do chamado (obrigatório)" aria-label="Link do chamado" />
+                        <input class="wie__input wie__input--short" [value]="ticketDraft()!.title" (input)="draftField('title', $any($event.target).value)"
+                               (keydown.enter)="saveTicket(t)" (keydown.escape)="ticketDraft.set(null)" placeholder="Título ou número (opcional)" aria-label="Título ou número do chamado" />
+                        <button mat-button (click)="ticketDraft.set(null)" [disabled]="busyTask() === t.number">Cancelar</button>
+                        <button mat-flat-button color="primary" (click)="saveTicket(t)" [disabled]="!ticketDraft()!.url.trim() || busyTask() === t.number">Anexar</button>
+                      </div>
+                    }
+                    @if (ticketDraft()?.task === t.number) {
+                      <small class="wie__ticket-help">A sub-tarefa conclui sozinha quando o chamado for marcado como resolvido.</small>
+                    }
                   </div>
                   <span class="wie__task-label" [style.color]="taskLook(t).color">{{ taskLabel(t) }}</span>
                   <span class="wie__chip">{{ executor(t.executor) }}</span>
-                  @for (a of userActions(t); track a) {
+                  @if (ticketActs(it, t); as ta) {
+                    @if (ta.length === 1 && ta[0] === 'attach') {
+                      @if (ticketDraft()?.task !== t.number) {
+                        <button mat-stroked-button class="wie__ticket-btn" (click)="startTicket(t)" [disabled]="busyTask() === t.number"
+                                matTooltip="Informe o link do chamado aberto — a sub-tarefa aguarda o chamado ser resolvido">
+                          <mat-icon>add_link</mat-icon>Anexar chamado
+                        </button>
+                      }
+                    } @else if (ta.length) {
+                      <button mat-stroked-button class="wie__ticket-btn" [matMenuTriggerFor]="ticketMenu" [matMenuTriggerData]="{ t: t, acts: ta }"
+                              [disabled]="busyTask() === t.number" matTooltip="Marcar o status do chamado — resolvido conclui a sub-tarefa sozinha">
+                        <mat-icon>confirmation_number</mat-icon>Chamado<mat-icon class="wie__ticket-caret">arrow_drop_down</mat-icon>
+                      </button>
+                    }
+                  }
+                  <!-- Chamado aberto: o status vai pelo menu "Chamado"; concluir/falhar/pular ficam no detalhe da sub-tarefa -->
+                  @for (a of openTicket(t) ? [] : userActions(t); track a) {
                     <button mat-icon-button class="wie__qa" (click)="taskAct(t, a)" [disabled]="busyTask() === t.number"
                             [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label + ' ' + num(t.number)"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
                   }
                 </li>
               }
             </ol>
+            <mat-menu #ticketMenu="matMenu">
+              <ng-template matMenuContent let-t="t" let-acts="acts">
+                @for (a of acts; track a) {
+                  <button mat-menu-item (click)="ticketAct(t, a)"><mat-icon>{{ ticketLook(a).icon }}</mat-icon>{{ a === 'attach' ? 'Anexar outro chamado' : ticketLook(a).label }}</button>
+                }
+              </ng-template>
+            </mat-menu>
           } @else if (!error()) {
             <p class="wie__muted">Carregando…</p>
           }
@@ -329,6 +386,19 @@ const FLASH_MS = 1_600;
       color: var(--mat-sys-primary); border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 40%, transparent); }
     .wie__out:hover { background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent); }
     .wie__out mat-icon { font-size: 13px; width: 13px; height: 13px; }
+    .wie__out-text { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wie__out-st { font-weight: 600; white-space: nowrap; }
+    .wie__out-st::before { content: '·'; margin: 0 3px 0 1px; color: var(--cc-text-3); font-weight: 400; }
+    .wie__ticket-btn.mat-mdc-button-base { height: 26px; padding: 0 8px; font-size: 11.5px; flex: none; }
+    .wie__ticket-btn mat-icon { font-size: 15px; width: 15px; height: 15px; margin-right: 3px; }
+    .wie__ticket-btn .wie__ticket-caret { margin: 0 -4px 0 0; }
+    .wie__ticket-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 2px; }
+    .wie__input { flex: 2 1 220px; min-width: 0; box-sizing: border-box; border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); border-radius: 8px;
+      background: var(--surface-input, #1a1f28); color: inherit; font: inherit; font-size: 12.5px; padding: 5px 8px; }
+    .wie__input--short { flex: 1 1 140px; }
+    .wie__input:focus { outline: none; border-color: color-mix(in srgb, var(--mat-sys-primary) 70%, transparent); }
+    .wie__ticket-form .mat-mdc-button-base { height: 28px; font-size: 12px; }
+    .wie__ticket-help { color: var(--cc-text-3); font-size: 11px; }
     .wie__chip { display: inline-flex; align-items: center; padding: 0 7px; border-radius: 999px; font-size: 10.5px; line-height: 18px; white-space: nowrap;
       border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); color: var(--cc-text-2); }
     .wie__qa.mat-mdc-icon-button { width: 28px; height: 28px; padding: 2px; }
@@ -426,10 +496,19 @@ export class WorkItemExecutionComponent {
   readonly actIcon = activityIcon;
   readonly taskLook = (t: WorkTask) => taskStatusLook(t.status);
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
-  /** 0091: PR/branch das entregas da sub-tarefa quando há; senão os links do `output` (como antes). */
-  readonly outLinks = (t: WorkTask) => taskDeliverableLinks(this.item(), t);
+  /** Chamado na Bancada + 0091: PR/branch das entregas da sub-tarefa (senão os links do `output`), sem repetir um link dela. */
+  readonly outLinks = (t: WorkTask) => taskExtraOutputLinks(this.item(), t);
   readonly prLabel = prStatusLabel;
   readonly actionLook = (a: WorkTaskAction) => TASK_ACTION_LABELS[a];
+  readonly links = (t: WorkTask) => taskLinks(t);
+  readonly linkIco = taskLinkIcon;
+  readonly linkLook = taskLinkStatusLook;
+  readonly ciLook = taskLinkCiLook;
+  readonly ticketLook = (a: TicketAction) => TICKET_ACTION_LABELS[a];
+  readonly ticketActs = ticketTaskActions;
+  readonly openTicket = (t: WorkTask) => { const c = currentTicket(t); return !!c && (c.status || 'open') === 'open'; };
+  /** Chamado na Bancada: formulário "Anexar chamado" aberto numa sub-tarefa. */
+  readonly ticketDraft = signal<{ task: number; url: string; title: string } | null>(null);
 
   readonly look = computed(() => itemStatusLook(this.status()));
   readonly status = computed(() => this.item()?.status ?? (this.liveData()?.status as WorkItem['status'] | undefined) ?? null);
@@ -708,10 +787,19 @@ export class WorkItemExecutionComponent {
 
   // ── sub-tarefas ──────────────────────────────────────────────────────────────────────────────
 
-  /** "Aguardando você" quando a sub-tarefa é do usuário e chegou a vez dela. */
+  /**
+   * "Aguardando você" quando a sub-tarefa é do usuário e chegou a vez dela; com chamado aberto, "Aguardando o chamado";
+   * etapa de PR pendente com PR aberto/mesclado mostra o PR no lugar de "Pendente".
+   */
   taskLabel(t: WorkTask): string {
+    if (t.status === 'waiting' && this.openTicket(t)) return 'Aguardando o chamado';
     if (t.executor === 'user' && (t.status === 'waiting' || (t.status === 'pending' && t.number === this.currentTask()))) return 'Aguardando você';
-    return taskStatusLook(t.status).label;
+    return taskPrHint(t) ?? taskStatusLook(t.status).label;
+  }
+
+  /** Texto do chip do link: título (ou "Chamado"/"PR"). */
+  linkText(l: WorkTaskLink): string {
+    return (l.title ?? '').trim() || (l.kind === 'ticket' ? 'Chamado' : l.kind === 'pr' ? 'PR' : 'Link');
   }
 
   taskIcon(t: WorkTask): string {
@@ -735,6 +823,40 @@ export class WorkItemExecutionComponent {
   openTask(item: WorkItem, t: WorkTask): void {
     const card = (this.card() ?? '') || item.cardNumber;
     if (card) this.actions.openTask(card, item, t.number, this.catalog());
+  }
+
+  // ── chamado na Bancada ───────────────────────────────────────────────────────────────────────
+
+  startTicket(t: WorkTask): void {
+    this.ticketDraft.set({ task: t.number, url: '', title: '' });
+  }
+
+  draftField(field: 'url' | 'title', value: string): void {
+    const d = this.ticketDraft();
+    if (d) this.ticketDraft.set({ ...d, [field]: value ?? '' });
+  }
+
+  async saveTicket(t: WorkTask): Promise<void> {
+    const d = this.ticketDraft();
+    if (!d || d.task !== t.number || !d.url.trim() || this.busyTask() === t.number) return;
+    this.busyTask.set(t.number);
+    const it = await this.actions.attachTicket(t, d.url.trim(), d.title.trim() || null);
+    this.busyTask.set(null);
+    if (it) { this.ticketDraft.set(null); this.afterTicket(it); }
+  }
+
+  async ticketAct(t: WorkTask, a: TicketAction): Promise<void> {
+    if (a === 'attach') { this.startTicket(t); return; }
+    this.busyTask.set(t.number);
+    const it = await this.actions.setTicketStatus(t, a, currentTicket(t)?.id ?? null);
+    this.busyTask.set(null);
+    if (it) this.afterTicket(it);
+  }
+
+  /** O endpoint devolve o item atualizado: aplica na hora (sem item na resposta, recarrega). */
+  private afterTicket(it: WorkItem | null | undefined): void {
+    if (it && it.number === this.current && Array.isArray(it.tasks)) this.applyItem(it);
+    else this.reload();
   }
 
   async taskAct(t: WorkTask, a: WorkTaskAction): Promise<void> {

@@ -3,8 +3,10 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { Observable, catchError, map, of, throwError } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
+  AttachTicketRequest,
   CreateWorkItemRequest,
   ExecuteWorkItemResponse,
+  TicketStatusRequest,
   UpdateWorkItemRequest,
   WorkItem,
   WorkDeliverable,
@@ -220,6 +222,21 @@ export class WorkItemsService {
   taskAction(taskNumber: number, action: WorkTaskAction, body: { result?: string | null; output?: Record<string, unknown> | null } = {}): Observable<WorkItem> {
     return this.http.post<WorkItem>(`${this.apiUrl}/tasks/${taskNumber}/${action}`, { result: body.result ?? null, output: body.output ?? null })
       .pipe(this.fail(`Não foi possível atualizar a sub-tarefa ${formatWorkNumber(taskNumber)}.`));
+  }
+
+  /** Chamado na Bancada: anexa o chamado à sub-tarefa (ela passa a aguardar o chamado) — devolve o item atualizado. */
+  attachTicket(taskNumber: number, req: AttachTicketRequest): Observable<WorkItem> {
+    return this.http.post<WorkItem>(`${this.apiUrl}/tasks/${taskNumber}/ticket`, { url: req.url.trim(), title: req.title?.trim() || null })
+      .pipe(this.fail(`Não foi possível anexar o chamado na sub-tarefa ${formatWorkNumber(taskNumber)}.`));
+  }
+
+  /**
+   * Chamado na Bancada: status do chamado da sub-tarefa (`resolved` conclui a sub-tarefa; `closed` = fechado sem
+   * resolução; `open` = reabrir) — devolve o item atualizado.
+   */
+  setTicketStatus(taskNumber: number, req: TicketStatusRequest): Observable<WorkItem> {
+    return this.http.put<WorkItem>(`${this.apiUrl}/tasks/${taskNumber}/ticket`, { status: req.status, linkId: req.linkId ?? null })
+      .pipe(this.fail(`Não foi possível atualizar o chamado da sub-tarefa ${formatWorkNumber(taskNumber)}.`));
   }
 
   /** Materializa o item de um plano (cards antigos) — idempotente. */
