@@ -39,7 +39,8 @@ export interface WorkItemsUpdatedPayload {
   cardNumber: string;
   number?: number | null;
   taskNumber?: number | null;
-  action?: 'created' | 'updated' | 'task' | 'status' | 'request' | 'activity' | 'deleted' | string;
+  /** 0091: `deliverable` = entrega nova/atualizada no item (`number`) — a tela recarrega o item aberto. */
+  action?: 'created' | 'updated' | 'task' | 'status' | 'request' | 'activity' | 'deleted' | 'deliverable' | string;
   status?: string | null;
 }
 
@@ -144,6 +145,13 @@ export interface WorkItem {
   fingerprint: string;
   tasks: WorkTask[];
   logs?: WorkItemLog[] | null;
+  /**
+   * 0091: o que o item e as sub-tarefas geraram (só no `GET WorkItems/{n}` — a lista leve do card não traz). Ordem do
+   * servidor: sub-tarefa, depois `at`. Ausente = servidor antigo (as telas caem nos `links`/`output`).
+   */
+  deliverables?: WorkDeliverable[] | null;
+  /** O `#n` pedido era de uma sub-tarefa deste item (GET por número — a numeração é a mesma). */
+  matchedTaskNumber?: number | null;
 }
 
 export interface TaskKindParam {
@@ -622,17 +630,33 @@ export function changedTaskNumbers(prev: readonly Pick<WorkTask, 'number' | 'sta
 
 const PR_URL = /\/pull(s|request)?\/\d+|\/pullrequest\/\d+/i;
 
-/** Links de PR do item (links `pr` + saídas das sub-tarefas que são URL de PR), sem repetir. */
-export function pullRequestLinks(item: Pick<WorkItem, 'links' | 'tasks'> | null | undefined): { title: string; url: string }[] {
+/** Link de PR do item; `status`/`reverted` só quando vem das entregas (0091). */
+export interface PullRequestLink {
+  title: string;
+  url: string;
+  status?: string | null;
+  reverted?: boolean;
+  deliverable?: WorkDeliverable;
+}
+
+/**
+ * Links de PR do item. 0091: com entregas `pr` (com URL) no item, são elas (com o estado); senão, como antes — links
+ * `pr` + saídas das sub-tarefas que são URL de PR, sem repetir.
+ */
+export function pullRequestLinks(item: Pick<WorkItem, 'links' | 'tasks' | 'deliverables'> | null | undefined): PullRequestLink[] {
   if (!item) return [];
-  const out: { title: string; url: string }[] = [];
+  const out: PullRequestLink[] = [];
   const seen = new Set<string>();
-  const add = (url: string | null | undefined, title: string | null | undefined) => {
+  const add = (url: string | null | undefined, title: string | null | undefined, d?: WorkDeliverable) => {
     const u = (url ?? '').trim();
     if (!isUrl(u) || seen.has(linkKey(u))) return;
     seen.add(linkKey(u));
-    out.push({ title: (title ?? '').trim() || u, url: u });
+    out.push(d
+      ? { title: (title ?? '').trim() || u, url: u, status: prStatusOf(d), reverted: !!d.reverted, deliverable: d }
+      : { title: (title ?? '').trim() || u, url: u });
   };
+  for (const d of item.deliverables ?? []) if (d.kind === 'pr') add(d.url, prShortTitle(d), d);
+  if (out.length) return out;
   for (const l of item.links ?? []) if (l.kind === 'pr' || PR_URL.test(l.url ?? '')) add(l.url, l.title);
   // Chamado na Bancada: PRs ligados às sub-tarefas (etapas do plano).
   for (const t of item.tasks ?? []) for (const l of t.links ?? []) if (l?.kind === 'pr') add(l.url, l.title);
@@ -675,11 +699,11 @@ export function taskLinks(task: Pick<WorkTask, 'links'> | null | undefined): Wor
   return out;
 }
 
-/** Saídas-link da sub-tarefa que não repetem um link dela (o link com status já aparece). */
-export function taskExtraOutputLinks(task: Pick<WorkTask, 'output' | 'links'>): ReturnType<typeof taskOutputLinks> {
+/** PR/branch da sub-tarefa (entregas, senão saídas-link — 0091) que não repetem um link dela (o link com status já aparece). */
+export function taskExtraOutputLinks(item: Pick<WorkItem, 'deliverables'> | null | undefined, task: Pick<WorkTask, 'number' | 'output' | 'links'>): TaskOutputLink[] {
   const known = new Set(taskLinks(task).map((l) => linkKey(l.url)));
   const seen = new Set<string>();
-  return taskOutputLinks(task).filter((o) => {
+  return taskDeliverableLinks(item, task).filter((o) => {
     const k = linkKey(o.url);
     if (known.has(k) || seen.has(k)) return false;
     seen.add(k);
@@ -794,4 +818,244 @@ export function taskPrHint(task: Pick<WorkTask, 'status' | 'links'>): string | n
   if (prs.some((l) => (l.status || 'open') === 'open')) return prs.length > 1 ? 'PRs abertos' : 'PR aberto';
   if (prs.every((l) => l.status === 'merged')) return prs.length > 1 ? 'PRs mesclados' : 'PR mesclado';
   return null;
+}
+
+// ── Entregas do item e das sub-tarefas (0091: `WorkDeliverableResponse`) ────────────────────────────
+
+/** Tipos de entrega (o servidor pode mandar outros; a tela mostra como "Link"). */
+export type WorkDeliverableKind = 'pr' | 'branch' | 'commit' | 'code' | 'ticket' | 'pr-text' | 'devops-state' | 'comment'
+  | 'timeline' | 'hours' | 'notify' | 'doc' | (string & {});
+/** auto = gravada pelo servidor · task = output/links da sub-tarefa · plan = etapa do plano · deduced = deduzida dos registros do card. */
+export type WorkDeliverableSource = 'auto' | 'task' | 'plan' | 'deduced' | (string & {});
+/** Estado do PR (`pr`) ou do chamado (`ticket`); os demais tipos vêm sem estado. */
+export type WorkDeliverableStatus = 'open' | 'merged' | 'closed' | 'draft' | 'resolved' | (string & {});
+
+export interface DeliverableCommit {
+  sha: string;
+  title?: string | null;
+}
+
+export interface DeliverableFileStat {
+  path: string;
+  status?: 'modified' | 'added' | 'removed' | 'renamed' | (string & {}) | null;
+  additions?: number | null;
+  deletions?: number | null;
+}
+
+/** `data` do `pr`. */
+export interface PrDeliverableData {
+  alreadyExisted?: boolean | null;
+  checks?: 'success' | 'failure' | 'pending' | (string & {}) | null;
+  checksFailed?: number | null;
+  approvals?: number | null;
+  /** Contagem (ou `true`) de revisões pedindo alteração. */
+  changesRequested?: number | boolean | null;
+  isDraft?: boolean | null;
+}
+
+/** `data` do `code`/`branch` (cherry-pick incluso). `fileList` vem com até 300 arquivos. */
+export interface CodeDeliverableData {
+  base?: string | null;
+  mergeBase?: string | null;
+  commits?: DeliverableCommit[] | null;
+  files?: number | null;
+  additions?: number | null;
+  deletions?: number | null;
+  truncated?: boolean | null;
+  fileList?: DeliverableFileStat[] | null;
+}
+
+export interface CommitDeliverableData { title?: string | null }
+export interface TicketDeliverableData { system?: string | null }
+export interface DevopsStateDeliverableData { from?: string | null; to?: string | null; action?: string | null }
+export interface HoursDeliverableData { hours?: number | string | null }
+export interface TimelineDeliverableData { entryId?: string | number | null }
+
+/** Extras por tipo — objeto, nunca nulo (a tela trata ausente como `{}`). */
+export type WorkDeliverableData = PrDeliverableData & CodeDeliverableData & CommitDeliverableData & TicketDeliverableData
+  & DevopsStateDeliverableData & HoursDeliverableData & TimelineDeliverableData & { [key: string]: unknown };
+
+export interface WorkDeliverable {
+  /** Guid da entrega gravada ou sintético (`out:57:pr`, `link:<guid>`, `pr:edv-solvace#123`) — codificar na URL. */
+  id: string;
+  /** Sub-tarefa (#n); nulo = do item. */
+  taskNumber?: number | null;
+  kind: WorkDeliverableKind;
+  title?: string | null;
+  url?: string | null;
+  status?: WorkDeliverableStatus | null;
+  repository?: string | null;
+  /** pr = origem; branch/code/commit = a branch. */
+  branch?: string | null;
+  /** pr = destino; branch/code = base. */
+  target?: string | null;
+  number?: number | null;
+  sha?: string | null;
+  /** timeline/comment/pr-text/notify: texto curto (≤ 600); horas: "1.5". */
+  text?: string | null;
+  data?: WorkDeliverableData | null;
+  source?: WorkDeliverableSource | null;
+  reverted?: boolean | null;
+  hasDiff?: boolean | null;
+  at?: string | null;
+}
+
+export interface WorkDeliverableDiffFile {
+  path: string;
+  previousPath?: string | null;
+  status?: 'modified' | 'added' | 'removed' | 'renamed' | (string & {}) | null;
+  additions?: number | null;
+  deletions?: number | null;
+  /** Diff unificado do arquivo; ausente = binário ou grande demais. */
+  patch?: string | null;
+}
+
+/** `GET WorkItems/{n}/deliverables/{id}/diff`. `error` = o GitHub não respondeu (branch apagada etc.). */
+export interface WorkDeliverableDiff {
+  source?: 'snapshot' | 'github' | (string & {}) | null;
+  repository?: string | null;
+  base?: string | null;
+  head?: string | null;
+  truncated?: boolean | null;
+  compareUrl?: string | null;
+  files?: WorkDeliverableDiffFile[] | null;
+  error?: string | null;
+}
+
+const DELIVERABLE_LOOK: Record<string, { label: string; icon: string }> = {
+  pr: { label: 'Pull request', icon: 'merge' },
+  branch: { label: 'Branch', icon: 'call_split' },
+  commit: { label: 'Commit', icon: 'commit' },
+  code: { label: 'Código alterado', icon: 'code' },
+  ticket: { label: 'Chamado', icon: 'confirmation_number' },
+  'pr-text': { label: 'Texto do PR', icon: 'article' },
+  'devops-state': { label: 'Card no DevOps', icon: 'swap_horiz' },
+  comment: { label: 'Comentário no card', icon: 'chat_bubble_outline' },
+  timeline: { label: 'Timeline', icon: 'timeline' },
+  hours: { label: 'Horas lançadas', icon: 'schedule' },
+  notify: { label: 'Aviso', icon: 'campaign' },
+  doc: { label: 'Link', icon: 'link' }
+};
+
+export function deliverableLabel(kind: string | null | undefined): string {
+  return DELIVERABLE_LOOK[kind ?? '']?.label ?? 'Link';
+}
+
+export function deliverableIcon(kind: string | null | undefined): string {
+  return DELIVERABLE_LOOK[kind ?? '']?.icon ?? 'link';
+}
+
+/** Entregas do item; com `taskNumber`, só as daquela sub-tarefa (sem ele, todas — inclusive as do item). */
+export function deliverablesOf(item: Pick<WorkItem, 'deliverables'> | null | undefined, taskNumber?: number | null): WorkDeliverable[] {
+  const all = item?.deliverables ?? [];
+  if (taskNumber === undefined || taskNumber === null) return all.slice();
+  return all.filter((d) => d.taskNumber != null && Number(d.taskNumber) === Number(taskNumber));
+}
+
+export type DeliverableGroupKey = 'prs' | 'code' | 'tickets' | 'card' | 'other';
+
+export interface DeliverableGroup {
+  key: DeliverableGroupKey;
+  label: string;
+  icon: string;
+  items: WorkDeliverable[];
+}
+
+/** Ordem dos grupos da aba Entregas do item; tipo fora da lista → Outros. */
+export const DELIVERABLE_GROUPS: readonly { key: DeliverableGroupKey; label: string; icon: string; kinds: readonly string[] }[] = [
+  { key: 'prs', label: 'Pull requests', icon: 'merge', kinds: ['pr', 'pr-text'] },
+  { key: 'code', label: 'Código e branches', icon: 'code', kinds: ['code', 'branch', 'commit'] },
+  { key: 'tickets', label: 'Chamados', icon: 'confirmation_number', kinds: ['ticket'] },
+  { key: 'card', label: 'Card', icon: 'style', kinds: ['devops-state', 'comment', 'timeline', 'hours'] },
+  { key: 'other', label: 'Outros', icon: 'link', kinds: [] }
+];
+
+export function deliverableGroupKey(kind: string | null | undefined): DeliverableGroupKey {
+  return DELIVERABLE_GROUPS.find((g) => g.kinds.includes(kind ?? ''))?.key ?? 'other';
+}
+
+/** Agrupa na ordem dos grupos (só os que têm entrega), mantendo a ordem do servidor dentro de cada grupo. */
+export function groupDeliverables(list: readonly WorkDeliverable[] | null | undefined): DeliverableGroup[] {
+  const by = new Map<DeliverableGroupKey, WorkDeliverable[]>();
+  for (const d of list ?? []) {
+    const k = deliverableGroupKey(d.kind);
+    const bucket = by.get(k);
+    if (bucket) bucket.push(d); else by.set(k, [d]);
+  }
+  return DELIVERABLE_GROUPS.filter((g) => by.has(g.key)).map((g) => ({ key: g.key, label: g.label, icon: g.icon, items: by.get(g.key)! }));
+}
+
+/** Estado do PR para a tela: `draft` quando o servidor manda `draft` ou `open` com `isDraft`. */
+export function prStatusOf(d: Pick<WorkDeliverable, 'status' | 'data'>): string | null {
+  const s = `${d.status ?? ''}`.trim().toLowerCase();
+  if (s === 'open' && d.data?.isDraft) return 'draft';
+  return s || (d.data?.isDraft ? 'draft' : null);
+}
+
+const PR_STATUS_LABELS: Record<string, string> = { open: 'Aberto', merged: 'Mesclado', closed: 'Fechado', draft: 'Rascunho' };
+const TICKET_STATUS_LABELS: Record<string, string> = { open: 'Aberto', resolved: 'Resolvido', closed: 'Fechado' };
+
+export function prStatusLabel(status: string | null | undefined): string {
+  return PR_STATUS_LABELS[`${status ?? ''}`.toLowerCase()] ?? (status || '');
+}
+
+export function ticketStatusLabel(status: string | null | undefined): string {
+  return TICKET_STATUS_LABELS[`${status ?? ''}`.toLowerCase()] ?? (status || '');
+}
+
+/** "PR #4521 · edv-solvace" (sem número: o título ou a URL). */
+export function prShortTitle(d: Pick<WorkDeliverable, 'number' | 'repository' | 'title' | 'url'>): string {
+  if (d.number != null) return [`PR #${d.number}`, d.repository].filter(Boolean).join(' · ');
+  return (d.title ?? '').trim() || (d.url ?? '');
+}
+
+/** URLs das entregas (para não repetir os mesmos links na lista antiga de `links`). */
+export function deliverableUrls(list: readonly WorkDeliverable[] | null | undefined): Set<string> {
+  return new Set((list ?? []).map((d) => (d.url ?? '').trim()).filter((u) => !!u));
+}
+
+/** Horas da entrega `hours` (`data.hours` ou o texto "1.5"); nulo quando não dá número. */
+export function deliverableHours(d: Pick<WorkDeliverable, 'data' | 'text'>): number | null {
+  const raw = d.data?.hours ?? d.text;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const n = typeof raw === 'number' ? raw : parseFloat(`${raw}`.replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+
+/** "1,5h" (pt-BR). */
+export function formatHours(n: number | null | undefined): string {
+  if (n === null || n === undefined || isNaN(n)) return '';
+  return `${n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}h`;
+}
+
+export function shortSha(sha: string | null | undefined): string {
+  return `${sha ?? ''}`.trim().slice(0, 7);
+}
+
+/** Link de PR/branch de uma sub-tarefa (sessão de execução). */
+export interface TaskOutputLink {
+  key: string;
+  url: string;
+  kind: 'pr' | 'branch' | 'link';
+  title?: string | null;
+  status?: string | null;
+}
+
+/**
+ * Links de PR/branch da sub-tarefa (sessão de execução): as entregas `pr`/`branch` dela quando há (com URL); senão os
+ * links que a sub-tarefa devolveu no `output` (como antes).
+ */
+export function taskDeliverableLinks(item: Pick<WorkItem, 'deliverables'> | null | undefined, task: Pick<WorkTask, 'number' | 'output'>): TaskOutputLink[] {
+  const seen = new Set<string>();
+  const out: TaskOutputLink[] = [];
+  for (const d of deliverablesOf(item, task.number)) {
+    if ((d.kind !== 'pr' && d.kind !== 'branch') || !isUrl(d.url)) continue;
+    const url = d.url.trim();
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push(d.kind === 'pr'
+      ? { key: 'pr', url, kind: 'pr', title: prShortTitle(d), status: prStatusOf(d) }
+      : { key: 'branch', url, kind: 'branch', title: d.branch || d.title || null, status: null });
+  }
+  return out.length ? out : taskOutputLinks(task);
 }

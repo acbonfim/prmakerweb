@@ -46,7 +46,7 @@ describe('chamado na Bancada — links da sub-tarefa', () => {
   it('saídas-link que já aparecem como link da sub-tarefa não repetem', () => {
     const t = task({ kind: 'pr', executor: 'claude', links: [{ kind: 'pr', url: PR, status: 'open' }],
       output: { prUrl: PR + '/', branch: 'https://github.com/solvace/api/tree/hotfix/77434' } });
-    expect(taskExtraOutputLinks(t).map((o) => o.kind)).toEqual(['branch']);
+    expect(taskExtraOutputLinks(null, t).map((o) => o.kind)).toEqual(['branch']);
   });
 
   it('PRs das sub-tarefas entram nos PRs do item, sem repetir os do item', () => {

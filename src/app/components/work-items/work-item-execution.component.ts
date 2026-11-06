@@ -51,6 +51,7 @@ import {
   itemProgress,
   itemStatusLook,
   kindInfo,
+  prStatusLabel,
   pullRequestLinks,
   requestStatusLabel,
   taskExtraOutputLinks,
@@ -178,7 +179,7 @@ const FLASH_MS = 1_600;
               @if (prs().length) {
                 <div class="wie__links">
                   @for (p of prs(); track p.url) {
-                    <a class="wie__link" [href]="p.url" target="_blank" rel="noopener"><mat-icon>merge</mat-icon>{{ p.title }}</a>
+                    <a class="wie__link" [href]="p.url" target="_blank" rel="noopener"><mat-icon>merge</mat-icon>{{ p.title }}@if (p.status) { · {{ prLabel(p.status).toLowerCase() }} }</a>
                   }
                 </div>
               }
@@ -213,7 +214,7 @@ const FLASH_MS = 1_600;
                           </a>
                         }
                         @for (o of outLinks(t); track o.url) {
-                          <a class="wie__out" [href]="o.url" target="_blank" rel="noopener" [matTooltip]="o.url">
+                          <a class="wie__out" [href]="o.url" target="_blank" rel="noopener" [matTooltip]="(o.title ? o.title + (o.status ? ' · ' + prLabel(o.status).toLowerCase() : '') + ' — ' : '') + o.url">
                             <mat-icon>{{ o.kind === 'pr' ? 'merge' : o.kind === 'branch' ? 'call_split' : 'link' }}</mat-icon>{{ o.kind === 'pr' ? 'PR' : o.kind === 'branch' ? 'Branch' : o.key }}
                           </a>
                         }
@@ -495,8 +496,9 @@ export class WorkItemExecutionComponent {
   readonly actIcon = activityIcon;
   readonly taskLook = (t: WorkTask) => taskStatusLook(t.status);
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
-  /** Chamado na Bancada: saídas-link que não repetem um link da sub-tarefa. */
-  readonly outLinks = (t: WorkTask) => taskExtraOutputLinks(t);
+  /** Chamado na Bancada + 0091: PR/branch das entregas da sub-tarefa (senão os links do `output`), sem repetir um link dela. */
+  readonly outLinks = (t: WorkTask) => taskExtraOutputLinks(this.item(), t);
+  readonly prLabel = prStatusLabel;
   readonly actionLook = (a: WorkTaskAction) => TASK_ACTION_LABELS[a];
   readonly links = (t: WorkTask) => taskLinks(t);
   readonly linkIco = taskLinkIcon;

@@ -161,7 +161,7 @@
       }
       @if (composer.open()) {
         <app-composer-suggest class="ck__suggest" [suggestions]="composer.suggestions()" [active]="composer.active()"
-                              [heading]="composer.trigger()?.kind === 'slash' ? 'Comandos e ferramentas' : 'Itens de trabalho'"
+                              [heading]="composer.heading() ?? 'Comandos e ferramentas'"
                               [loading]="composer.loadingTools()" (picked)="pickSuggestion($event)" (hovered)="composer.active.set($event)"></app-composer-suggest>
       }
       <div class="ck__row">

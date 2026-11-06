@@ -1,10 +1,11 @@
 import { Component, ElementRef, effect, inject, input, output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { itemStatusLook } from '../work-items/work-item.model';
+import { itemStatusLook, taskStatusLook } from '../work-items/work-item.model';
 import { ComposerSuggestion } from './composer-suggest';
 
 /**
- * 0090: lista de sugestões do compositor do Especialista — comandos e ferramentas (`/`) ou itens de trabalho (`#`).
+ * 0090: lista de sugestões do compositor do Especialista — comandos e ferramentas (`/`), itens de trabalho e sub-tarefas
+ * do card (`#`) ou de outros cards (`##`).
  * Fica sobre o campo (quem hospeda posiciona o `:host`); o teclado é do campo (↑/↓, Enter/Tab, Esc) e o mouse escolhe
  * com `mousedown` (o campo não perde o foco).
  */
@@ -22,7 +23,7 @@ import { ComposerSuggestion } from './composer-suggest';
           <span class="cs__main">
             <span class="cs__label">{{ s.label }}
               @if (s.title) { <small class="cs__title">{{ s.title }}</small> }
-              @if (s.kind === 'item' && s.status) { <small class="cs__status" [style.color]="look(s.status).color">{{ look(s.status).label }}</small> }
+              @if (s.kind === 'item' && s.status) { <small class="cs__status" [style.color]="look(s).color">{{ look(s).label }}</small> }
               @if (s.otherCard) { <small class="cs__card">card {{ s.otherCard }}</small> }
             </span>
             <span class="cs__detail">{{ s.detail }}</span>
@@ -73,7 +74,8 @@ export class ComposerSuggestComponent {
     });
   }
 
-  look(status: string) {
-    return itemStatusLook(status);
+  /** Selo do estado — a sub-tarefa tem estados próprios. */
+  look(s: ComposerSuggestion) {
+    return s.parentNumber ? taskStatusLook(s.status ?? '') : itemStatusLook(s.status);
   }
 }
