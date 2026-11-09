@@ -8,7 +8,7 @@ import type { GithubPullRequest } from '../../services/pull-request.service';
  * card, o valor dos commits e os links do GitHub.
  */
 
-export const PARAM_INPUTS: readonly TaskParamInput[] = ['repository', 'branch', 'target-branch', 'state', 'commits', 'text', 'textarea', 'select', 'pull-request'];
+export const PARAM_INPUTS: readonly TaskParamInput[] = ['repository', 'branch', 'target-branch', 'state', 'commits', 'text', 'textarea', 'select', 'pull-request', 'environments'];
 
 /** Bases do fluxo Solvace (destinos usuais de PR), na ordem em que aparecem nas sugestões. */
 export const BASE_BRANCHES: readonly string[] = ['release-version', 'hotfix-version', 'qa', 'development', 'master', 'edge'];

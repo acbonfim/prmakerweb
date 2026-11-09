@@ -3,7 +3,7 @@ import { WI_BUG_COLOR, WI_BUG_ICON, WI_US_COLOR, WI_US_ICON } from '../../helper
 /**
  * 0085 rodada 4 — **tipos do item de trabalho** (≠ tipo do card no DevOps). Um item é uma tarefa (abrir PR, revisar PR,
  * fechamento…), não uma US/Bug: os tipos vêm do catálogo (`catalog.itemTypes`, configuráveis em Skills Configurations
- * `WorkItemTypes`) com a reserva local abaixo (os 11 semeados). `bug`/`user-story` só aparecem em itens antigos (exibição,
+ * `WorkItemTypes`) com a reserva local abaixo (os semeados). `bug`/`user-story` só aparecem em itens antigos (exibição,
  * com a joaninha/livrinho) e não são oferecidos ao criar.
  */
 export interface WorkItemTypeInfo {
@@ -15,7 +15,7 @@ export interface WorkItemTypeInfo {
   description?: string | null;
 }
 
-/** Os 11 tipos semeados (reserva quando o catálogo não traz `itemTypes`). */
+/** Os tipos semeados (reserva quando o catálogo não traz `itemTypes`). */
 export const DEFAULT_ITEM_TYPES: readonly WorkItemTypeInfo[] = [
   { key: 'task', label: 'Tarefa', icon: 'task_alt', color: '#58a6ff', description: 'Tarefa simples do card.' },
   { key: 'pull-request', label: 'Pull request', icon: 'merge', color: '#a371f7', description: 'Branch, cherry-pick e PR para um destino.' },
@@ -27,7 +27,8 @@ export const DEFAULT_ITEM_TYPES: readonly WorkItemTypeInfo[] = [
   { key: 'closing', label: 'Fechamento', icon: 'flag', color: '#8b949e', description: 'Root cause, classificação, resumo e estado do card.' },
   { key: 'data', label: 'Dados/Script', icon: 'storage', color: '#db61a2', description: 'Consultas e scripts de dados.' },
   { key: 'ticket', label: 'Chamado', icon: 'confirmation_number', color: '#f0883e', description: 'Chamado para outra equipe.' },
-  { key: 'text', label: 'Textos/Resumo', icon: 'description', color: '#79c0ff', description: 'Resumo PT/EN, comentários e textos.' }
+  { key: 'text', label: 'Textos/Resumo', icon: 'description', color: '#79c0ff', description: 'Resumo PT/EN, comentários e textos.' },
+  { key: 'validation', label: 'Validação', icon: 'verified', color: '#56d364', description: 'Validar a demanda num ambiente, com prints de evidência.' }
 ];
 
 /** Tipos legados (itens antigos): só exibição. */

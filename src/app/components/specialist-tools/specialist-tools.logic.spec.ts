@@ -15,7 +15,8 @@ import {
   suffixFor,
   toolApplicability,
   toolGroup,
-  toolIcon
+  toolIcon,
+  repeatValues
 } from './specialist-tools.logic';
 
 const ctx: ToolContext = {
@@ -226,5 +227,49 @@ describe('0085 r4 — ferramentas do especialista (lógica)', () => {
     expect(msg).toContain('prmake_tool_run');
     const bare = specialistToolMessage({ key: 'novo-resumo', title: 'Novo resumo' }, [], {});
     expect(bare.split('\n')[0]).toBe('@especialista Use a ferramenta "Novo resumo" (novo-resumo).');
+  });
+  describe('0092 — validar em ambiente', () => {
+    const VAL: SpecialistTool = {
+      key: 'validar-em-ambiente',
+      title: 'Validar em ambiente',
+      type: 'validation',
+      ask: [
+        { key: 'environments', label: 'Ambientes', input: 'environments', default: 'dev, qa',
+          options: [{ value: 'dev', label: 'Desenvolvimento · devsp.solvacelabs.com' }, { value: 'qa', label: 'QA · qa.solvacelabs.com' }] },
+        { key: 'plant', label: 'Planta', required: false }
+      ],
+      tasks: [
+        { title: 'Validar em {eachLabel}', kind: 'env-validation', repeat: '{ask:environments}', params: { environment: '{each}', plant: '{ask:plant}' } },
+        { title: 'Avisar no card', kind: 'notify' }
+      ]
+    };
+
+    it('grupo QA e ícone próprio', () => {
+      expect(toolGroup(VAL)).toBe('qa');
+      expect(toolIcon(VAL, 'qa')).toBe('screenshot_monitor');
+    });
+
+    it('input environments mantém as opções (não vira select)', () => {
+      const p = askToParam(VAL.ask![0]);
+      expect(p.input).toBe('environments');
+      expect(p.options?.length).toBe(2);
+    });
+
+    it('repeat: uma sub-tarefa por ambiente, com {each} e {eachLabel}', () => {
+      const p = previewTasks(VAL, { environments: 'dev, https://gerdau.solvacelabs.com/', plant: 'COR' }, ctx);
+      expect(p.map((t) => t.title)).toEqual([
+        'Validar em Desenvolvimento · devsp.solvacelabs.com',
+        'Validar em https://gerdau.solvacelabs.com/',
+        'Avisar no card'
+      ]);
+      expect(p[1].params).toEqual([{ key: 'environment', value: 'https://gerdau.solvacelabs.com/' }, { key: 'plant', value: 'COR' }]);
+    });
+
+    it('repeat sem valor não gera a sub-tarefa; sem repeat gera uma', () => {
+      expect(previewTasks(VAL, { environments: '' }, ctx).map((t) => t.kind)).toEqual(['notify']);
+      expect(repeatValues({ repeat: null }, [], {}, ctx)).toEqual([null]);
+      expect(repeatValues({ repeat: '{ask:environments}' }, VAL.ask!, { environments: 'qa;dev;qa' }, ctx).map((x) => x?.label))
+        .toEqual(['QA · qa.solvacelabs.com', 'Desenvolvimento · devsp.solvacelabs.com']);
+    });
   });
 });

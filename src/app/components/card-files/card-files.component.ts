@@ -203,8 +203,8 @@ export class CardFilesComponent {
     const counts = new Map<string, number>();
     for (const f of files) counts.set(normalizeFileKind(f.kind), (counts.get(normalizeFileKind(f.kind)) ?? 0) + 1);
     const out = [{ id: 'all' as KindTab, label: 'Todos', icon: 'folder_copy', color: '', count: files.length }];
-    // Textos, Análises, Chamados, Scripts, Dados, Anexos — só as abas que têm arquivo (e a que está aberta).
-    const order: WorkItemFileKind[] = ['text', 'analysis', 'ticket', 'script', 'data', 'attachment'];
+    // Textos, Análises, Chamados, Evidências, Scripts, Dados, Anexos — só as abas que têm arquivo (e a que está aberta).
+    const order: WorkItemFileKind[] = ['text', 'analysis', 'ticket', 'evidence', 'script', 'data', 'attachment'];
     for (const kind of order) {
       const count = counts.get(kind) ?? 0;
       if (!count && this.kindTab() !== kind) continue;
