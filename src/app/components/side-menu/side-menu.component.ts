@@ -36,11 +36,12 @@ export class SideMenuComponent implements OnInit {
       icon: 'handyman',
       link: 'auth/workbench'
     },
-    {
-      label: 'Pull Requests',
-      icon: 'merge',
-      link: 'auth/register'
-    },
+    // Tela de Pull Request desativada (o card é tratado na Bancada) — reativar junto com a rota em authenticated.routes.
+    // {
+    //   label: 'Pull Requests',
+    //   icon: 'merge',
+    //   link: 'auth/register'
+    // },
     {
       label: 'Promoção de PRs',
       icon: 'rocket_launch',

@@ -23,11 +23,21 @@ export const AUTHENTICATED_ROUTES: Routes = [
         canActivate: [AuthGuard],
         loadComponent: () => import('./workbench/workbench.component').then(m => m.WorkbenchComponent)
       },
+      // ── Tela de Pull Request (DESATIVADA): o tratamento do card é feito pela Bancada; o componente continua no código.
+      // Link antigo (favorito, aba salva) → Bancada com o mesmo card; sem card → Início, onde fica o aviso do desligamento.
+      // Para reativar: troque o redirecionamento pela rota comentada abaixo e descomente o item "Pull Requests" no side-menu.
+      // {
+      //   path: 'register',
+      //   data: { tab: { title: 'Pull Request', icon: 'merge', card: true } },
+      //   canActivate: [AuthGuard],
+      //   loadComponent: () => import('./register/register.component').then(m => m.RegisterComponent)
+      // },
       {
         path: 'register',
-        data: { tab: { title: 'Pull Request', icon: 'merge', card: true } },
-        canActivate: [AuthGuard],
-        loadComponent: () => import('./register/register.component').then(m => m.RegisterComponent)
+        redirectTo: ({ queryParams }) => {
+          const card = `${queryParams['card'] ?? ''}`.trim();
+          return /^\d+$/.test(card) ? `/auth/workbench?card=${card}` : '/auth/dashboard';
+        }
       },
       {
         path: 'client-access',
