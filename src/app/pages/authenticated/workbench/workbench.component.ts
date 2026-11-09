@@ -40,7 +40,7 @@ import {
 } from '../../../components/work-items/cancel-work-dialog.component';
 import { workDialogConfig } from '../../../components/work-items/work-dialog-config';
 import { WorkItemActionsService } from '../../../components/work-items/work-item-actions.service';
-import { WorkItem, WorkItemStatus, formatWorkNumber, itemStatusLook } from '../../../components/work-items/work-item.model';
+import { WorkItem, WorkItemStatus, formatWorkNumber, itemStatusLook, waitingForResolve } from '../../../components/work-items/work-item.model';
 import { listenWorkItems } from '../../../components/work-items/work-items-live';
 import { WorkbenchCardComponent } from '../../../components/workbench-card/workbench-card.component';
 import { openWorkbenchCard } from '../../../components/workbench-card/workbench-card-dialog.component';
@@ -80,6 +80,31 @@ export interface PlanItemOption {
   icon: string;
   color: string;
   spin: boolean;
+}
+
+/**
+ * Item sem plano no seletor da Execução (criado na tela ou pelo especialista): não há plano para mostrar — escolher abre
+ * a sessão de execução do item na aba Itens. Os que esperam a pessoa vêm primeiro, depois os em andamento.
+ */
+export interface LoneItemOption {
+  number: number;
+  title: string;
+  statusLabel: string;
+  icon: string;
+  color: string;
+  waitsForYou: boolean;
+}
+
+export function loneItemOptions(items: readonly WorkItem[]): LoneItemOption[] {
+  const rank = (i: WorkItem) => (waitingForResolve(i) ? 0 : ACTIVE_PLAN_ITEM.has(i.status) ? 1 : 2);
+  return items
+    .filter((i) => !i.planId)
+    .sort((a, b) => rank(a) - rank(b) || b.number - a.number)
+    .map((i) => {
+      const look = itemStatusLook(i.status);
+      const waitsForYou = !!waitingForResolve(i);
+      return { number: i.number, title: i.title, statusLabel: waitsForYou ? 'aguardando você' : look.label.toLowerCase(), icon: look.icon, color: look.color, waitsForYou };
+    });
 }
 
 /** Item padrão do seletor: o em andamento mais recente; sem nenhum, o mais recente. */
@@ -336,6 +361,9 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
         icon: look.icon, color: look.color, spin: !!look.spin
       };
     }));
+  readonly loneItemOptions = computed(() => loneItemOptions(this.planItems()));
+  /** Sessão de execução pedida pelo seletor (item sem plano) — repassada à lista de itens. */
+  readonly sessionOf = signal<number | null>(null);
   readonly selectedPlanItem = computed<PlanItemOption | null>(() => {
     const options = this.planItemOptions();
     const picked = this.pickedPlanItem();
@@ -669,6 +697,13 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   /** Seletor "Execução do item". */
   pickPlanItem(number: number): void {
     this.pickedPlanItem.set(number);
+  }
+
+  /** Item sem plano escolhido no seletor da Execução: mostra a aba Itens com a sessão de execução dele. */
+  openItemSession(number: number): void {
+    this.selectMobile('items');
+    this.sessionOf.set(null);
+    queueMicrotask(() => this.sessionOf.set(number));
   }
 
   /** "+ Novo item" do aviso de versão fechada: cria o item e mostra a lista. */

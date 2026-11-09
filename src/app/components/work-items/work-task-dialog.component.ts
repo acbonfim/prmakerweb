@@ -35,7 +35,8 @@ import {
   taskLinks,
   taskStatusLook,
   ticketTaskActions,
-  userTaskActions
+  userTaskActions,
+  canResolveWait
 } from './work-item.model';
 import { listenWorkItems } from './work-items-live';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
@@ -207,6 +208,13 @@ export interface WorkTaskDialogData {
             </details>
           }
 
+          @if (resolvable()) {
+            <section class="wi-sec wtd__user">
+              <h4 class="wi-sec__title">O Claude está esperando você</h4>
+              <textarea class="wi-textarea" rows="2" [(ngModel)]="resultText"
+                        placeholder="O que você fez para destravar (opcional — o Claude lê ao retomar)"></textarea>
+            </section>
+          }
           @if (actions().length) {
             <section class="wi-sec wtd__user">
               <h4 class="wi-sec__title">Sua parte</h4>
@@ -221,6 +229,13 @@ export interface WorkTaskDialogData {
           <p class="wi-muted">Carregando…</p>
         }
       </div>
+      @if (resolvable()) {
+        <footer class="wi-dlg__foot">
+          <span class="wi-dlg__spacer"></span>
+          <button mat-flat-button color="primary" [disabled]="busy()" (click)="resolve()"
+                  matTooltip="A sub-tarefa volta a andar e o Claude retoma o item de onde parou"><mat-icon>lock_open</mat-icon>Já resolvi — continuar</button>
+        </footer>
+      }
       @if (actions().length) {
         <footer class="wi-dlg__foot">
           <span class="wi-dlg__spacer"></span>
@@ -277,6 +292,8 @@ export class WorkTaskDialogComponent {
   readonly look = computed(() => taskStatusLook(this.task()?.status));
   readonly kind = computed(() => kindInfo(this.task()?.kind, this.data.catalog));
   readonly actions = computed(() => { const t = this.task(); return t ? userTaskActions(t) : []; });
+  /** "Já resolvi": sub-tarefa do Claude parada esperando a pessoa. */
+  readonly resolvable = computed(() => { const t = this.task(); return !!t && canResolveWait(t); });
   /**
    * Parâmetros com o rótulo do catálogo (na ordem do catálogo; os de fora no fim), o valor legível (commits "card" =
    * todos os do card) e o link do GitHub para repositório/branch quando a URL base é conhecida.
@@ -363,6 +380,22 @@ export class WorkTaskDialogComponent {
         this.resultText = '';
         this.snack.open(`${formatWorkNumber(t.number)}: ${TASK_ACTION_LABELS[action].label.toLowerCase()} — ok.`, 'Ok', { duration: 3000 });
         this.reload();
+      },
+      error: (e) => { this.busy.set(false); this.snack.open(e.message, 'Fechar', { duration: 8000 }); }
+    });
+  }
+
+  /** "Já resolvi": devolve a sub-tarefa ao Claude (com a nota do que a pessoa fez) e o item é retomado. */
+  resolve(): void {
+    const t = this.task();
+    if (!t || this.busy()) return;
+    this.busy.set(true);
+    this.api.resolveTask(t.number, this.resultText).subscribe({
+      next: (it) => {
+        this.busy.set(false);
+        this.resultText = '';
+        this.snack.open(`${formatWorkNumber(t.number)}: avisado — o Claude retoma o item.`, 'Ok', { duration: 3000 });
+        if (it?.tasks) this.item.set(it); else this.reload();
       },
       error: (e) => { this.busy.set(false); this.snack.open(e.message, 'Fechar', { duration: 8000 }); }
     });

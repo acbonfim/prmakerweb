@@ -22,6 +22,7 @@ import {
   WorkTaskAction,
   canCancel,
   canExecute,
+  canResolveWait,
   canUndo,
   executingNumbers,
   executorLabel,
@@ -37,7 +38,8 @@ import {
   originLabel,
   sortByCreation,
   taskStatusLook,
-  userTaskActions
+  userTaskActions,
+  waitingForResolve
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
 import { WorkItemDialogComponent, WorkItemDialogData, WorkItemDialogResult } from './work-item-dialog.component';
@@ -70,7 +72,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
  * tratamento monta o plano (que vira o item de trabalho) pela fila (`ExecutionQueue/card/{card}/delivery`).
  *
  * API pública: `[card]`, `[cardType]` ('bug' | 'user-story', padrão do item novo), `[openItem]` (número — abre o modal
- * do item; vem do `?item=`), `(countChange)` (quantidade de itens do card a cada carga), `(executingChange)` (números
+ * do item; vem do `?item=`), `[openSessionOf]` (número — abre a sessão de execução do item), `(countChange)` (quantidade de itens do card a cada carga), `(executingChange)` (números
  * dos itens em execução — na fila, rodando, esperando ou desfazendo — a cada mudança). O ícone do item é o do **tipo do item** (rodada 4).
  */
 @Component({
@@ -197,7 +199,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                       <button class="wil__running" (click)="showSession(it.number)" [matTooltip]="(it.activity || look(it).label) + ' — ver a sessão de execução'"
                               [attr.aria-label]="'Ver a sessão de execução do ' + num(it.number)">
                         <mat-icon [class.wil__bot]="busy(it)">{{ it.status === 'waiting' ? 'front_hand' : 'smart_toy' }}</mat-icon>
-                        <span class="wil__running-text">{{ it.activity || (it.status === 'queued' ? 'Na fila' : it.status === 'reverting' ? 'Desfazendo' : it.status === 'waiting' ? 'Aguardando' : 'Executando') }}</span>
+                        <span class="wil__running-text">{{ it.activity || (it.status === 'queued' ? 'Na fila' : it.status === 'reverting' ? 'Desfazendo' : it.status === 'waiting' ? (waitsForYou(it) ? 'Aguardando você' : 'Aguardando') : 'Executando') }}</span>
                       </button>
                     } @else {
                       <button mat-icon-button class="wil__play" data-tour="wi-run" (click)="execute(it)" [disabled]="!canRun(it) || pending().has(it.number)"
@@ -233,6 +235,11 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                       </button>
                       <span class="wil__task-st-label" [style.color]="taskLook(t).color">{{ taskLook(t).label }}</span>
                       <span class="wil__chip wil__chip--exec">{{ executor(t.executor) }}</span>
+                      @if (canResolve(t)) {
+                        <button mat-icon-button class="wil__qa" (click)="resolve(it, t)" [disabled]="pendingTask() === t.number"
+                                matTooltip="Já resolvi — o Claude continua (na sessão de execução dá para dizer o que você fez)"
+                                [attr.aria-label]="'Já resolvi ' + num(t.number)"><mat-icon>lock_open</mat-icon></button>
+                      }
                       @for (a of quick(t); track a) {
                         <button mat-icon-button class="wil__qa" (click)="taskAct(t, a)" [disabled]="pendingTask() === t.number"
                                 [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label + ' ' + num(t.number)"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
@@ -387,6 +394,8 @@ export class WorkItemListComponent {
   readonly card = input<string | null>();
   readonly cardType = input<'bug' | 'user-story'>('bug');
   readonly openItem = input<number | null>(null);
+  /** Abre a sessão de execução deste item (seletor da aba Execução, para itens sem plano). */
+  readonly openSessionOf = input<number | null>(null);
   readonly countChange = output<number>();
   /** Números dos itens em execução (na fila, rodando, esperando ou desfazendo) — a cada mudança. */
   readonly executingChange = output<number[]>();
@@ -450,6 +459,9 @@ export class WorkItemListComponent {
   readonly canUndoIt = (it: WorkItem) => canUndo(it);
   readonly taskLook = (t: WorkTask) => taskStatusLook(t.status);
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
+  /** "Já resolvi": sub-tarefa do Claude parada esperando a pessoa. */
+  readonly canResolve = (t: WorkTask) => canResolveWait(t);
+  readonly waitsForYou = (it: WorkItem) => !!waitingForResolve(it);
   readonly quick = (t: WorkTask) => userTaskActions(t).filter((a) => a === 'complete' || a === 'skip');
   readonly actionLook = (a: WorkTaskAction) => TASK_ACTION_LABELS[a];
 
@@ -468,6 +480,11 @@ export class WorkItemListComponent {
     effect(() => {
       const card = (this.card() ?? '').trim() || null;
       untracked(() => this.switchCard(card));
+    });
+
+    effect(() => {
+      const n = this.openSessionOf();
+      if (n) untracked(() => this.showSession(n));
     });
 
     effect(() => {
@@ -790,6 +807,16 @@ export class WorkItemListComponent {
     const ok = await this.actions.taskAction(t, a);
     this.pendingTask.set(null);
     if (ok) this.load(true);
+  }
+
+  /** "Já resolvi" pela lista: devolve a sub-tarefa ao Claude e mostra a sessão do item continuando. */
+  async resolve(it: WorkItem, t: WorkTask): Promise<void> {
+    this.pendingTask.set(t.number);
+    const updated = await this.actions.resolveTask(t);
+    this.pendingTask.set(null);
+    if (!updated) return;
+    this.load(true);
+    this.showSession(it.number);
   }
 
   async askSpecialist(): Promise<void> {

@@ -758,6 +758,21 @@ export function currentTicket(task: Pick<WorkTask, 'links'> | null | undefined):
   return [...tickets].reverse().find((l) => (l.status || 'open') === 'open') ?? tickets[tickets.length - 1];
 }
 
+/**
+ * "Já resolvi": sub-tarefa do Claude parada esperando a pessoa (sem acesso, falta credencial, decisão…). Fica de fora a
+ * espera que destrava sozinha — chamado aberto (menu do chamado) e PR aberto (merge) — e a sub-tarefa da própria pessoa
+ * (Concluir).
+ */
+export function canResolveWait(task: Pick<WorkTask, 'executor' | 'status' | 'links'>): boolean {
+  if (task.status !== 'waiting' || task.executor === 'user') return false;
+  return !taskLinks(task).some((l) => (l.kind === 'ticket' || l.kind === 'pr') && (l.status || 'open') === 'open');
+}
+
+/** Sub-tarefa do item que espera a pessoa destravar (a primeira, pela ordem). */
+export function waitingForResolve(item: Pick<WorkItem, 'tasks'> | null | undefined): WorkTask | null {
+  return (item?.tasks ?? []).slice().sort((a, b) => a.order - b.order).find((t) => canResolveWait(t)) ?? null;
+}
+
 const FINISHED_TASK: ReadonlySet<string> = new Set(['completed', 'skipped', 'cancelled', 'reverted']);
 /** Item fechado/cancelado/desfeito (ou desfazendo): a Bancada só mostra. */
 const READONLY_ITEM: ReadonlySet<string> = new Set(['completed', 'cancelled', 'reverting', 'reverted']);
