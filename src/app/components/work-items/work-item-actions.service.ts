@@ -169,6 +169,18 @@ export class WorkItemActionsService {
     }
   }
 
+  /** "Já resolvi": a sub-tarefa volta a andar e o Claude retoma o item — devolve o item atualizado (ou undefined se falhou). */
+  async resolveTask(task: Pick<WorkTask, 'number'>, note?: string | null): Promise<WorkItem | undefined> {
+    try {
+      const it = await firstValueFrom(this.api.resolveTask(task.number, note));
+      this.ok(`${formatWorkNumber(task.number)}: avisado — o Claude retoma o item.`);
+      return it;
+    } catch (e) {
+      this.fail(e);
+      return undefined;
+    }
+  }
+
   /** Chamado na Bancada: anexa o chamado à sub-tarefa — devolve o item atualizado (ou undefined se falhou). */
   async attachTicket(task: Pick<WorkTask, 'number'>, url: string, title?: string | null): Promise<WorkItem | undefined> {
     try {

@@ -341,7 +341,7 @@
           <app-card-assistant [cardNumber]="card()"></app-card-assistant>
         </div>
 
-        <app-work-item-list [card]="card()" [cardType]="cardType()" [openItem]="openItem()"
+        <app-work-item-list [card]="card()" [cardType]="cardType()" [openItem]="openItem()" [openSessionOf]="sessionOf()"
                             (countChange)="onCountChange($event)" (executingChange)="onExecuting($event)"></app-work-item-list>
       </div>
 
@@ -360,10 +360,10 @@
         }
         <div class="wb-exec" data-tour="wb-exec-item">
           <span class="wb-exec__label"><mat-icon>play_circle</mat-icon><span class="wb-exec__label-text">Execução do item</span></span>
-          @if (planItemOptions().length) {
+          @if (planItemOptions().length || loneItemOptions().length) {
             <button mat-stroked-button type="button" class="wb-exec__pick" [matMenuTriggerFor]="execMenu"
                     [attr.aria-label]="'Item em tela: ' + (sel?.label ?? 'nenhum') + ' — trocar de item'"
-                    [matTooltip]="planItemOptions().length > 1 ? 'Trocar de item (' + planItemOptions().length + ' itens com plano)' : 'Item de trabalho deste plano'"
+                    [matTooltip]="planItemOptions().length + loneItemOptions().length > 1 ? 'Trocar de item (' + planItemOptions().length + ' com plano, ' + loneItemOptions().length + ' sem plano)' : 'Item de trabalho deste plano'"
                     matTooltipShowDelay="500">
               <span class="wb-exec__sel">
                 @if (sel) {
@@ -371,6 +371,8 @@
                   <span class="wb-exec__num">#{{ sel.number }}</span>
                   <span class="wb-exec__title">{{ sel.title }}</span>
                   <span class="wb-exec__status">· {{ sel.statusLabel }}</span>
+                } @else {
+                  <span class="wb-exec__title">Escolher um item</span>
                 }
                 <mat-icon class="wb-exec__caret">expand_more</mat-icon>
               </span>
@@ -382,6 +384,16 @@
                   <mat-icon [style.color]="o.color">{{ o.icon }}</mat-icon>
                   <span><b>#{{ o.number }}</b> {{ o.title }} <small class="wb-exec__opt-st">· {{ o.statusLabel }}</small></span>
                 </button>
+              }
+              <!-- Itens sem plano (criados na tela ou pelo especialista): não têm plano para mostrar aqui — abrem a sessão de execução -->
+              @if (loneItemOptions().length) {
+                <div class="wb-exec__group" role="presentation">Sem plano — abre a sessão de execução</div>
+                @for (o of loneItemOptions(); track o.number) {
+                  <button mat-menu-item type="button" (click)="openItemSession(o.number)">
+                    <mat-icon [style.color]="o.color">{{ o.icon }}</mat-icon>
+                    <span><b>#{{ o.number }}</b> {{ o.title }} <small class="wb-exec__opt-st" [class.wb-exec__opt-you]="o.waitsForYou">· {{ o.statusLabel }}</small></span>
+                  </button>
+                }
               }
             </mat-menu>
             <button mat-button type="button" class="wb-exec__files" (click)="showItemFiles(sel?.number)"

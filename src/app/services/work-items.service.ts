@@ -224,6 +224,12 @@ export class WorkItemsService {
       .pipe(this.fail(`Não foi possível atualizar a sub-tarefa ${formatWorkNumber(taskNumber)}.`));
   }
 
+  /** "Já resolvi": a sub-tarefa do Claude que esperava a pessoa volta a andar e o item é retomado — devolve o item atualizado. */
+  resolveTask(taskNumber: number, note?: string | null): Observable<WorkItem> {
+    return this.http.post<WorkItem>(`${this.apiUrl}/tasks/${taskNumber}/resolve`, { note: note?.trim() || null })
+      .pipe(this.fail(`Não foi possível retomar a sub-tarefa ${formatWorkNumber(taskNumber)}.`));
+  }
+
   /** Chamado na Bancada: anexa o chamado à sub-tarefa (ela passa a aguardar o chamado) — devolve o item atualizado. */
   attachTicket(taskNumber: number, req: AttachTicketRequest): Observable<WorkItem> {
     return this.http.post<WorkItem>(`${this.apiUrl}/tasks/${taskNumber}/ticket`, { url: req.url.trim(), title: req.title?.trim() || null })

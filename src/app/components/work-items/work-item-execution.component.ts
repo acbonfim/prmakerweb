@@ -41,6 +41,7 @@ import {
   buildLiveFeed,
   canCancel,
   canExecute,
+  canResolveWait,
   canUndo,
   changedTaskNumbers,
   currentTicket,
@@ -63,7 +64,8 @@ import {
   taskStatusLook,
   ticketTaskActions,
   userTaskActions,
-  waitCodeLabel
+  waitCodeLabel,
+  waitingForResolve
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
 import { listenWorkItems } from './work-items-live';
@@ -86,6 +88,8 @@ const FLASH_MS = 1_600;
  * sub-tarefas (PR/branch) e as ações (Cancelar…, Desfazer, Executar de novo). Ao concluir, um resumo final.
  * Chamado na Bancada: cada sub-tarefa mostra os chamados/PRs ligados a ela com o status; a de chamado da pessoa ganha
  * "Anexar chamado" e o menu do status (resolvido conclui sozinha; fechado sem resolução; reabrir).
+ * "Já resolvi": sub-tarefa do Claude parada esperando a pessoa (sem acesso ao banco, credencial, decisão…) ganha um quadro
+ * com o motivo, a nota opcional do que ela fez e o botão que devolve a sub-tarefa ao Claude e retoma o item.
  *
  * Fonte: `GET WorkItems/{number}` (sub-tarefas) + `GET WorkItems/{number}/live`. Tempo real: `workItemsUpdated` no grupo
  * `execplan:{card}` (refaz os GETs do item afetado com debounce de 300 ms; `_resynced` recarrega) + polling de 10 s só
@@ -154,6 +158,28 @@ const FLASH_MS = 1_600;
           <div class="wie__note wie__note--muted"><mat-icon>signal_cellular_connected_no_internet_0_bar</mat-icon><span>Sem sinal do executor há {{ q }} — ele pode estar num comando longo.</span></div>
         }
 
+        <!-- "Já resolvi": o Claude parou esperando a pessoa (sem acesso, credencial, decisão…) — ela destrava daqui -->
+        @if (resolvable(); as rt) {
+          <div class="wie__unblock" role="group" [attr.aria-label]="'Destravar ' + num(rt.number)">
+            <div class="wie__unblock-head">
+              <mat-icon>front_hand</mat-icon>
+              <span>O Claude parou em <b>{{ num(rt.number) }}</b> esperando você. Resolva o que ele pede e avise para ele continuar.</span>
+            </div>
+            @if (rt.result) { <div class="wie__unblock-why wie__md" [innerHTML]="rt.result | planMarkdown"></div> }
+            <textarea class="wie__input wie__unblock-note" rows="2" [value]="resolveNote()" (input)="resolveNote.set($any($event.target).value)"
+                      (keydown.control.enter)="resolve(rt)" (keydown.meta.enter)="resolve(rt)"
+                      placeholder="O que você fez (opcional, o Claude lê ao retomar) — ex.: adicionei o alias do banco de DEV"
+                      aria-label="O que você fez para destravar"></textarea>
+            <div class="wie__unblock-actions">
+              <button mat-button (click)="openTask(item()!, rt)">Ver a sub-tarefa</button>
+              <button mat-flat-button color="primary" (click)="resolve(rt)" [disabled]="busyTask() === rt.number"
+                      matTooltip="A sub-tarefa volta a andar e o Claude retoma o item de onde parou">
+                <mat-icon>lock_open</mat-icon>Já resolvi — continuar
+              </button>
+            </div>
+          </div>
+        }
+
         @if (live()) {
           <div class="wie__now" aria-live="polite">
             @if (liveData()?.activity; as a) {
@@ -163,7 +189,7 @@ const FLASH_MS = 1_600;
             } @else if (item()?.status === 'queued') {
               <mat-icon class="wie__now-ico">schedule</mat-icon><span class="wie__now-text">Na fila do executor — começa em instantes.</span>
             } @else if (item()?.status === 'waiting') {
-              <mat-icon class="wie__now-ico">front_hand</mat-icon><span class="wie__now-text">Aguardando uma ação para continuar.</span>
+              <mat-icon class="wie__now-ico">front_hand</mat-icon><span class="wie__now-text">{{ resolvable() ? 'Aguardando você — veja acima o que destravar.' : 'Aguardando uma ação para continuar.' }}</span>
             } @else {
               <mat-icon class="wie__now-ico wie__pulse">psychology</mat-icon><span class="wie__now-text">{{ item()?.activity || 'Pensando…' }}</span>
             }
@@ -250,6 +276,10 @@ const FLASH_MS = 1_600;
                         <mat-icon>confirmation_number</mat-icon>Chamado<mat-icon class="wie__ticket-caret">arrow_drop_down</mat-icon>
                       </button>
                     }
+                  }
+                  @if (canResolve(t)) {
+                    <button mat-icon-button class="wie__qa" (click)="resolve(t)" [disabled]="busyTask() === t.number"
+                            matTooltip="Já resolvi — o Claude continua" [attr.aria-label]="'Já resolvi ' + num(t.number)"><mat-icon>lock_open</mat-icon></button>
                   }
                   <!-- Chamado aberto: o status vai pelo menu "Chamado"; concluir/falhar/pular ficam no detalhe da sub-tarefa -->
                   @for (a of openTicket(t) ? [] : userActions(t); track a) {
@@ -344,6 +374,17 @@ const FLASH_MS = 1_600;
     .wie__note--warn { background: rgba(210,153,34,.08); border-color: rgba(210,153,34,.3); color: #e3b341; }
     .wie__note--err { background: rgba(248,81,73,.08); border-color: rgba(248,81,73,.3); color: #f85149; }
     .wie__note--muted { background: transparent; border-color: var(--cc-surface-border, rgba(255,255,255,.08)); color: var(--cc-text-2); }
+    .wie__unblock { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; flex: none;
+      background: rgba(210,153,34,.08); border: 1px solid rgba(210,153,34,.4); }
+    .wie__unblock-head { display: flex; align-items: flex-start; gap: 8px; color: #e3b341; font-size: 13px; line-height: 1.4; }
+    .wie__unblock-head mat-icon { font-size: 18px; width: 18px; height: 18px; flex: none; }
+    .wie__unblock-why { max-height: 180px; overflow: auto; padding: 6px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45;
+      background: var(--surface-input, #1a1f28); border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); overflow-wrap: anywhere; }
+    .wie__unblock-why ::ng-deep p { display: block; margin: 0 0 6px; }
+    .wie__unblock-why ::ng-deep ul { margin: 0 0 6px; padding-left: 18px; }
+    .wie__unblock-note { width: 100%; resize: vertical; min-height: 38px; }
+    .wie__unblock-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    .wie__unblock-actions mat-icon { margin-right: 4px; }
     .wie__now { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, #58a6ff 9%, transparent);
       border: 1px solid color-mix(in srgb, #58a6ff 28%, transparent); }
     .wie__now-ico { color: #58a6ff; font-size: 18px; width: 18px; height: 18px; flex: none; }
@@ -509,6 +550,10 @@ export class WorkItemExecutionComponent {
   readonly openTicket = (t: WorkTask) => { const c = currentTicket(t); return !!c && (c.status || 'open') === 'open'; };
   /** Chamado na Bancada: formulário "Anexar chamado" aberto numa sub-tarefa. */
   readonly ticketDraft = signal<{ task: number; url: string; title: string } | null>(null);
+  /** "Já resolvi": sub-tarefa do Claude esperando a pessoa (a primeira) e a nota do que ela fez. */
+  readonly resolvable = computed(() => waitingForResolve(this.item()));
+  readonly canResolve = (t: WorkTask) => canResolveWait(t);
+  readonly resolveNote = signal('');
 
   readonly look = computed(() => itemStatusLook(this.status()));
   readonly status = computed(() => this.item()?.status ?? (this.liveData()?.status as WorkItem['status'] | undefined) ?? null);
@@ -673,6 +718,7 @@ export class WorkItemExecutionComponent {
     this.flashed.set(new Set());
     this.celebrate.set(false);
     this.unseen.set(false);
+    this.resolveNote.set('');
     this.stick = true;
     this.feedSize = 0;
     if (n) this.reload();
@@ -794,6 +840,7 @@ export class WorkItemExecutionComponent {
   taskLabel(t: WorkTask): string {
     if (t.status === 'waiting' && this.openTicket(t)) return 'Aguardando o chamado';
     if (t.executor === 'user' && (t.status === 'waiting' || (t.status === 'pending' && t.number === this.currentTask()))) return 'Aguardando você';
+    if (canResolveWait(t)) return 'Aguardando você';
     return taskPrHint(t) ?? taskStatusLook(t.status).label;
   }
 
@@ -803,7 +850,7 @@ export class WorkItemExecutionComponent {
   }
 
   taskIcon(t: WorkTask): string {
-    if (t.executor === 'user' && t.status === 'waiting') return 'front_hand';
+    if ((t.executor === 'user' && t.status === 'waiting') || canResolveWait(t)) return 'front_hand';
     return taskStatusLook(t.status).icon;
   }
 
@@ -857,6 +904,17 @@ export class WorkItemExecutionComponent {
   private afterTicket(it: WorkItem | null | undefined): void {
     if (it && it.number === this.current && Array.isArray(it.tasks)) this.applyItem(it);
     else this.reload();
+  }
+
+  /** "Já resolvi": a sub-tarefa volta a andar e o item entra na fila de novo (item de plano: o "Já resolvi" da etapa). */
+  async resolve(t: WorkTask): Promise<void> {
+    if (this.busyTask() === t.number) return;
+    this.busyTask.set(t.number);
+    const it = await this.actions.resolveTask(t, this.resolveNote());
+    this.busyTask.set(null);
+    if (!it) return;
+    this.resolveNote.set('');
+    this.afterTicket(it);
   }
 
   async taskAct(t: WorkTask, a: WorkTaskAction): Promise<void> {
