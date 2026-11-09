@@ -1,19 +1,20 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { StorageService } from '../../../services/storage.service';
 import { HomeCardsComponent } from '../../../components/home-cards/home-cards.component';
 
 /**
- * Home: saudação + "Meus cards na Bancada" em destaque (0088) + "Seus últimos cards" e "Cards que você participou" (0051). Os atalhos de acesso rápido e o saldo
- * de férias saíram — o menu lateral já leva a essas telas.
+ * Home: saudação + aviso da tela de PR desativada + "Meus cards na Bancada" em destaque (0088) + "Seus últimos cards" e
+ * "Cards que você participou" (0051). Os atalhos de acesso rápido e o saldo de férias saíram — o menu lateral já leva a essas telas.
  */
 @Component({
   selector: 'app-home',
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.css'],
   standalone: true,
-  imports: [MatIconModule, RouterLink, HomeCardsComponent],
+  imports: [MatButtonModule, MatIconModule, RouterLink, HomeCardsComponent],
 })
 export class HomeComponent implements OnInit {
   private storageService = inject(StorageService);

@@ -165,7 +165,7 @@ export class SetupGuideService {
     this.ref.afterClosed().subscribe((result) => {
       this.ref = undefined;
       if (result === 'card') {
-        void this.router.navigate(['/auth/register']);
+        void this.router.navigate(['/auth/workbench']);
         return;
       }
       this.showMenuOnce();

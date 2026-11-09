@@ -12,6 +12,19 @@
     </div>
   </div>
 
+  <!-- Tela de Pull Request desativada: o aviso explica que o card agora é tratado na Bancada -->
+  <div class="pr-retired" role="status">
+    <mat-icon class="pr-retired__icon" aria-hidden="true">info</mat-icon>
+    <div class="pr-retired__text">
+      <strong>A tela de Pull Request foi desativada.</strong>
+      <span>Agora todo o tratamento do card é feito pela <b>Bancada</b> — itens de trabalho, execução do Claude ao vivo, arquivos,
+        PRs, Especialista do caso e linha do tempo, numa tela só. Links antigos da tela de PR já abrem o card na Bancada.</span>
+    </div>
+    <a mat-flat-button color="primary" routerLink="/auth/workbench" class="pr-retired__go">
+      <mat-icon>handyman</mat-icon>Abrir a Bancada
+    </a>
+  </div>
+
   <!-- 0088: Meus cards na Bancada — em destaque, pela última atualização no card; abrem na Bancada -->
   <app-home-cards scope="workbench" title="Meus cards na Bancada" icon="handyman" [featured]="true" [take]="12"
                   [class.col-hidden]="!workbenchVisible()"

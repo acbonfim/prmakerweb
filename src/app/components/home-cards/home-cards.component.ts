@@ -204,16 +204,13 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
   // ── Navegação ──
 
   /**
-   * Abre o card na tela de PR — ou na Bancada (lista da Bancada e itens de trabalho, 0088); com `focus`, já no painel
-   * (plano, Timeline, PRs ou itens). `item` abre aquele item de trabalho.
+   * Abre o card na Bancada (a tela de PR foi desativada — todas as listas abrem lá); com `focus`, já no painel
+   * (plano, Timeline ou itens). `item` abre aquele item de trabalho.
    */
   open(card: HomeCard, focus?: PanelFocus, event?: Event, item?: number) {
     event?.stopPropagation();
-    const workbench = this.scope === 'workbench' || focus === 'items';
-    const path = workbench ? '/auth/workbench' : '/auth/register';
-    const queryParams = workbench
-      ? { card: card.cardNumber, focus: focus ? WORKBENCH_FOCUS[focus] : undefined, item: item ?? undefined }
-      : { card: card.cardNumber, repositoryId: card.repositoryId ?? undefined, focus: focus ?? undefined };
+    const path = '/auth/workbench';
+    const queryParams = { card: card.cardNumber, focus: focus ? WORKBENCH_FOCUS[focus] : undefined, item: item ?? undefined };
     // Ctrl/Cmd+clique ou botão do meio: o card abre numa aba nova (0065); o clique normal usa a aba atual.
     if (event instanceof MouseEvent && (event.ctrlKey || event.metaKey || event.button === 1)) {
       event.preventDefault();
