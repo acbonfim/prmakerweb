@@ -141,7 +141,7 @@ export class TopMenuComponent implements OnInit {
   private router = inject(Router);
 
   openPending(item: ExecutionUserPending) {
-    this.router.navigate(['/auth/register'], { queryParams: { card: item.cardNumber } });
+    this.router.navigate(['/auth/workbench'], { queryParams: { card: item.cardNumber } });
   }
 
   pendingIcon(action: ExecutionUserAction): string {

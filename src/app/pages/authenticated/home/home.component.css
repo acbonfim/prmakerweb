@@ -94,6 +94,40 @@
   color: #fff;
 }
 
+/* Aviso: a tela de Pull Request foi desativada (o card é tratado na Bancada). */
+.pr-retired {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 45%, transparent);
+}
+
+.pr-retired__icon {
+  color: var(--mat-sys-primary);
+  font-size: 26px;
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+
+.pr-retired__text {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.pr-retired__text strong { font-size: 14px; }
+
+.pr-retired__go .mat-icon { margin-right: 4px; }
+
 /* Nenhuma das listas tem card ainda. */
 .home-empty {
   display: flex;
