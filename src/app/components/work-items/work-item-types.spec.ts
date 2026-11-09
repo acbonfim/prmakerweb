@@ -2,12 +2,12 @@ import { DEFAULT_ITEM_TYPES, defaultItemType, itemTypeLook, itemTypes, offeredIt
 import { WI_BUG_ICON, WI_US_ICON } from '../../helpers/work-item-type-icons';
 
 describe('0085 r4 — tipos do item de trabalho', () => {
-  it('reserva: os 11 tipos semeados quando o catálogo não traz', () => {
-    expect(DEFAULT_ITEM_TYPES.length).toBe(11);
+  it('reserva: os 12 tipos semeados (0092: validation) quando o catálogo não traz', () => {
+    expect(DEFAULT_ITEM_TYPES.length).toBe(12);
     expect(itemTypes(null).map((t) => t.key)).toEqual([
-      'task', 'pull-request', 'review', 'analysis', 'fix', 'implementation', 'adjustment', 'closing', 'data', 'ticket', 'text'
+      'task', 'pull-request', 'review', 'analysis', 'fix', 'implementation', 'adjustment', 'closing', 'data', 'ticket', 'text', 'validation'
     ]);
-    expect(itemTypes({ itemTypes: [] }).length).toBe(11);
+    expect(itemTypes({ itemTypes: [] }).length).toBe(12);
   });
 
   it('catálogo manda (e o rótulo vazio vira a chave)', () => {

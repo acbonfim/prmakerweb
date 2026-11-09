@@ -23,7 +23,7 @@ export type TaskKind = 'branch' | 'cherry-pick' | 'code' | 'pr' | 'devops-state'
  * `state` = estados do card no DevOps, `commits` = seletor de commits, `select` = `options`. Sem `input` no catálogo,
  * o editor deduz pelo nome do parâmetro (`paramInput` em work-item-pickers).
  */
-export type TaskParamInput = 'repository' | 'branch' | 'target-branch' | 'state' | 'commits' | 'text' | 'textarea' | 'select' | 'pull-request';
+export type TaskParamInput = 'repository' | 'branch' | 'target-branch' | 'state' | 'commits' | 'text' | 'textarea' | 'select' | 'pull-request' | 'environments';
 /** Opção de um parâmetro `select` (texto simples ou `{value, label}`). */
 export type TaskParamOption = string | { value: string; label?: string | null };
 export type WorkItemLinkKind = 'pr' | 'branch' | 'commit' | 'doc' | 'attachment' | 'timeline' | (string & {});
@@ -181,6 +181,8 @@ export interface WorkItemTemplateTask {
   kind: TaskKind;
   executor?: WorkTaskExecutor | null;
   params?: Record<string, string> | null;
+  /** 0092: uma sub-tarefa por valor (ex.: "{ask:environments}"); dentro dela `{each}` e `{eachLabel}`. */
+  repeat?: string | null;
 }
 
 export interface WorkItemTemplate {
@@ -345,7 +347,8 @@ const KIND_DEFAULTS: Record<string, { label: string; icon: string }> = {
   'pr-review': { label: 'Revisar PR', icon: 'rate_review' },
   'devops-action': { label: 'Ação no DevOps', icon: 'bolt' },
   'pr-text': { label: 'Texto do PR (PRMake)', icon: 'article' },
-  'sql-query': { label: 'Consulta SQL', icon: 'manage_search' }
+  'sql-query': { label: 'Consulta SQL', icon: 'manage_search' },
+  'env-validation': { label: 'Validar no ambiente', icon: 'screenshot_monitor' }
 };
 
 export function kindInfo(kind: string | null | undefined, catalog?: WorkItemCatalog | null): { label: string; icon: string } {

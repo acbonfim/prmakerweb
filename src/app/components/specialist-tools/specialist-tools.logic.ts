@@ -1,5 +1,6 @@
 import type { TaskKindParam, TaskParamOption, WorkItemCatalog, WorkItemTemplate, WorkItemTemplateTask } from '../work-items/work-item.model';
 import { splitTargets } from '../work-item-pickers/param-input';
+import { environmentLabel, splitEnvironments } from '../work-item-pickers/environments-input';
 import { defaultItemType, itemTypeLook } from '../work-items/work-item-types';
 
 /**
@@ -72,7 +73,8 @@ const KNOWN_GROUPS: Record<string, ToolGroupKey> = {
   'script-com-chamado': 'dados',
   'diagnostico-usuario': 'dados',
   'abrir-chamado': 'dados',
-  'novo-resumo': 'textos'
+  'novo-resumo': 'textos',
+  'validar-em-ambiente': 'qa'
 };
 
 const KNOWN_ICONS: Record<string, string> = {
@@ -93,7 +95,8 @@ const KNOWN_ICONS: Record<string, string> = {
   'script-com-chamado': 'storage',
   'diagnostico-usuario': 'person_search',
   'abrir-chamado': 'confirmation_number',
-  'novo-resumo': 'notes'
+  'novo-resumo': 'notes',
+  'validar-em-ambiente': 'screenshot_monitor'
 };
 
 const GROUP_ALIASES: Record<string, ToolGroupKey> = {
@@ -376,13 +379,41 @@ export interface PreviewTask {
 /** Prévia das sub-tarefas com as respostas (o `{repository}` padrão é o repositório respondido, se houver). */
 export function previewTasks(tool: Pick<SpecialistTool, 'tasks' | 'ask'>, answers: Record<string, string | null | undefined>, ctx: ToolContext): PreviewTask[] {
   const promotionTargets = (tool.ask ?? []).flatMap((a) => askOptions(a));
-  return (tool.tasks ?? []).map((t: WorkItemTemplateTask) => ({
-    title: renderMarkers(t.title, answers, ctx, { promotionTargets }),
-    kind: `${t.kind ?? ''}`,
-    params: Object.entries(t.params ?? {})
-      .map(([key, value]) => ({ key, value: renderMarkers(`${value ?? ''}`, answers, ctx, { promotionTargets }).trim() }))
-      .filter((p) => p.value)
-  }));
+  const render = (text: string) => renderMarkers(text, answers, ctx, { promotionTargets });
+  return (tool.tasks ?? []).flatMap((t: WorkItemTemplateTask) =>
+    repeatValues(t, tool.ask ?? [], answers, ctx).map((each) => {
+      const swap = (text: string) => (each ? replaceEach(text, each.value, each.label) : text);
+      return {
+        title: render(swap(t.title)),
+        kind: `${t.kind ?? ''}`,
+        params: Object.entries(t.params ?? {})
+          .map(([key, value]) => ({ key, value: render(swap(`${value ?? ''}`)).trim() }))
+          .filter((p) => p.value)
+      };
+    }));
+}
+
+/**
+ * 0092: valores do `repeat` da sub-tarefa (uma prévia por valor, com o rótulo da opção do ask que bate). Sem `repeat` =
+ * uma prévia sem troca (`null`); `repeat` sem valor = nenhuma.
+ */
+export function repeatValues(task: Pick<WorkItemTemplateTask, 'repeat'>, ask: ToolAsk[], answers: Record<string, string | null | undefined>, ctx: ToolContext): ({ value: string; label: string } | null)[] {
+  const spec = `${task.repeat ?? ''}`.trim();
+  if (!spec) return [null];
+  const values = splitEnvironments(renderMarkers(spec, answers, ctx, { keepUnknown: false }));
+  const askKey = /^\{ask:([\w.-]+)\}$/.exec(spec)?.[1];
+  const options = askOptionObjects(ask.find((a) => a.key === askKey));
+  return values.map((value) => ({ value, label: environmentLabel(value, options) }));
+}
+
+function askOptionObjects(ask: ToolAsk | undefined): { value: string; label?: string | null }[] {
+  const raw = ask?.options;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((o) => (typeof o === 'string' ? { value: o, label: o } : { value: `${o?.value ?? ''}`, label: o?.label ?? null }));
+}
+
+function replaceEach(text: string, value: string, label: string): string {
+  return `${text ?? ''}`.replace(/\{eachLabel\}/g, label).replace(/\{each\}/g, value);
 }
 
 /** Respostas como texto ("Repositório: edv-solvace-api; Branch de destino: release-version"). */

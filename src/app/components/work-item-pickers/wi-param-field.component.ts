@@ -9,17 +9,18 @@ import { WiCommitsPickerComponent } from './wi-commits-picker.component';
 import { WiRepoPickerComponent } from './wi-repo-picker.component';
 import { WiStatePickerComponent } from './wi-state-picker.component';
 import { WiPrPickerComponent } from './wi-pr-picker.component';
+import { WiEnvironmentsPickerComponent } from './wi-environments-picker.component';
 import { PICKER_STYLES } from './picker.styles';
 
 /**
  * 0085 rodada 3: o controle de um parâmetro da sub-tarefa, escolhido pelo `input` do catálogo (ou pelo nome do
- * parâmetro): repositório, branch, branch de destino, estado do card, commits, select, textarea ou texto. Repositório
+ * parâmetro): repositório, branch, branch de destino, estado do card, commits, ambientes (0092), select, textarea ou texto. Repositório
  * e branch ganham o atalho para abrir no GitHub quando a URL base é conhecida.
  */
 @Component({
   selector: 'app-wi-param-field',
   standalone: true,
-  imports: [FormsModule, MatIconModule, MatTooltipModule, WiBranchPickerComponent, WiCommitsPickerComponent, WiRepoPickerComponent, WiStatePickerComponent, WiPrPickerComponent],
+  imports: [FormsModule, MatIconModule, MatTooltipModule, WiBranchPickerComponent, WiCommitsPickerComponent, WiRepoPickerComponent, WiStatePickerComponent, WiPrPickerComponent, WiEnvironmentsPickerComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <div class="wip__line">
@@ -38,6 +39,9 @@ import { PICKER_STYLES } from './picker.styles';
         @case ('pull-request') {
           <app-wi-pr-picker [value]="text()" (valueChange)="value.set($event)" [card]="card()" [repository]="repository()"
                             [label]="label()" [placeholder]="param().placeholder ?? null" />
+        }
+        @case ('environments') {
+          <app-wi-environments-picker [value]="text()" (valueChange)="value.set($event)" [options]="options()" [label]="label()" />
         }
         @case ('select') {
           <select class="wi-select" [ngModel]="text()" (ngModelChange)="value.set($event)" [attr.aria-label]="label()">
@@ -58,7 +62,7 @@ import { PICKER_STYLES } from './picker.styles';
       }
     </div>
   `,
-  styles: [PICKER_STYLES, `app-wi-param-field, app-wi-repo-picker, app-wi-branch-picker, app-wi-state-picker, app-wi-commits-picker, app-wi-pr-picker { display: block; flex: 1; min-width: 0; }`]
+  styles: [PICKER_STYLES, `app-wi-param-field, app-wi-repo-picker, app-wi-branch-picker, app-wi-state-picker, app-wi-commits-picker, app-wi-pr-picker, app-wi-environments-picker { display: block; flex: 1; min-width: 0; }`]
 })
 export class WiParamFieldComponent {
   readonly param = input.required<TaskKindParam>();

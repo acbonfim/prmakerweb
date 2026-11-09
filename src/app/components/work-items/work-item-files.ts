@@ -7,7 +7,7 @@
 import { planDocumentFileName, planTerms } from '../execution-plan/plan-terms';
 import { WorkItem } from './work-item.model';
 
-export type WorkItemFileKind = 'script' | 'analysis' | 'ticket' | 'data' | 'attachment' | 'text';
+export type WorkItemFileKind = 'script' | 'analysis' | 'ticket' | 'evidence' | 'data' | 'attachment' | 'text';
 /**
  * `case` = arquivo da conversa do Especialista do caso (só na lista do card); `document` = o plano completo de um item
  * (não existe no servidor: montado na hora pelo `PlanDocumentService`, só na lista do card).
@@ -67,6 +67,7 @@ export interface FileKindLook {
 /** Ordem dos grupos: o chamado primeiro (é o que a pessoa copia para o sistema de chamados). */
 export const FILE_KIND_LOOKS: readonly FileKindLook[] = [
   { kind: 'ticket', group: 'Chamados', label: 'Chamado', icon: 'confirmation_number', color: '#d29922' },
+  { kind: 'evidence', group: 'Evidências', label: 'Evidência', icon: 'photo_library', color: '#56d364' },
   { kind: 'script', group: 'Scripts', label: 'Script', icon: 'code', color: '#58a6ff' },
   { kind: 'analysis', group: 'Análises', label: 'Análise', icon: 'description', color: '#a371f7' },
   { kind: 'data', group: 'Dados', label: 'Dados', icon: 'dataset', color: '#3fb950' },
@@ -307,5 +308,26 @@ export function guessUploadKind(name: string, contentType?: string | null): Work
   if (/chamado|ticket/.test(n)) return 'ticket';
   if (/an[aá]lise|analysis/.test(n)) return 'analysis';
   if (/\.(md|txt)$/.test(n)) return 'text';
+  if ((IMAGE_EXT.test(n) || t.startsWith('image/')) && /evid[eê]ncia|evidence|valida[cç][aã]o|validation/.test(n)) return 'evidence';
   return 'attachment';
+}
+
+/**
+ * 0092: prints da sub-tarefa (evidências da validação) — imagens do tipo `evidence` ou qualquer imagem ligada a ela,
+ * na ordem do nome (`01-…`, `02-…`).
+ */
+export function evidenceImages(files: readonly WorkItemFile[], taskNumber?: number | null): WorkItemFile[] {
+  return files
+    .filter((f) => (taskNumber == null || f.taskNumber === taskNumber) && filePreviewKind(f) === 'image')
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+}
+
+/** Legenda do print: sem extensão, sem a pasta e com o prefixo numérico destacado ("03-tela-salva.jpg" → "03 · tela salva"). */
+export function evidenceCaption(name: string): string {
+  const base = `${name ?? ''}`.split(/[\\/]/).pop() ?? '';
+  const stem = base.replace(/\.[a-z0-9]{1,5}$/i, '');
+  const m = /^(\d+)[-_ .]+(.*)$/.exec(stem);
+  const words = (m ? m[2] : stem).replace(/[-_]+/g, ' ').trim();
+  return m ? (words ? `${m[1]} · ${words}` : m[1]) : words || base;
 }

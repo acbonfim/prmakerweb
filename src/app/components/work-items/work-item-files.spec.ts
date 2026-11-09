@@ -19,7 +19,9 @@ import {
   isTextFile,
   normalizeFileKind,
   normalizeFiles,
-  resolveFileContentUrl
+  resolveFileContentUrl,
+  evidenceCaption,
+  evidenceImages
 } from './work-item-files';
 
 const f = (p: Partial<WorkItemFile>): WorkItemFile => ({ id: '1', name: 'a.md', kind: 'analysis', ...p } as WorkItemFile);
@@ -188,5 +190,34 @@ describe('planDocumentFiles (plano completo na aba Arquivos)', () => {
   it('em User Story o plano é de implementação', () => {
     const [doc] = planDocumentFiles([{ number: 2, planId: 'p2', planPhase: 'correction', title: 'US', updatedAt: at }], true);
     expect(doc.name).toBe('plano-de-implementacao-completo-item-2.md');
+  });
+});
+
+describe('0092 — evidências da validação', () => {
+  it('kind evidence: grupo Evidências logo depois de Chamados; upload de print de validação vira evidência', () => {
+    expect(normalizeFileKind('evidence')).toBe('evidence');
+    expect(fileKindLook('evidence').group).toBe('Evidências');
+    const groups = groupFiles([f({ id: 'a', kind: 'attachment', name: 'x.zip' }), f({ id: 'e', kind: 'evidence', name: '01-login.jpg' }), f({ id: 't', kind: 'ticket', name: 'chamado.md' })]);
+    expect(groups.map((g) => g.look.group)).toEqual(['Chamados', 'Evidências', 'Anexos']);
+    expect(guessUploadKind('evidencia-qa-01.png', 'image/png')).toBe('evidence');
+    expect(guessUploadKind('print.png', 'image/png')).toBe('attachment');
+  });
+
+  it('prints da sub-tarefa: só imagens dela, na ordem do nome', () => {
+    const list = [
+      f({ id: '1', name: '10-fim.jpg', kind: 'evidence', taskNumber: 7 }),
+      f({ id: '2', name: '02-tela.png', kind: 'attachment', taskNumber: 7 }),
+      f({ id: '3', name: 'resultado.md', kind: 'evidence', taskNumber: 7 }),
+      f({ id: '4', name: '01-login.jpg', kind: 'evidence', taskNumber: 8 })
+    ];
+    expect(evidenceImages(list, 7).map((x) => x.name)).toEqual(['02-tela.png', '10-fim.jpg']);
+    expect(evidenceImages(list).length).toBe(3);
+  });
+
+  it('legenda: sem extensão e com o prefixo numérico', () => {
+    expect(evidenceCaption('03-tela-salva.jpg')).toBe('03 · tela salva');
+    expect(evidenceCaption('qa/01_login.png')).toBe('01 · login');
+    expect(evidenceCaption('final.png')).toBe('final');
+    expect(evidenceCaption('04.png')).toBe('04');
   });
 });

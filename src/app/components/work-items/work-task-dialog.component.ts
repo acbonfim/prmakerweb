@@ -43,6 +43,7 @@ import { WORK_DIALOG_STYLES } from './work-dialog.styles';
 import { WorkItemFilesComponent } from './work-item-files.component';
 import { WorkItemFilesStore } from './work-item-files.store';
 import { WorkDeliverablesComponent } from './work-deliverables.component';
+import { WorkEvidenceGalleryComponent } from './work-evidence-gallery.component';
 import { filesOfTask } from './work-item-files';
 import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
 import { paramDisplay, paramInput, paramLink, paramOptions } from '../work-item-pickers/param-input';
@@ -66,7 +67,7 @@ export interface WorkTaskDialogData {
 @Component({
   selector: 'app-work-task-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WorkItemFilesComponent, WorkDeliverablesComponent],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WorkItemFilesComponent, WorkDeliverablesComponent, WorkEvidenceGalleryComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <!-- 0087: links de código (ref:) e de itens da engenharia reversa/Base Solvace abrem o popover aqui também -->
@@ -105,6 +106,7 @@ export interface WorkTaskDialogData {
             <section class="wi-sec wtd__gen">
               <h4 class="wi-sec__title">O que foi gerado @if (generatedCount()) { <small class="wi-muted">{{ generatedCount() }}</small> }</h4>
               <app-work-deliverables [deliverables]="taskDeliverables()" [card]="data.card" [itemNumber]="data.itemNumber" [compact]="true" />
+              <app-work-evidence-gallery [store]="files" [taskNumber]="data.taskNumber" [card]="data.card" />
               @if (taskFiles()) {
                 <h5 class="wtd__subtitle">Arquivos <small class="wi-muted">{{ taskFiles() }}</small></h5>
                 <app-work-item-files [store]="files" [card]="data.card" [taskNumber]="data.taskNumber" [compact]="true" />
