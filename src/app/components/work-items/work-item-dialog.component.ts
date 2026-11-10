@@ -86,7 +86,7 @@ export interface WorkItemDialogData {
           <span class="wi-dlg__title"><span class="wi-num">{{ num(data.number) }}</span> {{ item()?.title || 'Item de trabalho' }}</span>
           @if (item(); as it) {
             <span class="wi-dlg__sub">
-              <span class="wi-status" [style.color]="look().color"><mat-icon [class.wi-spin]="look().spin">{{ look().icon }}</mat-icon>{{ look().label }}</span>
+              <span class="wi-status" [style.color]="look().color"><mat-icon [class.wi-spin]="look().spin" [class.cime-bob]="look().bob">{{ look().icon }}</mat-icon>{{ look().label }}</span>
               <span class="wi-chip"><mat-icon>{{ originIco(it.origin) }}</mat-icon>{{ origin(it.origin) }}</span>
               <span>por {{ it.createdByName || 'PRMake' }} em {{ it.createdAt | date:'dd/MM/yy HH:mm' }}</span>
               @if (progress().total) { <span>{{ progress().done }}/{{ progress().total }} sub-tarefas</span> }

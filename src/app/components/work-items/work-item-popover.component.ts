@@ -51,7 +51,7 @@ const MAX_TASKS = 8;
           <span class="wip__num">{{ label() }}</span>
           @if (item(); as it) {
             <span class="wip__chip" [style.--wip-c]="type().color || '#8b9bb4'"><mat-icon>{{ type().icon }}</mat-icon>{{ type().label }}</span>
-            <span class="wip__chip" [style.--wip-c]="status().color"><mat-icon [class.wip__spin]="status().spin">{{ status().icon }}</mat-icon>{{ status().label }}</span>
+            <span class="wip__chip" [style.--wip-c]="status().color"><mat-icon [class.wip__spin]="status().spin" [class.cime-bob]="status().bob">{{ status().icon }}</mat-icon>{{ status().label }}</span>
             @if (otherCard()) { <span class="wip__card" matTooltip="Item de outro card">card {{ it.cardNumber }}</span> }
           }
         </div>

@@ -270,6 +270,8 @@ export interface StatusLook {
   color: string;
   /** Ícone girando (em andamento). */
   spin?: boolean;
+  /** Ícone balançando como o robô da sessão de execução (classe global `cime-bob`) — "Desfazendo": a seta girando ficava feia. */
+  bob?: boolean;
 }
 
 const ITEM_STATUS: Record<WorkItemStatus, StatusLook> = {
@@ -280,7 +282,7 @@ const ITEM_STATUS: Record<WorkItemStatus, StatusLook> = {
   completed: { label: 'Concluído', icon: 'check_circle', color: '#3fb950' },
   failed: { label: 'Falhou', icon: 'error', color: '#f85149' },
   cancelled: { label: 'Cancelado', icon: 'cancel', color: '#8b949e' },
-  reverting: { label: 'Desfazendo', icon: 'undo', color: '#bc8cff', spin: true },
+  reverting: { label: 'Desfazendo', icon: 'undo', color: '#bc8cff', bob: true },
   reverted: { label: 'Desfeito', icon: 'undo', color: '#bc8cff' }
 };
 
@@ -389,6 +391,26 @@ export function matchesFilter(item: Pick<WorkItem, 'status'>, filter: WorkItemFi
     case 'cancelled': return CANCELLED_ITEM.has(item.status);
     default: return true;
   }
+}
+
+/**
+ * Busca da lista de itens: `#742`/`742` acha o item pelo número (ou pelo de uma sub-tarefa dele) e também títulos com o
+ * número (ex.: "GS-104"); texto acha pelo título, sem diferença de maiúsculas e acentos, todas as palavras em qualquer ordem.
+ */
+export function matchesSearch(item: Pick<WorkItem, 'number' | 'title'> & { tasks?: Pick<WorkTask, 'number'>[] | null }, query: string | null | undefined): boolean {
+  const q = foldText(query ?? '').trim();
+  if (!q) return true;
+  const title = foldText(item.title ?? '');
+  const num = /^#?(\d+)$/.exec(q);
+  if (num) {
+    const d = num[1];
+    return `${item.number}`.startsWith(d) || (item.tasks ?? []).some((t) => `${t.number}` === d) || title.includes(d);
+  }
+  return q.split(/\s+/).every((w) => title.includes(w.replace(/^#/, '')) || (/^#\d+$/.test(w) && `${item.number}`.startsWith(w.slice(1))));
+}
+
+function foldText(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 /** Item rodando (ou na fila): o botão Executar vira atividade. */

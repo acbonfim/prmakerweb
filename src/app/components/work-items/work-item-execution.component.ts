@@ -118,7 +118,7 @@ const FLASH_MS = 1_600;
             <span class="wie__title-text" [title]="item()?.title || ''">{{ item()?.title || 'Carregando…' }}</span>
           </div>
           <div class="wie__sub">
-            <span class="wie__status" [style.color]="look().color"><mat-icon [class.wie__spin]="look().spin">{{ look().icon }}</mat-icon>{{ look().label }}</span>
+            <span class="wie__status" [style.color]="look().color"><mat-icon [class.wie__spin]="look().spin" [class.cime-bob]="look().bob">{{ look().icon }}</mat-icon>{{ look().label }}</span>
             @if (liveData()?.request; as r) {
               @if (r.workerName) { <span class="wie__fact" matTooltip="Máquina que executa"><mat-icon>computer</mat-icon>{{ r.workerName }}</span> }
               @if (live()) { <span class="wie__fact wie__fact--muted">{{ requestLabel(r.status) }}</span> }
