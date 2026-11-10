@@ -972,3 +972,9 @@ img.md-attachment.md-attachment--loading {
 .driver-popover.prmake-tour .driver-popover-arrow-side-top.driver-popover-arrow { border-top-color: var(--surface-2, #323232); }
 .driver-popover.prmake-tour .driver-popover-arrow-side-bottom.driver-popover-arrow { border-bottom-color: var(--surface-2, #323232); }
 .driver-active-element { border-radius: 10px; }
+
+// Ícone "trabalhando" que balança como o robô da sessão de execução (ex.: "Desfazendo" — StatusLook.bob).
+@media (prefers-reduced-motion: no-preference) {
+  .cime-bob { animation: cime-bob 1.4s ease-in-out infinite; }
+}
+@keyframes cime-bob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-2px) rotate(-8deg); } 75% { transform: translateY(-1px) rotate(8deg); } }

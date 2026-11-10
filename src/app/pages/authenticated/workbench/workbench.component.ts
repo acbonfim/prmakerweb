@@ -80,6 +80,7 @@ export interface PlanItemOption {
   icon: string;
   color: string;
   spin: boolean;
+  bob: boolean;
 }
 
 /**
@@ -358,7 +359,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       return {
         number: i.number, planId: i.planId!, title: i.title, status: i.status, statusLabel,
         label: `${formatWorkNumber(i.number)} ${i.title} · ${statusLabel}`,
-        icon: look.icon, color: look.color, spin: !!look.spin
+        icon: look.icon, color: look.color, spin: !!look.spin, bob: !!look.bob
       };
     }));
   readonly loneItemOptions = computed(() => loneItemOptions(this.planItems()));

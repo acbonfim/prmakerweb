@@ -79,7 +79,7 @@ export interface WorkTaskDialogData {
           <span class="wi-dlg__sub">
             <span>de <b>{{ num(data.itemNumber) }}</b> {{ item()?.title }}</span>
             @if (task(); as t) {
-              <span class="wi-status" [style.color]="look().color"><mat-icon [class.wi-spin]="look().spin">{{ look().icon }}</mat-icon>{{ look().label }}</span>
+              <span class="wi-status" [style.color]="look().color"><mat-icon [class.wi-spin]="look().spin" [class.cime-bob]="look().bob">{{ look().icon }}</mat-icon>{{ look().label }}</span>
             }
           </span>
         </div>

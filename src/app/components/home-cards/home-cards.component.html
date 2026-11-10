@@ -104,7 +104,7 @@
                 <span class="row-label nowrap">{{ workNumber(wi.number) }}</span>
                 <span class="ellipsis">{{ wi.title }}</span>
                 <span class="chip chip-item" [style.--item-color]="look.color">
-                  <mat-icon [class.spin]="look.spin">{{ look.icon }}</mat-icon>{{ look.label }}
+                  <mat-icon [class.spin]="look.spin" [class.cime-bob]="look.bob">{{ look.icon }}</mat-icon>{{ look.label }}
                 </span>
                 @if (c.workItems.count > 1) {
                   <span class="muted nowrap" [matTooltip]="c.workItems.open + ' aberto(s) de ' + c.workItems.count">+{{ c.workItems.count - 1 }}</span>

@@ -34,6 +34,7 @@ import {
   itemStatusLook,
   kindInfo,
   matchesFilter,
+  matchesSearch,
   originIcon,
   originLabel,
   sortByCreation,
@@ -94,6 +95,14 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
           </button>
         }
         <span class="wil__spacer"></span>
+        <label class="wil__search" [class.on]="query()" matTooltip="Filtrar pelo número (#742 — também acha pelo número de uma sub-tarefa) ou pelo título" matTooltipShowDelay="600">
+          <mat-icon class="wil__search-ico">search</mat-icon>
+          <input type="text" inputmode="search" autocomplete="off" placeholder="Nº ou título" aria-label="Filtrar itens pelo número ou pelo título"
+                 [value]="query()" (input)="query.set($any($event.target).value)" (keydown.escape)="query.set('')" />
+          @if (query()) {
+            <button type="button" class="wil__search-x" (click)="query.set('')" aria-label="Limpar a busca"><mat-icon>close</mat-icon></button>
+          }
+        </label>
         <div class="wil__filters" role="radiogroup" aria-label="Filtrar itens">
           @for (f of filters; track f.key) {
             <button type="button" role="radio" [attr.aria-checked]="filter() === f.key" [class.on]="filter() === f.key" (click)="filter.set(f.key)">
@@ -109,7 +118,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
         <div class="wil__msg wil__msg--err"><mat-icon>error_outline</mat-icon><span>{{ loadError() }}</span><button mat-button (click)="load()">Tentar de novo</button></div>
       }
 
-      <div class="wil__layout" [class.wil__layout--split]="sessionVisible()" [class.wil__layout--side]="wide()">
+      <div class="wil__layout" [class.wil__layout--split]="sessionVisible()" [class.wil__layout--side]="wide()" [class.wil__layout--fill]="wide()">
       @if (sessionVisible()) {
         <aside class="wil__session" aria-label="Sessão de execução">
           <div class="wil__session-bar">
@@ -170,7 +179,14 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
           </div>
         </div>
       } @else {
-        @if (!visible().length) { <div class="wil__msg">Nenhum item neste filtro.</div> }
+        @if (!visible().length) {
+          <div class="wil__msg">
+            @if (query().trim()) {
+              Nenhum item com "{{ query().trim() }}"{{ filter() === 'all' ? '' : ' neste filtro' }}.
+              <button mat-button (click)="query.set('')">Limpar a busca</button>
+            } @else { Nenhum item neste filtro. }
+          </div>
+        }
         <ul class="wil__list">
           @for (it of visible(); track it.id) {
             <li class="wil__item" [class.wil__item--live]="isLive(it)" [class.wil__item--active]="sessionVisible() && activeTab() === it.number" [class.wil__item--open]="isExpanded(it.number)" [class.wil__item--dim]="it.status === 'cancelled' || it.status === 'reverted'">
@@ -185,7 +201,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                 </button>
                 <div class="wil__meta">
                   <span class="wil__chip" [matTooltip]="'Origem: ' + origin(it.origin)"><mat-icon>{{ originIco(it.origin) }}</mat-icon>{{ origin(it.origin) }}</span>
-                  <span class="wil__status" [style.color]="look(it).color"><mat-icon [class.wil__spin]="look(it).spin">{{ look(it).icon }}</mat-icon>{{ look(it).label }}</span>
+                  <span class="wil__status" [style.color]="look(it).color"><mat-icon [class.wil__spin]="look(it).spin" [class.cime-bob]="look(it).bob">{{ look(it).icon }}</mat-icon>{{ look(it).label }}</span>
                   @if (progress(it); as p) {
                     @if (p.total) {
                       <span class="wil__prog" [matTooltip]="p.done + ' de ' + p.total + ' sub-tarefas'">
@@ -257,9 +273,20 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
     </div>
   `,
   styles: [`
-    :host { display: block; container-type: inline-size; container-name: wilhost; font-size: 13px; color: var(--mat-sys-on-surface); }
-    .wil { display: flex; flex-direction: column; gap: 8px; }
-    .wil__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    :host { display: flex; flex-direction: column; min-height: 0; container-type: inline-size; container-name: wilhost; font-size: 13px; color: var(--mat-sys-on-surface); }
+    .wil { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+    /* Barra (novo item, busca, filtros) fixa no desktop: só a lista abaixo dela rola (wil__layout--fill). */
+    .wil__bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .wil__search { display: inline-flex; align-items: center; gap: 4px; height: 30px; box-sizing: border-box; padding: 0 4px 0 8px; border-radius: 8px; cursor: text;
+      border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); color: var(--cc-text-2); width: 170px; transition: border-color .15s ease; }
+    .wil__search:focus-within, .wil__search.on { border-color: color-mix(in srgb, var(--mat-sys-primary) 60%, transparent); }
+    .wil__search-ico { font-size: 17px; width: 17px; height: 17px; flex: none; margin: 0 !important; }
+    .wil__search input { flex: 1; min-width: 0; background: none; border: 0; outline: 0; color: var(--mat-sys-on-surface); font: inherit; font-size: 12.5px; padding: 0; }
+    .wil__search input::placeholder { color: var(--cc-text-3); }
+    .wil__search-x { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px;
+      background: none; color: var(--cc-text-3); cursor: pointer; }
+    .wil__search-x:hover { color: var(--mat-sys-on-surface); background: rgba(255,255,255,.06); }
+    .wil__search-x mat-icon { font-size: 15px; width: 15px; height: 15px; margin: 0 !important; }
     .wil__bar .mat-mdc-button-base mat-icon { margin-right: 4px; }
     .wil__spacer { flex: 1; }
     .wil__ask { border-color: rgba(196,167,255,.35) !important; }
@@ -344,11 +371,16 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
     .wil__layout { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
     .wil__main { min-width: 0; container-type: inline-size; display: flex; flex-direction: column; gap: 8px; }
     .wil__layout--split .wil__session { max-height: min(78vh, 760px); }
+    /* Desktop (≥ 1024): a lista ocupa a altura que sobra e rola sozinha (a barra de rolagem fica junto da lista, não depois da
+       sessão); a sessão tem a rolagem dela. */
+    .wil__layout--fill { flex: 1 1 auto; min-height: 0; }
+    .wil__layout--fill .wil__main { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 3px; scrollbar-width: thin; }
+    .wil__layout--fill.wil__layout--split .wil__session { flex: 0 1 auto; max-height: 58%; min-height: 220px; }
+    .wil__layout--fill.wil__layout--split .wil__main { min-height: 140px; }
     @container wilhost (min-width: 760px) {
-      .wil__layout--split.wil__layout--side { display: grid; grid-template-columns: minmax(300px, 5fr) minmax(360px, 7fr); align-items: start; }
-      .wil__layout--split.wil__layout--side .wil__main { grid-column: 1; grid-row: 1; }
-      .wil__layout--split.wil__layout--side .wil__session { grid-column: 2; grid-row: 1; position: sticky; top: 8px;
-        max-height: calc(100dvh - var(--cime-topbar-total, 70px) - 60px); min-height: 420px; }
+      .wil__layout--split.wil__layout--side { display: grid; grid-template-columns: minmax(300px, 5fr) minmax(360px, 7fr); grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+      .wil__layout--split.wil__layout--side .wil__main { grid-column: 1; grid-row: 1; min-height: 0; }
+      .wil__layout--split.wil__layout--side .wil__session { grid-column: 2; grid-row: 1; max-height: none; min-height: 0; }
     }
     .wil__session { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; padding: 8px; border-radius: 12px;
       background: var(--surface-3, #212730); border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); }
@@ -387,6 +419,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
       .wil__task-st-label { display: none; }
       .wil__tasks { padding-left: 16px; }
       .wil__spacer { display: none; }
+      .wil__search { flex: 1 1 140px; width: auto; }
     }
   `]
 })
@@ -412,6 +445,8 @@ export class WorkItemListComponent {
   readonly loading = signal(false);
   readonly loadError = signal<string | null>(null);
   readonly filter = signal<WorkItemFilter>('all');
+  /** Busca pelo número (do item ou de uma sub-tarefa) ou pelo título. */
+  readonly query = signal('');
   readonly expanded = signal<ReadonlySet<number>>(new Set());
   /** Itens com uma ação em curso (HTTP) — cada item é independente. */
   readonly pending = signal<ReadonlySet<number>>(new Set());
@@ -435,9 +470,14 @@ export class WorkItemListComponent {
   readonly executing = computed(() => executingNumbers(this.items()));
   readonly sessionVisible = computed(() => this.sessionOpen() && this.sessionTabs().length > 0);
 
-  readonly visible = computed(() => this.items().filter((it) => matchesFilter(it, this.filter())));
+  private readonly searched = computed(() => {
+    const q = this.query();
+    return this.items().filter((it) => matchesSearch(it, q));
+  });
+  readonly visible = computed(() => this.searched().filter((it) => matchesFilter(it, this.filter())));
+  /** Contagem dos filtros: dentro da busca (sem busca, o card inteiro). */
   readonly counts = computed(() => {
-    const all = this.items();
+    const all = this.searched();
     return {
       all: all.length,
       open: all.filter((x) => matchesFilter(x, 'open')).length,
@@ -612,6 +652,7 @@ export class WorkItemListComponent {
     this.analysisDone.set(null);
     this.catalog.set(null);
     this.expanded.set(new Set());
+    this.query.set('');
     this.sessionTabs.set([]);
     this.activeTab.set(null);
     this.sessionOpen.set(false);

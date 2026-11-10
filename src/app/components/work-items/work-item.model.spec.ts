@@ -10,6 +10,7 @@ import {
   kindInfo,
   kindParams,
   matchesFilter,
+  matchesSearch,
   originLabel,
   outputEntries,
   taskStatusLook,
@@ -59,6 +60,21 @@ describe('work-item.model (0085)', () => {
     expect(matchesFilter(item({ status: 'reverted' }), 'cancelled')).toBeTrue();
     expect(matchesFilter(item({ status: 'cancelled' }), 'open')).toBeFalse();
     expect(matchesFilter(item({ status: 'cancelled' }), 'all')).toBeTrue();
+  });
+
+  it('busca por número (do item ou de sub-tarefa) e por título sem acento', () => {
+    const it = item({ number: 742, title: 'GS-105 — Registrar Ação de melhoria', tasks: [task({ number: 743 })] });
+    expect(matchesSearch(it, '')).toBeTrue();
+    expect(matchesSearch(it, '#742')).toBeTrue();
+    expect(matchesSearch(it, '74')).toBeTrue();
+    expect(matchesSearch(it, '743')).toBeTrue();
+    expect(matchesSearch(it, '105')).toBeTrue();
+    expect(matchesSearch(it, '#999')).toBeFalse();
+    expect(matchesSearch(it, 'acao REGISTRAR')).toBeTrue();
+    expect(matchesSearch(it, 'gs-105')).toBeTrue();
+    expect(matchesSearch(it, 'gs-104')).toBeFalse();
+    expect(itemStatusLook('reverting').spin).toBeFalsy();
+    expect(itemStatusLook('reverting').bob).toBeTrue();
   });
 
   it('executar só pending/failed; desfazer só com sub-tarefa concluída', () => {

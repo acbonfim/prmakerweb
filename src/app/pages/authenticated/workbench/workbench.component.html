@@ -367,7 +367,7 @@
                     matTooltipShowDelay="500">
               <span class="wb-exec__sel">
                 @if (sel) {
-                  <mat-icon class="wb-exec__st" [class.wb-exec__st--spin]="sel.spin" [style.color]="sel.color">{{ sel.icon }}</mat-icon>
+                  <mat-icon class="wb-exec__st" [class.wb-exec__st--spin]="sel.spin" [class.cime-bob]="sel.bob" [style.color]="sel.color">{{ sel.icon }}</mat-icon>
                   <span class="wb-exec__num">#{{ sel.number }}</span>
                   <span class="wb-exec__title">{{ sel.title }}</span>
                   <span class="wb-exec__status">· {{ sel.statusLabel }}</span>
