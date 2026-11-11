@@ -328,9 +328,10 @@
   // A lista ocupa o resto da altura e rola por dentro (barra de filtros fixa); o painel só rola se as sugestões não couberem.
   > app-work-item-list { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 }
-// Tela baixa (sugestões abertas): a lista não some espremida — abaixo disso o painel volta a rolar.
+// Tela baixa (sugestões abertas): a lista não some espremida — abaixo disso o painel volta a rolar. A altura mínima
+// cabe a sessão do item com as perguntas do PRMake (responder sem ir para a Execução).
 @media (min-width: 1024px) {
-  .wb-pane > app-work-item-list { min-height: 340px; }
+  .wb-pane > app-work-item-list { min-height: 440px; }
 }
 
 // Sugestão de análise inicial (card sem plano e sem itens)
