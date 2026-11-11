@@ -45,6 +45,9 @@ export class CaseCompactComponent implements OnDestroy {
   readonly cardType = input<'bug' | 'user-story'>('bug');
   /** Item de trabalho criado/aberto por uma ferramenta da conversa grande (o hospedeiro mostra o item). */
   readonly itemOpened = output<number>();
+  /** Bancada: mostra a seta que recolhe o painel para a direita (o hospedeiro esconde e mostra a seta de volta). */
+  readonly collapsible = input(false);
+  readonly collapse = output<void>();
 
   private store = inject(CaseChatStore);
   private api = inject(CaseChatService);

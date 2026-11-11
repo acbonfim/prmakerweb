@@ -275,7 +275,8 @@
     </button>
   </nav>
 
-  <div class="wb-body" [class.wb-body--executing]="executingItems().length > 0 && main === 'items'">
+  <div class="wb-body" [class.wb-body--executing]="executingItems().length > 0 && main === 'items'"
+       [class.wb-body--chat-off]="chatHidden()" [class.wb-body--chat-sliding]="chatSliding()">
     <!-- Coluna principal: Itens de trabalho | Plano (montados; troca por visibilidade) | Card (só quando aberta) -->
     <section class="wb-main" [class.wb-hidden]="!main">
       <div class="wb-segrow">
@@ -449,10 +450,19 @@
     </section>
 
     <!-- Coluna lateral: o Especialista do caso ocupa a altura toda -->
+    <!-- Desktop: a seta do cabeçalho recolhe o Especialista para a direita; recolhido, fica só a seta na borda para voltar -->
     <aside class="wb-side" [class.wb-hidden]="!showChat()">
-      <div class="wb-chat" [class.wb-flash]="chatFlash()" data-tour="wb-chat">
-        <app-case-compact class="wb-chat__box" [card]="card()" [cardType]="cardType()" (itemOpened)="onToolCreated($event)"></app-case-compact>
+      <div class="wb-chat" [class.wb-flash]="chatFlash()" data-tour="wb-chat" [attr.aria-hidden]="chatHidden() || null">
+        <app-case-compact class="wb-chat__box" [card]="card()" [cardType]="cardType()" [collapsible]="!narrow()"
+                          (collapse)="setChatCollapsed(true)" (itemOpened)="onToolCreated($event)"></app-case-compact>
       </div>
+      @if (chatHidden()) {
+        <button type="button" class="wb-chat-rail" (click)="setChatCollapsed(false)"
+                matTooltip="Mostrar o Especialista do caso" matTooltipPosition="left" matTooltipShowDelay="400" aria-label="Mostrar o Especialista do caso">
+          <mat-icon>chevron_left</mat-icon>
+          @if (caseUnread(); as u) { <span class="wb-count">{{ u }}</span> }
+        </button>
+      }
     </aside>
   </div>
 

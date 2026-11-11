@@ -525,6 +525,47 @@
 // Itens em execução (sessão ao vivo ao lado do item): a coluna principal ganha largura
 .wb-body--executing { grid-template-columns: minmax(0, 2.6fr) minmax(300px, 1fr); }
 
+// Especialista recolhido para a direita (desktop): a coluna lateral encolhe até a faixa da seta e a conversa sai pela
+// borda direita (presa à esquerda da coluna, cortada pelo overflow). Os tracks ficam no mesmo formato (minmax com fr)
+// para o navegador animar o grid-template-columns. A conversa só sai do layout quando a animação termina (`--chat-sliding`).
+@media (min-width: 1024px) {
+  .wb-body { transition: grid-template-columns .32s cubic-bezier(.2, .7, .2, 1); }
+  .wb-body.wb-body--chat-off { grid-template-columns: minmax(0, 1fr) minmax(34px, 0fr); }
+  .wb-body--chat-off .wb-side, .wb-body--chat-sliding .wb-side { overflow: hidden; }
+  .wb-body--chat-off .wb-chat, .wb-body--chat-sliding .wb-chat { min-width: 300px; }
+  .wb-chat { transition: opacity .25s ease, transform .32s cubic-bezier(.2, .7, .2, 1), box-shadow .3s ease; }
+  .wb-body--chat-off .wb-chat { opacity: 0; transform: translateX(24px); pointer-events: none; }
+  .wb-body--chat-off:not(.wb-body--chat-sliding) .wb-chat { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-body, .wb-chat { transition: none; }
+}
+
+// Faixa do Especialista recolhido: a seta para a esquerda fica sempre visível na borda direita
+.wb-chat-rail {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 1;
+  width: 34px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(142, 108, 240, .22), rgba(142, 108, 240, .04) 120px), var(--surface-1, #2a2a2a);
+  color: var(--mat-sys-on-surface);
+  cursor: pointer;
+  animation: wb-rail-in .25s ease .12s both;
+
+  &:hover { background: linear-gradient(180deg, rgba(142, 108, 240, .32), rgba(142, 108, 240, .08) 160px), var(--surface-1, #2a2a2a); }
+  &:focus-visible { outline: 2px solid var(--mat-sys-primary); outline-offset: -2px; }
+  .mat-icon { font-size: 22px; width: 22px; height: 22px; }
+}
+@keyframes wb-rail-in { from { opacity: 0; } to { opacity: 1; } }
+
 // Telas médias: lateral um pouco mais estreita e, na barra do card, "Linha do tempo" e "Ações DevOps" só com o ícone
 // (o tooltip diz o nome) para as etiquetas do card caberem ao lado.
 @media (max-width: 1360px) and (min-width: 1024px) {
