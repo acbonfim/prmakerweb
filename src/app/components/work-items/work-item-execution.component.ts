@@ -69,6 +69,9 @@ import {
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
 import { listenWorkItems } from './work-items-live';
+import { WorkItemQuestionsComponent } from './work-item-questions.component';
+import { EXECUTION_PLAN_EVENT, ExecutionPlanRealtimePayload, ExecutionQuestion } from '../execution-plan/execution-plan.model';
+import { ExecutionPlanService } from '../../services/execution-plan.service';
 import { WorkItemFilesStore } from './work-item-files.store';
 
 /** Debounce dos eventos do tempo real (rajadas de atividade viram um GET só). */
@@ -101,7 +104,7 @@ const FLASH_MS = 1_600;
 @Component({
   selector: 'app-work-item-execution',
   standalone: true,
-  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent],
+  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent, WorkItemQuestionsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wie" [class.wie--live]="live()" [class.wie--celebrate]="celebrate()" [attr.aria-busy]="live()"
@@ -158,8 +161,13 @@ const FLASH_MS = 1_600;
           <div class="wie__note wie__note--muted"><mat-icon>signal_cellular_connected_no_internet_0_bar</mat-icon><span>Sem sinal do executor há {{ q }} — ele pode estar num comando longo.</span></div>
         }
 
-        <!-- "Já resolvi": o Claude parou esperando a pessoa (sem acesso, credencial, decisão…) — ela destrava daqui -->
-        @if (resolvable(); as rt) {
+        <!-- Perguntas do PRMake (plano do item): responder aqui, sem ir para a aba Execução. Elas destravam o Claude — o
+             "Já resolvi" fica para as outras esperas (sem acesso, credencial…). -->
+        @if (questionsShown().length && item()?.planId; as planId) {
+          <app-work-item-questions [planId]="planId" [questions]="questionsShown()" [taskLabel]="waitingLabel()"
+                                   (answered)="onAnswered($event)"></app-work-item-questions>
+        } @else if (resolvable(); as rt) {
+          <!-- "Já resolvi": o Claude parou esperando a pessoa (sem acesso, credencial, decisão…) — ela destrava daqui -->
           <div class="wie__unblock" role="group" [attr.aria-label]="'Destravar ' + num(rt.number)">
             <div class="wie__unblock-head">
               <mat-icon>front_hand</mat-icon>
@@ -554,6 +562,23 @@ export class WorkItemExecutionComponent {
   readonly resolvable = computed(() => waitingForResolve(this.item()));
   readonly canResolve = (t: WorkTask) => canResolveWait(t);
   readonly resolveNote = signal('');
+  /** Perguntas do plano do item enquanto ele espera a pessoa (lidas do plano a cada carga do item em espera). */
+  private plans = inject(ExecutionPlanService);
+  private readonly planQuestions = signal<ExecutionQuestion[]>([]);
+  /** Respondidas nesta tela: continuam à vista (com a resposta) até o item sair da espera. */
+  private readonly answeredHere = signal<ReadonlySet<string>>(new Set());
+  private questionsSeq = 0;
+  private questionsKey: string | null = null;
+  readonly questionsShown = computed(() => {
+    const here = this.answeredHere();
+    return this.planQuestions()
+      .filter((q) => q.status === 'open' || (q.status === 'answered' && here.has(q.id)))
+      .sort((a, b) => a.order - b.order);
+  });
+  readonly waitingLabel = computed(() => {
+    const t = (this.item()?.tasks ?? []).find((x) => x.status === 'waiting');
+    return t ? this.num(t.number) : null;
+  });
 
   readonly look = computed(() => itemStatusLook(this.status()));
   readonly status = computed(() => this.item()?.status ?? (this.liveData()?.status as WorkItem['status'] | undefined) ?? null);
@@ -698,7 +723,11 @@ export class WorkItemExecutionComponent {
       if (!hidden && t - this.lastSignalAt >= POLL_IDLE_MS && t - this.lastLoadAt >= POLL_IDLE_MS) this.reload();
     }, 1000);
 
+    // Pergunta nova/respondida no plano do item (mesmo grupo `execplan:{card}` do tempo real dos itens): relê as perguntas.
+    this.ws.on(EXECUTION_PLAN_EVENT, this.onPlanEvent);
+
     inject(DestroyRef).onDestroy(() => {
+      this.ws.off(EXECUTION_PLAN_EVENT, this.onPlanEvent);
       clearInterval(tick);
       this.stopLive?.();
       if (this.flashTimer) clearTimeout(this.flashTimer);
@@ -719,6 +748,9 @@ export class WorkItemExecutionComponent {
     this.celebrate.set(false);
     this.unseen.set(false);
     this.resolveNote.set('');
+    this.planQuestions.set([]);
+    this.answeredHere.set(new Set());
+    this.questionsKey = null;
     this.stick = true;
     this.feedSize = 0;
     if (n) this.reload();
@@ -769,10 +801,48 @@ export class WorkItemExecutionComponent {
       }
     }
     this.item.set(it);
+    this.loadQuestions(it);
     // Sem `/live`: o histórico do próprio item alimenta o feed.
     const l = this.liveData();
     if (!l || (l as { _fallback?: boolean })._fallback) this.liveData.set(this.fallbackLive(it));
     this.itemChange.emit(it);
+  }
+
+  /** Item em espera com plano: lê as perguntas do plano (as abertas viram o quadro de respostas da sessão). */
+  private loadQuestions(it: WorkItem): void {
+    const seq = ++this.questionsSeq;
+    if (!it.planId || it.status !== 'waiting') {
+      this.questionsKey = null;
+      this.planQuestions.set([]);
+      this.answeredHere.set(new Set());
+      return;
+    }
+    // Só relê o plano quando o item mudou (o polling de 10 s do item em espera não vira um GET do plano a cada volta).
+    const key = `${it.planId}|${it.updatedAt}|${this.waitingLabel()}`;
+    if (key === this.questionsKey) return;
+    this.questionsKey = key;
+    const n = it.number;
+    this.plans.get(it.planId).subscribe({
+      next: (plan) => {
+        if (seq !== this.questionsSeq || n !== this.current) return;
+        this.planQuestions.set(plan?.questions ?? []);
+      },
+      error: () => { if (seq === this.questionsSeq) this.questionsKey = null; }
+    });
+  }
+
+  private readonly onPlanEvent = (p: ExecutionPlanRealtimePayload): void => {
+    const it = this.item();
+    if (!it?.planId || p?.planId !== it.planId || p.action !== 'question') return;
+    this.questionsKey = null;
+    this.loadQuestions(it);
+  };
+
+  /** Resposta confirmada: fica à vista com a resposta e o item recarrega (a sub-tarefa sai da espera quando o Claude seguir). */
+  onAnswered(q: ExecutionQuestion): void {
+    this.answeredHere.update((s) => new Set(s).add(q.id));
+    this.planQuestions.update((list) => list.map((x) => (x.id === q.id ? { ...x, ...q } : x)));
+    this.reload();
   }
 
   /** Feed montado só com o item (enquanto o `/live` não chega ou não existe). */

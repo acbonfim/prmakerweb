@@ -31,7 +31,8 @@
       </button>
     </header>
 
-    @if (showStep() || s.alsoWaiting.length || devOps()) {
+    <!-- Recolhido: uma linha só (etapa, DevOps e a publicação num chip) — sobra espaço para a lista e a sessão do item -->
+    @if (showStep() || s.alsoWaiting.length || devOps() || collapsed()) {
       <div class="sit__meta">
         @if (showStep()) {
           <span class="sit__meta-item" [title]="s.planTitle || ''">
@@ -46,10 +47,18 @@
         @for (w of s.alsoWaiting; track w) {
           <span class="sit__chip" title="Também aguardando">+ {{ w }}</span>
         }
+        @if (collapsed()) {
+          <button type="button" class="sit__meta-item sit__meta-btn" (click)="toggleCollapsed()"
+                  matTooltip="Discussion do card no DevOps — mostre os detalhes para ver o que foi publicado ou mudar a publicação">
+            <mat-icon>forum</mat-icon>{{ s.publishedAt ? 'Publicado na discussion em ' + publishedWhen() : 'Ainda não publicado na discussion' }}
+            · <strong>{{ s.autoPost ? 'publicação automática' : 'publicação manual' }}</strong>
+          </button>
+        }
       </div>
     }
 
-    <!-- 0076: discussion do DevOps — o que foi publicado, o que está pronto e a publicação automática -->
+    <!-- 0076: discussion do DevOps — o que foi publicado, o que está pronto e a publicação automática (recolhido: chip acima) -->
+    @if (!collapsed()) {
     <div class="sit__post" role="group" aria-label="Discussion do card no DevOps">
       <div class="sit__post-row">
         <mat-icon class="sit__post-icon">forum</mat-icon>
@@ -111,6 +120,7 @@
         <div class="sit__post-error" role="alert"><mat-icon>error_outline</mat-icon>{{ autoError() }}</div>
       }
     </div>
+    }
 
     @if (s.publishPending && !s.autoPost && s.markdown && !confirmPublish()) {
       <div class="sit__pending" role="status">
@@ -283,7 +293,7 @@
     }
 
     @if (nextHtml()) {
-      <div class="sit__next">
+      <div class="sit__next" [class.sit__next--compact]="collapsed()">
         <mat-icon>arrow_forward</mat-icon>
         <div class="sit__next-body">
           <span class="sit__next-label">Próximo passo</span>
