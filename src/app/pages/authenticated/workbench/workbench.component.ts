@@ -165,6 +165,10 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
  * especialista". `?item=<n>&focus=plan` abre a aba já no plano daquele item.
  */
 const EXEC_ABOUT_KEY = 'wb.execAbout.hidden';
+/** Especialista recolhido para a direita (desktop): lembrado neste navegador. */
+const CHAT_COLLAPSED_KEY = 'wb.chat.collapsed';
+/** Duração da animação de recolher/mostrar a lateral (igual à transição no scss). */
+const CHAT_SLIDE_MS = 320;
 
 function readFlag(key: string): boolean {
   try { return localStorage.getItem(key) === '1'; } catch { return false; }
@@ -339,6 +343,14 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   /** Aviso "Aqui você acompanha…" da Execução: fechado fica lembrado neste navegador; o ⓘ do plano mostra de novo. */
   readonly execAboutHidden = signal(readFlag(EXEC_ABOUT_KEY));
   readonly chatFlash = signal(false);
+  /**
+   * Especialista recolhido (só no desktop — no celular ele é uma aba): a lateral vira uma faixa com a seta para mostrar
+   * de novo. `chatSliding` fica ligado durante a animação (a conversa só sai do layout quando ela termina).
+   */
+  readonly chatCollapsed = signal(readFlag(CHAT_COLLAPSED_KEY));
+  readonly chatSliding = signal(false);
+  readonly chatHidden = computed(() => this.chatCollapsed() && !this.narrow());
+  private slideTimer?: ReturnType<typeof setTimeout>;
 
   // ── Execução do item (0085, rodada 3): a versão é o item de trabalho ────────────────────────
   /** Itens do card que têm plano (lidos aqui para o seletor; a lista de itens tem a sua própria leitura). */
@@ -759,7 +771,18 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Recolhe o Especialista para a direita ou traz de volta (seta no cabeçalho dele / seta na borda). */
+  setChatCollapsed(on: boolean): void {
+    if (this.chatCollapsed() === on) return;
+    clearTimeout(this.slideTimer);
+    this.chatSliding.set(true);
+    this.chatCollapsed.set(on);
+    writeFlag(CHAT_COLLAPSED_KEY, on);
+    this.slideTimer = setTimeout(() => this.chatSliding.set(false), CHAT_SLIDE_MS + 40);
+  }
+
   private flashChat(): void {
+    this.setChatCollapsed(false);
     clearTimeout(this.flashTimer);
     this.chatFlash.set(true);
     setTimeout(() => this.host.nativeElement.querySelector('.wb-chat')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 400);
@@ -959,6 +982,10 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     }
     if (tab !== 'chat' && this.mainTab() !== tab) {
       this.selectMain(tab);
+      return 'changed';
+    }
+    if (tab === 'chat' && this.chatCollapsed()) {
+      this.setChatCollapsed(false);
       return 'changed';
     }
     return 'ready';
