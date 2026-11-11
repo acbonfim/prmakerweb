@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ViewEncapsulation, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, ViewEncapsulation, computed, effect, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -43,6 +43,7 @@ import { WORK_DIALOG_STYLES } from './work-dialog.styles';
 import { WorkItemFilesComponent } from './work-item-files.component';
 import { WorkItemFilesStore } from './work-item-files.store';
 import { WorkDeliverablesComponent } from './work-deliverables.component';
+import { analysisBrief, analysisDeliverables, isAnalysisItem, pickAnalysisFile } from './analysis-overview';
 
 /** Resumo da Visão geral: as entregas que não são PR, por grupo. */
 const SUMMARY_WORDS: Record<DeliverableGroupKey, [string, string]> = {
@@ -113,11 +114,48 @@ export interface WorkItemDialogData {
               @if (it.cancelReason) {
                 <div class="wi-note wi-note--warn"><mat-icon>info</mat-icon><span>Cancelado: {{ it.cancelReason }}</span></div>
               }
-              <section class="wi-sec">
-                <h4 class="wi-sec__title">Descrição</h4>
-                @if (it.description) { <div class="wi-md" [innerHTML]="it.description | planMarkdown:'card'"></div> }
-                @else { <p class="wi-muted wid__p">Sem descrição.</p> }
-              </section>
+              @if (analysis()) {
+                <!-- Card 78262: item de análise — o que vai ser feito, o entregável e a própria análise na tela -->
+                <section class="wi-sec">
+                  <h4 class="wi-sec__title">O que vai ser feito</h4>
+                  @if (it.description) { <div class="wi-md" [innerHTML]="it.description | planMarkdown:'card'"></div> }
+                  @else { <p class="wid__brief">{{ brief() }}</p> }
+                </section>
+                <section class="wi-sec">
+                  <h4 class="wi-sec__title">Entregável</h4>
+                  <ul class="wid__dlv">
+                    @for (d of analysisDeliverables(); track d.title) {
+                      <li class="wid__dlv-item" [class.wid__dlv-item--done]="d.done">
+                        <mat-icon class="wid__dlv-ico">{{ d.done ? 'check_circle' : d.icon }}</mat-icon>
+                        <span class="wid__dlv-main"><b>{{ d.title }}</b><span class="wi-muted">{{ d.detail }}</span></span>
+                        <span class="wid__dlv-st">{{ d.done ? 'Entregue' : 'A fazer' }}</span>
+                      </li>
+                    }
+                  </ul>
+                </section>
+                @if (analysisFile()) {
+                  <section class="wi-sec wid__analysis" aria-label="Análise">
+                    <h4 class="wi-sec__title">Análise
+                      <small class="wi-muted">{{ analysisFile()!.name }}</small>
+                    </h4>
+                    @if (analysisText(); as text) {
+                      <div class="wi-md wid__analysis-body" [innerHTML]="text | planMarkdown:'card'"></div>
+                    } @else if (analysisError()) {
+                      <p class="wi-muted wid__p"><mat-icon>error_outline</mat-icon>{{ analysisError() }}</p>
+                    } @else {
+                      <p class="wi-muted wid__p"><mat-icon class="wi-spin">autorenew</mat-icon>Carregando a análise…</p>
+                    }
+                  </section>
+                } @else if (it.status === 'completed') {
+                  <p class="wi-muted wid__p"><mat-icon>info</mat-icon>A análise está na Timeline do card.</p>
+                }
+              } @else {
+                <section class="wi-sec">
+                  <h4 class="wi-sec__title">Descrição</h4>
+                  @if (it.description) { <div class="wi-md" [innerHTML]="it.description | planMarkdown:'card'"></div> }
+                  @else { <p class="wi-muted wid__p">Sem descrição.</p> }
+                </section>
+              }
               @if (files.count()) {
                 <!-- 0087: o que ajuda a entender o item (análise, mocks, scripts, chamado, imagens) à vista na visão geral -->
                 <section class="wi-sec">
@@ -251,6 +289,18 @@ export interface WorkItemDialogData {
   `,
   styles: [WORK_DIALOG_STYLES, `
     .wid__type { width: 20px; height: 20px; }
+    .wid__brief { margin: 0; font-size: 13px; line-height: 1.5; }
+    .wid__dlv { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .wid__dlv-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px;
+      border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); font-size: 12.5px; line-height: 1.4; }
+    .wid__dlv-ico { font-size: 18px; width: 18px; height: 18px; flex: none; color: var(--cc-text-3); }
+    .wid__dlv-item--done .wid__dlv-ico { color: #3fb950; }
+    .wid__dlv-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .wid__dlv-st { flex: none; font-size: 11px; color: var(--cc-text-3); }
+    .wid__dlv-item--done .wid__dlv-st { color: #3fb950; }
+    .wid__analysis-body { padding: 12px 14px; border-radius: 10px; background: var(--surface-input, #1a1f28);
+      border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); overflow-x: auto; }
+    .wid__analysis .wi-sec__title small { font-weight: 400; margin-left: 6px; }
     .wid__p { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
     .wid__lock { font-size: 15px; width: 15px; height: 15px; }
     .wid__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; }
@@ -340,6 +390,18 @@ export class WorkItemDialogComponent {
     const urls = deliverableUrls(this.deliverables());
     return (it?.links ?? []).filter((l) => !l.url || !urls.has(l.url.trim()));
   });
+  /** Card 78262: item de análise — Visão geral com o que vai ser feito, o entregável e a análise na tela. */
+  readonly analysis = computed(() => isAnalysisItem(this.item()));
+  private readonly us = computed(() => this.data.cardType === 'user-story' || /\bUS\b|hist[oó]ria/i.test(this.item()?.title ?? ''));
+  readonly brief = computed(() => analysisBrief(this.us()));
+  readonly analysisFile = computed(() => (this.analysis() ? pickAnalysisFile(this.files.files()) : null));
+  readonly analysisDeliverables = computed(() => {
+    const it = this.item();
+    return it ? analysisDeliverables(it, this.us(), !!this.analysisFile()) : [];
+  });
+  readonly analysisText = signal<string | null>(null);
+  readonly analysisError = signal<string | null>(null);
+  private analysisKey: string | null = null;
   /** Histórico do mais recente para o mais antigo. */
   readonly logs = computed(() => (this.item()?.logs ?? []).slice().sort((a, b) => (b.at > a.at ? 1 : b.at < a.at ? -1 : b.id - a.id)));
 
@@ -368,6 +430,19 @@ export class WorkItemDialogComponent {
       if (!p || p.number == null || p.number === this.data.number || (p.taskNumber != null && it?.tasks.some((t) => t.number === p.taskNumber))) this.reload();
     });
     inject(DestroyRef).onDestroy(stop);
+    // O texto da análise: busca de novo só quando o arquivo muda (outro arquivo ou regravado).
+    effect(() => {
+      const f = this.analysisFile();
+      const key = f ? `${f.id}|${f.updatedAt ?? f.createdAt ?? ''}` : null;
+      if (key === this.analysisKey) return;
+      this.analysisKey = key;
+      if (!f) { this.analysisText.set(null); return; }
+      this.analysisError.set(null);
+      this.api.fileContent(this.data.number, f).subscribe({
+        next: (blob) => blob.text().then((t) => { if (this.analysisKey === key) this.analysisText.set(t.trim() || null); }),
+        error: () => { if (this.analysisKey === key) this.analysisError.set('Não foi possível carregar a análise — abra pela aba Arquivos.'); }
+      });
+    });
   }
 
   reload(): void {

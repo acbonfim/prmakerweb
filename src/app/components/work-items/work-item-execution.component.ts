@@ -174,10 +174,18 @@ const FLASH_MS = 1_600;
               <span>O Claude parou em <b>{{ num(rt.number) }}</b> esperando você. Resolva o que ele pede e avise para ele continuar.</span>
             </div>
             @if (rt.result) { <div class="wie__unblock-why wie__md" [innerHTML]="rt.result | planMarkdown"></div> }
-            <textarea class="wie__input wie__unblock-note" rows="2" [value]="resolveNote()" (input)="resolveNote.set($any($event.target).value)"
-                      (keydown.control.enter)="resolve(rt)" (keydown.meta.enter)="resolve(rt)"
-                      placeholder="O que você fez (opcional, o Claude lê ao retomar) — ex.: adicionei o alias do banco de DEV"
-                      aria-label="O que você fez para destravar"></textarea>
+            <!-- Nota compacta: uma linha que cresce com o texto; o botão do canto abre uma área maior para escrever com calma -->
+            <div class="wie__unblock-compose" [class.wie__unblock-compose--open]="resolveWide()">
+              <textarea #resolveEl class="wie__unblock-note" rows="1" [value]="resolveNote()" (input)="onResolveInput($any($event.target))"
+                        (keydown.control.enter)="resolve(rt)" (keydown.meta.enter)="resolve(rt)"
+                        placeholder="O que você fez (opcional, o Claude lê ao retomar)"
+                        aria-label="O que você fez para destravar"></textarea>
+              <button mat-icon-button class="wie__unblock-grow" type="button" (click)="toggleResolveWide(resolveEl)"
+                      [matTooltip]="resolveWide() ? 'Diminuir' : 'Aumentar para escrever mais'"
+                      [attr.aria-label]="resolveWide() ? 'Diminuir a nota' : 'Aumentar a nota'" [attr.aria-expanded]="resolveWide()">
+                <mat-icon>{{ resolveWide() ? 'close_fullscreen' : 'open_in_full' }}</mat-icon>
+              </button>
+            </div>
             <div class="wie__unblock-actions">
               <button mat-button (click)="openTask(item()!, rt)">Ver a sub-tarefa</button>
               <button mat-flat-button color="primary" (click)="resolve(rt)" [disabled]="busyTask() === rt.number"
@@ -390,7 +398,18 @@ const FLASH_MS = 1_600;
       background: var(--surface-input, #1a1f28); border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); overflow-wrap: anywhere; }
     .wie__unblock-why ::ng-deep p { display: block; margin: 0 0 6px; }
     .wie__unblock-why ::ng-deep ul { margin: 0 0 6px; padding-left: 18px; }
-    .wie__unblock-note { width: 100%; resize: vertical; min-height: 38px; }
+    .wie__unblock-compose { position: relative; flex: none; }
+    .wie__unblock-note { display: block; width: 100%; box-sizing: border-box; resize: none; overflow-y: hidden; height: 34px; min-height: 34px; max-height: 140px;
+      padding: 7px 38px 7px 10px; border-radius: 8px; font: inherit; font-size: 12.5px; line-height: 18px; color: inherit;
+      background: var(--surface-input, #1a1f28); border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18));
+      transition: height .18s ease, border-color .15s ease, box-shadow .15s ease; }
+    .wie__unblock-note::placeholder { color: var(--cc-text-3); }
+    .wie__unblock-note:focus { outline: none; border-color: color-mix(in srgb, var(--mat-sys-primary) 70%, transparent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mat-sys-primary) 16%, transparent); }
+    .wie__unblock-compose--open .wie__unblock-note { min-height: 160px; max-height: 50vh; resize: vertical; overflow-y: auto; }
+    .wie__unblock-grow.mat-mdc-icon-button { position: absolute; top: 2px; right: 2px; width: 30px; height: 30px; padding: 5px; color: var(--cc-text-3); }
+    .wie__unblock-grow.mat-mdc-icon-button:hover { color: var(--cc-text-1, inherit); }
+    .wie__unblock-grow mat-icon { font-size: 17px; width: 17px; height: 17px; }
     .wie__unblock-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
     .wie__unblock-actions mat-icon { margin-right: 4px; }
     .wie__now { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, #58a6ff 9%, transparent);
@@ -562,6 +581,8 @@ export class WorkItemExecutionComponent {
   readonly resolvable = computed(() => waitingForResolve(this.item()));
   readonly canResolve = (t: WorkTask) => canResolveWait(t);
   readonly resolveNote = signal('');
+  /** "Já resolvi": área maior para escrever a nota (a compacta cresce sozinha até ~7 linhas). */
+  readonly resolveWide = signal(false);
   /** Perguntas do plano do item enquanto ele espera a pessoa (lidas do plano a cada carga do item em espera). */
   private plans = inject(ExecutionPlanService);
   private readonly planQuestions = signal<ExecutionQuestion[]>([]);
@@ -748,6 +769,7 @@ export class WorkItemExecutionComponent {
     this.celebrate.set(false);
     this.unseen.set(false);
     this.resolveNote.set('');
+    this.resolveWide.set(false);
     this.planQuestions.set([]);
     this.answeredHere.set(new Set());
     this.questionsKey = null;
@@ -984,7 +1006,30 @@ export class WorkItemExecutionComponent {
     this.busyTask.set(null);
     if (!it) return;
     this.resolveNote.set('');
+    this.resolveWide.set(false);
     this.afterTicket(it);
+  }
+
+  onResolveInput(el: HTMLTextAreaElement): void {
+    this.resolveNote.set(el.value);
+    this.fitResolve(el);
+  }
+
+  toggleResolveWide(el: HTMLTextAreaElement): void {
+    this.resolveWide.update((v) => !v);
+    // Depois da classe aplicada: a altura parte do mínimo do modo novo.
+    setTimeout(() => { this.fitResolve(el); el.focus(); });
+  }
+
+  /** A nota cresce com o texto até o limite do CSS (compacta ~7 linhas; aberta metade da tela) e rola dali em diante. */
+  private fitResolve(el: HTMLTextAreaElement): void {
+    const css = getComputedStyle(el);
+    const min = parseFloat(css.minHeight) || 34;
+    const max = parseFloat(css.maxHeight) || 140;
+    el.style.height = 'auto';
+    const h = Math.min(Math.max(el.scrollHeight + 2, min), max);
+    el.style.height = `${h}px`;
+    el.style.overflowY = el.scrollHeight + 2 > max ? 'auto' : 'hidden';
   }
 
   async taskAct(t: WorkTask, a: WorkTaskAction): Promise<void> {
