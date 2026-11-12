@@ -18,10 +18,8 @@
     } @else if (chat()?.sessionHost) {
       <span class="cc__chip" matTooltip="Máquina onde vive a sessão do especialista (executor separado do tratamento)"><mat-icon>dns</mat-icon>{{ chat()!.sessionHost }}</span>
     }
-    @if (tokensLabel(); as t) {
-      <span class="cc__chip cc__chip--hide-sm" [matTooltip]="'Entrada ' + (chat()!.inputTokens | number) + ' · saída ' + (chat()!.outputTokens | number) + ' tokens nesta conversa'">
-        <mat-icon>token</mat-icon>{{ t }} tokens
-      </span>
+    @if (usage(); as u) {
+      <app-token-usage class="cc__chip--hide-sm" [usage]="u" xPosition="before" />
     }
     <span class="cc__people" aria-label="Pessoas na conversa">
       @for (p of people().slice(0, 5); track p.name) {
@@ -79,13 +77,14 @@
             </div>
           }
 
-          @for (m of messages(); track m.id; let i = $index) {
+          @for (m of messages(); track m.key; let i = $index) {
             @if (newDay(i)) { <div class="cc__day">{{ m.createdAt | date: 'dd/MM/yyyy' }}</div> }
 
             @if (m.authorKind === 'system') {
               <div class="cc__sys"><mat-icon>info</mat-icon><span class="plan-md" [innerHTML]="m.text | planMarkdown:'case'"></span><time>{{ m.createdAt | date: 'HH:mm' }}</time></div>
             } @else {
-              <article class="msg" [class.msg--mine]="isMine(m)" [class.msg--spec]="m.authorKind === 'specialist'">
+              <article class="msg" [class.msg--mine]="isMine(m)" [class.msg--spec]="m.authorKind === 'specialist'" [attr.data-key]="m.key"
+                       [class.msg--in]="fresh.has(m.key)" [class.msg--out]="!!m.outgoing" [class.msg--failed]="m.outgoing === 'failed'">
                 @if (m.authorKind === 'specialist') {
                   <span class="sp-av"><mat-icon>psychology</mat-icon></span>
                 } @else {
@@ -121,6 +120,14 @@
                       <div class="msg__transcript">{{ m.transcript ? '“' + m.transcript + '”' : 'Sem transcrição — o navegador não transcreveu este áudio.' }}</div>
                     }
                     @if (m.text) { <div class="plan-md msg__text" [innerHTML]="m.text | planMarkdown:'case'"></div> }
+                    @if (m.localFiles?.length) {
+                      <div class="msg__files">
+                        @for (f of m.localFiles; track $index) {
+                          @if (f.preview) { <span class="msg__img msg__img--up"><img [src]="f.preview" [alt]="f.name"></span> }
+                          @else { <span class="msg__file"><mat-icon>upload_file</mat-icon>{{ f.name }}</span> }
+                        }
+                      </div>
+                    }
 
                     @if (m.files.length && m.kind !== 'voice') {
                       <div class="msg__files">
@@ -187,7 +194,25 @@
                         }
                       </div>
                     }
+                    @if (isMine(m)) {
+                      @let d = delivery(m);
+                      <span class="tick tick--{{ d }}" [matTooltip]="deliveryLabel(m)" [attr.aria-label]="deliveryLabel(m)" role="img">
+                        @switch (d) {
+                          @case ('sending') { <mat-icon>schedule</mat-icon> }
+                          @case ('failed') { <mat-icon>error_outline</mat-icon> }
+                          @case ('read') { <mat-icon>done_all</mat-icon> }
+                          @default { <mat-icon>done</mat-icon> }
+                        }
+                      </span>
+                    }
                   </div>
+                  @if (m.outgoing === 'failed') {
+                    <div class="msg__retry">
+                      <button type="button" (click)="retry(m)"><mat-icon>refresh</mat-icon>Tentar de novo</button>
+                      <button type="button" (click)="discard(m)" matTooltip="Desistir (o texto volta para o campo)"><mat-icon>close</mat-icon>Descartar</button>
+                    </div>
+                  }
+                  @if (!m.outgoing) {
                   <div class="msg__tools">
                     <button type="button" (click)="reply(m)" matTooltip="Responder citando esta mensagem"><mat-icon>reply</mat-icon></button>
                     <button type="button" (click)="pin(m)" matTooltip="Fixar como ponto combinado"><mat-icon>push_pin</mat-icon></button>
@@ -198,6 +223,7 @@
                       <button type="button" (click)="remove(m)" matTooltip="Apagar"><mat-icon>delete</mat-icon></button>
                     }
                   </div>
+                  }
                 </div>
               </article>
             }
@@ -239,9 +265,14 @@
 
       <!-- Compositor -->
       <div class="comp">
+        @if (!sticky.atEnd() && messages().length) {
+          <button type="button" class="cc__jump" (click)="toEnd()" matTooltip="Ir para a mensagem mais nova" aria-label="Ir para a mensagem mais nova">
+            <mat-icon>keyboard_arrow_down</mat-icon>
+          </button>
+        }
         <div class="comp__quick">
           @for (q of quick; track q.label) {
-            <button type="button" (click)="quickSend(q.text)" [disabled]="sending()"><mat-icon>{{ q.icon }}</mat-icon>{{ q.label }}</button>
+            <button type="button" (click)="quickSend(q.text)"><mat-icon>{{ q.icon }}</mat-icon>{{ q.label }}</button>
           }
         </div>
         @if (replyTo(); as r) {
@@ -297,8 +328,8 @@
             @if (canRecord) {
               <button mat-icon-button (click)="startVoice()" matTooltip="Mensagem de voz" aria-label="Gravar mensagem de voz"><mat-icon>mic</mat-icon></button>
             }
-            <button mat-mini-fab class="comp__send" (click)="send()" [disabled]="sending() || (!draft.trim() && !pending().length)" aria-label="Enviar">
-              <mat-icon>{{ sending() ? 'hourglass_top' : 'send' }}</mat-icon>
+            <button mat-mini-fab class="comp__send" [class.comp__send--go]="launching()" (click)="send()" [disabled]="!draft.trim() && !pending().length" aria-label="Enviar">
+              <mat-icon>send</mat-icon>
             </button>
           </div>
         }
@@ -358,7 +389,7 @@
             @if (pendingProposal(); as p) {
               <button mat-flat-button color="primary" class="aside__btn" (click)="openProposal(p)"><mat-icon>difference</mat-icon>Ver a proposta #{{ p.number }}</button>
             } @else {
-              <button mat-flat-button color="primary" class="aside__btn" (click)="send('Pode gerar a nova versão do plano com o que combinamos?')" [disabled]="sending() || !messages().length">
+              <button mat-flat-button color="primary" class="aside__btn" (click)="send('Pode gerar a nova versão do plano com o que combinamos?')" [disabled]="!messages().length">
                 <mat-icon>auto_awesome</mat-icon>Gerar nova versão do plano</button>
             }
             <span class="aside__hint aside__hint--center">usa os pontos combinados ({{ agreedPoints() }}) · você revisa antes de valer</span>

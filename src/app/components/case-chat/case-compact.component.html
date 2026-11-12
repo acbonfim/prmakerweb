@@ -86,12 +86,13 @@
         </div>
       } @else {
         @if (chat()?.hasMore) { <button type="button" class="ck__more" (click)="expand()">Mensagens anteriores na conversa grande</button> }
-        @for (m of messages(); track m.id; let i = $index) {
+        @for (m of messages(); track m.key; let i = $index) {
           @if (newDay(i)) { <div class="ck__day">{{ m.createdAt | date: 'dd/MM' }}</div> }
           @if (m.authorKind === 'system') {
             <div class="ck__sys"><mat-icon>info</mat-icon><span class="plan-md" [innerHTML]="m.text | planMarkdown:'case'"></span></div>
           } @else {
-            <article class="km" [class.km--mine]="isMine(m)" [class.km--spec]="m.authorKind === 'specialist'">
+            <article class="km" [class.km--mine]="isMine(m)" [class.km--spec]="m.authorKind === 'specialist'" [attr.data-key]="m.key"
+                     [class.km--in]="fresh.has(m.key)" [class.km--out]="!!m.outgoing" [class.km--failed]="m.outgoing === 'failed'">
               @if (m.authorKind === 'specialist') { <span class="sp-av sp-av--sm"><mat-icon>psychology</mat-icon></span> }
               @else { <app-user-avatar [name]="m.authorName" [imageUrl]="photos.photo(m.authorUserId)" [size]="24"></app-user-avatar> }
               <div class="km__col">
@@ -113,6 +114,14 @@
                   }
                   @if (m.kind === 'voice') { <div class="km__transcript">“{{ m.transcript || 'áudio sem transcrição' }}”</div> }
                   @if (m.text) { <div class="plan-md km__text" [innerHTML]="m.text | planMarkdown:'case'"></div> }
+                  @if (m.localFiles?.length) {
+                    <div class="km__files">
+                      @for (f of m.localFiles; track $index) {
+                        @if (f.preview) { <span class="km__img km__img--up"><img [src]="f.preview" [alt]="f.name"></span> }
+                        @else { <span class="km__file"><mat-icon>upload_file</mat-icon><span>{{ f.name }}</span></span> }
+                      }
+                    </div>
+                  }
                   @if (m.files.length && m.kind !== 'voice') {
                     <div class="km__files">
                       @for (f of m.files; track f.id) {
@@ -134,8 +143,27 @@
                   @if (actionOf(m); as a) {
                     <div class="km__card km__card--act"><mat-icon>bolt</mat-icon><span><b>Ação #{{ a.number }}</b> · {{ a.title }}<small>{{ a.status === 'pending' ? 'aguardando confirmação' : a.status === 'done' ? 'feita' : a.status === 'failed' ? 'falhou' : a.status === 'confirmed' ? 'executando' : 'não autorizada' }}</small></span></div>
                   }
+                  @if (isMine(m)) {
+                    @let d = delivery(m);
+                    <span class="tick tick--{{ d }}" [matTooltip]="deliveryLabel(m)" [attr.aria-label]="deliveryLabel(m)" role="img">
+                      @switch (d) {
+                        @case ('sending') { <mat-icon>schedule</mat-icon> }
+                        @case ('failed') { <mat-icon>error_outline</mat-icon> }
+                        @case ('read') { <mat-icon>done_all</mat-icon> }
+                        @default { <mat-icon>done</mat-icon> }
+                      }
+                    </span>
+                  }
                 </div>
-                <button type="button" class="km__reply" (click)="reply(m)" matTooltip="Responder a esta mensagem" aria-label="Responder"><mat-icon>reply</mat-icon></button>
+                @if (m.outgoing === 'failed') {
+                  <div class="km__retry">
+                    <button type="button" (click)="retry(m)"><mat-icon>refresh</mat-icon>Tentar de novo</button>
+                    <button type="button" (click)="discard(m)" matTooltip="Desistir (o texto volta para o campo)"><mat-icon>close</mat-icon>Descartar</button>
+                  </div>
+                }
+                @if (!m.outgoing) {
+                  <button type="button" class="km__reply" (click)="reply(m)" matTooltip="Responder a esta mensagem" aria-label="Responder"><mat-icon>reply</mat-icon></button>
+                }
               </div>
             </article>
           }
@@ -150,6 +178,11 @@
     </div>
 
     <div class="ck__composer" data-tour="case-composer">
+      @if (!sticky.atEnd() && messages().length) {
+        <button type="button" class="ck__jump" (click)="toEnd()" matTooltip="Ir para a mensagem mais nova" aria-label="Ir para a mensagem mais nova">
+          <mat-icon>keyboard_arrow_down</mat-icon>
+        </button>
+      }
       @if (replyTo(); as r) {
         <div class="ck__replying"><mat-icon>reply</mat-icon><span>{{ quoted(r.number) }}</span><button mat-icon-button (click)="clearReply()" aria-label="Cancelar resposta"><mat-icon>close</mat-icon></button></div>
       }
@@ -175,7 +208,7 @@
         <textarea #box class="ck__box" rows="1" [(ngModel)]="draft" (keydown)="onKey($event)" (input)="onInput()"
                   (click)="onCaret()" (keyup)="onCaret($event)" (blur)="composer.hide()"
                   [placeholder]="working() ? 'Escreva — ele lê quando terminar' : 'Pergunte ao especialista… (/ comandos, # item)'" aria-label="Mensagem para o especialista"></textarea>
-        <button mat-icon-button class="ck__send" (click)="send()" [disabled]="sending() || (!draft.trim() && !pending().length)" matTooltip="Enviar (Enter)" aria-label="Enviar">
+        <button mat-icon-button class="ck__send" [class.ck__send--go]="launching()" (click)="send()" [disabled]="!draft.trim() && !pending().length" matTooltip="Enviar (Enter)" aria-label="Enviar">
           <mat-icon>send</mat-icon>
         </button>
       </div>

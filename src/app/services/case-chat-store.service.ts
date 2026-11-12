@@ -4,13 +4,32 @@ import { WsService } from './ws.service';
 import { StorageService } from './storage.service';
 import { CaseChatService } from './case-chat.service';
 import { executionPlanGroup } from '../components/execution-plan/execution-plan.model';
-import { CASE_CHAT_EVENT, CaseChat, CaseChatRealtimePayload, CaseFile, CaseMessage, isRunActive } from '../components/case-chat/case-chat.model';
+import {
+  CASE_CHAT_EVENT, CaseChat, CaseChatRealtimePayload, CaseDelivery, CaseFile, CaseMessage, CaseViewMessage, isRunActive
+} from '../components/case-chat/case-chat.model';
 
 /** Arquivo escolhido/colado e ainda não enviado (fica no rascunho da conversa). */
 export interface PendingFile {
   id: number;
   file: File;
   preview: string | null;
+}
+
+/** Mensagem que saiu deste navegador e ainda não foi gravada (envio otimista: aparece na conversa na hora). */
+interface OutboxEntry {
+  key: string;
+  /** Última mensagem do servidor quando saiu — a gravada vem depois dela (acha a mesma se o evento chegar antes da resposta). */
+  base: number;
+  text: string;
+  files: File[];
+  previews: { name: string; preview: string | null }[];
+  peopleOnly: boolean;
+  deep: boolean;
+  replyTo: number | null;
+  createdAt: string;
+  status: 'sending' | 'failed';
+  posting: boolean;
+  onError?: (message: string, err: unknown) => void;
 }
 
 /**
@@ -34,6 +53,12 @@ export interface CaseRoom {
   draft: { text: string; peopleOnly: boolean; deep: boolean };
   /** Rolagem do modal quando foi fechado (null = no fim). */
   scrollTop: number | null;
+  /** Saindo deste navegador (⏱) ou que falharam (tentar de novo). */
+  readonly outbox: WritableSignal<OutboxEntry[]>;
+  /** Id da mensagem gravada → chave da bolha otimista (a bolha continua a mesma, sem piscar). */
+  readonly keys: Map<string, string>;
+  /** Mensagens na tela: as do servidor e, no fim, as que estão saindo. */
+  readonly view: Signal<CaseViewMessage[]>;
 }
 
 export interface CaseChatStatus {
@@ -53,6 +78,7 @@ const SEEN_KEY = (card: string) => `prmake.case-seen.${card}`;
 /** Conversas guardadas em memória (as mais usadas); a mais antiga sai e libera as imagens. */
 const MAX_ROOMS = 6;
 const RELOAD_DEBOUNCE_MS = 200;
+const SEEN_DEBOUNCE_MS = 800;
 
 /**
  * 0081: estado da conversa do Especialista do caso por card, mantido em memória enquanto o app está aberto e
@@ -63,7 +89,10 @@ const RELOAD_DEBOUNCE_MS = 200;
 export class CaseChatStore {
   private api = inject(CaseChatService);
   private ws = inject(WsService);
-  readonly myId = (inject(StorageService).getAccess()?.user?.externalId ?? '').toLowerCase();
+  private readonly me = inject(StorageService).getAccess()?.user ?? null;
+  readonly myId = (this.me?.externalId ?? '').toLowerCase();
+  /** Nome na bolha otimista (avatar com as iniciais/foto de quem escreveu, como a gravada). */
+  private readonly myName = this.me?.fullName || this.me?.name || 'Você';
 
   private readonly rooms = new Map<string, CaseRoom>();
   private readonly statuses = new Map<string, Signal<CaseChatStatus>>();
@@ -73,6 +102,9 @@ export class CaseChatStore {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly inflight = new Set<string>();
   private readonly loadingBlobs = new Set<string>();
+  private readonly seenPosted = new Map<string, number>();
+  private readonly seenWanted = new Map<string, number>();
+  private readonly seenTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private listening = false;
   private fileSeq = 0;
 
@@ -84,9 +116,12 @@ export class CaseChatStore {
       this.rooms.set(card, r);
       return r;
     }
+    const chat = signal<CaseChat | null>(null);
+    const outbox = signal<OutboxEntry[]>([]);
+    const keys = new Map<string, string>();
     r = {
       card,
-      chat: signal<CaseChat | null>(null),
+      chat,
       loading: signal(true),
       loadError: signal(false),
       typing: signal<Record<string, number>>({}),
@@ -95,7 +130,13 @@ export class CaseChatStore {
       replyTo: signal<CaseMessage | null>(null),
       pending: signal<PendingFile[]>([]),
       draft: { text: '', peopleOnly: false, deep: false },
-      scrollTop: null
+      scrollTop: null,
+      outbox,
+      keys,
+      view: computed<CaseViewMessage[]>(() => {
+        const server = (chat()?.messages ?? []).map((m) => ({ ...m, key: keys.get(m.id) ?? m.id }));
+        return [...server, ...outbox().map((e) => this.localMessage(e))];
+      })
     };
     this.rooms.set(card, r);
     this.evict();
@@ -163,9 +204,24 @@ export class CaseChatStore {
 
   markSeen(card: string, number: number): void {
     const room = this.room(card);
+    this.postSeen(card, number);
     if (number <= room.seen()) return;
     try { localStorage.setItem(SEEN_KEY(card), `${number}`); } catch { /* sem storage */ }
     room.seen.set(number);
+  }
+
+  /** Avisa o servidor (o ✓✓ de quem escreveu) — junta as marcações seguidas numa chamada só. */
+  private postSeen(card: string, number: number): void {
+    if (!number || number <= (this.seenPosted.get(card) ?? 0)) return;
+    this.seenWanted.set(card, Math.max(number, this.seenWanted.get(card) ?? 0));
+    if (this.seenTimers.has(card)) return;
+    this.seenTimers.set(card, setTimeout(() => {
+      this.seenTimers.delete(card);
+      const n = this.seenWanted.get(card) ?? 0;
+      if (n <= (this.seenPosted.get(card) ?? 0)) return;
+      this.seenPosted.set(card, n);
+      this.api.seen(card, n).subscribe({ error: () => this.seenPosted.set(card, 0) });
+    }, SEEN_DEBOUNCE_MS));
   }
 
   isMine(m: CaseMessage): boolean {
@@ -194,21 +250,75 @@ export class CaseChatStore {
     room.pending.set(room.pending().filter((x) => x.id !== p.id));
   }
 
-  /** Manda o rascunho (ou `text`, sem mexer no rascunho). No sucesso limpa o que foi enviado e mostra na hora. */
-  send(card: string, text?: string): Observable<CaseMessage> | null {
+  /**
+   * Manda o rascunho (ou `text`, sem mexer no rascunho) como no WhatsApp: a mensagem vai para a conversa na hora (⏱),
+   * o campo fica livre para a próxima e o servidor confirma depois (✓). Saem em ordem, uma de cada vez. Falhou: a bolha
+   * fica marcada com "tentar de novo" e `onError` avisa. Devolve false se não havia o que mandar.
+   */
+  send(card: string, text?: string, onError?: (message: string, err: unknown) => void): boolean {
     const room = this.room(card);
     const body = (text ?? room.draft.text).trim();
-    const files = room.pending().map((p) => p.file);
-    if (!body && !files.length) return null;
-    return this.api.post(card, {
-      text: body, files, peopleOnly: room.draft.peopleOnly, deep: room.draft.deep, replyTo: room.replyTo()?.number ?? null
-    }).pipe(tap((m) => {
-      if (text === undefined) room.draft.text = '';
-      room.draft.deep = false;
-      this.clearPending(room);
-      room.replyTo.set(null);
-      this.appendMine(card, m);
-    }));
+    const pending = room.pending();
+    if (!body && !pending.length) return false;
+    const entry: OutboxEntry = {
+      key: `local-${++this.fileSeq}-${Date.now()}`,
+      base: room.chat()?.messages.at(-1)?.number ?? 0,
+      text: body,
+      files: pending.map((p) => p.file),
+      previews: pending.map((p) => ({ name: p.file.name, preview: p.preview })),
+      peopleOnly: room.draft.peopleOnly,
+      deep: room.draft.deep,
+      replyTo: room.replyTo()?.number ?? null,
+      createdAt: new Date().toISOString(),
+      status: 'sending',
+      posting: false,
+      onError
+    };
+    if (text === undefined) room.draft.text = '';
+    room.draft.deep = false;
+    // As prévias seguem com a bolha (liberadas quando o servidor confirmar).
+    room.pending.set([]);
+    room.replyTo.set(null);
+    room.outbox.update((list) => [...list, entry]);
+    this.pump(card);
+    return true;
+  }
+
+  /** Falhou: tenta de novo (volta para a fila, na ordem). */
+  retry(card: string, key: string): void {
+    const room = this.room(card);
+    room.outbox.update((list) => list.map((e) => e.key === key ? { ...e, status: 'sending' as const } : e));
+    this.pump(card);
+  }
+
+  /** Desiste da mensagem que falhou; o texto volta para o campo se ele estiver vazio. */
+  discard(card: string, key: string): void {
+    const room = this.room(card);
+    const entry = room.outbox().find((e) => e.key === key);
+    if (!entry || entry.posting) return;
+    room.outbox.update((list) => list.filter((e) => e.key !== key));
+    if (!room.draft.text.trim()) room.draft.text = entry.text;
+    for (const p of entry.previews) if (p.preview) URL.revokeObjectURL(p.preview);
+  }
+
+  /** ⏱ enviando · ✓ recebida pelo servidor · ✓✓ lida pelo especialista ou por outra pessoa. */
+  delivery(card: string, m: CaseViewMessage): CaseDelivery {
+    if (m.outgoing) return m.outgoing;
+    return this.readBy(card, m).length ? 'read' : 'sent';
+  }
+
+  /** Quem já leu a mensagem (o especialista e/ou outras pessoas). */
+  readBy(card: string, m: CaseMessage): string[] {
+    const c = this.room(card).chat();
+    if (!c || !m.number) return [];
+    const who: string[] = [];
+    if ((c.specialistReadNumber ?? 0) >= m.number) who.push('Especialista');
+    const author = (m.authorUserId ?? '').toLowerCase();
+    for (const r of c.readers ?? []) {
+      const id = (r.userId ?? '').toLowerCase();
+      if (r.number >= m.number && id !== author && id !== this.myId) who.push(r.name.split(' ')[0]);
+    }
+    return who;
   }
 
   /** Mensagem própria aparece antes do evento do servidor (que depois recarrega e confirma). */
@@ -257,6 +367,7 @@ export class CaseChatStore {
         room.loading.set(false);
         room.loadError.set(false);
         room.chat.set(c);
+        this.reconcile(room);
       },
       error: () => {
         this.inflight.delete(card);
@@ -282,10 +393,84 @@ export class CaseChatStore {
         return;
       }
     }
+    if (p.action === 'seen') {
+      // ✓✓ na hora, sem recarregar a conversa.
+      const c = room.chat();
+      const n = p.number ?? 0;
+      if (!c || !n) return;
+      if (p.specialist) {
+        if (n > (c.specialistReadNumber ?? 0)) room.chat.set({ ...c, specialistReadNumber: n });
+        return;
+      }
+      if (!p.userId) return;
+      const id = p.userId.toLowerCase();
+      const readers = [...(c.readers ?? [])];
+      const i = readers.findIndex((r) => r.userId.toLowerCase() === id);
+      if (i >= 0 && readers[i].number >= n) return;
+      const entry = { userId: p.userId, name: p.by ?? readers[i]?.name ?? '', number: n, at: new Date().toISOString() };
+      if (i >= 0) readers[i] = entry; else readers.push(entry);
+      room.chat.set({ ...c, readers });
+      return;
+    }
     // A mensagem chegou: quem escreveu parou de digitar.
     if (p.action === 'message') room.typing.set({});
     this.reload(card);
   };
+
+  /** Manda a próxima da fila (uma de cada vez: a ordem na conversa é a ordem em que a pessoa escreveu). */
+  private pump(card: string): void {
+    const room = this.room(card);
+    if (room.outbox().some((e) => e.posting)) return;
+    const next = room.outbox().find((e) => e.status === 'sending');
+    if (!next) return;
+    const mark = (patch: Partial<OutboxEntry>) => room.outbox.update((list) => list.map((e) => e.key === next.key ? { ...e, ...patch } : e));
+    mark({ posting: true });
+    this.api.post(card, {
+      text: next.text, files: next.files, peopleOnly: next.peopleOnly, deep: next.deep, replyTo: next.replyTo
+    }).subscribe({
+      next: (m) => {
+        room.keys.set(m.id, next.key);
+        room.outbox.update((list) => list.filter((e) => e.key !== next.key));
+        for (const p of next.previews) if (p.preview) URL.revokeObjectURL(p.preview);
+        this.appendMine(card, m);
+        this.pump(card);
+      },
+      error: (err) => {
+        mark({ posting: false, status: 'failed' });
+        next.onError?.('Não foi possível enviar a mensagem — toque em tentar de novo.', err);
+        this.pump(card);
+      }
+    });
+  }
+
+  /**
+   * O evento do servidor pode chegar antes da resposta do envio (ou a resposta se perdeu e a mensagem foi gravada): a
+   * gravada já está na lista. A bolha otimista passa a apontar para ela (mesma chave) e sai da fila.
+   */
+  private reconcile(room: CaseRoom): void {
+    const out = room.outbox();
+    if (!out.length) return;
+    const server = room.chat()?.messages ?? [];
+    const taken = new Set(room.keys.keys());
+    const done: string[] = [];
+    for (const e of out) {
+      const m = server.find((x) => !taken.has(x.id) && x.number > e.base && this.isMine(x) && x.text.trim() === e.text);
+      if (!m) continue;
+      taken.add(m.id);
+      room.keys.set(m.id, e.key);
+      done.push(e.key);
+    }
+    // Mesmo com o envio no ar: a resposta dele só confirma (appendMine não repete).
+    if (done.length) room.outbox.update((list) => list.filter((e) => !done.includes(e.key)));
+  }
+
+  private localMessage(e: OutboxEntry): CaseViewMessage {
+    return {
+      id: e.key, key: e.key, number: 0, authorKind: 'person', authorUserId: this.me?.externalId || null, authorName: this.myName, kind: 'text',
+      text: e.text, transcript: null, peopleOnly: e.peopleOnly, deep: e.deep, mentions: [], steps: [], replyToNumber: e.replyTo,
+      createdAt: e.createdAt, files: [], outgoing: e.status, localFiles: e.previews
+    };
+  }
 
   private evict(): void {
     for (const [card, room] of this.rooms) {
