@@ -123,18 +123,58 @@ export interface CaseChat {
   knows: string[];
   run?: ExecutionRequest | null;
   sessionHost?: string | null;
+  /** Acumulado desde que a conversa existe (a entrada soma o cache lido). */
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  /** Consumo desde o último /clear, com a entrada separada (nova, cache lido, cache escrito). */
+  usage?: CaseUsage | null;
+  /** Última mensagem que o especialista leu (✓✓ nas mensagens para ele). */
+  specialistReadNumber?: number;
+  /** Até onde cada pessoa viu a conversa (✓✓ de quem escreveu). */
+  readers?: CaseReader[];
   canDecide: boolean;
   hasPlan: boolean;
   serverTime: string;
 }
 
+export interface CaseUsage {
+  since?: string | null;
+  responses: number;
+  inputTokens: number;
+  outputTokens: number;
+  freshInputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+}
+
+export interface CaseReader {
+  userId: string;
+  name: string;
+  number: number;
+  at: string;
+}
+
+/**
+ * Mensagem na tela: as do servidor e as que ainda estão saindo deste navegador (envio otimista, como no WhatsApp).
+ * `key` é estável do rascunho até a mensagem gravada — a bolha não pisca nem anima de novo quando o servidor confirma.
+ */
+export type CaseViewMessage = CaseMessage & {
+  key: string;
+  /** Só nas que ainda não chegaram ao servidor. */
+  outgoing?: 'sending' | 'failed';
+  /** Prévia dos arquivos que estão subindo. */
+  localFiles?: { name: string; preview: string | null }[];
+};
+
+/** Estado da entrega de uma mensagem minha: ⏱ enviando · ✓ o servidor recebeu · ✓✓ lida (especialista ou outra pessoa). */
+export type CaseDelivery = 'sending' | 'failed' | 'sent' | 'read';
+
 /** Sinal de tempo real da conversa (grupo do card `execplan:{card}`). */
 export interface CaseChatRealtimePayload {
   cardNumber: string;
-  action: 'message' | 'edited' | 'deleted' | 'typing' | 'run' | 'activity' | 'point' | 'proposal' | 'action';
+  action: 'message' | 'edited' | 'deleted' | 'typing' | 'seen' | 'run' | 'activity' | 'point' | 'proposal' | 'action' | 'cleared';
   number?: number;
   requestId?: string;
   status?: string;
@@ -142,6 +182,8 @@ export interface CaseChatRealtimePayload {
   recent?: { label: string; tool?: string | null; at: string }[];
   by?: string;
   userId?: string | null;
+  /** `seen` do especialista (leu até `number`). */
+  specialist?: boolean;
 }
 
 export const CASE_CHAT_EVENT = 'caseChatUpdated';

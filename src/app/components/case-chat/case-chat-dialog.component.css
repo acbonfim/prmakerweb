@@ -136,7 +136,7 @@
 .act__detail { font-size: 12.5px; margin-bottom: 8px; }
 
 /* compositor */
-.comp { flex: none; padding: 8px 16px 10px; border-top: 1px solid var(--cc-line); background: var(--surface-2, #323232); display: flex; flex-direction: column; gap: 7px; }
+.comp { position: relative; flex: none; padding: 8px 16px 10px; border-top: 1px solid var(--cc-line); background: var(--surface-2, #323232); display: flex; flex-direction: column; gap: 7px; }
 .comp__quick { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .comp__quick button { white-space: nowrap; color: var(--mat-sys-on-surface); border-color: var(--cc-line); background: color-mix(in srgb, var(--mat-sys-on-surface) 4%, transparent); }
 .comp__quick mat-icon { font-size: 15px; width: 15px; height: 15px; color: var(--spec); }
@@ -215,6 +215,45 @@
   .msg { max-width: 100%; }
   .comp { padding: 6px 8px 8px; }
 }
+/* Envio como no WhatsApp: a bolha aparece na hora (⏱ → ✓ → ✓✓), mensagens novas entram animadas. */
+.msg--in { animation: msg-in .34s cubic-bezier(.2,.8,.25,1.15) both; }
+.msg--in.msg--mine { animation-name: msg-in-mine; }
+.msg--out .msg__bubble { opacity: .85; }
+.msg--failed .msg__bubble { outline: 1px solid rgba(248,81,73,.6); opacity: 1; }
+.msg--mine .msg__bubble { padding-right: 32px; }
+.tick { position: absolute; right: 8px; bottom: 5px; display: inline-flex; line-height: 0; opacity: .7; }
+.tick mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.tick--sending mat-icon { animation: tick-clock 1.6s linear infinite; }
+.tick--sent mat-icon { animation: tick-pop .28s ease-out; }
+.tick--read { opacity: 1; color: #53bdeb; }
+.tick--read mat-icon { animation: tick-pop .34s cubic-bezier(.3,1.6,.5,1); }
+.tick--failed { opacity: 1; color: #f85149; }
+.msg__retry { display: flex; gap: 10px; margin-top: 4px; }
+.msg__retry button { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; padding: 0; color: #f0883e; font: inherit; font-size: 12px; cursor: pointer; }
+.msg__retry button:last-child { color: var(--cc-muted); }
+.msg__retry mat-icon { font-size: 15px; width: 15px; height: 15px; }
+.msg__img--up { position: relative; cursor: default; }
+.msg__img--up::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), transparent);
+  background-size: 200% 100%; animation: msg-upload 1.1s linear infinite; }
+.cc__jump { position: absolute; right: 22px; bottom: calc(100% + 10px); z-index: 3; width: 36px; height: 36px; border-radius: 50%; border: 0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--mat-sys-on-surface); background: var(--surface-2, #323232);
+  box-shadow: 0 3px 12px rgba(0,0,0,.35); animation: msg-in .2s ease-out both; }
+.comp__send { transition: transform .15s ease; }
+.comp__send:not([disabled]):active { transform: scale(.9); }
+.comp__send--go mat-icon { animation: send-go .45s cubic-bezier(.3,.7,.3,1); }
+
+@keyframes msg-in { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes msg-in-mine { from { opacity: 0; transform: translate(10px, 12px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes tick-pop { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.25); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes tick-clock { to { transform: rotate(360deg); } }
+@keyframes msg-upload { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes send-go {
+  0% { transform: none; }
+  45% { transform: translate(16px, -12px) rotate(-18deg); opacity: 0; }
+  46% { transform: translate(-14px, 8px); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
   .sp-av--pulse, .rec-dot, .cc__spin, .dots i { animation: none; }
+  .msg--in, .cc__jump, .tick mat-icon, .comp__send--go mat-icon, .msg__img--up::after { animation: none !important; }
 }

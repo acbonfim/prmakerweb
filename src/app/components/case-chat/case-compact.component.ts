@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnDestroy, ViewChild, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { Component, ElementRef, Injector, OnDestroy, ViewChild, afterNextRender, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,7 +13,8 @@ import { planApiError } from '../../services/execution-plan.service';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
-import { CaseAction, CaseFile, CaseMessage, CaseProposal, SPECIALIST_NAME, isRunActive } from './case-chat.model';
+import { CaseAction, CaseDelivery, CaseFile, CaseMessage, CaseProposal, CaseViewMessage, SPECIALIST_NAME, isRunActive } from './case-chat.model';
+import { StickyScroll, flyToChat } from './chat-motion';
 import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-proposal-dialog.component';
 import { openCaseChat } from './open-case-chat';
 import { CaseComposer, CaseComposerService } from './case-composer.service';
@@ -60,16 +61,28 @@ export class CaseCompactComponent implements OnDestroy {
   /** 0090: `/` comandos e ferramentas, `#` itens de trabalho (o mesmo do modal). */
   readonly composer = new CaseComposer(this.composerSvc, () => this.card(), () => this.cardType());
 
-  @ViewChild('scroll') private scrollRef?: ElementRef<HTMLDivElement>;
+  @ViewChild('scroll') private set scrollEl(ref: ElementRef<HTMLDivElement> | undefined) {
+    this.scrollRef = ref;
+    if (ref) this.sticky.attach(ref.nativeElement);
+    else this.sticky.detach();
+  }
+  private scrollRef?: ElementRef<HTMLDivElement>;
   @ViewChild('box') private boxRef?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('picker') private pickerRef?: ElementRef<HTMLInputElement>;
 
+  private injector = inject(Injector);
   private watching: string | null = null;
-  private stickToBottom = true;
+  /** Abre na mensagem mais nova e segue o fim enquanto o conteúdo cresce, até a pessoa rolar para cima. */
+  readonly sticky = new StickyScroll(60, () => this.markSeen());
+  /** Mensagens que chegaram com a conversa aberta (entram animadas); as que já estavam, não. */
+  readonly fresh = new Set<string>();
+  private known: Set<string> | null = null;
+  /** O botão de enviar "decola" a cada envio. */
+  readonly launching = signal(false);
+  private launchTimer?: ReturnType<typeof setTimeout>;
   private lastTypingSent = 0;
   private clock = setInterval(() => this.now.set(Date.now()), 1000);
   readonly now = signal(Date.now());
-  readonly sending = signal(false);
   readonly dropping = signal(false);
   /** Mensagens com "o que ele fez" aberto. */
   readonly openSteps = signal<Set<string>>(new Set());
@@ -85,7 +98,8 @@ export class CaseCompactComponent implements OnDestroy {
     const c = this.card();
     return c ? this.store.status(c)() : null;
   });
-  readonly messages = computed(() => this.chat()?.messages ?? []);
+  /** As do servidor e, no fim, as que estão saindo deste navegador (⏱). */
+  readonly messages = computed<CaseViewMessage[]>(() => this.room()?.view() ?? []);
   readonly run = computed(() => this.chat()?.run ?? null);
   readonly working = computed(() => isRunActive(this.run()));
   readonly runLabel = computed(() => {
@@ -118,15 +132,19 @@ export class CaseCompactComponent implements OnDestroy {
       if (c === this.watching) return;
       if (this.watching) this.store.unwatch(this.watching);
       this.watching = c;
-      this.stickToBottom = true;
+      this.known = null;
+      this.fresh.clear();
+      this.sticky.toEnd();
       if (c) this.store.watch(c);
     });
     effect(() => {
       const c = this.chat();
+      const list = this.messages();
       if (!c) return;
       untracked(() => {
+        this.trackFresh(list);
         this.photos.ensure([...c.participants.map((p) => p.userId), ...c.messages.map((m) => m.authorUserId)]);
-        if (this.stickToBottom) this.scrollToEnd();
+        if (this.sticky.atEnd()) afterNextRender(() => this.markSeen(), { injector: this.injector });
       });
     });
   }
@@ -134,6 +152,8 @@ export class CaseCompactComponent implements OnDestroy {
   ngOnDestroy(): void {
     if (this.watching) this.store.unwatch(this.watching);
     clearInterval(this.clock);
+    clearTimeout(this.launchTimer);
+    this.sticky.detach();
   }
 
   // ── Abrir / enviar ──────────────────────────────────────────────────────────────────────────────
@@ -147,24 +167,72 @@ export class CaseCompactComponent implements OnDestroy {
 
   send(text?: string): void {
     const c = this.card();
-    if (!c || this.sending()) return;
+    if (!c) return;
     // 0090: comando digitado (`/clear`, `/cancelar-item-de-trabalho #n`, `/ferramenta`) não vai como mensagem.
     if (text === undefined && !this.pending().length && this.runCommand(c)) return;
-    const request = this.store.send(c, text);
-    if (!request) return;
-    this.sending.set(true);
-    this.stickToBottom = true;
-    request.subscribe({
-      next: () => {
-        this.sending.set(false);
-        this.scrollToEnd();
-        this.boxRef?.nativeElement.focus();
-      },
-      error: (err) => {
-        this.sending.set(false);
-        this.snack.open(planApiError(err, 'Não foi possível enviar a mensagem.'), 'Fechar', { duration: 8000 });
-      }
+    const body = (text ?? this.draft).trim();
+    // Como no WhatsApp: vai para a conversa na hora (⏱) e o campo fica livre; o servidor confirma depois (✓).
+    if (!this.store.send(c, text, (m) => this.snack.open(m, 'Fechar', { duration: 8000 }))) return;
+    const key = this.room()?.outbox().at(-1)?.key;
+    this.launch();
+    this.sticky.toEnd();
+    afterNextRender(() => {
+      this.sticky.toEnd();
+      if (body) flyToChat(this.boxRef?.nativeElement, this.bubbleOf(key), body);
+    }, { injector: this.injector });
+    this.boxRef?.nativeElement.focus();
+  }
+
+  retry(m: CaseViewMessage): void {
+    const c = this.card();
+    if (c) this.store.retry(c, m.key);
+  }
+
+  discard(m: CaseViewMessage): void {
+    const c = this.card();
+    if (c) this.store.discard(c, m.key);
+  }
+
+  delivery(m: CaseViewMessage): CaseDelivery {
+    const c = this.card();
+    return c ? this.store.delivery(c, m) : 'sent';
+  }
+
+  deliveryLabel(m: CaseViewMessage): string {
+    switch (this.delivery(m)) {
+      case 'sending': return 'Enviando…';
+      case 'failed': return 'Não foi enviada';
+      case 'read': return 'Lida por ' + this.store.readBy(this.card() ?? '', m).join(', ');
+      default: return 'Recebida — ainda não lida';
+    }
+  }
+
+  private launch(): void {
+    clearTimeout(this.launchTimer);
+    this.launching.set(false);
+    // Próximo quadro: a classe sai e volta, e a animação roda de novo mesmo em envios seguidos.
+    requestAnimationFrame(() => {
+      this.launching.set(true);
+      this.launchTimer = setTimeout(() => this.launching.set(false), 500);
     });
+  }
+
+  private bubbleOf(key: string | undefined): HTMLElement | null {
+    if (!key) return null;
+    return this.scrollRef?.nativeElement.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"] .km__bubble`) ?? null;
+  }
+
+  /** Primeira carga: tudo "já estava". Depois, o que chega de outros entra animado (as minhas voam do campo). */
+  private trackFresh(list: CaseViewMessage[]): void {
+    if (!this.known) {
+      this.known = new Set(list.map((m) => m.key));
+      return;
+    }
+    for (const m of list) {
+      if (this.known.has(m.key)) continue;
+      this.known.add(m.key);
+      if (!m.outgoing) this.fresh.add(m.key);
+    }
   }
 
   onKey(event: KeyboardEvent): void {
@@ -253,7 +321,7 @@ export class CaseCompactComponent implements OnDestroy {
     if (!c || !(await this.composerSvc.clear(c))) return;
     this.draft = '';
     this.clearReply();
-    this.stickToBottom = true;
+    this.sticky.toEnd();
     this.store.reload(c, 0);
   }
 
@@ -388,28 +456,18 @@ export class CaseCompactComponent implements OnDestroy {
   }
 
   onScroll(): void {
-    this.stickToBottom = this.isAtBottom();
-    if (this.stickToBottom) this.markSeen();
+    this.sticky.onScroll();
   }
 
-  private isAtBottom(): boolean {
-    const el = this.scrollRef?.nativeElement;
-    return !el || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  toEnd(): void {
+    this.sticky.toEnd(true);
   }
 
   /** Viu o fim da conversa na tela (painel visível, não numa aba escondida do celular) → nada de "novas". */
   private markSeen(): void {
     const c = this.card();
-    const last = this.messages().at(-1)?.number ?? 0;
+    const last = this.chat()?.messages.at(-1)?.number ?? 0;
     const visible = !!(this.host.nativeElement as HTMLElement).offsetParent && document.visibilityState === 'visible';
     if (c && last && visible) this.store.markSeen(c, last);
-  }
-
-  private scrollToEnd(): void {
-    setTimeout(() => {
-      const el = this.scrollRef?.nativeElement;
-      if (el) el.scrollTop = el.scrollHeight;
-      this.markSeen();
-    }, 30);
   }
 }

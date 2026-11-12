@@ -2,14 +2,16 @@ import {
   AfterViewInit,
   Component,
   ElementRef,
+  Injector,
   OnDestroy,
   ViewChild,
+  afterNextRender,
   computed,
   effect,
   inject,
   signal
 } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -29,10 +31,12 @@ import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import { SpecialistToolsComponent } from '../specialist-tools/specialist-tools.component';
 import {
   CaseAction,
+  CaseDelivery,
   CaseFile,
   CaseMessage,
   CasePoint,
   CaseProposal,
+  CaseViewMessage,
   SPECIALIST_NAME,
   isRunActive
 } from './case-chat.model';
@@ -41,6 +45,10 @@ import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-prop
 import { CaseComposer, CaseComposerService } from './case-composer.service';
 import { ComposerAction, ComposerSuggestion } from './composer-suggest';
 import { ComposerSuggestComponent } from './composer-suggest.component';
+import { StickyScroll, flyToChat } from './chat-motion';
+import { TokenUsageComponent } from '../token-usage/token-usage.component';
+import { TokenUsage } from '../../services/token-pricing.service';
+import { formatTokens, formatUsd } from '../../services/ai-usage.service';
 
 export interface CaseChatDialogData {
   card: string;
@@ -81,8 +89,8 @@ const QUICK = [
 @Component({
   selector: 'app-case-chat-dialog',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, MatBadgeModule,
-    PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent, SpecialistToolsComponent, ComposerSuggestComponent],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, MatBadgeModule,
+    PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent, SpecialistToolsComponent, ComposerSuggestComponent, TokenUsageComponent],
   templateUrl: './case-chat-dialog.component.html',
   styleUrls: ['./case-chat-dialog.component.css']
 })
@@ -108,7 +116,17 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   readonly chat = this.room.chat;
   readonly loading = this.room.loading;
   readonly loadError = this.room.loadError;
+  /** Decidindo proposta/enviando áudio (o texto não trava: sai na hora, como no WhatsApp). */
   readonly sending = signal(false);
+  /** O botão de enviar "decola" a cada envio. */
+  readonly launching = signal(false);
+  private launchTimer?: ReturnType<typeof setTimeout>;
+  /** Abre na mensagem mais nova e segue o fim enquanto o conteúdo cresce, até a pessoa rolar para cima. */
+  readonly sticky = new StickyScroll(80);
+  /** Mensagens que chegaram com a conversa aberta (entram animadas); as que já estavam, não. */
+  readonly fresh = new Set<string>();
+  private known: Set<string> | null = null;
+  private injector = inject(Injector);
   readonly showHistory = signal(false);
   /** Ferramentas do especialista (painel sobre a conversa) e quantas se aplicam ao card (contagem do ícone). */
   readonly toolsOpen = signal(false);
@@ -140,7 +158,8 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   @ViewChild('picker') private pickerRef?: ElementRef<HTMLInputElement>;
   @ViewChild(SpecialistToolsComponent) private toolsRef?: SpecialistToolsComponent;
 
-  readonly messages = computed(() => this.chat()?.messages ?? []);
+  /** As do servidor e, no fim, as que estão saindo deste navegador (⏱). */
+  readonly messages = computed<CaseViewMessage[]>(() => this.room.view());
   readonly run = computed(() => this.chat()?.run ?? null);
   readonly working = computed(() => isRunActive(this.run()));
   readonly proposalsById = computed(() => new Map((this.chat()?.proposals ?? []).map((p) => [p.id, p])));
@@ -165,17 +184,40 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
     if (r.status === 'queued') return r.waitReason || 'Na fila — começa em instantes';
     return r.currentActivity?.label ?? 'Pensando…';
   });
-  readonly tokensLabel = computed(() => {
+  /**
+   * Consumo desde o último /clear, com a entrada separada: o número antigo somava tudo desde que a conversa existe e
+   * contava o cache lido (≈ 1/10 do preço) como entrada — 7 M de "entrada" no 78161 eram 97% cache lido.
+   */
+  readonly usage = computed<TokenUsage | null>(() => {
     const c = this.chat();
-    if (!c) return '';
-    const total = (c.inputTokens ?? 0) + (c.outputTokens ?? 0);
-    return total >= 1_000_000 ? `${(total / 1_000_000).toFixed(1)} M` : total >= 1000 ? `${Math.round(total / 1000)} k` : `${total}`;
+    if (!c) return null;
+    const u = c.usage;
+    const allTime = `Desde o início da conversa: entrada ${formatTokens(c.inputTokens ?? 0)} (com o cache lido) · saída ${formatTokens(c.outputTokens ?? 0)} · ${formatUsd(c.costUsd ?? 0)}.`;
+    if (!u) {
+      if (!c.inputTokens && !c.outputTokens) return null;
+      return { input: c.inputTokens, output: c.outputTokens, reportedCostUsd: c.costUsd || null, reportedBy: 'Claude Code', title: 'Consumo do especialista nesta conversa' };
+    }
+    if (!u.responses && !u.inputTokens) return null;
+    return {
+      freshInput: u.freshInputTokens,
+      cacheRead: u.cacheReadTokens,
+      cacheWrite: u.cacheWriteTokens,
+      input: u.freshInputTokens || u.cacheReadTokens || u.cacheWriteTokens ? null : u.inputTokens,
+      output: u.outputTokens,
+      reportedCostUsd: u.costUsd || null,
+      reportedBy: 'Claude Code',
+      calls: u.responses,
+      title: u.since ? 'Consumo do especialista desde a última limpeza (/clear)' : 'Consumo do especialista nesta conversa',
+      subtitle: `${u.responses} ${u.responses === 1 ? 'resposta' : 'respostas'}`,
+      notes: [
+        'Cada resposta relê o contexto da sessão: o cache lido é a maior parte da entrada e custa cerca de 1/10 da entrada nova.',
+        u.since ? allTime : null
+      ]
+    };
   });
 
   private clock?: ReturnType<typeof setInterval>;
   private lastTypingSent = 0;
-  private stickToBottom = this.room.scrollTop === null;
-  private viewReady = false;
 
   constructor() {
     // A tela do card já acompanha o card; o modal também (aberto de outro lugar, ou se a tela fechar por baixo).
@@ -183,30 +225,32 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
     this.clock = setInterval(() => this.now.set(Date.now()), 1000);
     effect(() => {
       const c = this.chat();
+      const list = this.messages();
       if (!c) return;
+      this.trackFresh(list);
       this.photos.ensure([...c.participants.map((p) => p.userId), ...c.messages.map((m) => m.authorUserId), this.me?.externalId]);
-      // Mensagem nova ou atividade do especialista: acompanha o fim se a pessoa estava lá, e marca como vista.
+      // Mensagem nova ou atividade do especialista: marca como vista (a rolagem segue o fim sozinha se a pessoa estava lá).
       this.store.markSeen(this.data.card, c.messages.at(-1)?.number ?? 0);
-      if (this.viewReady && this.stickToBottom) this.scrollToEnd();
     });
   }
 
   ngAfterViewInit(): void {
-    // Volta para onde estava (ou para o fim) sem animação — reabrir parece que nunca fechou.
+    // Volta para onde estava (ou para o fim) sem animação — reabrir parece que nunca fechou. Conversa grande: continua
+    // no fim enquanto o texto e as imagens ganham altura.
+    const el = this.scrollRef?.nativeElement;
+    if (el) this.sticky.attach(el, this.room.scrollTop);
     setTimeout(() => {
-      const el = this.scrollRef?.nativeElement;
-      if (el) el.scrollTop = this.room.scrollTop ?? el.scrollHeight;
-      this.viewReady = true;
       this.boxRef?.nativeElement.focus();
       if (this.data.tool) this.openTool(this.data.tool);
     }, 0);
   }
 
   ngOnDestroy(): void {
-    const el = this.scrollRef?.nativeElement;
-    this.room.scrollTop = el && !this.isAtBottom() ? el.scrollTop : null;
+    this.room.scrollTop = this.sticky.atEnd() ? null : this.sticky.scrollTop;
+    this.sticky.detach();
     this.store.unwatch(this.data.card);
     clearInterval(this.clock);
+    clearTimeout(this.launchTimer);
     if (this.voice.recording()) this.voice.cancel();
   }
 
@@ -234,23 +278,73 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   // ── Envio ──────────────────────────────────────────────────────────────────────────────────────
 
   send(textOverride?: string): void {
-    if (this.sending()) return;
     // 0090: comando digitado (`/clear`, `/cancelar-item-de-trabalho #n`, `/ferramenta`) não vai como mensagem.
     if (textOverride === undefined && !this.pending().length && this.runCommand()) return;
-    const request = this.store.send(this.data.card, textOverride);
-    if (!request) return;
-    this.sending.set(true);
-    this.stickToBottom = true;
-    request.subscribe({
-      next: () => {
-        this.sending.set(false);
-        this.scrollToEnd();
-      },
-      error: (err) => {
-        this.sending.set(false);
-        this.snack.open(planApiError(err, 'Não foi possível enviar a mensagem.'), 'Fechar', { duration: 8000 });
-      }
+    const body = (textOverride ?? this.draft).trim();
+    // Como no WhatsApp: vai para a conversa na hora (⏱) e o campo fica livre; o servidor confirma depois (✓).
+    if (!this.store.send(this.data.card, textOverride, (m) => this.snack.open(m, 'Fechar', { duration: 8000 }))) return;
+    const key = this.room.outbox().at(-1)?.key;
+    this.launch();
+    this.sticky.toEnd();
+    afterNextRender(() => {
+      this.sticky.toEnd();
+      if (body) flyToChat(this.boxRef?.nativeElement, this.bubbleOf(key), body);
+    }, { injector: this.injector });
+    this.boxRef?.nativeElement.focus();
+  }
+
+  retry(m: CaseViewMessage): void {
+    this.store.retry(this.data.card, m.key);
+  }
+
+  discard(m: CaseViewMessage): void {
+    this.store.discard(this.data.card, m.key);
+  }
+
+  delivery(m: CaseViewMessage): CaseDelivery {
+    return this.store.delivery(this.data.card, m);
+  }
+
+  deliveryLabel(m: CaseViewMessage): string {
+    switch (this.delivery(m)) {
+      case 'sending': return 'Enviando…';
+      case 'failed': return 'Não foi enviada';
+      case 'read': return 'Lida por ' + this.store.readBy(this.data.card, m).join(', ');
+      default: return 'Recebida — ainda não lida';
+    }
+  }
+
+  toEnd(): void {
+    this.sticky.toEnd(true);
+  }
+
+  private launch(): void {
+    clearTimeout(this.launchTimer);
+    this.launching.set(false);
+    // Próximo quadro: a classe sai e volta, e a animação roda de novo mesmo em envios seguidos.
+    requestAnimationFrame(() => {
+      this.launching.set(true);
+      this.launchTimer = setTimeout(() => this.launching.set(false), 500);
     });
+  }
+
+  private bubbleOf(key: string | undefined): HTMLElement | null {
+    if (!key) return null;
+    return this.scrollRef?.nativeElement.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"] .msg__bubble`) ?? null;
+  }
+
+  /** Primeira carga: tudo "já estava". Depois, o que chega de outros entra animado (as minhas voam do campo). */
+  private trackFresh(list: CaseViewMessage[]): void {
+    if (!this.known) {
+      if (this.loading()) return;
+      this.known = new Set(list.map((m) => m.key));
+      return;
+    }
+    for (const m of list) {
+      if (this.known.has(m.key)) continue;
+      this.known.add(m.key);
+      if (!m.outgoing) this.fresh.add(m.key);
+    }
   }
 
   quickSend(text: string): void {
@@ -364,6 +458,7 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
     this.draft = '';
     this.replyTo.set(null);
     this.room.scrollTop = null;
+    this.sticky.toEnd();
     this.load();
   }
 
@@ -484,9 +579,8 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
         this.voiceReview.set(null);
         this.voiceTranscript = '';
         this.replyTo.set(null);
-        this.stickToBottom = true;
         this.store.appendMine(this.data.card, m);
-        this.scrollToEnd();
+        this.sticky.toEnd();
       },
       error: (err) => {
         this.sending.set(false);
@@ -636,21 +730,7 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
     return `${Math.floor(s / 60)}:${`${s % 60}`.padStart(2, '0')}`;
   }
 
-  trackMessage = (_: number, m: CaseMessage) => m.id;
-
   onScroll(): void {
-    this.stickToBottom = this.isAtBottom();
-  }
-
-  private isAtBottom(): boolean {
-    const el = this.scrollRef?.nativeElement;
-    return !el || el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  }
-
-  private scrollToEnd(): void {
-    setTimeout(() => {
-      const el = this.scrollRef?.nativeElement;
-      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    }, 30);
+    this.sticky.onScroll();
   }
 }

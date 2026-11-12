@@ -64,6 +64,11 @@ export class CaseChatService {
     return this.http.post<WorkItem>(this.url(card, `/work-items/${number}/cancel`), { undo, reason: reason || null });
   }
 
+  /** Vi a conversa até a mensagem `number` (o ✓✓ de quem escreveu). */
+  seen(card: string, number: number): Observable<void> {
+    return this.http.post<void>(this.url(card, '/seen'), { number });
+  }
+
   typing(card: string): Observable<void> {
     return this.http.post<void>(this.url(card, '/typing'), {});
   }
