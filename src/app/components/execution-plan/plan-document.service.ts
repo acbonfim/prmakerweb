@@ -137,7 +137,7 @@ export class PlanDocumentService {
   private async loadRefs(plan: ExecutionPlan, phase: string): Promise<CodeRef[]> {
     const owners = new Set([plan.id, ...(phase === 'correction' && plan.parentPlanId ? [plan.parentPlanId] : [])]);
     const heads = (await this.codeRefs.loadHeads(plan.cardNumber))
-      .filter((h) => owners.has(h.planId) && (phase !== 'correction' || h.change !== 'read'));
+      .filter((h) => !!h.planId && owners.has(h.planId) && (phase !== 'correction' || h.change !== 'read'));
     const refs = await Promise.all(heads.map((h) => this.codeRefs.get(plan.cardNumber, h.ref).catch(() => null)));
     const order = ['change', 'create', 'remove', 'suspect', 'read'];
     return refs.filter((r): r is CodeRef => !!r)
