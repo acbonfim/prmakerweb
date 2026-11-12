@@ -1,4 +1,4 @@
-import { docLabel, hasRichOverview, itemCode, itemDocuments, itemImages, parseItemBrief, pickItemDocument, resultHeadline, stepTitle, titleSeverity } from './item-overview';
+import { briefMarkdown, docLabel, hasRichOverview, isEditableText, itemCode, itemDocuments, itemImages, overviewFileName, parseItemBrief, pickItemDocument, resultHeadline, stepTitle, titleSeverity } from './item-overview';
 import { WorkItemFile } from './work-item-files';
 
 /** Descrição real do item #96 do card 78161 (formato antigo do especialista, sem acento). */
@@ -127,5 +127,17 @@ describe('item-overview — manchetes e rótulos do #738', () => {
     const b = parseItemBrief('**Por que existe:** refazer a reprodução.\n\n**Achado GS-018:** apaga donos.\n\n**Entregavel:** sequencia de prints.');
     expect(b.purpose).toBe('refazer a reprodução.');
     expect(b.body).toContain('### Entregável\nsequencia de prints.');
+  });
+});
+
+describe('item-overview — visão geral como arquivo', () => {
+  it('nome do arquivo pelo código do item e prévia a partir da ficha', () => {
+    expect(overviewFileName({ title: 'GS-002 — [Crítica] Gestão', number: 102 })).toBe('00-visao-geral-GS-002.md');
+    expect(overviewFileName({ title: 'Abrir PR', number: 7 })).toBe('00-visao-geral-item-7.md');
+    const md = briefMarkdown(parseItemBrief('## Para que serve\nAnalisar.\n\n> [!SUMMARY]\n> **Problema:** x'), 'GS-002 — Gestão')!;
+    expect(md).toBe('**GS-002 — Gestão**\n\n## Para que serve\nAnalisar.\n\n> [!SUMMARY]\n> **Problema:** x');
+    expect(briefMarkdown(parseItemBrief(null))).toBeNull();
+    expect(isEditableText({ name: '05-proposta.md' })).toBeTrue();
+    expect(isEditableText({ name: 'print.jpg', contentType: 'image/jpeg' })).toBeFalse();
   });
 });

@@ -157,7 +157,7 @@ export interface WorkItemDialogData {
                 }
               } @else if (rich()) {
                 <!-- Card 78161: para que serve, etapas com o resultado, o documento do item na tela e a ficha do pedido -->
-                <app-work-item-overview [item]="it" [files]="files.files()" [brief]="itemBrief()" (openTask)="openTaskNumber($event)" />
+                <app-work-item-overview [item]="it" [files]="files.files()" [brief]="itemBrief()" (openTask)="openTaskNumber($event)" (saved)="files.load()" />
               } @else {
                 <section class="wi-sec">
                   <h4 class="wi-sec__title">Descrição</h4>
@@ -251,7 +251,7 @@ export interface WorkItemDialogData {
               @if (!deliverables().length && !files.count()) {
                 <p class="wi-muted wid__p">Este item ainda não gerou nada.</p>
               } @else {
-                <app-work-deliverables [deliverables]="deliverables()" [card]="data.card" [itemNumber]="data.number" [showTask]="true" [grouped]="true" (openTask)="openTaskNumber($event)" />
+                <app-work-deliverables [deliverables]="deliverables()" [card]="data.card" [itemNumber]="data.number" [showTask]="true" [grouped]="true" (openTask)="openTaskNumber($event)" (saved)="files.load()" />
                 @if (files.count()) {
                   <section class="wi-sec">
                     <h5 class="wid__group-title"><mat-icon>folder_open</mat-icon>Arquivos<small>{{ files.count() }}</small></h5>

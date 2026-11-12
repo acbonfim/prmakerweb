@@ -261,3 +261,25 @@ export function hasRichOverview(item: Pick<WorkItem, 'tasks'> | null, brief: Ite
   if (!item) return false;
   return !!brief.purpose || brief.legacy || docs.length > 0 || (item.tasks ?? []).some((t) => !!t.result?.trim());
 }
+
+// ── Visão geral sempre à vista (arquivo ou prévia da descrição) ─────────────────────────────────
+
+/** Nome do arquivo da visão geral do item: `00-visao-geral-GS-001.md` (sem código no título: `00-visao-geral-item-96.md`). */
+export function overviewFileName(item: Pick<WorkItem, 'title' | 'number'>): string {
+  return `00-visao-geral-${itemCode(item.title) ?? `item-${item.number}`}.md`;
+}
+
+/** A ficha do pedido como markdown de um arquivo (para que serve + o resto) — a prévia da visão geral. */
+export function briefMarkdown(brief: ItemBrief, title?: string | null): string | null {
+  const parts = [
+    title ? `**${title}**` : null,
+    brief.purpose ? `## Para que serve\n${brief.purpose}` : null,
+    brief.body
+  ].filter(Boolean);
+  return brief.purpose || brief.body ? parts.join('\n\n') : null;
+}
+
+/** Arquivo de texto que a tela edita (markdown, texto, SQL, CSV, JSON). */
+export function isEditableText(f: Pick<WorkItemFile, 'name' | 'contentType'>): boolean {
+  return /\.(md|markdown|txt|sql|csv|json)$/i.test(f.name ?? '') || /^text\//i.test(f.contentType ?? '');
+}
