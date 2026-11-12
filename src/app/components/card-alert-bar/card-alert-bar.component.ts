@@ -151,6 +151,7 @@ export class CardAlertBarComponent {
     { key: 'missingResolutionType', icon: 'rule', label: 'Card sem Resolution Type preenchido' },
     { key: 'missingGeneralClassification', icon: 'category', label: 'Card sem General Classification preenchido' },
     { key: 'missingClassification', icon: 'sell', label: 'Card sem Classification preenchido' },
+    { key: 'missingBugType', icon: 'pest_control', label: 'Card sem Bug Type preenchido' },
     { key: 'remainingNotZero', icon: 'timelapse', label: 'Card com Remaining não zerado' }
   ];
 

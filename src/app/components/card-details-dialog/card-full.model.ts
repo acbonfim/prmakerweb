@@ -3,6 +3,8 @@ export interface CardAlerts {
   missingResolutionType: boolean;
   missingGeneralClassification: boolean;
   missingClassification: boolean;
+  /** Bug sem Bug Type (picklist do DevOps); sempre false em User Story. */
+  missingBugType?: boolean;
   remainingNotZero: boolean;
 }
 

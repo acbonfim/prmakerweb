@@ -431,6 +431,7 @@ export class RegisterComponent implements OnInit, OnDestroy {
       a.missingResolutionType ||
       a.missingGeneralClassification ||
       a.missingClassification ||
+      a.missingBugType ||
       a.remainingNotZero
     );
   }

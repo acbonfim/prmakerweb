@@ -330,6 +330,7 @@ export class DevOpsActionsMenuComponent {
       a.missingResolutionType && 'Resolution Type',
       a.missingGeneralClassification && 'General Classification',
       a.missingClassification && 'Classification',
+      a.missingBugType && 'Bug Type',
       a.remainingNotZero && 'Remaining não zerado',
     ].filter((x): x is string => !!x);
   }
