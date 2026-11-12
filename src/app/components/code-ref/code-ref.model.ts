@@ -5,7 +5,8 @@ export type CodeChange = 'change' | 'create' | 'remove' | 'suspect' | 'read';
 /** Cabeça (lista do card, sem o código) — liga citações e pinta o link. */
 export interface CodeRefHead {
   id: string;
-  planId: string;
+  /** Card 78161: null = fotografia do card sem plano (itens de trabalho de uma US, por exemplo). */
+  planId: string | null;
   ref: string;
   repository?: string | null;
   path: string;

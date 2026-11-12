@@ -44,6 +44,8 @@ import { WorkItemFilesComponent } from './work-item-files.component';
 import { WorkItemFilesStore } from './work-item-files.store';
 import { WorkDeliverablesComponent } from './work-deliverables.component';
 import { analysisBrief, analysisDeliverables, isAnalysisItem, pickAnalysisFile } from './analysis-overview';
+import { hasRichOverview, itemDocuments, parseItemBrief, titleSeverity } from './item-overview';
+import { WorkItemOverviewComponent } from './work-item-overview.component';
 
 /** Resumo da Visão geral: as entregas que não são PR, por grupo. */
 const SUMMARY_WORDS: Record<DeliverableGroupKey, [string, string]> = {
@@ -76,7 +78,7 @@ export interface WorkItemDialogData {
 @Component({
   selector: 'app-work-item-dialog',
   standalone: true,
-  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WiTypeIconComponent, WorkItemFilesComponent, WorkDeliverablesComponent],
+  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WiTypeIconComponent, WorkItemFilesComponent, WorkDeliverablesComponent, WorkItemOverviewComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <!-- 0087: links de código (ref:) e de itens da engenharia reversa/Base Solvace abrem o popover aqui também -->
@@ -84,9 +86,13 @@ export interface WorkItemDialogData {
       <header class="wi-dlg__head">
         <app-wi-type-icon class="wi-type wid__type" [type]="item()?.type" [catalog]="data.catalog" [size]="20" />
         <div class="wi-dlg__head-main">
-          <span class="wi-dlg__title"><span class="wi-num">{{ num(data.number) }}</span> {{ item()?.title || 'Item de trabalho' }}</span>
+          <span class="wi-dlg__title"><span class="wi-num">{{ num(data.number) }}</span> {{ titled().title || 'Item de trabalho' }}</span>
           @if (item(); as it) {
             <span class="wi-dlg__sub">
+              @if (titled().severity; as sev) {
+                <!-- Card 78161: gravidade marcada no título ([Crítica], [Alta]...) vira selo colorido -->
+                <span class="wid__sev wid__sev--{{ sev.severity }}" matTooltip="Gravidade"><mat-icon>{{ sev.severity === 'low' ? 'info' : 'priority_high' }}</mat-icon>{{ sev.label }}</span>
+              }
               <span class="wi-status" [style.color]="look().color"><mat-icon [class.wi-spin]="look().spin" [class.cime-bob]="look().bob">{{ look().icon }}</mat-icon>{{ look().label }}</span>
               <span class="wi-chip"><mat-icon>{{ originIco(it.origin) }}</mat-icon>{{ origin(it.origin) }}</span>
               <span>por {{ it.createdByName || 'PRMake' }} em {{ it.createdAt | date:'dd/MM/yy HH:mm' }}</span>
@@ -149,6 +155,9 @@ export interface WorkItemDialogData {
                 } @else if (it.status === 'completed') {
                   <p class="wi-muted wid__p"><mat-icon>info</mat-icon>A análise está na Timeline do card.</p>
                 }
+              } @else if (rich()) {
+                <!-- Card 78161: para que serve, etapas com o resultado, o documento do item na tela e a ficha do pedido -->
+                <app-work-item-overview [item]="it" [files]="files.files()" [brief]="itemBrief()" (openTask)="openTaskNumber($event)" />
               } @else {
                 <section class="wi-sec">
                   <h4 class="wi-sec__title">Descrição</h4>
@@ -156,7 +165,13 @@ export interface WorkItemDialogData {
                   @else { <p class="wi-muted wid__p">Sem descrição.</p> }
                 </section>
               }
-              @if (files.count()) {
+              @if (files.count() && rich() && !analysis()) {
+                <!-- Card 78161: os documentos já estão na tela acima — a lista completa fica recolhida -->
+                <details class="wi-sec wid__files">
+                  <summary class="wi-sec__title">Arquivos do item <small class="wi-muted">{{ files.count() }}</small></summary>
+                  <app-work-item-files [store]="files" [card]="data.card" [compact]="true" [allowUpload]="false" />
+                </details>
+              } @else if (files.count()) {
                 <!-- 0087: o que ajuda a entender o item (análise, mocks, scripts, chamado, imagens) à vista na visão geral -->
                 <section class="wi-sec">
                   <h4 class="wi-sec__title">Arquivos do item <small class="wi-muted">{{ files.count() }}</small></h4>
@@ -289,6 +304,14 @@ export interface WorkItemDialogData {
   `,
   styles: [WORK_DIALOG_STYLES, `
     .wid__type { width: 20px; height: 20px; }
+    .wid__sev { --c: #8b949e; display: inline-flex; align-items: center; gap: 2px; padding: 0 8px 0 4px; border-radius: 999px; font-size: 11px; font-weight: 700;
+      line-height: 18px; color: color-mix(in srgb, var(--c) 85%, var(--mat-sys-on-surface)); background: color-mix(in srgb, var(--c) 16%, transparent);
+      border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); }
+    .wid__sev mat-icon { font-size: 14px; width: 14px; height: 14px; }
+    .wid__sev--critical { --c: #f85149; }
+    .wid__sev--high { --c: #db6d28; }
+    .wid__sev--medium { --c: #d29922; }
+    .wid__sev--low { --c: #58a6ff; }
     .wid__brief { margin: 0; font-size: 13px; line-height: 1.5; }
     .wid__dlv { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
     .wid__dlv-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px;
@@ -301,6 +324,8 @@ export interface WorkItemDialogData {
     .wid__analysis-body { padding: 12px 14px; border-radius: 10px; background: var(--surface-input, #1a1f28);
       border: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); overflow-x: auto; }
     .wid__analysis .wi-sec__title small { font-weight: 400; margin-left: 6px; }
+    .wid__files > summary { cursor: pointer; width: fit-content; }
+    .wid__files[open] > summary { margin-bottom: 6px; }
     .wid__p { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
     .wid__lock { font-size: 15px; width: 15px; height: 15px; }
     .wid__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; }
@@ -402,6 +427,13 @@ export class WorkItemDialogComponent {
   readonly analysisText = signal<string | null>(null);
   readonly analysisError = signal<string | null>(null);
   private analysisKey: string | null = null;
+  /** Card 78161: título sem a marca de gravidade (vira selo) e a Visão geral rica dos demais itens. */
+  readonly titled = computed(() => titleSeverity(this.item()?.title));
+  readonly itemBrief = computed(() => parseItemBrief(this.item()?.description));
+  readonly rich = computed(() => {
+    const it = this.item();
+    return !!it && hasRichOverview(it, this.itemBrief(), itemDocuments(this.files.files(), it.tasks ?? []));
+  });
   /** Histórico do mais recente para o mais antigo. */
   readonly logs = computed(() => (this.item()?.logs ?? []).slice().sort((a, b) => (b.at > a.at ? 1 : b.at < a.at ? -1 : b.id - a.id)));
 
