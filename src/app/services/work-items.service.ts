@@ -9,6 +9,7 @@ import {
   TicketStatusRequest,
   UpdateWorkItemRequest,
   WorkItem,
+  WorkItemRelated,
   WorkDeliverable,
   WorkDeliverableDiff,
   WorkItemCatalog,
@@ -133,6 +134,24 @@ export class WorkItemsService {
     if (query.trim()) params = params.set('q', query.trim());
     if (exceptCard) params = params.set('exceptCard', exceptCard);
     return this.http.get<WorkItemSearchHit[]>(`${this.apiUrl}/search`, { params }).pipe(this.fail('Não foi possível buscar os itens de trabalho.'));
+  }
+
+  /** 0094: itens relatados ao card (menção ou manual), resolvidos com sub-tarefas — a aba "Relatado" (somente leitura). */
+  listRelated(card: string): Observable<WorkItemRelated[]> {
+    return this.http.get<WorkItemRelated[]>(`${this.apiUrl}/card/${this.card(card)}/related`)
+      .pipe(this.fail('Não foi possível carregar os relatados.'));
+  }
+
+  /** 0094: relaciona um item (número de item ou sub-tarefa) ao card, à mão. */
+  addRelated(card: string, number: number): Observable<WorkItemRelated> {
+    return this.http.post<WorkItemRelated>(`${this.apiUrl}/card/${this.card(card)}/related`, { number })
+      .pipe(this.fail('Não foi possível relacionar o item.'));
+  }
+
+  /** 0094: remove o relatado (pelo número do item relatado). */
+  removeRelated(card: string, number: number): Observable<unknown> {
+    return this.http.delete(`${this.apiUrl}/card/${this.card(card)}/related/${number}`)
+      .pipe(this.fail('Não foi possível remover o relatado.'));
   }
 
   /** Um item com os registros (histórico). Número de sub-tarefa → o item dono, com `matchedTaskNumber`. */

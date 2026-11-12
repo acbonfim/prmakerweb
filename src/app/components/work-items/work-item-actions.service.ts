@@ -205,8 +205,8 @@ export class WorkItemActionsService {
     }
   }
 
-  openTask(card: string, item: WorkItem, taskNumber: number, catalog?: WorkItemCatalog | null): MatDialogRef<WorkTaskDialogComponent> {
-    const data: WorkTaskDialogData = { card, itemNumber: item.number, taskNumber, item, catalog: catalog ?? null };
+  openTask(card: string, item: WorkItem, taskNumber: number, catalog?: WorkItemCatalog | null, readOnly = false): MatDialogRef<WorkTaskDialogComponent> {
+    const data: WorkTaskDialogData = { card, itemNumber: item.number, taskNumber, item, catalog: catalog ?? null, readOnly };
     return this.dialog.open(WorkTaskDialogComponent, workDialogConfig(data, '640px'));
   }
 

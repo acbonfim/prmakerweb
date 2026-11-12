@@ -117,7 +117,7 @@ export function defaultPlanItem(items: readonly WorkItem[]): WorkItem | null {
 }
 
 /** Aba da coluna principal (desktop) — Itens de trabalho | Execução (plano do item) | Card. */
-export type WorkbenchMainTab = 'items' | 'plan' | 'files' | 'card';
+export type WorkbenchMainTab = 'items' | 'plan' | 'reported' | 'files' | 'card';
 /** Aba no celular (< 1024 px) — Itens | Plano | Especialista | Card. */
 export type WorkbenchMobileTab = WorkbenchMainTab | 'chat' | 'card';
 type CardState = 'idle' | 'loading' | 'found' | 'missing' | 'error';

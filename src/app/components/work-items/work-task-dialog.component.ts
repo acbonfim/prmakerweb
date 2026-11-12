@@ -55,6 +55,8 @@ export interface WorkTaskDialogData {
   /** Item já carregado (mostra na hora; o modal recarrega e acompanha ao vivo). */
   item?: WorkItem | null;
   catalog?: WorkItemCatalog | null;
+  /** 0094: aberto pela aba "Relatado" — somente leitura. */
+  readOnly?: boolean;
 }
 
 /**
@@ -293,9 +295,9 @@ export class WorkTaskDialogComponent {
   readonly task = computed(() => this.item()?.tasks?.find((t) => t.number === this.data.taskNumber) ?? null);
   readonly look = computed(() => taskStatusLook(this.task()?.status));
   readonly kind = computed(() => kindInfo(this.task()?.kind, this.data.catalog));
-  readonly actions = computed(() => { const t = this.task(); return t ? userTaskActions(t) : []; });
+  readonly actions = computed(() => { const t = this.task(); return t && !this.data.readOnly ? userTaskActions(t) : []; });
   /** "Já resolvi": sub-tarefa do Claude parada esperando a pessoa. */
-  readonly resolvable = computed(() => { const t = this.task(); return !!t && canResolveWait(t); });
+  readonly resolvable = computed(() => { const t = this.task(); return !this.data.readOnly && !!t && canResolveWait(t); });
   /**
    * Parâmetros com o rótulo do catálogo (na ordem do catálogo; os de fora no fim), o valor legível (commits "card" =
    * todos os do card) e o link do GitHub para repositório/branch quando a URL base é conhecida.
@@ -337,7 +339,7 @@ export class WorkTaskDialogComponent {
   });
   readonly ticket = computed(() => currentTicket(this.task()));
   readonly ticketTask = computed(() => isTicketTask(this.task()));
-  readonly ticketActs = computed(() => ticketTaskActions(this.item(), this.task()));
+  readonly ticketActs = computed(() => this.data.readOnly ? [] : ticketTaskActions(this.item(), this.task()));
   /** 0091: entregas desta sub-tarefa (vêm no GET do item). */
   readonly taskDeliverables = computed(() => deliverablesOf(this.item(), this.data.taskNumber));
   readonly generatedCount = computed(() => this.taskDeliverables().length + this.taskFiles());
