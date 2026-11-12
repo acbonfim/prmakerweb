@@ -19,12 +19,16 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule, MatIconRegistry } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog } from '@angular/material/dialog';
 import { DomSanitizer } from '@angular/platform-browser';
 import { WorkItemsService } from '../../services/work-items.service';
 import { WsService } from '../../services/ws.service';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { registerWorkItemTypeIcons } from '../../helpers/work-item-type-icons';
 import { WiTypeIconComponent } from './wi-type-icon.component';
+import { LiveBrowserService, LiveBrowserView, browserStreamUrl, pickBrowserSession } from './live-browser';
+import { LiveBrowserDialogComponent, LiveBrowserDialogData } from './live-browser-dialog.component';
+import { workDialogConfig } from './work-dialog-config';
 import {
   LiveFeedEntry,
   TASK_ACTION_LABELS,
@@ -78,6 +82,8 @@ import { WorkItemFilesStore } from './work-item-files.store';
 const LIVE_DEBOUNCE_MS = 300;
 /** Polling de segurança: só enquanto o item roda e sem evento recente. */
 const POLL_IDLE_MS = 10_000;
+/** 0095: de quanto em quanto tempo pergunta ao executor local se o navegador da skill está aberto. */
+const BROWSER_POLL_MS = 4000;
 /** Heartbeat mais velho que isso → "sem sinal do executor". */
 const QUIET_MS = 120_000;
 /** Duração do destaque de uma sub-tarefa que mudou de status. */
@@ -320,7 +326,13 @@ const FLASH_MS = 1_600;
         </section>
 
         <section class="wie__sec wie__sec--feed">
-          <h4 class="wie__sec-title">O que está sendo feito @if (feed().length) { <small>{{ feed().length }}</small> }</h4>
+          <h4 class="wie__sec-title">O que está sendo feito @if (feed().length) { <small>{{ feed().length }}</small> }
+            @if (browser()) {
+              <button mat-icon-button class="wie__browser" (click)="openBrowser()" matTooltip="Ver tela ao vivo" aria-label="Ver tela ao vivo">
+                <mat-icon>web</mat-icon><i class="wie__browser-dot"></i>
+              </button>
+            }
+          </h4>
           <div class="wie__feed-wrap">
             <ol #feedEl class="wie__feed" (scroll)="onFeedScroll()" aria-label="Atividades da execução">
               @for (e of feed(); track $index) {
@@ -437,6 +449,9 @@ const FLASH_MS = 1_600;
     .wie__sec { display: flex; flex-direction: column; gap: 6px; flex: none; }
     .wie__sec-title { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--cc-text-3); display: flex; gap: 6px; align-items: baseline; }
     .wie__sec-title small { font-weight: 500; letter-spacing: 0; opacity: .8; }
+    .wie__browser.mat-mdc-icon-button { --mdc-icon-button-state-layer-size: 26px; width: 26px; height: 26px; padding: 4px; margin: -6px 0 -6px auto; align-self: center; position: relative; color: var(--mat-sys-primary); }
+    .wie__browser mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .wie__browser-dot { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: #e5534b; animation: wie-fade 1.6s ease-in-out infinite; }
     .wie__muted { color: var(--cc-text-3); margin: 0; font-size: 12.5px; }
     .wie__tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
     .wie__task { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 8px; border: 1px solid transparent; transition: background-color .4s ease, border-color .4s ease; }
@@ -542,6 +557,13 @@ export class WorkItemExecutionComponent {
   private api = inject(WorkItemsService);
   private actions = inject(WorkItemActionsService);
   private ws = inject(WsService);
+  private dialog = inject(MatDialog);
+  private browsers = inject(LiveBrowserService);
+  /** 0095: navegador da skill aberto no executor DESTA máquina para este item (botão "Ver tela ao vivo"). */
+  readonly browser = signal<LiveBrowserView | null>(null);
+  private browserTimer: ReturnType<typeof setInterval> | null = null;
+  /** Só quem é dono da execução procura o executor local (os outros nunca tocam no 127.0.0.1). */
+  private readonly watchBrowser = computed(() => !this.readOnly() && this.live() && !!this.liveData()?.mine);
   private injector = inject(Injector);
 
   readonly item = signal<WorkItem | null>(null);
@@ -703,6 +725,12 @@ export class WorkItemExecutionComponent {
       untracked(() => this.start(n));
     });
 
+    // 0095: enquanto a execução é minha e está viva, procura o navegador da skill no executor desta máquina.
+    effect(() => {
+      const on = this.watchBrowser();
+      untracked(() => (on ? this.startBrowserWatch() : this.stopBrowserWatch()));
+    });
+
     // Tempo real do card do item (o `[card]` ou, sem ele, o card que veio no item).
     effect(() => {
       const card = ((this.card() ?? '') || (this.item()?.cardNumber ?? '')).trim() || null;
@@ -757,6 +785,7 @@ export class WorkItemExecutionComponent {
       this.ws.off(EXECUTION_PLAN_EVENT, this.onPlanEvent);
       clearInterval(tick);
       this.stopLive?.();
+      this.stopBrowserWatch();
       if (this.flashTimer) clearTimeout(this.flashTimer);
       if (this.celebrateTimer) clearTimeout(this.celebrateTimer);
       if (this.filesFlashTimer) clearTimeout(this.filesFlashTimer);
@@ -770,6 +799,7 @@ export class WorkItemExecutionComponent {
     this.current = n;
     this.item.set(null);
     this.liveData.set(null);
+    this.browser.set(null);
     this.error.set(null);
     this.flashed.set(new Set());
     this.celebrate.set(false);
@@ -957,6 +987,41 @@ export class WorkItemExecutionComponent {
     if (t.executor !== 'user') return [];
     if (t.status === 'pending' && t.number !== this.currentTask()) return [];
     return userTaskActions(t);
+  }
+
+  // ── 0095: tela ao vivo ─────────────────────────────────────────────────────────────────────────
+
+  private startBrowserWatch(): void {
+    if (this.browserTimer) return;
+    void this.probeBrowser();
+    this.browserTimer = setInterval(() => void this.probeBrowser(), BROWSER_POLL_MS);
+  }
+
+  private stopBrowserWatch(): void {
+    if (this.browserTimer) clearInterval(this.browserTimer);
+    this.browserTimer = null;
+    this.browser.set(null);
+  }
+
+  private async probeBrowser(): Promise<void> {
+    if (typeof document !== 'undefined' && document.hidden && !this.browser()) return;
+    const list = await this.browsers.list();
+    if (!this.browserTimer) return;
+    const it = this.item();
+    const card = ((this.card() ?? '') || (it?.cardNumber ?? '')).trim() || null;
+    const s = pickBrowserSession(list, card, this.liveData()?.request?.workerName, (it?.tasks ?? []).map((t) => t.number));
+    if (!s || !list) {
+      if (this.browser()) this.browser.set(null);
+      return;
+    }
+    const url = browserStreamUrl(list, s);
+    const cur = this.browser();
+    if (cur?.url !== url || cur.session.task !== s.task || cur.session.label !== s.label) this.browser.set({ session: s, url });
+  }
+
+  openBrowser(): void {
+    const data: LiveBrowserDialogData = { itemNumber: this.number(), title: this.item()?.title ?? null, view: this.browser.asReadonly() };
+    this.dialog.open(LiveBrowserDialogComponent, workDialogConfig(data, '1100px'));
   }
 
   openFiles(): void {

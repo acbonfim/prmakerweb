@@ -559,6 +559,8 @@ export interface WorkItemLive {
   /** Últimos 50 registros, mais novo por último. */
   logs: WorkItemLiveLog[];
   executorOnline: boolean;
+  /** 0095: a execução é de quem está vendo — só então a Bancada procura o executor desta máquina ("Ver tela ao vivo"). */
+  mine?: boolean;
 }
 
 /** Linha do feed da sessão (atividades do executor + registros do item), mais nova por último. */
