@@ -114,3 +114,18 @@ describe('item-overview — rótulos na mesma linha', () => {
       .toBe('Base Solvace consultada: GAP-531 e GAP-909 confirmam o achado.');
   });
 });
+
+describe('item-overview — manchetes e rótulos do #738', () => {
+  it('negrito com itálico dentro e negrito aberto não vazam **', () => {
+    expect(resultHeadline('**Encerrado como improcedente por decisão de Alex (opção 3 do *Já resolvi*).** Resto.'))
+      .toBe('**Encerrado como improcedente por decisão de Alex (opção 3 do *Já resolvi*).**');
+    expect(resultHeadline('**Encerrado como improcedente por decisão de Alex (opção 3 do *Já resolvi*). Sem fechar'))
+      .toBe('Encerrado como improcedente por decisão de Alex (opção 3 do *Já resolvi*).');
+  });
+
+  it('Por que existe vira o para que serve e Entregável ganha seção', () => {
+    const b = parseItemBrief('**Por que existe:** refazer a reprodução.\n\n**Achado GS-018:** apaga donos.\n\n**Entregavel:** sequencia de prints.');
+    expect(b.purpose).toBe('refazer a reprodução.');
+    expect(b.body).toContain('### Entregável\nsequencia de prints.');
+  });
+});

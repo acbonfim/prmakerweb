@@ -211,7 +211,8 @@ export class WorkItemOverviewComponent {
     });
   });
   readonly doneCount = computed(() => this.steps().filter((s) => s.done || s.task.status === 'skipped').length);
-  readonly allDone = computed(() => this.steps().length > 0 && this.doneCount() === this.steps().length);
+  /** "O que foi entregue" só quando tudo acabou e algo foi de fato entregue (só pulada não é entrega). */
+  readonly allDone = computed(() => this.steps().some((s) => s.done) && this.doneCount() === this.steps().length);
 
   private readonly texts = signal<Record<string, string>>({});
   readonly failed = signal<Set<string>>(new Set());

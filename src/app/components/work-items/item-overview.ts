@@ -50,10 +50,11 @@ export interface ItemBrief {
   legacy: boolean;
 }
 
-type Field = 'purpose' | 'problem' | 'impact' | 'where' | 'modules' | 'base' | 'proposal' | 'acceptance' | 'rules' | 'other';
+type Field = 'purpose' | 'deliverable' | 'problem' | 'impact' | 'where' | 'modules' | 'base' | 'proposal' | 'acceptance' | 'rules' | 'other';
 
 const FIELD_LABELS: [RegExp, Field][] = [
-  [/^(o que (sera|vai ser) feito|para que serve|objetivo)$/, 'purpose'],
+  [/^(o que (sera|vai ser) feito|para que serve|objetivo|por que existe)$/, 'purpose'],
+  [/^(entregavel|entregaveis|resultado esperado)$/, 'deliverable'],
   [/^(achado|problema|o problema|o achado|sintoma)$/, 'problem'],
   [/^impacto$/, 'impact'],
   [/^onde$/, 'where'],
@@ -122,6 +123,7 @@ function legacyBody(parts: LabeledPart[]): string {
   }
   for (const p of of('modules')) out.push(`### Módulos\n${p.text}`);
   for (const p of of('base')) out.push(`### Base Solvace\n${p.text}`);
+  for (const p of of('deliverable')) out.push(`### Entregável\n${p.text}`);
   for (const p of of('acceptance')) out.push(`### Critérios de aceite\n${toList(p.text)}`);
   for (const p of of('other')) out.push(p.label ? `**${p.label}:** ${p.text}` : p.text);
   for (const p of of('rules')) out.push(`> [!WARNING]\n${quote(`**Regras:** ${p.text}`)}`);
@@ -162,8 +164,12 @@ export function parseItemBrief(description: string | null | undefined): ItemBrie
 export function resultHeadline(result: string | null | undefined, max = 180): string | null {
   const text = (result ?? '').replace(/\s+/g, ' ').trim();
   if (!text) return null;
-  const bold = /^\*\*([^*]{3,200})\*\*/.exec(text);
+  const bold = /^\*\*((?:[^*]|\*(?!\*)){3,200}?)\*\*/.exec(text);
   if (bold) return `**${bold[1].trim()}**`;
+  return firstSentence(text.replace(/^\*\*/, ''), max);
+}
+
+function firstSentence(text: string, max: number): string {
   // Primeira frase (o ponto não pode estar dentro de `código`).
   let inCode = false;
   for (let i = 0; i < text.length; i++) {
@@ -171,10 +177,15 @@ export function resultHeadline(result: string | null | undefined, max = 180): st
     if (c === '`') inCode = !inCode;
     if (!inCode && (c === '.' || c === '!' || c === '?') && (i + 1 === text.length || text[i + 1] === ' ') && i >= 20) {
       const s = text.slice(0, i + 1);
-      return s.length <= max ? s : clip(s, max);
+      return balanced(s.length <= max ? s : clip(s, max));
     }
   }
-  return clip(text, max);
+  return balanced(clip(text, max));
+}
+
+/** Negrito aberto e não fechado no recorte não pode vazar `**` cru na tela. */
+function balanced(s: string): string {
+  return (s.match(/\*\*/g) ?? []).length % 2 ? s.replace(/\*\*/g, '') : s;
 }
 
 function clip(s: string, max: number): string {
