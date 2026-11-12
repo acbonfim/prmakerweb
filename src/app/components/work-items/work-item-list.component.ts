@@ -6,7 +6,8 @@ import { MatIconModule, MatIconRegistry } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { DomSanitizer } from '@angular/platform-browser';
-import { WorkItemsService } from '../../services/work-items.service';
+import { map } from 'rxjs';
+import { WorkItemsService, WorkItemSearchHit } from '../../services/work-items.service';
 import { ExecutionPlanService } from '../../services/execution-plan.service';
 import { WsService } from '../../services/ws.service';
 import { ExecutionPlanSummary } from '../execution-plan/execution-plan.model';
@@ -18,6 +19,7 @@ import {
   WorkItem,
   WorkItemCatalog,
   WorkItemFilter,
+  WorkItemRelated,
   WorkTask,
   WorkTaskAction,
   canCancel,
@@ -37,6 +39,8 @@ import {
   matchesSearch,
   originIcon,
   originLabel,
+  relatedSourceIcon,
+  relatedSourceLabel,
   sortByCreation,
   taskStatusLook,
   userTaskActions,
@@ -84,10 +88,12 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
   template: `
     <div class="wil">
       <div class="wil__bar">
-        <button mat-flat-button color="primary" class="wil__new" data-tour="wi-new" (click)="create()" [disabled]="!card()"><mat-icon>add</mat-icon>Novo item</button>
-        <button mat-stroked-button class="wil__ask" (click)="askSpecialist()" [disabled]="!card()" matTooltip="O especialista do caso monta o item pelas regras do PRMake">
-          <mat-icon>psychology</mat-icon>Pedir ao especialista
-        </button>
+        @if (!readOnly()) {
+          <button mat-flat-button color="primary" class="wil__new" data-tour="wi-new" (click)="create()" [disabled]="!card()"><mat-icon>add</mat-icon>Novo item</button>
+          <button mat-stroked-button class="wil__ask" (click)="askSpecialist()" [disabled]="!card()" matTooltip="O especialista do caso monta o item pelas regras do PRMake">
+            <mat-icon>psychology</mat-icon>Pedir ao especialista
+          </button>
+        }
         @if (!sessionVisible() && (sessionTabs().length || executing().length)) {
           <button mat-stroked-button class="wil__reopen" (click)="openSession()" matTooltip="Reabrir a sessão de execução ao lado da lista">
             <mat-icon [class.wil__bot]="executing().length">smart_toy</mat-icon>Sessão de execução
@@ -118,6 +124,36 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
         <div class="wil__msg wil__msg--err"><mat-icon>error_outline</mat-icon><span>{{ loadError() }}</span><button mat-button (click)="load()">Tentar de novo</button></div>
       }
 
+      @if (source() === 'related') {
+        <div class="wil__addrel">
+          <label class="wil__search wil__addrel-field" [class.on]="relatedQuery()">
+            <mat-icon class="wil__search-ico">add_link</mat-icon>
+            <input type="text" inputmode="search" autocomplete="off" placeholder="Relacionar item de outro card (nº ou título)"
+                   aria-label="Buscar item para relacionar" [value]="relatedQuery()"
+                   (input)="onRelatedQuery($any($event.target).value)" (keydown.escape)="onRelatedQuery('')" />
+            @if (relatedSearching()) { <mat-icon class="wil__spin wil__addrel-busy">autorenew</mat-icon> }
+            @else if (relatedQuery()) { <button type="button" class="wil__search-x" (click)="onRelatedQuery('')" aria-label="Limpar"><mat-icon>close</mat-icon></button> }
+          </label>
+          @if (relatedQuery().trim() && relatedHits().length) {
+            <ul class="wil__addrel-hits">
+              @for (h of relatedHits(); track h.number) {
+                <li>
+                  <button type="button" class="wil__addrel-hit" (click)="addRelated(h)" [disabled]="addingRelated()">
+                    <span class="wil__num">{{ num(h.itemNumber) }}</span>
+                    <span class="wil__addrel-title">{{ h.kind === 'task' ? h.itemTitle : h.title }}</span>
+                    <span class="wil__addrel-card">card {{ h.cardNumber }}</span>
+                    @if (h.kind === 'task') { <span class="wil__addrel-task">sub-tarefa {{ num(h.number) }}</span> }
+                    <mat-icon class="wil__addrel-add">add</mat-icon>
+                  </button>
+                </li>
+              }
+            </ul>
+          } @else if (relatedQuery().trim() && !relatedSearching()) {
+            <p class="wil__msg">Nenhum item encontrado para "{{ relatedQuery().trim() }}".</p>
+          }
+        </div>
+      }
+
       <div class="wil__layout" [class.wil__layout--split]="sessionVisible()" [class.wil__layout--side]="wide()" [class.wil__layout--fill]="wide()">
       @if (sessionVisible()) {
         <aside class="wil__session" aria-label="Sessão de execução">
@@ -143,7 +179,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
             </div>
           }
           @if (activeTab(); as n) {
-            <app-work-item-execution class="wil__exec" [number]="n" [card]="card() ?? null" [catalog]="catalog()"
+            <app-work-item-execution class="wil__exec" [number]="n" [card]="card() ?? null" [catalog]="catalog()" [readOnly]="readOnly()"
                                      (openDetails)="openItemDialog($event)" (itemChange)="mergeItem($event)" />
           }
         </aside>
@@ -165,19 +201,27 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
       @if (loading() && !items().length) {
         <div class="wil__msg"><mat-icon class="wil__spin">autorenew</mat-icon>Carregando itens…</div>
       } @else if (!items().length && !loadError()) {
-        <div class="wil__empty">
-          <mat-icon class="wil__empty-ico">checklist</mat-icon>
-          <p><b>Nenhum item de trabalho neste card.</b><br>
-            <span>Itens são entregas com sub-tarefas (branch, cherry-pick, código, PR, estado no DevOps…) que o Claude executa — vários em paralelo.</span></p>
-          <div class="wil__empty-actions">
-            <button mat-flat-button color="primary" (click)="create()" [disabled]="!card()"><mat-icon>add</mat-icon>Novo item</button>
-            @if (correctionPlan(); as p) {
-              <button mat-stroked-button (click)="generateFromPlan(p)" [disabled]="generating()">
-                <mat-icon>account_tree</mat-icon>{{ generating() ? 'Gerando…' : 'Gerar itens a partir do plano' }}
-              </button>
-            }
+        @if (source() === 'related') {
+          <div class="wil__empty">
+            <mat-icon class="wil__empty-ico">hub</mat-icon>
+            <p><b>Nenhum item relatado.</b><br>
+              <span>Relacione um item de outro card mencionando <code>#n</code> na conversa do especialista (ou no plano/Timeline), ou adicione pelo campo acima.</span></p>
           </div>
-        </div>
+        } @else {
+          <div class="wil__empty">
+            <mat-icon class="wil__empty-ico">checklist</mat-icon>
+            <p><b>Nenhum item de trabalho neste card.</b><br>
+              <span>Itens são entregas com sub-tarefas (branch, cherry-pick, código, PR, estado no DevOps…) que o Claude executa — vários em paralelo.</span></p>
+            <div class="wil__empty-actions">
+              <button mat-flat-button color="primary" (click)="create()" [disabled]="!card()"><mat-icon>add</mat-icon>Novo item</button>
+              @if (correctionPlan(); as p) {
+                <button mat-stroked-button (click)="generateFromPlan(p)" [disabled]="generating()">
+                  <mat-icon>account_tree</mat-icon>{{ generating() ? 'Gerando…' : 'Gerar itens a partir do plano' }}
+                </button>
+              }
+            </div>
+          </div>
+        }
       } @else {
         @if (!visible().length) {
           <div class="wil__msg">
@@ -199,6 +243,9 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                 <button class="wil__title" (click)="openItemDialog(it.number, it)" [title]="it.title">
                   <span class="wil__num">{{ num(it.number) }}</span><span class="wil__title-text">{{ it.title }}</span>
                 </button>
+                @if (source() === 'related') {
+                  <span class="wil__chip wil__relcard" matTooltip="Card de origem deste item"><mat-icon>style</mat-icon>card {{ it.cardNumber }}</span>
+                }
                 <div class="wil__meta">
                   <span class="wil__chip" [matTooltip]="'Origem: ' + origin(it.origin)"><mat-icon>{{ originIco(it.origin) }}</mat-icon>{{ origin(it.origin) }}</span>
                   <span class="wil__status" [style.color]="look(it).color"><mat-icon [class.wil__spin]="look(it).spin" [class.cime-bob]="look(it).bob">{{ look(it).icon }}</mat-icon>{{ look(it).label }}</span>
@@ -211,30 +258,37 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                     }
                   }
                   <span class="wil__actions">
-                    @if (isLive(it)) {
-                      <button class="wil__running" (click)="showSession(it.number)" [matTooltip]="(it.activity || look(it).label) + ' — ver a sessão de execução'"
-                              [attr.aria-label]="'Ver a sessão de execução do ' + num(it.number)">
-                        <mat-icon [class.wil__bot]="busy(it)">{{ it.status === 'waiting' ? 'front_hand' : 'smart_toy' }}</mat-icon>
-                        <span class="wil__running-text">{{ it.activity || (it.status === 'queued' ? 'Na fila' : it.status === 'reverting' ? 'Desfazendo' : it.status === 'waiting' ? (waitsForYou(it) ? 'Aguardando você' : 'Aguardando') : 'Executando') }}</span>
-                      </button>
-                    } @else {
-                      <button mat-icon-button class="wil__play" data-tour="wi-run" (click)="execute(it)" [disabled]="!canRun(it) || pending().has(it.number)"
-                              [matTooltip]="canRun(it) ? 'Executar (roda em paralelo aos outros itens)' : 'Executar — só itens pendentes ou que falharam'"
-                              [attr.aria-label]="'Executar ' + num(it.number)">
-                        <mat-icon>play_arrow</mat-icon>
-                      </button>
+                    @if (!readOnly()) {
+                      @if (isLive(it)) {
+                        <button class="wil__running" (click)="showSession(it.number)" [matTooltip]="(it.activity || look(it).label) + ' — ver a sessão de execução'"
+                                [attr.aria-label]="'Ver a sessão de execução do ' + num(it.number)">
+                          <mat-icon [class.wil__bot]="busy(it)">{{ it.status === 'waiting' ? 'front_hand' : 'smart_toy' }}</mat-icon>
+                          <span class="wil__running-text">{{ it.activity || (it.status === 'queued' ? 'Na fila' : it.status === 'reverting' ? 'Desfazendo' : it.status === 'waiting' ? (waitsForYou(it) ? 'Aguardando você' : 'Aguardando') : 'Executando') }}</span>
+                        </button>
+                      } @else {
+                        <button mat-icon-button class="wil__play" data-tour="wi-run" (click)="execute(it)" [disabled]="!canRun(it) || pending().has(it.number)"
+                                [matTooltip]="canRun(it) ? 'Executar (roda em paralelo aos outros itens)' : 'Executar — só itens pendentes ou que falharam'"
+                                [attr.aria-label]="'Executar ' + num(it.number)">
+                          <mat-icon>play_arrow</mat-icon>
+                        </button>
+                      }
+                      @if (it.editable) {
+                        <button mat-icon-button (click)="edit(it)" matTooltip="Editar" aria-label="Editar" [disabled]="pending().has(it.number)"><mat-icon>edit</mat-icon></button>
+                      }
+                      <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Mais ações" [disabled]="pending().has(it.number)"><mat-icon>more_horiz</mat-icon></button>
+                      <mat-menu #menu="matMenu" xPosition="before">
+                        @if (it.startedAt || isLive(it)) { <button mat-menu-item (click)="showSession(it.number)"><mat-icon>smart_toy</mat-icon>Ver sessão de execução</button> }
+                        <button mat-menu-item (click)="duplicate(it)"><mat-icon>content_copy</mat-icon>Criar novo a partir deste</button>
+                        @if (canCancelIt(it)) { <button mat-menu-item (click)="cancel(it)"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
+                        @if (canUndoIt(it)) { <button mat-menu-item (click)="undo(it)"><mat-icon>undo</mat-icon>Desfazer</button> }
+                        @if (it.planId) { <button mat-menu-item (click)="openPlan(it.number)"><mat-icon>account_tree</mat-icon>Abrir plano</button> }
+                      </mat-menu>
+                    } @else if (source() === 'related') {
+                      @if (relMeta(it.number); as rel) {
+                        <span class="wil__chip wil__relsrc" [matTooltip]="rel.context || 'Relatado ' + relLabel(rel.source)"><mat-icon>{{ relIcon(rel.source) }}</mat-icon>{{ relLabel(rel.source) }}</span>
+                      }
+                      <button mat-icon-button class="wil__relx" (click)="removeRelated(it)" matTooltip="Remover o relatado" aria-label="Remover o relatado"><mat-icon>link_off</mat-icon></button>
                     }
-                    @if (it.editable) {
-                      <button mat-icon-button (click)="edit(it)" matTooltip="Editar" aria-label="Editar" [disabled]="pending().has(it.number)"><mat-icon>edit</mat-icon></button>
-                    }
-                    <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Mais ações" [disabled]="pending().has(it.number)"><mat-icon>more_horiz</mat-icon></button>
-                    <mat-menu #menu="matMenu" xPosition="before">
-                      @if (it.startedAt || isLive(it)) { <button mat-menu-item (click)="showSession(it.number)"><mat-icon>smart_toy</mat-icon>Ver sessão de execução</button> }
-                      <button mat-menu-item (click)="duplicate(it)"><mat-icon>content_copy</mat-icon>Criar novo a partir deste</button>
-                      @if (canCancelIt(it)) { <button mat-menu-item (click)="cancel(it)"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
-                      @if (canUndoIt(it)) { <button mat-menu-item (click)="undo(it)"><mat-icon>undo</mat-icon>Desfazer</button> }
-                      @if (it.planId) { <button mat-menu-item (click)="openPlan(it.number)"><mat-icon>account_tree</mat-icon>Abrir plano</button> }
-                    </mat-menu>
                   </span>
                 </div>
               </div>
@@ -242,7 +296,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
               @if (isExpanded(it.number) && it.tasks.length) {
                 <ol class="wil__tasks">
                   @for (t of it.tasks; track t.id) {
-                    <li class="wil__task">
+                    <li class="wil__task" [class.wil__task--cited]="source() === 'related' && relMeta(it.number)?.matchedTaskNumber === t.number">
                       <mat-icon class="wil__task-st" [style.color]="taskLook(t).color" [class.wil__spin]="taskLook(t).spin" [matTooltip]="taskLook(t).label">{{ taskLook(t).icon }}</mat-icon>
                       <button class="wil__task-main" (click)="openTask(it, t)" [title]="t.title">
                         <span class="wil__num">{{ num(t.number) }}</span>
@@ -251,14 +305,16 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                       </button>
                       <span class="wil__task-st-label" [style.color]="taskLook(t).color">{{ taskLook(t).label }}</span>
                       <span class="wil__chip wil__chip--exec">{{ executor(t.executor) }}</span>
-                      @if (canResolve(t)) {
-                        <button mat-icon-button class="wil__qa" (click)="resolve(it, t)" [disabled]="pendingTask() === t.number"
-                                matTooltip="Já resolvi — o Claude continua (na sessão de execução dá para dizer o que você fez)"
-                                [attr.aria-label]="'Já resolvi ' + num(t.number)"><mat-icon>lock_open</mat-icon></button>
-                      }
-                      @for (a of quick(t); track a) {
-                        <button mat-icon-button class="wil__qa" (click)="taskAct(t, a)" [disabled]="pendingTask() === t.number"
-                                [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label + ' ' + num(t.number)"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
+                      @if (!readOnly()) {
+                        @if (canResolve(t)) {
+                          <button mat-icon-button class="wil__qa" (click)="resolve(it, t)" [disabled]="pendingTask() === t.number"
+                                  matTooltip="Já resolvi — o Claude continua (na sessão de execução dá para dizer o que você fez)"
+                                  [attr.aria-label]="'Já resolvi ' + num(t.number)"><mat-icon>lock_open</mat-icon></button>
+                        }
+                        @for (a of quick(t); track a) {
+                          <button mat-icon-button class="wil__qa" (click)="taskAct(t, a)" [disabled]="pendingTask() === t.number"
+                                  [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label + ' ' + num(t.number)"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
+                        }
                       }
                     </li>
                   }
@@ -413,6 +469,26 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
     @keyframes wil-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(88,166,255,0); } 50% { box-shadow: 0 0 0 3px rgba(88,166,255,.16); } }
     @keyframes wil-slide { 0% { background-position: -35% 0; } 100% { background-position: 135% 0; } }
     @keyframes wil-bob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-2px) rotate(-8deg); } 75% { transform: translateY(-1px) rotate(8deg); } }
+    /* 0094: aba Relatado — adicionar manual, selo de origem, card de origem, remover. */
+    .wil__addrel { display: flex; flex-direction: column; gap: 4px; }
+    .wil__addrel-field { width: 100%; max-width: 420px; }
+    .wil__addrel-busy { font-size: 16px; width: 16px; height: 16px; flex: none; color: var(--cc-text-3); }
+    .wil__addrel-hits { list-style: none; margin: 0; padding: 4px; display: flex; flex-direction: column; gap: 2px; max-width: 520px;
+      border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); border-radius: 10px; background: var(--surface-1, #262b33); }
+    .wil__addrel-hit { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; color: inherit; font: inherit; font-size: 12.5px;
+      text-align: left; cursor: pointer; padding: 6px 8px; border-radius: 8px; }
+    .wil__addrel-hit:hover:not(:disabled) { background: rgba(255,255,255,.06); }
+    .wil__addrel-hit:disabled { opacity: .5; cursor: default; }
+    .wil__addrel-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .wil__addrel-card, .wil__addrel-task { flex: none; font-size: 11px; color: var(--cc-text-3); white-space: nowrap; }
+    .wil__addrel-add { flex: none; font-size: 18px; width: 18px; height: 18px; color: var(--mat-sys-primary); }
+    .wil__relcard { color: var(--cc-text-3); }
+    .wil__relsrc mat-icon { color: #c4a7ff; }
+    .wil__relx.mat-mdc-icon-button { width: 30px; height: 30px; padding: 4px; }
+    .wil__relx mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--cc-text-3); }
+    .wil__relx:hover mat-icon { color: #f85149; }
+    .wil__task--cited { background: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent); border-left-color: color-mix(in srgb, var(--mat-sys-primary) 55%, transparent); }
+
     @container (max-width: 560px) {
       .wil__meta { width: 100%; margin-left: 30px; }
       .wil__actions { margin-left: auto; }
@@ -426,6 +502,10 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
 export class WorkItemListComponent {
   readonly card = input<string | null>();
   readonly cardType = input<'bug' | 'user-story'>('bug');
+  /** 0094: aba "Relatado" — somente leitura (sem criar/editar/executar/cancelar/resolver). */
+  readonly readOnly = input(false);
+  /** 0094: fonte dos itens — `card` (os do card) ou `related` (os relatados, de outros cards). */
+  readonly source = input<'card' | 'related'>('card');
   readonly openItem = input<number | null>(null);
   /** Abre a sessão de execução deste item (seletor da aba Execução, para itens sem plano). */
   readonly openSessionOf = input<number | null>(null);
@@ -486,9 +566,21 @@ export class WorkItemListComponent {
     } as Record<WorkItemFilter, number>;
   });
 
+  /** 0094: metadados da relação por número de item (selo de origem, sub-tarefa citada, remover). */
+  readonly relatedMeta = signal<Map<number, WorkItemRelated>>(new Map());
+  /** 0094: busca para adicionar relatado manual. */
+  readonly relatedQuery = signal('');
+  readonly relatedHits = signal<WorkItemSearchHit[]>([]);
+  readonly relatedSearching = signal(false);
+  readonly addingRelated = signal(false);
+  private relatedSearchSeq = 0;
+
   readonly num = formatWorkNumber;
   readonly origin = originLabel;
   readonly originIco = originIcon;
+  readonly relLabel = relatedSourceLabel;
+  readonly relIcon = relatedSourceIcon;
+  readonly relMeta = (n: number) => this.relatedMeta().get(n) ?? null;
   readonly executor = executorLabel;
   readonly look = (it: WorkItem) => itemStatusLook(it.status);
   readonly progress = (it: WorkItem) => itemProgress(it);
@@ -667,9 +759,17 @@ export class WorkItemListComponent {
   load(quiet = false): void {
     const card = this.currentCard;
     if (!card) return;
+    const related = this.source() === 'related';
     const seq = ++this.loadSeq;
     if (!quiet) this.loading.set(true);
-    this.api.list(card).subscribe({
+    // 0094: na aba "Relatado" a fonte é /related (itens de outros cards); guardamos os metadados da relação.
+    const request = related
+      ? this.api.listRelated(card).pipe(map((rels) => {
+          this.relatedMeta.set(new Map((rels ?? []).map((r) => [r.item.number, r])));
+          return (rels ?? []).map((r) => r.item);
+        }))
+      : this.api.list(card);
+    request.subscribe({
       next: (list) => {
         if (seq !== this.loadSeq || card !== this.currentCard) return;
         const first = !this.items().length;
@@ -686,8 +786,9 @@ export class WorkItemListComponent {
         this.loadError.set(null);
         if (first) this.restoreExpanded(card, sorted);
         this.countChange.emit(sorted.length);
-        if (!sorted.length) this.findCorrectionPlan(card);
-        if (first || countChanged) this.findAnalysisDone(card);
+        // Avisos e planos só fazem sentido para os itens do próprio card.
+        if (!related && !sorted.length) this.findCorrectionPlan(card);
+        if (!related && (first || countChanged)) this.findAnalysisDone(card);
       },
       error: (e) => {
         if (seq !== this.loadSeq || card !== this.currentCard) return;
@@ -695,6 +796,50 @@ export class WorkItemListComponent {
         this.loadError.set(e.message);
       }
     });
+  }
+
+  // ── relatados (0094) ───────────────────────────────────────────────────────────────────────────
+
+  /** Busca itens de outros cards para adicionar como relatado (debounce simples). */
+  onRelatedQuery(value: string): void {
+    this.relatedQuery.set(value);
+    const q = value.trim();
+    const seq = ++this.relatedSearchSeq;
+    if (q.length < 1) { this.relatedHits.set([]); this.relatedSearching.set(false); return; }
+    this.relatedSearching.set(true);
+    setTimeout(() => {
+      if (seq !== this.relatedSearchSeq) return;
+      this.api.search(q, this.currentCard, 8).subscribe({
+        next: (hits) => { if (seq === this.relatedSearchSeq) { this.relatedHits.set(hits ?? []); this.relatedSearching.set(false); } },
+        error: () => { if (seq === this.relatedSearchSeq) { this.relatedHits.set([]); this.relatedSearching.set(false); } }
+      });
+    }, 250);
+  }
+
+  addRelated(hit: WorkItemSearchHit): void {
+    const card = this.currentCard;
+    if (!card || this.addingRelated()) return;
+    this.addingRelated.set(true);
+    this.api.addRelated(card, hit.number).subscribe({
+      next: () => { this.addingRelated.set(false); this.clearRelatedSearch(); this.load(true); },
+      error: (e) => { this.addingRelated.set(false); this.loadError.set(e.message); }
+    });
+  }
+
+  removeRelated(it: WorkItem): void {
+    const card = this.currentCard;
+    if (!card) return;
+    this.api.removeRelated(card, it.number).subscribe({
+      next: () => this.load(true),
+      error: (e) => this.loadError.set(e.message)
+    });
+  }
+
+  private clearRelatedSearch(): void {
+    this.relatedSearchSeq++;
+    this.relatedQuery.set('');
+    this.relatedHits.set([]);
+    this.relatedSearching.set(false);
   }
 
   private findCorrectionPlan(card: string): void {
@@ -781,7 +926,7 @@ export class WorkItemListComponent {
   openItemDialog(number: number, item?: WorkItem | null, fromQuery = false): void {
     const card = this.currentCard;
     if (!card) return;
-    const data: WorkItemDialogData = { card, number, cardType: this.cardType(), item: item ?? null, catalog: this.catalog() };
+    const data: WorkItemDialogData = { card, number, cardType: this.cardType(), item: item ?? null, catalog: this.catalog(), readOnly: this.readOnly() };
     const ref = this.dialog.open<WorkItemDialogComponent, WorkItemDialogData, WorkItemDialogResult>(WorkItemDialogComponent, workDialogConfig(data, '860px'));
     ref.afterClosed().subscribe((r) => {
       if (fromQuery) this.clearItemQuery(number);
@@ -801,7 +946,7 @@ export class WorkItemListComponent {
 
   openTask(item: WorkItem, task: WorkTask): void {
     const card = this.currentCard;
-    if (card) this.actions.openTask(card, item, task.number, this.catalog());
+    if (card) this.actions.openTask(card, item, task.number, this.catalog(), this.readOnly());
   }
 
   async create(): Promise<void> {

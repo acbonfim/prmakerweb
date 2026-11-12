@@ -188,10 +188,12 @@ const FLASH_MS = 1_600;
             </div>
             <div class="wie__unblock-actions">
               <button mat-button (click)="openTask(item()!, rt)">Ver a sub-tarefa</button>
-              <button mat-flat-button color="primary" (click)="resolve(rt)" [disabled]="busyTask() === rt.number"
-                      matTooltip="A sub-tarefa volta a andar e o Claude retoma o item de onde parou">
-                <mat-icon>lock_open</mat-icon>Já resolvi — continuar
-              </button>
+              @if (!readOnly()) {
+                <button mat-flat-button color="primary" (click)="resolve(rt)" [disabled]="busyTask() === rt.number"
+                        matTooltip="A sub-tarefa volta a andar e o Claude retoma o item de onde parou">
+                  <mat-icon>lock_open</mat-icon>Já resolvi — continuar
+                </button>
+              }
             </div>
           </div>
         }
@@ -298,7 +300,7 @@ const FLASH_MS = 1_600;
                             matTooltip="Já resolvi — o Claude continua" [attr.aria-label]="'Já resolvi ' + num(t.number)"><mat-icon>lock_open</mat-icon></button>
                   }
                   <!-- Chamado aberto: o status vai pelo menu "Chamado"; concluir/falhar/pular ficam no detalhe da sub-tarefa -->
-                  @for (a of openTicket(t) ? [] : userActions(t); track a) {
+                  @for (a of readOnly() || openTicket(t) ? [] : userActions(t); track a) {
                     <button mat-icon-button class="wie__qa" (click)="taskAct(t, a)" [disabled]="busyTask() === t.number"
                             [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label + ' ' + num(t.number)"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
                   }
@@ -342,14 +344,16 @@ const FLASH_MS = 1_600;
       </div>
 
       @if (item(); as it) {
-        <footer class="wie__foot">
-          @if (canUndoIt()) { <button mat-button (click)="undo()" [disabled]="acting()"><mat-icon>undo</mat-icon>Desfazer</button> }
-          @if (canCancelIt()) { <button mat-button class="wie__cancel" (click)="cancel()" [disabled]="acting()"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
-          <span class="wie__spacer"></span>
-          @if (canRun()) {
-            <button mat-flat-button color="primary" (click)="execute()" [disabled]="acting()"><mat-icon>play_arrow</mat-icon>{{ it.status === 'failed' ? 'Executar de novo' : 'Executar' }}</button>
-          }
-        </footer>
+        @if (!readOnly()) {
+          <footer class="wie__foot">
+            @if (canUndoIt()) { <button mat-button (click)="undo()" [disabled]="acting()"><mat-icon>undo</mat-icon>Desfazer</button> }
+            @if (canCancelIt()) { <button mat-button class="wie__cancel" (click)="cancel()" [disabled]="acting()"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
+            <span class="wie__spacer"></span>
+            @if (canRun()) {
+              <button mat-flat-button color="primary" (click)="execute()" [disabled]="acting()"><mat-icon>play_arrow</mat-icon>{{ it.status === 'failed' ? 'Executar de novo' : 'Executar' }}</button>
+            }
+          </footer>
+        }
       }
     </section>
   `,
@@ -528,6 +532,8 @@ export class WorkItemExecutionComponent {
   readonly number = input.required<number>();
   readonly card = input<string | null>(null);
   readonly catalog = input<WorkItemCatalog | null>(null);
+  /** 0094: sessão aberta pela aba "Relatado" — somente leitura (sem ações). */
+  readonly readOnly = input(false);
   /** Pediu para abrir o modal do item. */
   readonly openDetails = output<number>();
   /** Item recarregado (a lista aproveita para atualizar a linha sem outro GET). */
@@ -579,7 +585,7 @@ export class WorkItemExecutionComponent {
   readonly ticketDraft = signal<{ task: number; url: string; title: string } | null>(null);
   /** "Já resolvi": sub-tarefa do Claude esperando a pessoa (a primeira) e a nota do que ela fez. */
   readonly resolvable = computed(() => waitingForResolve(this.item()));
-  readonly canResolve = (t: WorkTask) => canResolveWait(t);
+  readonly canResolve = (t: WorkTask) => !this.readOnly() && canResolveWait(t);
   readonly resolveNote = signal('');
   /** "Já resolvi": área maior para escrever a nota (a compacta cresce sozinha até ~7 linhas). */
   readonly resolveWide = signal(false);

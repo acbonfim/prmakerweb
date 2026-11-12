@@ -68,6 +68,8 @@ export interface WorkItemDialogData {
   item?: WorkItem | null;
   catalog?: WorkItemCatalog | null;
   tab?: WorkItemDialogTab;
+  /** 0094: aberto pela aba "Relatado" — somente leitura (sem ações do item). */
+  readOnly?: boolean;
 }
 
 /**
@@ -284,21 +286,23 @@ export interface WorkItemDialogData {
         }
       </div>
       @if (item(); as it) {
-        <footer class="wi-dlg__foot">
-          @if (canUndoIt()) { <button mat-button (click)="undo()" [disabled]="acting()"><mat-icon>undo</mat-icon>Desfazer</button> }
-          @if (canCancelIt()) { <button mat-button (click)="cancel()" [disabled]="acting()"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
-          <span class="wi-dlg__spacer"></span>
-          @if (it.editable) {
-            <button mat-stroked-button (click)="edit()" [disabled]="acting()"><mat-icon>edit</mat-icon>Editar</button>
-          } @else {
-            <button mat-stroked-button (click)="duplicate()" [disabled]="acting()" matTooltip="O item já foi iniciado: crie um novo a partir dele"><mat-icon>content_copy</mat-icon>Criar novo a partir deste</button>
-          }
-          @if (busyItem()) {
-            <button mat-flat-button disabled><mat-icon class="wi-spin">autorenew</mat-icon>{{ it.status === 'queued' ? 'Na fila' : 'Executando' }}</button>
-          } @else {
-            <button mat-flat-button color="primary" (click)="execute()" [disabled]="!canRun() || acting()"><mat-icon>play_arrow</mat-icon>Executar</button>
-          }
-        </footer>
+        @if (!data.readOnly) {
+          <footer class="wi-dlg__foot">
+            @if (canUndoIt()) { <button mat-button (click)="undo()" [disabled]="acting()"><mat-icon>undo</mat-icon>Desfazer</button> }
+            @if (canCancelIt()) { <button mat-button (click)="cancel()" [disabled]="acting()"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
+            <span class="wi-dlg__spacer"></span>
+            @if (it.editable) {
+              <button mat-stroked-button (click)="edit()" [disabled]="acting()"><mat-icon>edit</mat-icon>Editar</button>
+            } @else {
+              <button mat-stroked-button (click)="duplicate()" [disabled]="acting()" matTooltip="O item já foi iniciado: crie um novo a partir dele"><mat-icon>content_copy</mat-icon>Criar novo a partir deste</button>
+            }
+            @if (busyItem()) {
+              <button mat-flat-button disabled><mat-icon class="wi-spin">autorenew</mat-icon>{{ it.status === 'queued' ? 'Na fila' : 'Executando' }}</button>
+            } @else {
+              <button mat-flat-button color="primary" (click)="execute()" [disabled]="!canRun() || acting()"><mat-icon>play_arrow</mat-icon>Executar</button>
+            }
+          </footer>
+        }
       }
     </div>
   `,

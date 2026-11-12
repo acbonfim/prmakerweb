@@ -154,6 +154,36 @@ export interface WorkItem {
   matchedTaskNumber?: number | null;
 }
 
+/** 0094: origem de um relatado (selo da aba "Relatado"). */
+export type WorkItemRelatedSource = 'specialist' | 'plan' | 'timeline' | 'item-ref' | 'manual' | (string & {});
+
+/** 0094: um item relatado ao card (`GET WorkItems/card/{card}/related`) — a relação + o item resolvido (de outro card, em geral). */
+export interface WorkItemRelated {
+  source: WorkItemRelatedSource;
+  context?: string | null;
+  /** Sub-tarefa citada (quando a menção foi a um `#n` de sub-tarefa). */
+  matchedTaskNumber?: number | null;
+  relatedAt: string;
+  addedByName?: string | null;
+  item: WorkItem;
+}
+
+const RELATED_SOURCE_LOOK: Record<string, { label: string; icon: string }> = {
+  specialist: { label: 'Especialista', icon: 'psychology' },
+  plan: { label: 'Plano', icon: 'account_tree' },
+  timeline: { label: 'Timeline', icon: 'timeline' },
+  'item-ref': { label: 'Item', icon: 'checklist' },
+  manual: { label: 'Manual', icon: 'add_link' }
+};
+
+export function relatedSourceLabel(source: string | null | undefined): string {
+  return RELATED_SOURCE_LOOK[source ?? '']?.label ?? 'Relatado';
+}
+
+export function relatedSourceIcon(source: string | null | undefined): string {
+  return RELATED_SOURCE_LOOK[source ?? '']?.icon ?? 'link';
+}
+
 export interface TaskKindParam {
   key: string;
   label?: string | null;

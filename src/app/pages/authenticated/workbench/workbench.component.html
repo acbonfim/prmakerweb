@@ -264,6 +264,10 @@
       <mat-icon>folder_open</mat-icon><span>Arquivos</span>
       @if (filesCount()) { <span class="wb-count">{{ filesCount() }}</span> }
     </button>
+    <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'reported'" [attr.aria-selected]="mtab === 'reported'"
+            (click)="selectMobile('reported')">
+      <mat-icon>hub</mat-icon><span>Relatado</span>
+    </button>
     <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'chat'" [attr.aria-selected]="mtab === 'chat'"
             (click)="selectMobile('chat')">
       <mat-icon>psychology</mat-icon><span>Especialista</span>
@@ -299,6 +303,12 @@
                   matTooltipShowDelay="600">
             <mat-icon>folder_open</mat-icon><span class="wb-seg__label">Arquivos</span>
             @if (filesCount()) { <span class="wb-count">{{ filesCount() }}</span> }
+          </button>
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'reported'" data-tour="wb-reported-tab"
+                  [attr.aria-selected]="main === 'reported'" (click)="selectMain('reported')"
+                  matTooltip="Itens de trabalho de outros cards relacionados a este (menção na conversa do especialista ou adicionados à mão) — somente leitura"
+                  matTooltipShowDelay="600">
+            <mat-icon>hub</mat-icon><span class="wb-seg__label">Relatado</span>
           </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'card'" data-tour="wb-card-tab"
                   [attr.aria-selected]="main === 'card'" (click)="selectMain('card')">
@@ -344,6 +354,13 @@
 
         <app-work-item-list [card]="card()" [cardType]="cardType()" [openItem]="openItem()" [openSessionOf]="sessionOf()"
                             (countChange)="onCountChange($event)" (executingChange)="onExecuting($event)"></app-work-item-list>
+      </div>
+
+      <!-- 0094: Relatado — itens de outros cards relacionados a este (menção/manual), somente leitura -->
+      <div class="wb-pane" [class.wb-hidden]="main !== 'reported'" data-tour="wb-reported">
+        @if (main === 'reported') {
+          <app-work-item-list [card]="card()" [cardType]="cardType()" [readOnly]="true" [source]="'related'"></app-work-item-list>
+        }
       </div>
 
       <div class="wb-pane wb-pane--plan" [class.wb-hidden]="main !== 'plan'" data-tour="wb-plan">
