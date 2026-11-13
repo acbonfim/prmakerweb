@@ -83,7 +83,8 @@ const QUICK = [
 
 /**
  * 0080: Especialista do caso — a conversa do card com um agente próprio (pista do especialista no executor), que conhece
- * o caso inteiro, mostra o que está fazendo ao vivo e nunca altera o plano: conclusões viram proposta que uma pessoa aceita.
+ * o caso inteiro, mostra o que está fazendo ao vivo e só mexe no plano a pedido (0096: ajuste direto no plano atual;
+ * versão nova pela proposta que uma pessoa aceita).
  * Várias pessoas escrevem na mesma conversa (avatares, "digitando"); imagens coladas/arrastadas, arquivos e voz.
  */
 @Component({
