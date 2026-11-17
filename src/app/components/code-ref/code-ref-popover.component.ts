@@ -16,7 +16,8 @@ import {
 } from './code-ref.model';
 
 export type CodeRefTab = 'proposal' | 'current' | 'done';
-export type CodeRefMode = 'popover' | 'sheet' | 'dialog';
+/** `inline` (card 78505): a fotografia aberta dentro do resultado da sub-tarefa, sem fechar. */
+export type CodeRefMode = 'popover' | 'sheet' | 'dialog' | 'inline';
 
 export interface CodeRefDialogData {
   card: string;
@@ -65,7 +66,8 @@ const TAB_LABEL: Record<CodeRefTab, string> = { proposal: 'Proposta', current: '
     '[class.cr--popover]': "modeV() === 'popover'",
     '[class.cr--sheet]': "modeV() === 'sheet'",
     '[class.cr--dialog]': "modeV() === 'dialog'",
-    role: 'dialog',
+    '[class.cr--inline]': "modeV() === 'inline'",
+    '[attr.role]': "modeV() === 'inline' ? 'region' : 'dialog'",
     tabindex: '-1',
     '[attr.aria-label]': 'ariaLabel()',
     '(keydown)': 'onKeydown($event)',
@@ -101,9 +103,11 @@ const TAB_LABEL: Record<CodeRefTab, string> = { proposal: 'Proposta', current: '
             <mat-icon>open_in_full</mat-icon>
           </button>
         }
-        <button mat-icon-button type="button" (click)="close()" matTooltip="Fechar (Esc)" aria-label="Fechar">
-          <mat-icon>close</mat-icon>
-        </button>
+        @if (modeV() !== 'inline') {
+          <button mat-icon-button type="button" (click)="close()" matTooltip="Fechar (Esc)" aria-label="Fechar">
+            <mat-icon>close</mat-icon>
+          </button>
+        }
       </span>
     </header>
 
@@ -204,6 +208,7 @@ const TAB_LABEL: Record<CodeRefTab, string> = { proposal: 'Proposta', current: '
     .cr.cr--popover { width: min(760px, calc(100vw - 24px)); max-height: min(70vh, 720px); animation: cr-in .12s ease-out; }
     .cr.cr--sheet { width: 100vw; max-height: 82vh; border-radius: 14px 14px 0 0; border-bottom: none; animation: cr-up .18s ease-out; }
     .cr.cr--dialog { width: 100%; height: 100%; border: none; border-radius: 0; box-shadow: none; }
+    .cr.cr--inline { width: 100%; max-height: 420px; box-shadow: none; border-radius: 10px; }
     @keyframes cr-in { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
     @keyframes cr-up { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
     @media (prefers-reduced-motion: reduce) { .cr.cr--popover, .cr.cr--sheet { animation: none; } }
@@ -471,7 +476,7 @@ export class CodeRefPopoverComponent {
       const el = this.codeEl()?.nativeElement;
       if (el) requestAnimationFrame(() => this.scrollToFocus(el));
     });
-    afterNextRender(() => this.host.nativeElement.focus({ preventScroll: true }));
+    afterNextRender(() => { if (this.modeV() !== 'inline') this.host.nativeElement.focus({ preventScroll: true }); });
   }
 
   reload(): void { this.load(false); }
@@ -545,7 +550,7 @@ export class CodeRefPopoverComponent {
   }
 
   onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && !this.dialogRef && !event.defaultPrevented) {
+    if (event.key === 'Escape' && !this.dialogRef && this.modeV() !== 'inline' && !event.defaultPrevented) {
       event.preventDefault();
       event.stopPropagation();
       this.close();
