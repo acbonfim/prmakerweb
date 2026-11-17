@@ -8,6 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
+import { CodeSnapshotsComponent } from '../code-ref/code-snapshots.component';
 import { WorkItemsService } from '../../services/work-items.service';
 import { WsService } from '../../services/ws.service';
 import {
@@ -69,7 +70,7 @@ export interface WorkTaskDialogData {
 @Component({
   selector: 'app-work-task-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WorkItemFilesComponent, WorkDeliverablesComponent, WorkEvidenceGalleryComponent],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, CodeSnapshotsComponent, WorkItemFilesComponent, WorkDeliverablesComponent, WorkEvidenceGalleryComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <!-- 0087: links de código (ref:) e de itens da engenharia reversa/Base Solvace abrem o popover aqui também -->
@@ -181,7 +182,11 @@ export interface WorkTaskDialogData {
           }
 
           @if (t.result) {
-            <section class="wi-sec"><h4 class="wi-sec__title">Resultado</h4><div class="wi-md" [innerHTML]="t.result | planMarkdown:'card'"></div></section>
+            <!-- Card 78505: o resultado da etapa (tabelas, itens da Base, análise) e o código citado já aberto -->
+            <section class="wi-sec"><h4 class="wi-sec__title">Resultado</h4><div class="wi-md" [innerHTML]="t.result | planMarkdown:'card'"></div>
+              <app-code-snapshots [card]="data.card" [text]="t.result" /></section>
+          } @else if (t.status === 'completed') {
+            <p class="wi-muted wtd__small">Concluída sem resultado registrado.</p>
           }
 
           @if (t.undo) {
