@@ -128,7 +128,7 @@ const TAB_LABEL: Record<CodeRefTab, string> = { proposal: 'Proposta', current: '
             <span>A referência <code>{{ refIdV() }}</code> não existe (ou foi removida) neste card.</span>
           } @else {
             <code class="cr__cite">{{ citationV() }}</code>
-            <span>Este trecho ainda não tem fotografia no card.</span>
+            <span>{{ cardV() ? 'Este trecho ainda não tem fotografia no card.' : 'Trecho do código citado no documento (a fotografia do código só existe nos textos de um card).' }}</span>
             <button mat-stroked-button type="button" (click)="copy(citationV())"><mat-icon>content_copy</mat-icon> Copiar caminho</button>
           }
         </div>

@@ -48,6 +48,7 @@ import {
   SECTION_PARTS_FROM,
   relationKind
 } from '../../../services/architecture.service';
+import { CodeRefHostDirective } from '../../../components/code-ref/code-ref-host.directive';
 import { LazyMarkdownComponent } from '../../../components/lazy-markdown/lazy-markdown.component';
 import { REVERSE_DOCS } from '../../../services/reverse-engineering.service';
 
@@ -101,6 +102,8 @@ interface TreeGroup {
     KbByQuestionComponent,
     KbFriendlyOverviewComponent, KbConnectionsComponent, KbGuideReviewComponent, KbLearnCardComponent, KbAskDeepComponent, KbQuestionsComponent, LazyMarkdownComponent,
     KbAttachDropDirective, KbAttachToolsComponent, KbAttachChipsComponent],
+  // Links de código do markdown (`#cite/…`): sem a diretiva, o navegador resolve contra o <base href="/"> e sai da tela.
+  hostDirectives: [CodeRefHostDirective],
   templateUrl: './architecture.component.html',
   styleUrls: ['./architecture.component.css']
 })
