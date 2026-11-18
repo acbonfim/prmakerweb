@@ -9,6 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Popover, PopoverModule } from 'primeng/popover';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdown.pipe';
+import { CodeRefHostDirective } from '../../../components/code-ref/code-ref-host.directive';
 import { LazyMarkdownComponent, MarkdownPartsSource } from '../../../components/lazy-markdown/lazy-markdown.component';
 import { ArchitectureService } from '../../../services/architecture.service';
 import { WsService } from '../../../services/ws.service';
@@ -41,6 +42,8 @@ type View = 'modulos' | 'revisoes' | 'indice' | 'glossario';
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule, PopoverModule, PlanMarkdownPipe,
     ReHowToComponent, ReProgressComponent, ReRevisionComponent, ReAssetsComponent, ReIndexComponent, ReGlossaryComponent, ReTrapsComponent, ReInfraComponent, ReCopyCommandComponent,
     LazyMarkdownComponent],
+  // Links de código do markdown (`#cite/…`): sem a diretiva, o navegador resolve contra o <base href="/"> e sai da tela.
+  hostDirectives: [CodeRefHostDirective],
   templateUrl: './reverse-engineering.component.html',
   styleUrls: ['./reverse-engineering.component.css']
 })
