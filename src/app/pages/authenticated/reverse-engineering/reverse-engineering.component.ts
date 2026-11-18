@@ -162,6 +162,9 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   });
 
   docStatus = computed<ReverseDocStatus | null>(() => this.module()?.docs.find(d => d.type === this.docKey()) ?? null);
+  /** 0097: documentos que ainda se geram (para o "Como gerar"): sem os descontinuados, a prática (sob demanda) e o índice técnico. */
+  generatableDocs = computed(() => (this.module()?.docs ?? [])
+    .filter(d => !this.isDiscontinued(d) && !['pratica', 'tecnico'].includes(d.type)).map(d => d.type));
   docType = computed(() => this.docTypes().find(t => t.key === this.docKey()) ?? null);
   openRevision = computed(() => this.docStatus()?.open ?? null);
   /** 0056: grupos do sumário que vêm recolhidos (o glossário tem centenas de termos) — abertos por clique ou ao ir a um item. */
@@ -402,12 +405,23 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
   objectEntries(o: Record<string, number>) { return Object.entries(o ?? {}); }
-  docState(m: ReverseModuleSummary, key: string) { return m.docs.find(d => d.type === key)?.state ?? 'none'; }
+  /** 0097: design e visão descontinuados — pelo status do módulo ou pelo tipo (doc-types); API antiga não manda: falso. */
+  isDiscontinued(d: ReverseDocStatus | string) {
+    const type = typeof d === 'string' ? d : d.type;
+    return (typeof d !== 'string' && !!d.discontinued) || !!this.docTypes().find(t => t.key === type)?.discontinued;
+  }
+  /**
+   * 0097: abas/bolinhas do módulo — descontinuado só aparece se tem publicado (ou revisão aberta); o índice técnico tem aba
+   * própria (fora da lista de documentos com aprovação).
+   */
+  visibleDocs(m: ReverseModuleSummary) {
+    return m.docs.filter(d => d.type !== 'tecnico' && (!this.isDiscontinued(d) || !!d.published || !!d.open));
+  }
   isLive(h?: ReverseRevisionHead | null) {
     return !!h?.progressAt && ['draft', 'changes'].includes(h.status) && Date.now() - new Date(h.progressAt).getTime() < 3 * 60000;
   }
   moduleLive(m: ReverseModuleSummary) { return m.docs.some(d => this.isLive(d.open)); }
-  docTitle(key: string) { return this.docs.find(d => d.key === key)?.short ?? key; }
+  docTitle(key: string) { return this.docs.find(d => d.key === key)?.short ?? this.docTypes().find(t => t.key === key)?.title ?? key; }
   date(at?: string | null) { return at ? new Date(at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''; }
   pct(v?: number | null) { return v == null ? '—' : `${Math.floor(v * 100)}%`; }
   worldIcon(w: string) { return ({ legado: 'history', revamp: 'auto_awesome', front: 'web', 'integração': 'sync_alt', login: 'lock' } as any)[w] ?? 'widgets'; }

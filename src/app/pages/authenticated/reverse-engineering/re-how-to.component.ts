@@ -43,7 +43,7 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
         <li>
           <b>Rode o comando do documento</b> (um por vez, ou todos em sequência):
           <div class="how__cmds">
-            @for (d of docs; track d.key) {
+            @for (d of docs(); track d.key) {
               <div class="cmd">
                 <mat-icon class="cmd__icon">{{ d.icon }}</mat-icon><span class="cmd__label">{{ d.short }}</span>
                 <code>/engenharia-reversa {{ module().key }} {{ d.key }}</code>
@@ -56,19 +56,20 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
               <button type="button" (click)="copy('/engenharia-reversa ' + module().key + ' tudo')" matTooltip="Copiar"><mat-icon>content_copy</mat-icon></button>
             </div>
           </div>
-          <div class="muted"><b>Visão prática</b> (para quem usa o sistema: como chegar, como fazer, perguntas práticas) — só depois que os demais exigidos forem
-            aprovados e publicados; é escrita só do que foi publicado.</div>
+          <!-- 0097: prática sob demanda; design e visão descontinuados (não aparecem aqui) -->
+          <div class="muted"><b>Visão prática</b> (para quem usa o sistema) — <b>sob demanda</b>: a tela sugere quando o Pergunte acumula perguntas sem
+            resposta do módulo, e ela é escrita a partir dessas perguntas (aba Visão prática).</div>
           <div class="muted"><b>Já publicado?</b> "melhorar" vê o que mudou no código e no banco desde a versão publicada e aplica as sugestões das
-            análises e a nota do revisor. Ordem recomendada no "tudo": arquitetura → UI/UX → funcional → visão → spec. arquitetura → spec. design.</div>
+            análises e a nota do revisor. No "tudo": funcional e arquitetura numa passada só → spec. arquitetura.</div>
           <!-- 0056: todo comando com o botão de copiar -->
           <div class="how__cmds">
-            @for (d of docs; track d.key) {
+            @for (d of docs(); track d.key) {
               <app-copy-command [command]="'/engenharia-reversa ' + module().key + ' melhorar ' + d.key" [label]="'Melhorar ' + d.short" icon="auto_fix_high" [block]="true" />
             }
           </div>
           <details class="how__redo">
             <summary class="muted">Refazer do zero (mantém os IDs)</summary>
-            @for (d of docs; track d.key) {
+            @for (d of docs(); track d.key) {
               <app-copy-command [command]="'/engenharia-reversa ' + module().key + ' refazer ' + d.key" [label]="d.short" icon="restart_alt" [block]="true" />
             }
           </details>
@@ -84,7 +85,7 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
           (<code>prmake-skills.sh db-credentials</code>). Scripts SQL versionados no repositório não são usados.
         </li>
         <li>
-          <b>UI/UX</b>: antes de gerar UI/UX e Spec. design, anexe na aba <b>UI/UX</b> os links do Figma/protótipo ou as imagens — o Claude compara com o que está implementado.
+          <b>UI/UX</b>: antes de gerar UI/UX, anexe na aba <b>UI/UX</b> os links do Figma/protótipo ou as imagens — o Claude compara com o que está implementado.
         </li>
         <li>
           <b>Acompanhe aqui, ao vivo</b>: cada documento mostra as etapas (inventário do código → leitura por área → checagem de cobertura → envio), o que o
@@ -123,9 +124,14 @@ export class ReHowToComponent {
   module = input.required<ReverseModule>();
   approverRoles = input<string[]>([]);
   reference = input<{ environment: string; host: string; global: string; locals: string[] } | null | undefined>(null);
-  readonly docKeys = REVERSE_DOCS.map(d => d.key).join(' · ');
+  /** 0097: documentos que ainda se geram (vêm do módulo/API: sem descontinuados, prática e índice técnico); vazio = lista fixa. */
+  docKeys = input<string[] | null>(null);
   dbLabel = computed(() => { const r = this.reference(); return r ? `${r.environment} (${r.global} + ${r.locals.length} locais)` : 'de referência (DEMO)'; });
-  readonly docs = REVERSE_DOCS;
+  docs = computed(() => {
+    const keys = this.docKeys();
+    if (!keys?.length) return REVERSE_DOCS;
+    return keys.map(k => REVERSE_DOCS.find(d => d.key === k) ?? { key: k, short: k, icon: 'description' });
+  });
   readonly installCmd = 'bash ~/.claude/skills/.prmake/prmake-skills.sh update engenharia-reversa';
   readonly reposCmd = 'bash ~/.claude/skills/.prmake/prmake-skills.sh repos scan';
   isLegacy = computed(() => this.module().projectKind === 'legacy');

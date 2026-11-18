@@ -60,11 +60,17 @@ export interface ReverseDocStatus {
   staleBecause?: string[];
   /** 0054: exigidos que faltam publicar antes de começar. */
   blockedBy?: string[];
+  /** 0097: tipo descontinuado (design, visão) — se a API mandar aqui; senão vale o `discontinued` do tipo (doc-types). */
+  discontinued?: boolean;
 }
 
 export interface ReverseModuleSummary {
   key: string; name: string; displayName?: string | null; businessArea?: string | null; projectKind: string; world: string;
   docs: ReverseDocStatus[]; publishedRequired: number; requiredCount: number; complete: boolean; inReview: number; items: number; aliases: string[];
+  /** 0097: perguntas do Pergunte sem resposta (abertas) para o módulo — a visão prática é sob demanda a partir delas. */
+  openQuestions?: number;
+  /** 0097: visão prática sugerida (sem prática publicada ou desatualizada e perguntas sem resposta ≥ o mínimo da config). */
+  practicalSuggested?: boolean;
 }
 
 export interface ReverseAsset {
@@ -118,6 +124,10 @@ export interface ReverseTrap {
 
 export interface ReverseDocType {
   key: string; title: string; sectionKey: string; order: number; required: boolean; kinds: string[]; headings: string[]; purpose: string; template: string;
+  /** 0097: não se gera mais (design, visão) — o publicado continua legível e na busca. */
+  discontinued?: boolean;
+  /** 0097: gerado sem IA e publicado direto (índice técnico). */
+  generated?: boolean;
 }
 
 export interface ReverseItemHead { id: string; kind: string; title: string; level: number; removed: boolean; }
