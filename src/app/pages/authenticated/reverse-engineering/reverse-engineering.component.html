@@ -113,6 +113,11 @@
             <li><b>Revise e publique</b>: diferença por item, cobertura do código, avisos. Publicado = ativo na Base Solvace e nas análises.</li>
             <li><b>Melhore sempre</b>: as análises de cards sugerem correções e lacunas; a próxima sessão "melhorar" usa tudo isso.</li>
           </ol>
+          @if (!canGenerate()) {
+            <!-- 0097: leitura aberta -->
+            <p class="muted">Você vê tudo o que está publicado (e o andamento das sessões) em leitura. Gerar é com os administradores; aprovar e publicar, com
+              {{ settings()?.approverRoles?.join(' ou ') || 'os aprovadores' }}.</p>
+          }
           <div class="legend">
             @for (s of ['none', 'draft', 'review', 'changes', 'approved', 'published']; track s) {
               <span><span class="dot" [style.background]="state(s).color"></span>{{ state(s).label }}</span>
@@ -134,7 +139,7 @@
           </div>
           @if (m.summary) { <p class="summary">{{ m.summary }}</p> }
           <div class="modhead__actions">
-            <button mat-stroked-button type="button" #howBtn (click)="howPop.toggle($event)"><mat-icon>terminal</mat-icon>Como gerar</button>
+            @if (canGenerate()) { <button mat-stroked-button type="button" #howBtn (click)="howPop.toggle($event)"><mat-icon>terminal</mat-icon>Como gerar</button> }
             <button mat-stroked-button type="button" #srcBtn (click)="openSources($event)"><mat-icon>source</mat-icon>Fontes e apelidos</button>
             <app-re-traps [moduleKey]="m.key" [canApprove]="m.canApprove" [migratedAt]="m.trapsMigratedAt" [stamp]="m.traps"
                           (changed)="loadModule(m.key, false)" (goTo)="scrollTo($event)"></app-re-traps>
@@ -241,12 +246,12 @@
           </div>
 
           @if (docKey() === 'uiux' || docKey() === 'design') {
-            <app-re-assets [moduleKey]="m.key" [assets]="m.assets" (changed)="loadModule(m.key, false)"></app-re-assets>
+            <app-re-assets [moduleKey]="m.key" [assets]="m.assets" [canEdit]="canGenerate()" (changed)="loadModule(m.key, false)"></app-re-assets>
           }
 
           @if (ds.staleBecause?.length) {
-            <div class="stale"><mat-icon>update</mat-icon><span><b>Desatualizada:</b> {{ ds.staleBecause!.join(', ') }} foi republicado depois dela. Rode
-              <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' melhorar ' + ds.type" />.</span></div>
+            <div class="stale"><mat-icon>update</mat-icon><span><b>Desatualizada:</b> {{ ds.staleBecause!.join(', ') }} foi republicado depois dela.
+              @if (canGenerate()) { Rode <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' melhorar ' + ds.type" />. }</span></div>
           }
           @if (ds.open; as open) {
             @if (open.status === 'draft' || open.status === 'changes') {
@@ -258,7 +263,7 @@
               <mat-icon>lock</mat-icon>
               <div>
                 <b>{{ docTitle(ds.type) }} é escrita só do que já foi aprovado.</b>
-                <div class="muted">Publique antes: {{ ds.blockedBy!.join(', ') }}. Depois, no Claude Code: <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" /></div>
+                <div class="muted">Publique antes: {{ ds.blockedBy!.join(', ') }}.@if (canGenerate()) { Depois, no Claude Code: <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" /> }</div>
               </div>
             </div>
           } @else if (!ds.published) {
@@ -266,9 +271,13 @@
               <mat-icon>hourglass_empty</mat-icon>
               <div>
                 <b>{{ docTitle(ds.type) }} ainda não foi gerado.</b>
-                <div class="muted">No Claude Code aberto na pasta do módulo:</div>
-                <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" [block]="true" />
-                <div><a (click)="howPop.show($event, howBtn)">Ver o passo a passo</a></div>
+                @if (canGenerate()) {
+                  <div class="muted">No Claude Code aberto na pasta do módulo:</div>
+                  <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" [block]="true" />
+                  <div><a (click)="howPop.toggle($event)">Ver o passo a passo</a></div>
+                } @else {
+                  <div class="muted">Um administrador gera os documentos no Claude Code; publicado, aparece aqui para todos.</div>
+                }
               </div>
             </div>
           }

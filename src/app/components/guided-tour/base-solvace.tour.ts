@@ -8,7 +8,7 @@ import { TourDefinition } from './tour.model';
  */
 export const BASE_SOLVACE_TOUR: TourDefinition = {
   id: 'base-solvace',
-  version: 1,
+  version: 2,
   title: 'Como usar a Base Solvace',
   help: {
     subtitle: 'Configuração inicial, como achar respostas e como ajudar a base a aprender',
@@ -168,12 +168,13 @@ export const BASE_SOLVACE_TOUR: TourDefinition = {
         'você revisa antes de gravar.'
     },
     {
-      id: 'reverse', anchor: 'kb-reverse', group: 'Administração', since: 1, phase: 'entry', side: 'bottom', align: 'start', prepare: 'project',
-      requires: 'admin', optional: true,
-      title: 'Engenharia reversa (administrador)',
+      // 0097: a engenharia reversa é de leitura para todos (gerar e aprovar continuam restritos).
+      id: 'reverse', anchor: 'kb-reverse', group: 'Um sistema por dentro', since: 2, phase: 'entry', side: 'bottom', align: 'start', prepare: 'project',
+      optional: true,
+      title: 'Engenharia reversa',
       body: 'Os documentos completos do módulo — cada regra (RN), caso de uso (UC), tela, endpoint e integração com ID — e quantos já foram publicados.',
       detail: 'A engenharia reversa é gerada no Claude Code com a skill <code>/engenharia-reversa</code>, aprovada documento a documento ' +
-        'e, publicada, passa a ser a fonte das análises. O link leva à tela de Engenharia reversa do módulo.'
+        'e, publicada, passa a ser a fonte das análises. O link leva à tela de Engenharia reversa do módulo (leitura para todos).'
     },
     {
       id: 'done', anchor: 'kb-help', group: 'Começo', since: 1, phase: 'entry', side: 'bottom', align: 'end', prepare: 'overview', guide: false,

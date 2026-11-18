@@ -26,12 +26,14 @@ import { ReverseAsset, ReverseEngineeringService } from '../../../services/rever
             @if (a.notes) { <span class="muted">{{ a.notes }}</span> }
             <span class="spacer"></span>
             <span class="muted">{{ a.createdBy }}</span>
-            <button type="button" class="icon" (click)="remove(a)" matTooltip="Remover"><mat-icon>delete</mat-icon></button>
+            @if (canEdit()) { <button type="button" class="icon" (click)="remove(a)" matTooltip="Remover"><mat-icon>delete</mat-icon></button> }
           </li>
         } @empty {
-          <li class="muted">Nenhum anexo ainda. Adicione o link do Figma (arquivo ou frame), do protótipo, ou suba as telas exportadas.</li>
+          <li class="muted">Nenhum anexo ainda.@if (canEdit()) { Adicione o link do Figma (arquivo ou frame), do protótipo, ou suba as telas exportadas. }</li>
         }
       </ul>
+      <!-- 0097: anexar é parte da geração (administrador); os demais só abrem os anexos. -->
+      @if (canEdit()) {
       <div class="add">
         <input type="text" placeholder="Título (ex.: Figma — Cadastro de ideia)" [(ngModel)]="title">
         <input type="url" placeholder="https://www.figma.com/… ou link do protótipo" [(ngModel)]="url">
@@ -42,6 +44,7 @@ import { ReverseAsset, ReverseEngineeringService } from '../../../services/rever
           <mat-icon>upload_file</mat-icon>Subir arquivo
         </label>
       </div>
+      }
     </section>
   `,
   styles: [`
@@ -71,6 +74,8 @@ export class ReAssetsComponent {
   private snack = inject(MatSnackBar);
   moduleKey = input.required<string>();
   assets = input<ReverseAsset[]>([]);
+  /** 0097: anexar/remover (geração) — só administrador. */
+  canEdit = input(false);
   changed = output<void>();
   busy = signal(false);
   title = '';

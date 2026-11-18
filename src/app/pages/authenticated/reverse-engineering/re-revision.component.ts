@@ -262,7 +262,8 @@ export class ReRevisionComponent {
         // revisão mudou com o documento aberto: busca o texto novo
         if (this.contentFor !== this.contentKey(r)) { this.content.set(null); if (this.showDoc()) this.withContent(() => {}); }
       },
-      error: e => { this.loading.set(false); this.toast(e); }
+      // 0097: quem não pode ver a revisão (403) só não vê o painel — o publicado continua na tela.
+      error: e => { this.loading.set(false); if (e?.status !== 403) this.toast(e); }
     });
   }
 

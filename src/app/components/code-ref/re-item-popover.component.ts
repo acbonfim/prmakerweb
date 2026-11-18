@@ -95,7 +95,8 @@ function idOf(ref: string): string {
         @case ('forbidden') {
           <div class="rei__state rei__state--locked" role="status">
             <mat-icon>lock</mat-icon>
-            <span>Os itens da engenharia reversa são visíveis só para administradores.</span>
+            <!-- 0097: a leitura é aberta a todos; 403 aqui = API antiga ou sessão sem permissão -->
+            <span>Sem acesso a este item da engenharia reversa.</span>
           </div>
         }
         @case ('missing') {
