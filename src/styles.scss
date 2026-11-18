@@ -618,7 +618,6 @@ div.md-table.md-table {
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 10px;
   background: rgba(13, 17, 23, 0.32);
-  scrollbar-width: thin;
 }
 div.md-table.md-table > table {
   display: table;
@@ -978,3 +977,35 @@ img.md-attachment.md-attachment--loading {
   .cime-bob { animation: cime-bob 1.4s ease-in-out infinite; }
 }
 @keyframes cime-bob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-2px) rotate(-8deg); } 75% { transform: translateY(-1px) rotate(8deg); } }
+
+/* ──────────────────────────────────────────────────────────────
+   Barras de rolagem (todas as telas): pílula fina e translúcida, sem trilho nem setas. Discreta parada, aparece
+   mais quando o mouse está na área que rola e ganha a cor primária ao arrastar. Chrome/Edge/Safari pelo
+   ::-webkit-scrollbar; Firefox pelo padrão (scrollbar-width/color). Não ponha scrollbar-width/scrollbar-color
+   nos componentes: no Chrome eles desligam este estilo (só `scrollbar-width: none`, para esconder).
+   ────────────────────────────────────────────────────────────── */
+:root {
+  --cime-scroll-thumb: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent);
+  --cime-scroll-thumb-area: color-mix(in srgb, var(--mat-sys-on-surface) 22%, transparent);
+  --cime-scroll-thumb-hover: color-mix(in srgb, var(--mat-sys-on-surface) 36%, transparent);
+  --cime-scroll-thumb-active: color-mix(in srgb, var(--mat-sys-primary) 75%, transparent);
+}
+::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner { background: transparent; }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+::-webkit-scrollbar-thumb {
+  min-width: 32px;
+  min-height: 32px;
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background-color: var(--cime-scroll-thumb);
+  background-clip: padding-box;
+  transition: background-color .2s ease;
+}
+:hover::-webkit-scrollbar-thumb { background-color: var(--cime-scroll-thumb-area); }
+::-webkit-scrollbar-thumb:hover { border-width: 2px; background-color: var(--cime-scroll-thumb-hover); }
+::-webkit-scrollbar-thumb:active { border-width: 2px; background-color: var(--cime-scroll-thumb-active); }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--cime-scroll-thumb-area) transparent; }
+}

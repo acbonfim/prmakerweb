@@ -518,7 +518,7 @@ type ReadState = 'sent' | 'analyzing' | 'read' | 'replied';
 
     /* ── Conversa (popup) ── */
     .chat { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; }
-    .chat__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 22px 10px; scroll-behavior: smooth; }
+    .chat__scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 18px 22px 10px; scroll-behavior: smooth; }
     .chat__empty { max-width: 520px; margin: 8vh auto 0; text-align: center; animation: note-in .35s ease-out; }
     .chat__empty-icon { display: inline-flex; width: 56px; height: 56px; border-radius: 18px; align-items: center; justify-content: center;
       background: linear-gradient(135deg, color-mix(in srgb, var(--mat-sys-primary) 35%, transparent), color-mix(in srgb, var(--mat-sys-primary) 8%, transparent));

@@ -132,7 +132,7 @@ interface Preview {
     .pf__count { min-width: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; font-weight: 700; text-align: center;
       background: rgba(255,255,255,.08); }
     .pf__body { flex: 1 1 auto; min-height: 0; display: flex; }
-    .pf__list { flex: 0 0 min(300px, 38%); overflow-y: auto; padding: 8px; border-right: 1px solid rgba(255,255,255,.06); }
+    .pf__list { flex: 0 0 min(300px, 38%); overflow-y: auto; overflow-x: hidden; padding: 8px; border-right: 1px solid rgba(255,255,255,.06); }
     .pf__item { width: 100%; display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: none; border-radius: 8px;
       background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
     .pf__item:hover { background: rgba(255,255,255,.04); }
