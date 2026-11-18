@@ -315,8 +315,11 @@
             <mat-icon>description</mat-icon><span class="wb-seg__label">Card</span>
           </button>
         </div>
-        <!-- Linha de horas do card (a mesma do assistente), sempre à vista ao lado das abas -->
-        <app-card-hours class="wb-hoursline" data-tour="wb-hoursline" [cardNumber]="card()"></app-card-hours>
+        <!-- Linha de horas do card (a mesma do assistente), sempre à vista ao lado das abas; à direita, o botão das sugestões do PRMake -->
+        <div class="wb-hoursline" data-tour="wb-hoursline">
+          <app-card-hours class="wb-hoursline__hours" [cardNumber]="card()"></app-card-hours>
+          <app-card-assistant-launcher class="wb-hoursline__sugg" data-tour="wb-suggestions" [cardNumber]="card()"></app-card-assistant-launcher>
+        </div>
       </div>
 
       <div class="wb-pane" [class.wb-hidden]="main !== 'items'" data-tour="wb-items">
@@ -346,10 +349,9 @@
           </div>
         }
 
-        <!-- Sugestões como na tela de PR (situação do card + assistente do PRMake); na aba Plano o próprio plano mostra -->
+        <!-- Situação do card como na tela de PR; as sugestões do PRMake ficam no botão da barra de horas -->
         <div class="wb-sugg" data-tour="wb-suggest">
           <app-card-situation [cardNumber]="card()"></app-card-situation>
-          <app-card-assistant [cardNumber]="card()"></app-card-assistant>
         </div>
 
         <app-work-item-list [card]="card()" [cardType]="cardType()" [openItem]="openItem()" [openSessionOf]="sessionOf()"

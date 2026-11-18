@@ -225,13 +225,19 @@
 .wb-hoursline {
   flex: 1 1 0;
   min-width: 0;
-  overflow: hidden;
-  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 3px 8px;
   border-radius: 10px;
   border: 1px solid var(--wb-border);
   background: var(--surface-1, #262b33);
   container-type: inline-size;
   container-name: wb-hours;
+
+  // As horas encolhem (e cortam) antes; o botão das sugestões fica sempre inteiro, colado à direita (o brilho dele vaza).
+  .wb-hoursline__hours { flex: 1 1 0; min-width: 0; overflow: hidden; }
+  .wb-hoursline__sugg { flex: none; margin-left: auto; }
 
   ::ng-deep {
     .hr { flex-wrap: nowrap; gap: 4px 8px; }
@@ -252,7 +258,8 @@
 @container wb-hours (max-width: 300px) {
   .wb-hoursline ::ng-deep {
     .hr__fact--orig { display: none; }
-    .hr__fact--done::before { content: none; }
+    // Mais específico que o separador "·" do app-card-hours (.hr__fact + .hr__fact::before), senão o "·" sobra à esquerda.
+    .hr .hr__fact.hr__fact--done::before { content: none; }
   }
 }
 @container wb-segrow (max-width: 900px) {
@@ -380,8 +387,8 @@
 }
 .wb-first-wait__bot { flex: none; color: var(--mat-sys-primary); animation: wb-run-bob 1.4s ease-in-out infinite; }
 
-// Situação do card + assistente do PRMake (só na aba Itens; o plano mostra os dele). Altura limitada: a lista de
-// itens continua à vista mesmo com várias sugestões abertas.
+// Situação do card (só na aba Itens; o plano mostra a dele). As sugestões do PRMake ficam no botão da barra de horas.
+// Altura limitada: a lista de itens continua à vista.
 .wb-sugg {
   flex: none;
   display: flex;
@@ -392,10 +399,10 @@
   scrollbar-width: thin;
 
   &:empty { display: none; }
-  > app-card-situation:empty, > app-card-assistant:empty { display: none; }
+  > app-card-situation:empty { display: none; }
 }
-// A linha de horas do assistente já está ao lado das abas (wb-hoursline): na Bancada inteira (aba Itens e o assistente
-// dentro do plano, na aba Execução) ela fica escondida. A tela de PR não usa este estilo.
+// A linha de horas do assistente já está ao lado das abas (wb-hoursline): no assistente dentro do plano (aba Execução)
+// ela fica escondida. A tela de PR não usa este estilo.
 :host ::ng-deep app-card-assistant .as__hours { display: none; }
 .wb-pane--plan { overflow: hidden; }
 .wb-plan { display: block; flex: 1 1 auto; min-height: 0; }

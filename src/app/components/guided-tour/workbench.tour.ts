@@ -20,10 +20,12 @@ import { TourDefinition } from './tour.model';
  * **Arquivos** mostra todos os arquivos do card com filtro por item; itens e sub-tarefas trazem código/linha com popover.
  * v8 (telas menores): a faixa "Arquivos do plano" saiu — o plano completo virou arquivo em **Arquivos e textos** (e na aba
  * Arquivos); "Cancelar e desfazer" virou ícone no cabeçalho do plano; o aviso da Execução fecha e volta pelo ⓘ.
+ * v9: as **sugestões do PRMake** saíram da aba Itens para um botão na barra de horas (pisca quando há sugestão e abre um
+ * popover); a aba Itens mostra só a situação do card acima da lista.
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 8,
+  version: 9,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -108,12 +110,20 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'entrega com as sub-tarefas. Tudo aparece na lista, ao vivo.'
     },
     {
-      id: 'suggest', anchor: 'wb-suggest', group: 'Itens de trabalho', since: 2, phase: 'card', side: 'bottom', align: 'start',
+      id: 'suggest', anchor: 'wb-suggest', group: 'Itens de trabalho', since: 9, phase: 'card', side: 'bottom', align: 'start',
       optional: true, prepare: 'tab:items',
-      title: 'Situação e sugestões',
-      body: 'Como na tela de PR: a <b>situação atual</b> do card (o que é aguardado e desde quando) e as <b>sugestões do PRMake</b>.',
-      detail: 'A situação pode ser copiada ou publicada no DevOps; as sugestões (estimativa, publicação, horas) não travam nada. ' +
-        'Na aba Plano elas ficam no próprio plano.'
+      title: 'Situação do card',
+      body: 'Como na tela de PR: a <b>situação atual</b> do card — o que é aguardado, desde quando e o próximo passo.',
+      detail: 'A situação pode ser copiada ou publicada no DevOps. Na aba Execução ela fica nos detalhes do próprio plano.'
+    },
+    {
+      id: 'suggestions', anchor: 'wb-suggestions', group: 'Itens de trabalho', since: 9, phase: 'card', side: 'bottom', align: 'end',
+      optional: true,
+      title: 'Sugestões do PRMake',
+      body: 'Na ponta da barra de horas: quando o PRMake tem uma <b>sugestão</b> (lançar horas, estimativa, publicar a situação), ' +
+        'este botão pisca. Clique para ver e responder.',
+      detail: 'As sugestões nunca travam nada: responda com um clique, dispense ou deixe para depois. As respondidas ficam no ' +
+        'histórico dentro do mesmo popover.'
     },
     {
       id: 'items', anchor: 'wb-items', group: 'Itens de trabalho', since: 1, phase: 'card', side: 'right', align: 'start', prepare: 'tab:items',

@@ -85,6 +85,29 @@ export class CardAssistantService {
   /** Sugestão nova (aberta) que chegou pelo tempo real. */
   readonly fresh$ = new Subject<NewSuggestionEvent>();
 
+  /**
+   * Cards cujo aviso de sugestão nova é do botão de sugestões da barra de horas (Bancada): o "Ver" do aviso abre o
+   * popover dele, e os blocos do assistente na mesma tela (o do plano) não avisam de novo.
+   */
+  private launchers = new Map<string, number>();
+
+  claimLauncher(card: string | number | null | undefined): () => void {
+    const key = norm(card);
+    if (!key) return () => undefined;
+    this.launchers.set(key, (this.launchers.get(key) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const n = (this.launchers.get(key) ?? 1) - 1;
+      if (n > 0) this.launchers.set(key, n); else this.launchers.delete(key);
+    };
+  }
+
+  hasLauncher(card: string | number | null | undefined): boolean {
+    return this.launchers.has(norm(card));
+  }
+
   // ── Sugestões ─────────────────────────────────────────────────────────────────────────────────
 
   suggestionsOf(card: string | number | null | undefined): Signal<CardSuggestion[] | null> {
