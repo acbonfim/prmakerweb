@@ -392,7 +392,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     if (this.staleFor === stamp && this.staleList()) return;
     this.staleFor = stamp;
     this.staleLoading.set(true);
-    this.api.search('', { module: m.key, limit: 2000 }).subscribe({
+    this.api.search('', { module: m.key, stale: true, limit: 500 }).subscribe({
       next: hits => { if (this.staleFor === stamp) { this.staleList.set(hits.filter(h => !!h.stale)); this.staleLoading.set(false); } },
       error: () => { if (this.staleFor === stamp) { this.staleList.set([]); this.staleLoading.set(false); } }
     });

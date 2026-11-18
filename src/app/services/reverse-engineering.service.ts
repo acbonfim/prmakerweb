@@ -109,7 +109,7 @@ export function reverseDocOfItem(id: string): string {
   if (['TUT', 'FAQ'].includes(kind)) return 'pratica';
   if (['OBJ', 'PER'].includes(kind)) return 'visao';
   if (['ADR', 'NFR', 'SEQ'].includes(kind)) return 'spec-arquitetura';
-  if (['END', 'ROT', 'TAB', 'CHV', 'MSG'].includes(kind)) return 'tecnico';  // 0097: índice técnico (SQL segue na arquitetura)
+  if (['END', 'ROT', 'TAB', 'DBO', 'CHV', 'MSG'].includes(kind)) return 'tecnico';  // 0097: índice técnico (SQL segue na arquitetura)
   return 'funcional';
 }
 
@@ -261,9 +261,10 @@ export class ReverseEngineeringService {
   }
   assetFile(id: string): Observable<Blob> { return this.http.get(`${this.api}/assets/${id}/file`, { responseType: 'blob' }); }
   deleteAsset(id: string): Observable<void> { return this.http.delete<void>(`${this.api}/assets/${id}`); }
-  search(q: string, filter: { module?: string; kind?: string; doc?: string; limit?: number }): Observable<ReverseIndexHit[]> {
+  search(q: string, filter: { module?: string; kind?: string; doc?: string; limit?: number; stale?: boolean }): Observable<ReverseIndexHit[]> {
     let params = new HttpParams().set('q', q ?? '').set('limit', String(filter.limit ?? 40));
     if (filter.module) params = params.set('module', filter.module);
+    if (filter.stale) params = params.set('stale', 'true');  // 0097: só os itens com código alterado desde a geração
     if (filter.kind) params = params.set('kind', filter.kind);
     if (filter.doc) params = params.set('doc', filter.doc);
     return this.http.get<ReverseIndexHit[]>(`${this.api}/index/search`, { params });
