@@ -65,9 +65,10 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadComponent: () => import('./plugin-settings/plugin-settings-page.component').then(m => m.PluginSettingsPageComponent)
       },
       {
+        // 0097: leitura aberta a todo usuário autenticado (gerar/aprovar seguem os flags da API dentro da tela).
         path: 'reverse-engineering',
         data: { tab: { title: 'Engenharia reversa', icon: 'biotech' } },
-        canActivate: [AuthGuard, AdminGuard],
+        canActivate: [AuthGuard],
         loadComponent: () => import('./reverse-engineering/reverse-engineering.component').then(m => m.ReverseEngineeringComponent)
       },
       {

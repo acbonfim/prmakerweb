@@ -42,9 +42,14 @@
             <span class="mod__name">{{ m.displayName || m.name }} <span class="muted">{{ m.world }}</span></span>
             @if (moduleLive(m)) { <span class="dot dot--live" matTooltip="Gerando agora"></span> }
             @if (m.inReview) { <span class="badge" matTooltip="Documentos esperando aprovação">{{ m.inReview }}</span> }
+            @if (m.openQuestions) {
+              <!-- 0097: perguntas do Pergunte sem resposta (a visão prática é sob demanda a partir delas) -->
+              <span class="badge badge--ask" [matTooltip]="'Pergunte sem resposta: ' + m.openQuestions + (m.practicalSuggested ? ' — visão prática sugerida' : '')">
+                <mat-icon>help_outline</mat-icon>{{ m.openQuestions }}</span>
+            }
             <span class="dots">
-              @for (d of docs; track d.key) {
-                <span class="dot" [style.background]="state(docState(m, d.key)).color" [matTooltip]="d.short + ': ' + state(docState(m, d.key)).label"></span>
+              @for (d of visibleDocs(m); track d.type) {
+                <span class="dot" [style.background]="state(d.state).color" [matTooltip]="docTitle(d.type) + ': ' + state(d.state).label + (isDiscontinued(d) ? ' (descontinuado)' : '')"></span>
               }
             </span>
           </button>
@@ -113,6 +118,11 @@
             <li><b>Revise e publique</b>: diferença por item, cobertura do código, avisos. Publicado = ativo na Base Solvace e nas análises.</li>
             <li><b>Melhore sempre</b>: as análises de cards sugerem correções e lacunas; a próxima sessão "melhorar" usa tudo isso.</li>
           </ol>
+          @if (!canGenerate()) {
+            <!-- 0097: leitura aberta -->
+            <p class="muted">Você vê tudo o que está publicado (e o andamento das sessões) em leitura. Gerar é com os administradores; aprovar e publicar, com
+              {{ settings()?.approverRoles?.join(' ou ') || 'os aprovadores' }}.</p>
+          }
           <div class="legend">
             @for (s of ['none', 'draft', 'review', 'changes', 'approved', 'published']; track s) {
               <span><span class="dot" [style.background]="state(s).color"></span>{{ state(s).label }}</span>
@@ -129,12 +139,21 @@
           <div class="meta">
             <span [class.ok]="m.complete"><mat-icon>{{ m.complete ? 'verified' : 'pending' }}</mat-icon>{{ m.publishedRequired }}/{{ m.requiredCount }} documentos exigidos publicados</span>
             <span><mat-icon>list_alt</mat-icon>{{ m.items }} itens</span>
+            @if (m.openQuestions) {
+              <a class="ask" (click)="selectDoc('pratica')" matTooltip="Perguntas do Pergunte que a Base Solvace não soube responder para este módulo — base da visão prática (sob demanda)">
+                <mat-icon>help_outline</mat-icon>Pergunte sem resposta: {{ m.openQuestions }}</a>
+            }
+            @if (m.staleItems) {
+              <!-- 0097: reancoragem — itens cujo trecho citado mudou na master -->
+              <a class="stale-link" (click)="openStale($event)" matTooltip="O trecho do código citado no &quot;Onde:&quot; mudou na master depois da geração — confirme no código">
+                <mat-icon>update</mat-icon>{{ m.staleItems }} {{ m.staleItems === 1 ? 'item com código alterado' : 'itens com código alterado' }} desde a geração</a>
+            }
             <a (click)="router.navigate(['/auth/architecture'], { queryParams: { p: m.key } })"><mat-icon>account_tree</mat-icon>Ver na Base Solvace</a>
             @for (s of m.siblings; track s) { <a (click)="openModule(s)"><mat-icon>swap_horiz</mat-icon>{{ s }}</a> }
           </div>
           @if (m.summary) { <p class="summary">{{ m.summary }}</p> }
           <div class="modhead__actions">
-            <button mat-stroked-button type="button" #howBtn (click)="howPop.toggle($event)"><mat-icon>terminal</mat-icon>Como gerar</button>
+            @if (canGenerate()) { <button mat-stroked-button type="button" #howBtn (click)="howPop.toggle($event)"><mat-icon>terminal</mat-icon>Como gerar</button> }
             <button mat-stroked-button type="button" #srcBtn (click)="openSources($event)"><mat-icon>source</mat-icon>Fontes e apelidos</button>
             <app-re-traps [moduleKey]="m.key" [canApprove]="m.canApprove" [migratedAt]="m.trapsMigratedAt" [stamp]="m.traps"
                           (changed)="loadModule(m.key, false)" (goTo)="scrollTo($event)"></app-re-traps>
@@ -152,7 +171,7 @@
           <p-popover #howPop appendTo="body" styleClass="re-popover">
             <ng-template #content>
               <div class="re-popover__body">
-                <app-re-how-to [module]="m" [approverRoles]="settings()?.approverRoles ?? []" [reference]="settings()?.referenceDatabase"></app-re-how-to>
+                <app-re-how-to [module]="m" [docKeys]="generatableDocs()" [approverRoles]="settings()?.approverRoles ?? []" [reference]="settings()?.referenceDatabase"></app-re-how-to>
               </div>
             </ng-template>
           </p-popover>
@@ -181,6 +200,32 @@
                       <button mat-flat-button color="primary" type="button" (click)="saveSources()">Salvar</button>
                     </div>
                   } @else { <p class="muted">Só {{ settings()?.approverRoles?.join(' ou ') }} altera as fontes.</p> }
+                </section>
+              </div>
+            </ng-template>
+          </p-popover>
+
+          <p-popover #stalePop appendTo="body" styleClass="re-popover">
+            <ng-template #content>
+              <div class="re-popover__body">
+                <section class="stale-list">
+                  <h3><mat-icon>update</mat-icon>{{ m.staleItems ?? 0 }} {{ m.staleItems === 1 ? 'item com código alterado' : 'itens com código alterado' }} desde a geração</h3>
+                  <p class="muted">O trecho citado no "Onde:" mudou na master. O texto do item pode estar certo ou não — as análises confirmam no código.
+                    A marca sai quando o documento é publicado de novo.</p>
+                  @if (staleLoading()) { <div class="state"><mat-spinner diameter="20"></mat-spinner></div> }
+                  @else {
+                    @for (h of staleList(); track h.ref) {
+                      <button type="button" class="stale-list__row" (click)="goToStale(h)">
+                        <span class="id">{{ h.itemId }}</span>
+                        <span class="stale-list__title">{{ h.title }}
+                          @if (h.stale?.reason) { <span class="muted"> — {{ h.stale?.reason }}</span> }
+                        </span>
+                        <span class="muted">{{ docTitle(h.docType) }}{{ h.stale?.commit ? ' · ' + sha(h.stale?.commit) : '' }}</span>
+                      </button>
+                    } @empty {
+                      <div class="muted">A lista não veio com a marca de cada item — veja a contagem acima.</div>
+                    }
+                  }
                 </section>
               </div>
             </ng-template>
@@ -215,13 +260,20 @@
             histórico): {{ supersededKeys(m.supersededSections) }}.</span></div>
         }
         <nav class="doctabs">
-          @for (d of m.docs; track d.type) {
-            <button type="button" class="doctab" [class.doctab--on]="docKey() === d.type" (click)="selectDoc(d.type)">
+          @for (d of visibleDocs(m); track d.type) {
+            <button type="button" class="doctab" [class.doctab--on]="docKey() === d.type" [class.doctab--off]="isDiscontinued(d)" (click)="selectDoc(d.type)"
+                    [matTooltip]="isDiscontinued(d) ? 'Descontinuado: não se gera mais; o publicado continua valendo para leitura e na busca' : ''">
               @if (isLive(d.open)) { <span class="dot dot--live"></span> } @else { <span class="dot" [style.background]="state(d.state).color"></span> }
               {{ docTitle(d.type) }}
+              @if (d.type === 'pratica' && m.practicalSuggested) { <mat-icon class="doctab__icon doctab__icon--ask" matTooltip="Sugerida: perguntas sem resposta no Pergunte">help_outline</mat-icon> }
               @if (d.pendingSuggestions) { <span class="badge" matTooltip="Sugestões pendentes das análises">{{ d.pendingSuggestions }}</span> }
             </button>
           }
+          <!-- 0097: índice técnico (sem IA, publicado direto) -->
+          <button type="button" class="doctab" [class.doctab--on]="docKey() === 'tecnico'" (click)="selectDoc('tecnico')"
+                  matTooltip="Endpoints, rotas/telas, tabelas, procedures/views/jobs, chaves de configuração e mensagens — extraídos do código da master, sem IA">
+            <span class="dot" [style.background]="state(m.technicalIndex ? 'published' : 'none').color"></span>Índice técnico
+          </button>
           <button type="button" class="doctab" [class.doctab--on]="docKey() === 'infra'" (click)="selectDoc('infra')"
                   matTooltip="Infra na AWS: Lambdas, esteiras, buckets, segredos e logs (etapa opcional da skill)">
             <mat-icon class="doctab__icon">cloud</mat-icon>Infra
@@ -232,33 +284,99 @@
           <app-re-infra [moduleKey]="m.key" [stamp]="revisionStamp()"></app-re-infra>
         }
 
+        @if (docKey() === 'tecnico') {
+          @if (m.technicalIndex; as ti) {
+            <div class="docinfo tech">
+              <span class="docinfo__state" [style.color]="state('published').color"><mat-icon>bolt</mat-icon>Gerado sem IA</span>
+              <span class="muted">v{{ ti.version }} · {{ date(ti.generatedAt) }}</span>
+              @for (c of ti.commits; track c.repository + c.commit) {
+                <span class="chip tech__commit" [matTooltip]="c.repository + (c.branch ? ' (' + c.branch + ')' : '') + ' @ ' + c.commit">
+                  <mat-icon>commit</mat-icon>{{ c.repository }}&#64;{{ sha(c.commit) }}{{ c.branch && c.branch !== 'master' ? ' (' + c.branch + ')' : '' }}</span>
+              }
+              @if (docType(); as t) { <span class="muted purpose">{{ t.purpose }}</span> }
+            </div>
+            @if (objectEntries(ti.counts).length) {
+              <div class="chips tech__counts">@for (k of objectEntries(ti.counts); track k[0]) { <span class="chip" [matTooltip]="kindLabel(k[0])">{{ k[0] }} {{ k[1] }}</span> }</div>
+            }
+            @if (canGenerate()) {
+              <div class="muted tech__redo">Regerar (sem IA, a qualquer hora): <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' indice'" /></div>
+            }
+          } @else if (!docLoading() && !doc()?.content && !doc()?.outline) {
+            <div class="empty">
+              <mat-icon>data_object</mat-icon>
+              <div>
+                <b>Índice técnico ainda não gerado.</b>
+                <div class="muted">Lista feita sem IA, direto do código da master: endpoints, rotas e telas, tabelas, procedures/views/jobs, chaves de configuração
+                  e mensagens — com o commit, publicada sem aprovação.</div>
+                @if (canGenerate()) {
+                  <div class="muted">No Claude Code:</div>
+                  <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' indice'" [block]="true" />
+                } @else { <div class="muted">Um administrador gera no Claude Code.</div> }
+              </div>
+            </div>
+          }
+        }
+
         @if (docStatus(); as ds) {
           <div class="docinfo">
             <span class="docinfo__state" [style.color]="state(ds.state).color"><mat-icon>{{ state(ds.state).icon }}</mat-icon>{{ state(ds.state).label }}</span>
             @if (ds.published) { <span class="muted">publicado v{{ ds.published.version }} · {{ ds.published.items }} itens · {{ date(ds.published.updatedAt) }} por {{ ds.published.updatedBy }}</span> }
-            @if (!ds.required) { <span class="chip">opcional</span> }
+            @if (isDiscontinued(ds)) {
+              <span class="chip chip--off" matTooltip="Não se gera mais (0097): o publicado continua legível e na busca das análises">descontinuado</span>
+            } @else if (ds.type === 'pratica') {
+              <span class="chip" matTooltip="Gerada quando o Pergunte acumula perguntas sem resposta deste módulo">sob demanda</span>
+            } @else if (!ds.required) { <span class="chip">opcional</span> }
             @if (docType(); as t) { <span class="muted purpose">{{ t.purpose }}</span> }
           </div>
 
           @if (docKey() === 'uiux' || docKey() === 'design') {
-            <app-re-assets [moduleKey]="m.key" [assets]="m.assets" (changed)="loadModule(m.key, false)"></app-re-assets>
+            <app-re-assets [moduleKey]="m.key" [assets]="m.assets" [canEdit]="canGenerate()" (changed)="loadModule(m.key, false)"></app-re-assets>
           }
 
           @if (ds.staleBecause?.length) {
-            <div class="stale"><mat-icon>update</mat-icon><span><b>Desatualizada:</b> {{ ds.staleBecause!.join(', ') }} foi republicado depois dela. Rode
-              <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' melhorar ' + ds.type" />.</span></div>
+            <div class="stale"><mat-icon>update</mat-icon><span><b>Desatualizada:</b> {{ ds.staleBecause!.join(', ') }} foi republicado depois dela.
+              @if (canGenerate() && !isDiscontinued(ds)) { Rode <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' melhorar ' + ds.type" />. }</span></div>
+          }
+          @if (ds.type === 'pratica' && !ds.open) {
+            <!-- 0097: visão prática sob demanda, centrada nas perguntas sem resposta do Pergunte -->
+            <div class="ondemand" [class.ondemand--on]="m.practicalSuggested">
+              <mat-icon>support_agent</mat-icon>
+              <div>
+                <b>{{ ds.published ? 'Visão prática' : 'Visão prática ainda não gerada' }} — sob demanda.</b>
+                <span class="muted"> É gerada quando o Pergunte não sabe responder: parte das perguntas sem resposta do módulo.</span>
+                <div>
+                  @if (m.openQuestions) { <b>{{ m.openQuestions }}</b> {{ m.openQuestions === 1 ? 'pergunta' : 'perguntas' }} sem resposta no Pergunte agora. }
+                  @else if (m.openQuestions === 0) { Nenhuma pergunta sem resposta agora. }
+                  @if (ds.blockedBy?.length) { <span class="muted">Antes, publicar: {{ ds.blockedBy!.join(', ') }}.</span> }
+                </div>
+                @if (m.practicalSuggested) {
+                  <div class="ondemand__go"><b>Sugerida agora.</b>
+                    @if (canGenerate()) { No Claude Code aberto na pasta do módulo:
+                      <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' pratica'" [block]="true" />
+                    } @else { <span class="muted">Um administrador gera no Claude Code.</span> }
+                  </div>
+                }
+              </div>
+            </div>
           }
           @if (ds.open; as open) {
             @if (open.status === 'draft' || open.status === 'changes') {
               <app-re-progress [revision]="open"></app-re-progress>
             }
             <app-re-revision [revisionId]="open.id" [stamp]="revisionStamp()" (changed)="onRevisionChanged()" (decided)="scrollToTop()"></app-re-revision>
+          } @else if (ds.type === 'pratica') {
+            <!-- 0097: sob demanda (bloco acima) -->
+          } @else if (!ds.published && isDiscontinued(ds)) {
+            <div class="empty">
+              <mat-icon>block</mat-icon>
+              <div><b>{{ docTitle(ds.type) }} foi descontinuado.</b><div class="muted">Não se gera mais; os documentos exigidos cobrem o que as análises usam.</div></div>
+            </div>
           } @else if (!ds.published && ds.blockedBy?.length) {
             <div class="empty">
               <mat-icon>lock</mat-icon>
               <div>
                 <b>{{ docTitle(ds.type) }} é escrita só do que já foi aprovado.</b>
-                <div class="muted">Publique antes: {{ ds.blockedBy!.join(', ') }}. Depois, no Claude Code: <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" /></div>
+                <div class="muted">Publique antes: {{ ds.blockedBy!.join(', ') }}.@if (canGenerate()) { Depois, no Claude Code: <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" /> }</div>
               </div>
             </div>
           } @else if (!ds.published) {
@@ -266,9 +384,13 @@
               <mat-icon>hourglass_empty</mat-icon>
               <div>
                 <b>{{ docTitle(ds.type) }} ainda não foi gerado.</b>
-                <div class="muted">No Claude Code aberto na pasta do módulo:</div>
-                <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" [block]="true" />
-                <div><a (click)="howPop.show($event, howBtn)">Ver o passo a passo</a></div>
+                @if (canGenerate()) {
+                  <div class="muted">No Claude Code aberto na pasta do módulo:</div>
+                  <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' ' + ds.type" [block]="true" />
+                  <div><a (click)="howPop.toggle($event)">Ver o passo a passo</a></div>
+                } @else {
+                  <div class="muted">Um administrador gera os documentos no Claude Code; publicado, aparece aqui para todos.</div>
+                }
               </div>
             </div>
           }
@@ -300,7 +422,8 @@
                   }
                   @if (!tocCollapsed(g.kind)) {
                     @for (i of g.items; track i.id) {
-                      <button type="button" class="toc__item" [class.toc__item--removed]="i.removed" (click)="scrollTo(i.id)"><span class="id">{{ i.id }}</span>{{ i.title }}</button>
+                      <button type="button" class="toc__item" [class.toc__item--removed]="i.removed" (click)="scrollTo(i.id)"><span class="id">{{ i.id }}</span>{{ i.title }}
+                        @if (staleIds().has(i.id)) { <mat-icon class="toc__stale" matTooltip="Código mudou desde a geração">update</mat-icon> }</button>
                     }
                   }
                 }

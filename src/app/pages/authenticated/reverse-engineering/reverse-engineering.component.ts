@@ -13,9 +13,10 @@ import { CodeRefHostDirective } from '../../../components/code-ref/code-ref-host
 import { LazyMarkdownComponent, MarkdownPartsSource } from '../../../components/lazy-markdown/lazy-markdown.component';
 import { ArchitectureService } from '../../../services/architecture.service';
 import { WsService } from '../../../services/ws.service';
+import { StorageService } from '../../../services/storage.service';
 import { TabStatus, TabsService } from '../../../services/tabs.service';
 import {
-  REVERSE_DOCS, REVERSE_EVENT, ReverseDoc, ReverseDocStatus, ReverseDocType, ReverseEngineeringService, ReverseModule, ReverseModuleSummary,
+  REVERSE_DOCS, REVERSE_EVENT, ReverseDoc, ReverseDocStatus, ReverseDocType, ReverseEngineeringService, ReverseIndexHit, ReverseModule, ReverseModuleSummary,
   ReverseRevisionHead, ReverseSettings, ReverseSource, reverseGroup, reverseState
 } from '../../../services/reverse-engineering.service';
 import { ReHowToComponent } from './re-how-to.component';
@@ -56,6 +57,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   private snack = inject(MatSnackBar);
   private host = inject(ElementRef<HTMLElement>);
   private tabs = inject(TabsService);
+  private storage = inject(StorageService);
   /** Abas internas (0065): só a aba ativa dá nome/status à aba (a tela fica viva em segundo plano). */
   private tabScreen = this.tabs.bindScreen(inject(DestroyRef));
   /**
@@ -73,9 +75,15 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   private pendingItem: string | null = null;
   @ViewChild(ReIndexComponent) indexRef?: ReIndexComponent;
   @ViewChild('srcPop') srcPop?: Popover;
+  @ViewChild('stalePop') stalePop?: Popover;
 
   readonly docs = REVERSE_DOCS;
   readonly state = reverseState;
+  /**
+   * 0097: todo usuário autenticado lê a engenharia reversa; gerar (comandos, anexos, andamento) continua de administrador.
+   * Aprovar/publicar/configurar segue o `canApprove` que a API devolve.
+   */
+  readonly canGenerate = signal(this.readIsAdmin());
 
   view = signal<View>('modulos');
   settings = signal<ReverseSettings | null>(null);
@@ -121,6 +129,16 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   /** Muda a cada evento da revisão aberta — o painel de revisão recarrega. */
   revisionStamp = signal<string | null>(null);
 
+  /**
+   * 0097: itens com código alterado desde a geração. O módulo traz só a contagem (`staleItems`); a lista vem da busca do
+   * índice sem termo (lista filtrada pelo módulo), filtrando os que têm `stale` — carregada ao abrir o popover.
+   */
+  staleList = signal<ReverseIndexHit[] | null>(null);
+  staleLoading = signal(false);
+  private staleFor: string | null = null;
+  /** IDs desatualizados do documento aberto (marca no sumário, depois que a lista foi carregada). */
+  staleIds = computed(() => new Set((this.staleList() ?? []).filter(h => h.docType === this.docKey()).map(h => h.itemId)));
+
   sourcesDraft: ReverseSource[] = [];
   aliasesDraft = '';
 
@@ -154,7 +172,11 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR')).map(([area, modules]) => ({ area, modules }));
   });
 
-  docStatus = computed<ReverseDocStatus | null>(() => this.module()?.docs.find(d => d.type === this.docKey()) ?? null);
+  /** 0097: o índice técnico não tem status de aprovação (aba própria) — fica fora do bloco de documento. */
+  docStatus = computed<ReverseDocStatus | null>(() => this.docKey() === 'tecnico' ? null : this.module()?.docs.find(d => d.type === this.docKey()) ?? null);
+  /** 0097: documentos que ainda se geram (para o "Como gerar"): sem os descontinuados, a prática (sob demanda) e o índice técnico. */
+  generatableDocs = computed(() => (this.module()?.docs ?? [])
+    .filter(d => !this.isDiscontinued(d) && !['pratica', 'tecnico'].includes(d.type)).map(d => d.type));
   docType = computed(() => this.docTypes().find(t => t.key === this.docKey()) ?? null);
   openRevision = computed(() => this.docStatus()?.open ?? null);
   /** 0056: grupos do sumário que vêm recolhidos (o glossário tem centenas de termos) — abertos por clique ou ao ir a um item. */
@@ -292,6 +314,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
 
   loadModule(key: string, spinner: boolean) {
     if (spinner) { this.moduleLoading.set(true); this.module.set(null); }
+    if (this.staleFor && !this.staleFor.startsWith(`${key}:`)) { this.staleFor = null; this.staleList.set(null); }
     this.joinModuleGroup(key);
     this.api.module(key).subscribe({
       next: m => {
@@ -306,19 +329,22 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     const key = this.moduleKey(); if (!key) return;
     if (this.docKey() === 'infra') { this.doc.set(null); this.docLoading.set(false); return; }  // 0059: aba Infra não é um documento
     this.docLoading.set(true);
+    // 0097: índice técnico ainda não gerado (ou API antiga, sem o tipo `tecnico`) = aba vazia com o comando, sem aviso de erro.
+    const quiet = this.docKey() === 'tecnico';
     this.api.doc(key, this.docKey(), false).subscribe({
       next: d => {
         this.doc.set(d);
         this.docLoading.set(false);
         if (item) this.scrollTo(item);
       },
-      error: e => { this.docLoading.set(false); this.doc.set(null); this.toast(e); }
+      error: e => { this.docLoading.set(false); this.doc.set(null); if (!quiet) this.toast(e); }
     });
   }
 
   loadPending() {
-    this.api.revisions({ status: 'open' }).subscribe({ next: r => this.pending.set(r) });
-    this.api.kcDivergences().subscribe({ next: k => this.kc.set(k as any) });
+    // 0097: quem não é administrador pode não ver as sessões (403) — a lista só fica vazia.
+    this.api.revisions({ status: 'open' }).subscribe({ next: r => this.pending.set(r), error: () => this.pending.set([]) });
+    this.api.kcDivergences().subscribe({ next: k => this.kc.set(k as any), error: () => this.kc.set([]) });
   }
 
   /** 0054: sugestão que é "o que deu errado" vira armadilha ligada ao item (aprovador). */
@@ -358,6 +384,22 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     this.srcPop?.toggle(event);
   }
 
+  /** 0097: popover "N itens com código alterado desde a geração". */
+  openStale(event: Event) {
+    const m = this.module(); if (!m) return;
+    this.stalePop?.toggle(event);
+    const stamp = `${m.key}:${m.staleItems ?? 0}`;
+    if (this.staleFor === stamp && this.staleList()) return;
+    this.staleFor = stamp;
+    this.staleLoading.set(true);
+    this.api.search('', { module: m.key, stale: true, limit: 500 }).subscribe({
+      next: hits => { if (this.staleFor === stamp) { this.staleList.set(hits.filter(h => !!h.stale)); this.staleLoading.set(false); } },
+      error: () => { if (this.staleFor === stamp) { this.staleList.set([]); this.staleLoading.set(false); } }
+    });
+  }
+
+  goToStale(h: ReverseIndexHit) { this.stalePop?.hide(); this.openModule(h.moduleKey, h.docType, h.itemId); }
+
   addSource() { this.sourcesDraft.push({ repository: '', path: '', role: 'frontend' }); }
   removeSource(i: number) { this.sourcesDraft.splice(i, 1); }
 
@@ -393,17 +435,42 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
 
   // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
-  objectEntries(o: Record<string, number>) { return Object.entries(o ?? {}); }
-  docState(m: ReverseModuleSummary, key: string) { return m.docs.find(d => d.type === key)?.state ?? 'none'; }
+  objectEntries(o: Record<string, number> | null | undefined) { return Object.entries(o ?? {}); }
+  /** 0097: rótulo do tipo de item (END → Endpoints…) pela lista da API. */
+  kindLabel(prefix: string) { return this.settings()?.kinds.find(k => k.prefix === prefix)?.plural ?? prefix; }
+  sha(commit?: string | null) { return (commit ?? '').slice(0, 7); }
+  /** 0097: design e visão descontinuados — pelo status do módulo ou pelo tipo (doc-types); API antiga não manda: falso. */
+  isDiscontinued(d: ReverseDocStatus | string) {
+    const type = typeof d === 'string' ? d : d.type;
+    return (typeof d !== 'string' && !!d.discontinued) || !!this.docTypes().find(t => t.key === type)?.discontinued;
+  }
+  /**
+   * 0097: abas/bolinhas do módulo — descontinuado só aparece se tem publicado (ou revisão aberta); o índice técnico tem aba
+   * própria (fora da lista de documentos com aprovação).
+   */
+  visibleDocs(m: ReverseModuleSummary) {
+    return m.docs.filter(d => d.type !== 'tecnico' && (!this.isDiscontinued(d) || !!d.published || !!d.open));
+  }
   isLive(h?: ReverseRevisionHead | null) {
     return !!h?.progressAt && ['draft', 'changes'].includes(h.status) && Date.now() - new Date(h.progressAt).getTime() < 3 * 60000;
   }
   moduleLive(m: ReverseModuleSummary) { return m.docs.some(d => this.isLive(d.open)); }
-  docTitle(key: string) { return this.docs.find(d => d.key === key)?.short ?? key; }
+  docTitle(key: string) { return this.docs.find(d => d.key === key)?.short ?? this.docTypes().find(t => t.key === key)?.title ?? key; }
   date(at?: string | null) { return at ? new Date(at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''; }
   pct(v?: number | null) { return v == null ? '—' : `${Math.floor(v * 100)}%`; }
   worldIcon(w: string) { return ({ legado: 'history', revamp: 'auto_awesome', front: 'web', 'integração': 'sync_alt', login: 'lock' } as any)[w] ?? 'widgets'; }
   statusLabel(s: string) { return ({ draft: 'rascunho', review: 'em revisão', changes: 'ajustes pedidos', approved: 'aprovada', published: 'publicada', discarded: 'descartada', superseded: 'substituída' } as any)[s] ?? s; }
+  private readIsAdmin(): boolean {
+    try {
+      const token = this.storage.getItem('apiKey');
+      if (!token) return false;
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const raw = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? payload['role'];
+      return (Array.isArray(raw) ? raw : raw ? [raw] : []).includes('admin');
+    } catch {
+      return false;
+    }
+  }
   private normalize(v: string) { return (v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); }
   private toast(e: any) { this.snack.open(e?.error?.error ?? 'Não foi possível carregar.', 'OK', { duration: 6000 }); }
 }

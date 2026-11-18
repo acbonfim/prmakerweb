@@ -270,8 +270,8 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
       this.trapsKey = key;
       this.traps.set([]);
       this.showTraps.set(false);
-      // 0074: as armadilhas vêm da engenharia reversa (só administrador): para os demais nem se pergunta ao backend.
-      if (key && this.isAdmin()) this.reverse.traps(key).subscribe({ next: t => { if (this.trapsKey === key) this.traps.set(t); }, error: () => {} });
+      // 0097: as armadilhas vêm da engenharia reversa, que agora todo usuário autenticado lê (antes, 0074: só administrador).
+      if (key) this.reverse.traps(key).subscribe({ next: t => { if (this.trapsKey === key) this.traps.set(t); }, error: () => {} });
     });
     // Diagramas: depois que o conteúdo da seção/artigo aparece na tela.
     effect(() => {
@@ -302,9 +302,9 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
   /** 0052: projetos que são módulo na Engenharia reversa (legado/revamp/front/integração/login). */
   isModule(p: ArchitectureProject) { return ['legacy', 'revamp', 'frontend', 'integration', 'auth'].includes(p.kind); }
   /** Documentos da engenharia reversa publicados (seções re-*). */
-  reverseCount(p: ArchitectureProject) { return p.sections.filter(s => s.key.startsWith('re-')).length; }
-  /** Documentos da engenharia reversa (7 com a visão prática — 0054). */
-  readonly reverseTotal = REVERSE_DOCS.length;
+  reverseCount(p: ArchitectureProject) { return p.sections.filter(s => s.key.startsWith('re-') && s.key !== 're-tecnico').length; }
+  /** Documentos da engenharia reversa (7 com a visão prática — 0054; 0097: o índice técnico, gerado sem IA, não conta). */
+  readonly reverseTotal = REVERSE_DOCS.filter(d => !d.generated).length;
   /** 0066: relação que veio de um item INT da engenharia reversa (evidência re#INT-001) → o ID do item. */
   reItem(evidence?: string | null): string | null { return evidence?.startsWith('re#') ? evidence.slice(3) : null; }
   openReverseRef(ref: string) {
@@ -312,8 +312,7 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
     if (module && id) this.openReverse(module, id);
   }
   openReverse(key: string, item?: string) {
-    // A tela de engenharia reversa é só de administrador: para os demais os links nem aparecem (e isto é só uma trava).
-    if (!this.isAdmin()) return;
+    // 0097: a tela de engenharia reversa é de leitura para todos (gerar/aprovar ficam restritos lá dentro).
     this.router.navigate(['/auth/reverse-engineering'], { queryParams: { m: key, d: item ? reverseDocOfItem(item) : null, i: item ?? null } });
   }
   trapDate(at: string) { return new Date(at).toLocaleDateString('pt-BR'); }
@@ -802,12 +801,12 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** Sistema que o tour abre para mostrar: o mais completo (guia no Simples, ligações, engenharia reversa para o admin). */
+  /** Sistema que o tour abre para mostrar: o mais completo (guia no Simples, ligações, engenharia reversa — 0097: para todos). */
   private tourProject(): ArchitectureProject | null {
     const score = (p: ArchitectureProject) =>
       (this.simple() ? (guideSections(p).length ? 4 : 0) : (p.sections.length ? 4 : 0)) +
       ((p.relations?.length || p.usedBy?.length) ? 2 : 0) +
-      (this.isAdmin() && this.isModule(p) && this.reverseCount(p) ? 1 : 0);
+      (this.isModule(p) && this.reverseCount(p) ? 1 : 0);
     let best: ArchitectureProject | null = null;
     for (const p of this.projects()) if (!best || score(p) > score(best)) best = p;
     return best;

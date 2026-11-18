@@ -262,7 +262,8 @@ export class ReRevisionComponent {
         // revisão mudou com o documento aberto: busca o texto novo
         if (this.contentFor !== this.contentKey(r)) { this.content.set(null); if (this.showDoc()) this.withContent(() => {}); }
       },
-      error: e => { this.loading.set(false); this.toast(e); }
+      // 0097: quem não pode ver a revisão (403) só não vê o painel — o publicado continua na tela.
+      error: e => { this.loading.set(false); if (e?.status !== 403) this.toast(e); }
     });
   }
 
@@ -333,7 +334,7 @@ export class ReRevisionComponent {
   statusLabel(s: string) {
     return ({ draft: 'rascunho', review: 'em revisão', changes: 'ajustes pedidos', approved: 'aprovada', published: 'publicada', discarded: 'descartada', superseded: 'substituída' } as any)[s] ?? s;
   }
-  modeLabel(m: string) { return ({ new: 'novo', improve: 'melhorar', redo: 'refazer', manual: 'manual' } as any)[m] ?? m; }
+  modeLabel(m: string) { return ({ new: 'novo', improve: 'melhorar', redo: 'refazer', manual: 'manual', generated: 'gerado sem IA', reanchor: 'reancorar (só o "Onde:")' } as any)[m] ?? m; }
   changeLabel(c: string) { return ({ added: 'novo', removed: 'removido', changed: 'alterado' } as any)[c] ?? c; }
   pct(v: number) { return `${Math.floor(v * 100)}%`; }
   date(at?: string | null) { return at ? new Date(at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''; }

@@ -59,6 +59,7 @@ import {
                   <span class="id">{{ h.itemId }}</span>
                   <span class="hit__title">{{ h.title }}</span>
                   <span class="chip">{{ h.kindLabel }}</span>
+                  @if (h.stale) { <mat-icon class="stale" [matTooltip]="'Código mudou desde a geração' + (h.stale.reason ? ': ' + h.stale.reason : '')">update</mat-icon> }
                   @if (h.tables.length) { <span class="muted">{{ h.tables.slice(0, 3).join(', ') }}</span> }
                 </button>
                 @if (openRef() === h.ref) {
@@ -67,6 +68,7 @@ import {
                       <div class="item__meta">
                         <a (click)="goTo.emit({ module: it.moduleKey, doc: it.docType, item: it.itemId })">Abrir no documento ({{ it.docType }})</a>
                         @if (it.referencedBy.length) { <span class="muted">citado por: {{ it.referencedBy.join(', ') }}</span> }
+                        @if (it.stale) { <span class="stale-note"><mat-icon>update</mat-icon>código mudou desde a geração{{ it.stale.reason ? ' — ' + it.stale.reason : '' }}{{ it.stale.commit ? ' (' + it.stale.commit.slice(0, 7) + ')' : '' }}</span> }
                       </div>
                       <div class="md" [innerHTML]="it.body | planMarkdown"></div>
                     } @else { <mat-spinner diameter="18"></mat-spinner> }
@@ -102,6 +104,10 @@ import {
     .id { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; min-width: 64px; }
     .hit__title { flex: 1; min-width: 0; }
     .chip { font-size: 11px; padding: 0 6px; border-radius: 8px; background: rgba(255,255,255,.07); white-space: nowrap; }
+    /* 0097: item com código alterado desde a geração */
+    .stale { font-size: 15px; width: 15px; height: 15px; color: #f0883e; flex: none; }
+    .stale-note { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #f0883e; }
+    .stale-note mat-icon { font-size: 14px; width: 14px; height: 14px; }
     .item { margin: 4px 0 10px 72px; padding: 8px 12px; border-left: 2px solid var(--mat-sys-primary); }
     .item__meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; margin-bottom: 4px; }
     .item__meta a { color: var(--mat-sys-primary); cursor: pointer; }

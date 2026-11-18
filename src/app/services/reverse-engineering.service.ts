@@ -60,12 +60,30 @@ export interface ReverseDocStatus {
   staleBecause?: string[];
   /** 0054: exigidos que faltam publicar antes de começar. */
   blockedBy?: string[];
+  /** 0097: tipo descontinuado (design, visão) — se a API mandar aqui; senão vale o `discontinued` do tipo (doc-types). */
+  discontinued?: boolean;
 }
 
 export interface ReverseModuleSummary {
   key: string; name: string; displayName?: string | null; businessArea?: string | null; projectKind: string; world: string;
   docs: ReverseDocStatus[]; publishedRequired: number; requiredCount: number; complete: boolean; inReview: number; items: number; aliases: string[];
+  /** 0097: perguntas do Pergunte sem resposta (abertas) para o módulo — a visão prática é sob demanda a partir delas. */
+  openQuestions?: number;
+  /** 0097: visão prática sugerida (sem prática publicada ou desatualizada e perguntas sem resposta ≥ o mínimo da config). */
+  practicalSuggested?: boolean;
+  /** 0097: índice técnico (gerado sem IA, publicado direto) — null/ausente = ainda não gerado (ou API antiga). */
+  technicalIndex?: ReverseTechnicalIndex | null;
+  /** 0097: itens cujo trecho citado no código mudou desde a geração (reancoragem) — só a contagem. */
+  staleItems?: number;
 }
+
+/** 0097: item desatualizado — o trecho do código citado no "Onde:" mudou na master depois da geração. */
+export interface ReverseStale { since: string; reason?: string | null; commit?: string | null; }
+
+/** 0097: commit da master de onde o índice técnico foi extraído. */
+export interface ReverseTechnicalCommit { repository: string; commit: string; branch?: string | null; }
+/** 0097: resumo do índice técnico do módulo (`tecnico`): versão, quando, de quais commits e quantos itens por tipo (END, ROT, TAB…). */
+export interface ReverseTechnicalIndex { version: number; generatedAt: string; commits: ReverseTechnicalCommit[]; counts: Record<string, number>; }
 
 export interface ReverseAsset {
   id: string; moduleKey: string; kind: string; title: string; url?: string | null; fileName?: string | null; contentType?: string | null;
@@ -91,6 +109,7 @@ export function reverseDocOfItem(id: string): string {
   if (['TUT', 'FAQ'].includes(kind)) return 'pratica';
   if (['OBJ', 'PER'].includes(kind)) return 'visao';
   if (['ADR', 'NFR', 'SEQ'].includes(kind)) return 'spec-arquitetura';
+  if (['END', 'ROT', 'TAB', 'DBO', 'CHV', 'MSG'].includes(kind)) return 'tecnico';  // 0097: índice técnico (SQL segue na arquitetura)
   return 'funcional';
 }
 
@@ -118,6 +137,10 @@ export interface ReverseTrap {
 
 export interface ReverseDocType {
   key: string; title: string; sectionKey: string; order: number; required: boolean; kinds: string[]; headings: string[]; purpose: string; template: string;
+  /** 0097: não se gera mais (design, visão) — o publicado continua legível e na busca. */
+  discontinued?: boolean;
+  /** 0097: gerado sem IA e publicado direto (índice técnico). */
+  generated?: boolean;
 }
 
 export interface ReverseItemHead { id: string; kind: string; title: string; level: number; removed: boolean; }
@@ -132,6 +155,8 @@ export interface ReverseDoc {
 export interface ReverseIndexHit {
   ref: string; moduleKey: string; moduleName?: string | null; docType: string; itemId: string; kind: string; kindLabel: string; title: string;
   snippet: string; tags: string[]; tables: string[]; modules: string[]; synonyms?: string[]; removed: boolean; score: number;
+  /** 0097: código mudou desde a geração (null/ausente = em dia ou API antiga). */
+  stale?: ReverseStale | null;
 }
 export interface ReverseItem extends ReverseIndexHit { body: string; refs: string[]; evidence: string[]; referencedBy: string[]; sectionVersion: number; }
 
@@ -144,7 +169,7 @@ export interface ReverseSettings {
 }
 
 /** Ordem e rótulos curtos dos documentos (a tela usa sem esperar a API). */
-export const REVERSE_DOCS: { key: string; short: string; icon: string; human?: boolean }[] = [
+export const REVERSE_DOCS: { key: string; short: string; icon: string; human?: boolean; generated?: boolean }[] = [
   { key: 'funcional', short: 'Funcional', icon: 'rule' },
   { key: 'arquitetura', short: 'Arquitetura', icon: 'lan' },
   { key: 'uiux', short: 'UI/UX', icon: 'design_services' },
@@ -152,6 +177,8 @@ export const REVERSE_DOCS: { key: string; short: string; icon: string; human?: b
   { key: 'spec-arquitetura', short: 'Spec. arquitetura', icon: 'architecture' },
   { key: 'design', short: 'Spec. design', icon: 'palette' },
   { key: 'pratica', short: 'Visão prática', icon: 'support_agent', human: true },
+  /** 0097: gerado sem IA e publicado direto (aba própria no módulo, fora dos documentos com aprovação). */
+  { key: 'tecnico', short: 'Índice técnico', icon: 'data_object', generated: true },
 ];
 
 export const REVERSE_STATE: Record<string, { label: string; color: string; icon: string }> = {
@@ -234,9 +261,10 @@ export class ReverseEngineeringService {
   }
   assetFile(id: string): Observable<Blob> { return this.http.get(`${this.api}/assets/${id}/file`, { responseType: 'blob' }); }
   deleteAsset(id: string): Observable<void> { return this.http.delete<void>(`${this.api}/assets/${id}`); }
-  search(q: string, filter: { module?: string; kind?: string; doc?: string; limit?: number }): Observable<ReverseIndexHit[]> {
+  search(q: string, filter: { module?: string; kind?: string; doc?: string; limit?: number; stale?: boolean }): Observable<ReverseIndexHit[]> {
     let params = new HttpParams().set('q', q ?? '').set('limit', String(filter.limit ?? 40));
     if (filter.module) params = params.set('module', filter.module);
+    if (filter.stale) params = params.set('stale', 'true');  // 0097: só os itens com código alterado desde a geração
     if (filter.kind) params = params.set('kind', filter.kind);
     if (filter.doc) params = params.set('doc', filter.doc);
     return this.http.get<ReverseIndexHit[]>(`${this.api}/index/search`, { params });

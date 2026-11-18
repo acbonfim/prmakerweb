@@ -56,8 +56,8 @@ export class SideMenuComponent implements OnInit {
     {
       label: 'Engenharia reversa',
       icon: 'biotech',
-      link: 'auth/reverse-engineering',
-      allowedRoles: ['admin']
+      // 0097: todos leem a engenharia reversa (gerar e aprovar continuam restritos dentro da tela).
+      link: 'auth/reverse-engineering'
     },
     {
       label: 'Gestão de usuários',
