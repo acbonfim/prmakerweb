@@ -1,4 +1,4 @@
-import { Component, DestroyRef, ElementRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -26,6 +26,8 @@ const KIND_ICON: Record<string, string> = {
  * destaque) e "Dispensar". **Nunca bloqueia**: o plano e a skill seguem; ninguém espera a resposta. Respondidas
  * viram uma linha no histórico (recolhido); falhou → a mensagem do DevOps e "Tentar de novo". Sugestão nova pelo
  * tempo real → aviso discreto (snackbar) "O PRMake tem uma sugestão: X · Ver". Inclui a linha de horas do card.
+ * `variant="popover"`: o conteúdo do popover do botão de sugestões da barra de horas (Bancada) — sempre aberto, sem as
+ * horas (a barra já mostra), todas as abertas e um fechar; o aviso de sugestão nova fica com o botão.
  */
 @Component({
   selector: 'app-card-assistant',
@@ -33,7 +35,19 @@ const KIND_ICON: Record<string, string> = {
   imports: [MatIconModule, MatTooltipModule, CardHoursComponent],
   template: `
     @if (card()) {
-      <section class="as" [class.as--collapsed]="collapsed()" role="region" aria-label="Assistente do PRMake neste card">
+      <section class="as" [class.as--collapsed]="collapsed()" [class.as--popover]="popover()" role="region" aria-label="Assistente do PRMake neste card">
+        @if (popover()) {
+          <div class="as__head as__head--popover">
+            <span class="as__avatar" aria-hidden="true"><mat-icon>assistant</mat-icon></span>
+            <span class="as__kicker">Sugestões do PRMake</span>
+            @if (pending().length; as n) {
+              <span class="as__count" [attr.aria-label]="n + ' sugestões abertas'">{{ n === 1 ? '1 sugestão' : n + ' sugestões' }}</span>
+            } @else if (loaded()) {
+              <span class="as__quiet">nada pendente</span>
+            }
+            <button type="button" class="as__close" (click)="closed.emit()" aria-label="Fechar as sugestões"><mat-icon>close</mat-icon></button>
+          </div>
+        } @else {
         <div class="as__head">
           <button type="button" class="as__toggle" (click)="toggle()" [attr.aria-expanded]="!collapsed()"
                   [matTooltip]="collapsed() ? 'Mostrar as sugestões do PRMake' : 'Recolher'">
@@ -49,6 +63,7 @@ const KIND_ICON: Record<string, string> = {
           </button>
           <app-card-hours class="as__hours" [cardNumber]="card()"></app-card-hours>
         </div>
+        }
 
         @if (!collapsed()) {
           @if (loadError()) {
@@ -103,6 +118,8 @@ const KIND_ICON: Record<string, string> = {
                 <mat-icon>expand_more</mat-icon>Mais {{ hiddenCount() === 1 ? '1 sugestão' : hiddenCount() + ' sugestões' }}
               </button>
             }
+          } @else if (popover() && loaded() && !loadError()) {
+            <p class="as__empty">Nenhuma sugestão aberta agora. Quando o PRMake tiver uma (estimativa, horas, publicação), este botão pisca.</p>
           }
           @if (history().length) {
             <div class="as__hist">
@@ -146,6 +163,17 @@ const KIND_ICON: Record<string, string> = {
     .as__quiet { font-size: 12px; color: color-mix(in srgb, var(--mat-sys-on-surface) 48%, transparent); }
     .as__chevron { flex: none; font-size: 18px; width: 18px; height: 18px; color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); }
     .as__hours { flex: 1 1 320px; min-width: 0; padding: 2px 0 2px 4px; }
+    .as--popover { margin: 0; border: 0; border-radius: 0; background: none; }
+    .as__head--popover { gap: 8px; padding: 8px 6px 8px 12px; flex-wrap: nowrap; }
+    .as__head--popover .as__count { margin-left: 2px; }
+    .as__close { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin-left: auto; padding: 0;
+      border: 0; border-radius: 50%; background: none; color: color-mix(in srgb, var(--mat-sys-on-surface) 62%, transparent); cursor: pointer; }
+    .as__close:hover { background: rgba(255,255,255,.06); color: var(--mat-sys-on-surface); }
+    .as__close:focus-visible { outline: 2px solid #58a6ff; outline-offset: -2px; }
+    .as__close .mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .as--popover .as__msgs { padding-top: 10px; }
+    .as--popover .as__empty { margin: 0; padding: 12px 14px 14px; border-top: 1px solid rgba(255,255,255,.06); font-size: 12.5px;
+      color: color-mix(in srgb, var(--mat-sys-on-surface) 58%, transparent); }
     .as__error { display: flex; align-items: center; gap: 6px; margin: 0 12px 8px; color: #f2b8b5; font-size: 12.5px; }
     .as__error .mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .as__link { display: inline-flex; align-items: center; gap: 2px; padding: 0 2px; border: 0; background: none; color: var(--mat-sys-primary); font: inherit; font-size: 12px; cursor: pointer; }
@@ -206,6 +234,11 @@ const KIND_ICON: Record<string, string> = {
 })
 export class CardAssistantComponent {
   readonly cardNumber = input<string | number | null | undefined>(null);
+  /** `block` (padrão): bloco recolhível com as horas; `popover`: conteúdo do botão de sugestões da barra de horas. */
+  readonly variant = input<'block' | 'popover'>('block');
+  /** Fechar do popover. */
+  readonly closed = output<void>();
+  readonly popover = computed(() => this.variant() === 'popover');
 
   private svc = inject(CardAssistantService);
   private snackBar = inject(MatSnackBar);
@@ -225,7 +258,7 @@ export class CardAssistantComponent {
   readonly showAll = signal(false);
   readonly visible = computed(() => {
     const list = this.pending();
-    if (this.showAll() || list.length <= MAX_VISIBLE) return list;
+    if (this.popover() || this.showAll() || list.length <= MAX_VISIBLE) return list;
     const head = list.slice(0, MAX_VISIBLE);
     const flash = this.flashId();
     const flashed = flash ? list.find(s => s.id === flash) : null;
@@ -233,7 +266,8 @@ export class CardAssistantComponent {
   });
   readonly hiddenCount = computed(() => this.pending().length - this.visible().length);
 
-  readonly collapsed = signal(loadCollapsed());
+  private readonly collapsedPref = signal(loadCollapsed());
+  readonly collapsed = computed(() => !this.popover() && this.collapsedPref());
   readonly showHistory = signal(false);
   readonly busy = signal<string | null>(null);
   readonly acting = signal<string | null>(null);
@@ -251,7 +285,11 @@ export class CardAssistantComponent {
       const card = this.card();
       untracked(() => this.switchCard(card));
     });
-    this.freshSub = this.svc.fresh$.subscribe(e => { if (e.card === this.card()) this.announce(e.suggestion); });
+    this.freshSub = this.svc.fresh$.subscribe(e => {
+      if (e.card !== this.card()) return;
+      // O botão de sugestões da barra de horas avisa e abre o popover; aqui só destaca.
+      if (this.popover() || this.svc.hasLauncher(e.card)) this.flash(e.suggestion.id); else this.announce(e.suggestion);
+    });
     const clock = setInterval(() => this.now.set(Date.now()), 60_000);
     inject(DestroyRef).onDestroy(() => {
       clearInterval(clock);
@@ -282,8 +320,8 @@ export class CardAssistantComponent {
   }
 
   toggle(): void {
-    const v = !this.collapsed();
-    this.collapsed.set(v);
+    const v = !this.collapsedPref();
+    this.collapsedPref.set(v);
     try { localStorage.setItem(COLLAPSED_KEY, v ? '1' : '0'); } catch { /* sem storage */ }
   }
 
