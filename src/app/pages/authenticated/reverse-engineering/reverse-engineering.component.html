@@ -238,6 +238,11 @@
               @if (d.pendingSuggestions) { <span class="badge" matTooltip="Sugestões pendentes das análises">{{ d.pendingSuggestions }}</span> }
             </button>
           }
+          <!-- 0097: índice técnico (sem IA, publicado direto) -->
+          <button type="button" class="doctab" [class.doctab--on]="docKey() === 'tecnico'" (click)="selectDoc('tecnico')"
+                  matTooltip="Endpoints, rotas/telas, tabelas, procedures/views/jobs, chaves de configuração e mensagens — extraídos do código da master, sem IA">
+            <span class="dot" [style.background]="state(m.technicalIndex ? 'published' : 'none').color"></span>Índice técnico
+          </button>
           <button type="button" class="doctab" [class.doctab--on]="docKey() === 'infra'" (click)="selectDoc('infra')"
                   matTooltip="Infra na AWS: Lambdas, esteiras, buckets, segredos e logs (etapa opcional da skill)">
             <mat-icon class="doctab__icon">cloud</mat-icon>Infra
@@ -246,6 +251,39 @@
 
         @if (docKey() === 'infra') {
           <app-re-infra [moduleKey]="m.key" [stamp]="revisionStamp()"></app-re-infra>
+        }
+
+        @if (docKey() === 'tecnico') {
+          @if (m.technicalIndex; as ti) {
+            <div class="docinfo tech">
+              <span class="docinfo__state" [style.color]="state('published').color"><mat-icon>bolt</mat-icon>Gerado sem IA</span>
+              <span class="muted">v{{ ti.version }} · {{ date(ti.generatedAt) }}</span>
+              @for (c of ti.commits; track c.repository + c.commit) {
+                <span class="chip tech__commit" [matTooltip]="c.repository + (c.branch ? ' (' + c.branch + ')' : '') + ' @ ' + c.commit">
+                  <mat-icon>commit</mat-icon>{{ c.repository }}&#64;{{ sha(c.commit) }}{{ c.branch && c.branch !== 'master' ? ' (' + c.branch + ')' : '' }}</span>
+              }
+              @if (docType(); as t) { <span class="muted purpose">{{ t.purpose }}</span> }
+            </div>
+            @if (objectEntries(ti.counts).length) {
+              <div class="chips tech__counts">@for (k of objectEntries(ti.counts); track k[0]) { <span class="chip" [matTooltip]="kindLabel(k[0])">{{ k[0] }} {{ k[1] }}</span> }</div>
+            }
+            @if (canGenerate()) {
+              <div class="muted tech__redo">Regerar (sem IA, a qualquer hora): <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' indice'" /></div>
+            }
+          } @else if (!docLoading() && !doc()?.content && !doc()?.outline) {
+            <div class="empty">
+              <mat-icon>data_object</mat-icon>
+              <div>
+                <b>Índice técnico ainda não gerado.</b>
+                <div class="muted">Lista feita sem IA, direto do código da master: endpoints, rotas e telas, tabelas, procedures/views/jobs, chaves de configuração
+                  e mensagens — com o commit, publicada sem aprovação.</div>
+                @if (canGenerate()) {
+                  <div class="muted">No Claude Code:</div>
+                  <app-copy-command [command]="'/engenharia-reversa ' + m.key + ' indice'" [block]="true" />
+                } @else { <div class="muted">Um administrador gera no Claude Code.</div> }
+              </div>
+            </div>
+          }
         }
 
         @if (docStatus(); as ds) {

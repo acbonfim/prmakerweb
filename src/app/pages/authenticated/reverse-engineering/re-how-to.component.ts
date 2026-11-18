@@ -75,6 +75,12 @@ import { REVERSE_DOCS, ReverseModule } from '../../../services/reverse-engineeri
           </details>
         </li>
         <li>
+          <!-- 0097 -->
+          <b>Índice técnico</b> <span class="muted">(sem IA, a qualquer hora)</span>: endpoints, rotas/telas, tabelas, procedures/views/jobs, chaves de
+          configuração e mensagens extraídos da master, com o commit — publicado direto, sem aprovação (aba <b>Índice técnico</b>).
+          <app-copy-command [command]="'/engenharia-reversa ' + module().key + ' indice'" label="Índice técnico" icon="data_object" [block]="true" />
+        </li>
+        <li>
           <b>Infra na AWS</b> <span class="muted">(opcional)</span>: esteiras de deploy, Lambdas, buckets, segredos (só nomes) e onde ver os logs no
           CloudWatch — lidos pelo AWS CLI, somente leitura, e mostrados na aba <b>Infra</b> do módulo.
           <app-copy-command [command]="'/engenharia-reversa ' + module().key + ' infra'" label="Infra" icon="cloud" [block]="true" />
@@ -129,7 +135,7 @@ export class ReHowToComponent {
   dbLabel = computed(() => { const r = this.reference(); return r ? `${r.environment} (${r.global} + ${r.locals.length} locais)` : 'de referência (DEMO)'; });
   docs = computed(() => {
     const keys = this.docKeys();
-    if (!keys?.length) return REVERSE_DOCS;
+    if (!keys?.length) return REVERSE_DOCS.filter(d => !d.generated);
     return keys.map(k => REVERSE_DOCS.find(d => d.key === k) ?? { key: k, short: k, icon: 'description' });
   });
   readonly installCmd = 'bash ~/.claude/skills/.prmake/prmake-skills.sh update engenharia-reversa';

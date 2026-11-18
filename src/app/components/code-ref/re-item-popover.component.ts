@@ -12,13 +12,13 @@ export type ReItemMode = 'popover' | 'sheet';
 
 const MAX_CITED = 12;
 
-/** Cor do selo pelo prefixo do id (UC azul, RN âmbar, TELA verde-água, API roxo, DB verde…). */
+/** Cor do selo pelo prefixo do id (UC azul, RN âmbar, TELA verde-água, API roxo, DB verde…; 0097: tipos do índice técnico junto dos parecidos). */
 const KIND_TONES: [RegExp, string][] = [
   [/^(UC|FLX|SEQ|TUT|FN)$/, '#58a6ff'],
-  [/^(RN|CFG|PER|REL)$/, '#d29922'],
-  [/^(TELA|UI|CMP)$/, '#39c5cf'],
-  [/^(API|INT|EVT|JOB|NTF|INF)$/, '#bc8cff'],
-  [/^(DB|SQL|TRG|OBJ|EST)$/, '#3fb950'],
+  [/^(RN|CFG|PER|REL|CHV|MSG)$/, '#d29922'],
+  [/^(TELA|UI|CMP|ROT)$/, '#39c5cf'],
+  [/^(API|INT|EVT|JOB|NTF|INF|END)$/, '#bc8cff'],
+  [/^(DB|SQL|TRG|OBJ|EST|TAB)$/, '#3fb950'],
   [/^(GAP|NFR|ADR|TEC|PRF)$/, '#f0883e'],
 ];
 

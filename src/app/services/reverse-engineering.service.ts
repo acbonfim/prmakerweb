@@ -71,7 +71,14 @@ export interface ReverseModuleSummary {
   openQuestions?: number;
   /** 0097: visão prática sugerida (sem prática publicada ou desatualizada e perguntas sem resposta ≥ o mínimo da config). */
   practicalSuggested?: boolean;
+  /** 0097: índice técnico (gerado sem IA, publicado direto) — null/ausente = ainda não gerado (ou API antiga). */
+  technicalIndex?: ReverseTechnicalIndex | null;
 }
+
+/** 0097: commit da master de onde o índice técnico foi extraído. */
+export interface ReverseTechnicalCommit { repository: string; commit: string; branch?: string | null; }
+/** 0097: resumo do índice técnico do módulo (`tecnico`): versão, quando, de quais commits e quantos itens por tipo (END, ROT, TAB…). */
+export interface ReverseTechnicalIndex { version: number; generatedAt: string; commits: ReverseTechnicalCommit[]; counts: Record<string, number>; }
 
 export interface ReverseAsset {
   id: string; moduleKey: string; kind: string; title: string; url?: string | null; fileName?: string | null; contentType?: string | null;
@@ -97,6 +104,7 @@ export function reverseDocOfItem(id: string): string {
   if (['TUT', 'FAQ'].includes(kind)) return 'pratica';
   if (['OBJ', 'PER'].includes(kind)) return 'visao';
   if (['ADR', 'NFR', 'SEQ'].includes(kind)) return 'spec-arquitetura';
+  if (['END', 'ROT', 'TAB', 'CHV', 'MSG'].includes(kind)) return 'tecnico';  // 0097: índice técnico (SQL segue na arquitetura)
   return 'funcional';
 }
 
@@ -154,7 +162,7 @@ export interface ReverseSettings {
 }
 
 /** Ordem e rótulos curtos dos documentos (a tela usa sem esperar a API). */
-export const REVERSE_DOCS: { key: string; short: string; icon: string; human?: boolean }[] = [
+export const REVERSE_DOCS: { key: string; short: string; icon: string; human?: boolean; generated?: boolean }[] = [
   { key: 'funcional', short: 'Funcional', icon: 'rule' },
   { key: 'arquitetura', short: 'Arquitetura', icon: 'lan' },
   { key: 'uiux', short: 'UI/UX', icon: 'design_services' },
@@ -162,6 +170,8 @@ export const REVERSE_DOCS: { key: string; short: string; icon: string; human?: b
   { key: 'spec-arquitetura', short: 'Spec. arquitetura', icon: 'architecture' },
   { key: 'design', short: 'Spec. design', icon: 'palette' },
   { key: 'pratica', short: 'Visão prática', icon: 'support_agent', human: true },
+  /** 0097: gerado sem IA e publicado direto (aba própria no módulo, fora dos documentos com aprovação). */
+  { key: 'tecnico', short: 'Índice técnico', icon: 'data_object', generated: true },
 ];
 
 export const REVERSE_STATE: Record<string, { label: string; color: string; icon: string }> = {

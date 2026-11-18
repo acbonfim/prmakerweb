@@ -161,7 +161,8 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR')).map(([area, modules]) => ({ area, modules }));
   });
 
-  docStatus = computed<ReverseDocStatus | null>(() => this.module()?.docs.find(d => d.type === this.docKey()) ?? null);
+  /** 0097: o índice técnico não tem status de aprovação (aba própria) — fica fora do bloco de documento. */
+  docStatus = computed<ReverseDocStatus | null>(() => this.docKey() === 'tecnico' ? null : this.module()?.docs.find(d => d.type === this.docKey()) ?? null);
   /** 0097: documentos que ainda se geram (para o "Como gerar"): sem os descontinuados, a prática (sob demanda) e o índice técnico. */
   generatableDocs = computed(() => (this.module()?.docs ?? [])
     .filter(d => !this.isDiscontinued(d) && !['pratica', 'tecnico'].includes(d.type)).map(d => d.type));
@@ -316,13 +317,15 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     const key = this.moduleKey(); if (!key) return;
     if (this.docKey() === 'infra') { this.doc.set(null); this.docLoading.set(false); return; }  // 0059: aba Infra não é um documento
     this.docLoading.set(true);
+    // 0097: índice técnico ainda não gerado (ou API antiga, sem o tipo `tecnico`) = aba vazia com o comando, sem aviso de erro.
+    const quiet = this.docKey() === 'tecnico';
     this.api.doc(key, this.docKey(), false).subscribe({
       next: d => {
         this.doc.set(d);
         this.docLoading.set(false);
         if (item) this.scrollTo(item);
       },
-      error: e => { this.docLoading.set(false); this.doc.set(null); this.toast(e); }
+      error: e => { this.docLoading.set(false); this.doc.set(null); if (!quiet) this.toast(e); }
     });
   }
 
@@ -404,7 +407,10 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
 
   // ── Helpers ────────────────────────────────────────────────────────────────────────────────
 
-  objectEntries(o: Record<string, number>) { return Object.entries(o ?? {}); }
+  objectEntries(o: Record<string, number> | null | undefined) { return Object.entries(o ?? {}); }
+  /** 0097: rótulo do tipo de item (END → Endpoints…) pela lista da API. */
+  kindLabel(prefix: string) { return this.settings()?.kinds.find(k => k.prefix === prefix)?.plural ?? prefix; }
+  sha(commit?: string | null) { return (commit ?? '').slice(0, 7); }
   /** 0097: design e visão descontinuados — pelo status do módulo ou pelo tipo (doc-types); API antiga não manda: falso. */
   isDiscontinued(d: ReverseDocStatus | string) {
     const type = typeof d === 'string' ? d : d.type;

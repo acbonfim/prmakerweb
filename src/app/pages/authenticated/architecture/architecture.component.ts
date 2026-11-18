@@ -302,9 +302,9 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
   /** 0052: projetos que são módulo na Engenharia reversa (legado/revamp/front/integração/login). */
   isModule(p: ArchitectureProject) { return ['legacy', 'revamp', 'frontend', 'integration', 'auth'].includes(p.kind); }
   /** Documentos da engenharia reversa publicados (seções re-*). */
-  reverseCount(p: ArchitectureProject) { return p.sections.filter(s => s.key.startsWith('re-')).length; }
-  /** Documentos da engenharia reversa (7 com a visão prática — 0054). */
-  readonly reverseTotal = REVERSE_DOCS.length;
+  reverseCount(p: ArchitectureProject) { return p.sections.filter(s => s.key.startsWith('re-') && s.key !== 're-tecnico').length; }
+  /** Documentos da engenharia reversa (7 com a visão prática — 0054; 0097: o índice técnico, gerado sem IA, não conta). */
+  readonly reverseTotal = REVERSE_DOCS.filter(d => !d.generated).length;
   /** 0066: relação que veio de um item INT da engenharia reversa (evidência re#INT-001) → o ID do item. */
   reItem(evidence?: string | null): string | null { return evidence?.startsWith('re#') ? evidence.slice(3) : null; }
   openReverseRef(ref: string) {
