@@ -116,6 +116,20 @@ function idOf(ref: string): string {
             @if (it.removed) {
               <div class="rei__removed"><mat-icon>history_toggle_off</mat-icon> Item removido da versão atual da engenharia reversa.</div>
             }
+            @if (it.stale; as st) {
+              <!-- 0097: reancoragem achou mudança no trecho citado -->
+              <div class="rei__stale" role="note">
+                <mat-icon>update</mat-icon>
+                <div>
+                  <b>Código mudou desde a geração</b> — confirme no código.
+                  @if (st.reason) { <div class="rei__stale-why">{{ st.reason }}</div> }
+                  <div class="rei__stale-meta">
+                    @if (st.commit) { <code>{{ st.commit.slice(0, 7) }}</code> }
+                    @if (st.since) { <span>desde {{ staleDate(st.since) }}</span> }
+                  </div>
+                </div>
+              </div>
+            }
             @if (bodyHtml()) {
               <div class="rei__md" [innerHTML]="bodyHtml()" (click)="onBodyClick($event)"></div>
             } @else {
@@ -213,6 +227,12 @@ function idOf(ref: string): string {
       color: #e3b341; background: color-mix(in srgb, #d29922 10%, transparent); border: 1px solid color-mix(in srgb, #d29922 30%, transparent); }
     .rei__removed .mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .rei__empty { margin: 0; color: #8b949e; }
+    .rei__stale { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 10px; padding: 6px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45;
+      color: #f0b072; background: color-mix(in srgb, #f0883e 10%, transparent); border: 1px solid color-mix(in srgb, #f0883e 32%, transparent); }
+    .rei__stale > .mat-icon { flex: none; font-size: 16px; width: 16px; height: 16px; margin-top: 1px; }
+    .rei__stale-why { color: #c9d1d9; }
+    .rei__stale-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: #8b949e; }
+    .rei__stale-meta code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #79c0ff; }
 
     .rei__md { line-height: 1.55; overflow-wrap: anywhere; }
     .rei__md > :first-child { margin-top: 0; }
@@ -323,6 +343,11 @@ export class ReItemPopoverComponent {
   docLabel(doc: string | null | undefined): string {
     const d = (doc ?? '').trim();
     return d ? `Documento ${d}` : 'Engenharia reversa';
+  }
+
+  staleDate(at: string): string {
+    const d = new Date(at);
+    return isNaN(d.getTime()) ? at : d.toLocaleDateString('pt-BR');
   }
 
   reload(): void { this.load(); }

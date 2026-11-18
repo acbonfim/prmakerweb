@@ -30,6 +30,8 @@ export interface ReItem {
   sectionVersion?: number | string | null;
   removed: boolean;
   traps: ReItemTrap[];
+  /** 0097: o trecho do código citado mudou desde a geração (reancoragem) — confirmar no código. */
+  stale?: { since: string; reason?: string | null; commit?: string | null } | null;
 }
 
 export type ReItemResult =

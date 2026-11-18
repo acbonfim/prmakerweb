@@ -16,7 +16,7 @@ import { WsService } from '../../../services/ws.service';
 import { StorageService } from '../../../services/storage.service';
 import { TabStatus, TabsService } from '../../../services/tabs.service';
 import {
-  REVERSE_DOCS, REVERSE_EVENT, ReverseDoc, ReverseDocStatus, ReverseDocType, ReverseEngineeringService, ReverseModule, ReverseModuleSummary,
+  REVERSE_DOCS, REVERSE_EVENT, ReverseDoc, ReverseDocStatus, ReverseDocType, ReverseEngineeringService, ReverseIndexHit, ReverseModule, ReverseModuleSummary,
   ReverseRevisionHead, ReverseSettings, ReverseSource, reverseGroup, reverseState
 } from '../../../services/reverse-engineering.service';
 import { ReHowToComponent } from './re-how-to.component';
@@ -75,6 +75,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   private pendingItem: string | null = null;
   @ViewChild(ReIndexComponent) indexRef?: ReIndexComponent;
   @ViewChild('srcPop') srcPop?: Popover;
+  @ViewChild('stalePop') stalePop?: Popover;
 
   readonly docs = REVERSE_DOCS;
   readonly state = reverseState;
@@ -127,6 +128,16 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   kc = signal<{ id: string; projectKey: string; content: string; cardNumber?: string | null; createdBy: string; itemId?: string | null }[]>([]);
   /** Muda a cada evento da revisão aberta — o painel de revisão recarrega. */
   revisionStamp = signal<string | null>(null);
+
+  /**
+   * 0097: itens com código alterado desde a geração. O módulo traz só a contagem (`staleItems`); a lista vem da busca do
+   * índice sem termo (lista filtrada pelo módulo), filtrando os que têm `stale` — carregada ao abrir o popover.
+   */
+  staleList = signal<ReverseIndexHit[] | null>(null);
+  staleLoading = signal(false);
+  private staleFor: string | null = null;
+  /** IDs desatualizados do documento aberto (marca no sumário, depois que a lista foi carregada). */
+  staleIds = computed(() => new Set((this.staleList() ?? []).filter(h => h.docType === this.docKey()).map(h => h.itemId)));
 
   sourcesDraft: ReverseSource[] = [];
   aliasesDraft = '';
@@ -303,6 +314,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
 
   loadModule(key: string, spinner: boolean) {
     if (spinner) { this.moduleLoading.set(true); this.module.set(null); }
+    if (this.staleFor && !this.staleFor.startsWith(`${key}:`)) { this.staleFor = null; this.staleList.set(null); }
     this.joinModuleGroup(key);
     this.api.module(key).subscribe({
       next: m => {
@@ -371,6 +383,22 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
     this.aliasesDraft = m.aliases.join(', ');
     this.srcPop?.toggle(event);
   }
+
+  /** 0097: popover "N itens com código alterado desde a geração". */
+  openStale(event: Event) {
+    const m = this.module(); if (!m) return;
+    this.stalePop?.toggle(event);
+    const stamp = `${m.key}:${m.staleItems ?? 0}`;
+    if (this.staleFor === stamp && this.staleList()) return;
+    this.staleFor = stamp;
+    this.staleLoading.set(true);
+    this.api.search('', { module: m.key, limit: 2000 }).subscribe({
+      next: hits => { if (this.staleFor === stamp) { this.staleList.set(hits.filter(h => !!h.stale)); this.staleLoading.set(false); } },
+      error: () => { if (this.staleFor === stamp) { this.staleList.set([]); this.staleLoading.set(false); } }
+    });
+  }
+
+  goToStale(h: ReverseIndexHit) { this.stalePop?.hide(); this.openModule(h.moduleKey, h.docType, h.itemId); }
 
   addSource() { this.sourcesDraft.push({ repository: '', path: '', role: 'frontend' }); }
   removeSource(i: number) { this.sourcesDraft.splice(i, 1); }

@@ -143,6 +143,11 @@
               <a class="ask" (click)="selectDoc('pratica')" matTooltip="Perguntas do Pergunte que a Base Solvace não soube responder para este módulo — base da visão prática (sob demanda)">
                 <mat-icon>help_outline</mat-icon>Pergunte sem resposta: {{ m.openQuestions }}</a>
             }
+            @if (m.staleItems) {
+              <!-- 0097: reancoragem — itens cujo trecho citado mudou na master -->
+              <a class="stale-link" (click)="openStale($event)" matTooltip="O trecho do código citado no &quot;Onde:&quot; mudou na master depois da geração — confirme no código">
+                <mat-icon>update</mat-icon>{{ m.staleItems }} {{ m.staleItems === 1 ? 'item com código alterado' : 'itens com código alterado' }} desde a geração</a>
+            }
             <a (click)="router.navigate(['/auth/architecture'], { queryParams: { p: m.key } })"><mat-icon>account_tree</mat-icon>Ver na Base Solvace</a>
             @for (s of m.siblings; track s) { <a (click)="openModule(s)"><mat-icon>swap_horiz</mat-icon>{{ s }}</a> }
           </div>
@@ -195,6 +200,32 @@
                       <button mat-flat-button color="primary" type="button" (click)="saveSources()">Salvar</button>
                     </div>
                   } @else { <p class="muted">Só {{ settings()?.approverRoles?.join(' ou ') }} altera as fontes.</p> }
+                </section>
+              </div>
+            </ng-template>
+          </p-popover>
+
+          <p-popover #stalePop appendTo="body" styleClass="re-popover">
+            <ng-template #content>
+              <div class="re-popover__body">
+                <section class="stale-list">
+                  <h3><mat-icon>update</mat-icon>{{ m.staleItems ?? 0 }} {{ m.staleItems === 1 ? 'item com código alterado' : 'itens com código alterado' }} desde a geração</h3>
+                  <p class="muted">O trecho citado no "Onde:" mudou na master. O texto do item pode estar certo ou não — as análises confirmam no código.
+                    A marca sai quando o documento é publicado de novo.</p>
+                  @if (staleLoading()) { <div class="state"><mat-spinner diameter="20"></mat-spinner></div> }
+                  @else {
+                    @for (h of staleList(); track h.ref) {
+                      <button type="button" class="stale-list__row" (click)="goToStale(h)">
+                        <span class="id">{{ h.itemId }}</span>
+                        <span class="stale-list__title">{{ h.title }}
+                          @if (h.stale?.reason) { <span class="muted"> — {{ h.stale?.reason }}</span> }
+                        </span>
+                        <span class="muted">{{ docTitle(h.docType) }}{{ h.stale?.commit ? ' · ' + sha(h.stale?.commit) : '' }}</span>
+                      </button>
+                    } @empty {
+                      <div class="muted">A lista não veio com a marca de cada item — veja a contagem acima.</div>
+                    }
+                  }
                 </section>
               </div>
             </ng-template>
@@ -391,7 +422,8 @@
                   }
                   @if (!tocCollapsed(g.kind)) {
                     @for (i of g.items; track i.id) {
-                      <button type="button" class="toc__item" [class.toc__item--removed]="i.removed" (click)="scrollTo(i.id)"><span class="id">{{ i.id }}</span>{{ i.title }}</button>
+                      <button type="button" class="toc__item" [class.toc__item--removed]="i.removed" (click)="scrollTo(i.id)"><span class="id">{{ i.id }}</span>{{ i.title }}
+                        @if (staleIds().has(i.id)) { <mat-icon class="toc__stale" matTooltip="Código mudou desde a geração">update</mat-icon> }</button>
                     }
                   }
                 }

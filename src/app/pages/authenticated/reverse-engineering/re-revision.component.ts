@@ -334,7 +334,7 @@ export class ReRevisionComponent {
   statusLabel(s: string) {
     return ({ draft: 'rascunho', review: 'em revisão', changes: 'ajustes pedidos', approved: 'aprovada', published: 'publicada', discarded: 'descartada', superseded: 'substituída' } as any)[s] ?? s;
   }
-  modeLabel(m: string) { return ({ new: 'novo', improve: 'melhorar', redo: 'refazer', manual: 'manual', generated: 'gerado sem IA' } as any)[m] ?? m; }
+  modeLabel(m: string) { return ({ new: 'novo', improve: 'melhorar', redo: 'refazer', manual: 'manual', generated: 'gerado sem IA', reanchor: 'reancorar (só o "Onde:")' } as any)[m] ?? m; }
   changeLabel(c: string) { return ({ added: 'novo', removed: 'removido', changed: 'alterado' } as any)[c] ?? c; }
   pct(v: number) { return `${Math.floor(v * 100)}%`; }
   date(at?: string | null) { return at ? new Date(at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''; }

@@ -73,7 +73,12 @@ export interface ReverseModuleSummary {
   practicalSuggested?: boolean;
   /** 0097: índice técnico (gerado sem IA, publicado direto) — null/ausente = ainda não gerado (ou API antiga). */
   technicalIndex?: ReverseTechnicalIndex | null;
+  /** 0097: itens cujo trecho citado no código mudou desde a geração (reancoragem) — só a contagem. */
+  staleItems?: number;
 }
+
+/** 0097: item desatualizado — o trecho do código citado no "Onde:" mudou na master depois da geração. */
+export interface ReverseStale { since: string; reason?: string | null; commit?: string | null; }
 
 /** 0097: commit da master de onde o índice técnico foi extraído. */
 export interface ReverseTechnicalCommit { repository: string; commit: string; branch?: string | null; }
@@ -150,6 +155,8 @@ export interface ReverseDoc {
 export interface ReverseIndexHit {
   ref: string; moduleKey: string; moduleName?: string | null; docType: string; itemId: string; kind: string; kindLabel: string; title: string;
   snippet: string; tags: string[]; tables: string[]; modules: string[]; synonyms?: string[]; removed: boolean; score: number;
+  /** 0097: código mudou desde a geração (null/ausente = em dia ou API antiga). */
+  stale?: ReverseStale | null;
 }
 export interface ReverseItem extends ReverseIndexHit { body: string; refs: string[]; evidence: string[]; referencedBy: string[]; sectionVersion: number; }
 
