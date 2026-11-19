@@ -72,6 +72,7 @@ import {
   waitingForResolve
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
+import { WorkTaskControlsComponent } from './work-task-controls.component';
 import { listenWorkItems } from './work-items-live';
 import { WorkItemQuestionsComponent } from './work-item-questions.component';
 import { EXECUTION_PLAN_EVENT, ExecutionPlanRealtimePayload, ExecutionQuestion } from '../execution-plan/execution-plan.model';
@@ -110,7 +111,8 @@ const FLASH_MS = 1_600;
 @Component({
   selector: 'app-work-item-execution',
   standalone: true,
-  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent, WorkItemQuestionsComponent],
+  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent, WorkItemQuestionsComponent,
+    WorkTaskControlsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="wie" [class.wie--live]="live()" [class.wie--celebrate]="celebrate()" [attr.aria-busy]="live()"
@@ -310,6 +312,8 @@ const FLASH_MS = 1_600;
                     <button mat-icon-button class="wie__qa" (click)="taskAct(t, a)" [disabled]="busyTask() === t.number"
                             [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label + ' ' + num(t.number)"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
                   }
+                  <!-- Card 78680: mover / pausar / cancelar só esta, com as dependências à vista -->
+                  <app-work-task-controls [item]="it" [task]="t" [readOnly]="readOnly()" (changed)="afterTicket($event)" />
                 </li>
               }
             </ol>
@@ -1064,7 +1068,7 @@ export class WorkItemExecutionComponent {
   }
 
   /** O endpoint devolve o item atualizado: aplica na hora (sem item na resposta, recarrega). */
-  private afterTicket(it: WorkItem | null | undefined): void {
+  afterTicket(it: WorkItem | null | undefined): void {
     if (it && it.number === this.current && Array.isArray(it.tasks)) this.applyItem(it);
     else this.reload();
   }

@@ -47,6 +47,7 @@ import {
   waitingForResolve
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
+import { WorkTaskControlsComponent } from './work-task-controls.component';
 import { WorkItemDialogComponent, WorkItemDialogData, WorkItemDialogResult } from './work-item-dialog.component';
 import { workDialogConfig } from './work-dialog-config';
 import { listenWorkItems } from './work-items-live';
@@ -83,7 +84,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
 @Component({
   selector: 'app-work-item-list',
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, WorkItemExecutionComponent, WiTypeIconComponent],
+  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, WorkItemExecutionComponent, WiTypeIconComponent, WorkTaskControlsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wil">
@@ -316,6 +317,8 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                                   [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label + ' ' + num(t.number)"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
                         }
                       }
+                      <!-- Card 78680: mover / pausar / cancelar só esta (relatado: só leitura) -->
+                      <app-work-task-controls [item]="it" [task]="t" [readOnly]="readOnly() || source() === 'related'" (changed)="load(true)" />
                     </li>
                   }
                 </ol>
