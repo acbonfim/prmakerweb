@@ -38,6 +38,7 @@ import {
   userTaskActions
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
+import { WorkTaskControlsComponent } from './work-task-controls.component';
 import { listenWorkItems } from './work-items-live';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
 import { WorkItemFilesComponent } from './work-item-files.component';
@@ -80,7 +81,8 @@ export interface WorkItemDialogData {
 @Component({
   selector: 'app-work-item-dialog',
   standalone: true,
-  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WiTypeIconComponent, WorkItemFilesComponent, WorkDeliverablesComponent, WorkItemOverviewComponent],
+  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, WiTypeIconComponent, WorkItemFilesComponent, WorkDeliverablesComponent, WorkItemOverviewComponent,
+    WorkTaskControlsComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <!-- 0087: links de código (ref:) e de itens da engenharia reversa/Base Solvace abrem o popover aqui também -->
@@ -238,6 +240,8 @@ export interface WorkItemDialogData {
                     @for (a of quick(t); track a) {
                       <button mat-icon-button class="wid__qa" [disabled]="busyTask() === t.number" (click)="taskAct(t, a)" [matTooltip]="actionLook(a).label" [attr.aria-label]="actionLook(a).label"><mat-icon>{{ actionLook(a).icon }}</mat-icon></button>
                     }
+                    <!-- Card 78680: mover / pausar / cancelar só esta -->
+                    <app-work-task-controls [item]="it" [task]="t" [readOnly]="!!data.readOnly" (changed)="item.set($event)" />
                     @if (t.description) {
                       <!-- 0087: o que será feito, com o código (caminho:linhas → popover) e as regras da Base Solvace -->
                       <details class="wid__task-desc">

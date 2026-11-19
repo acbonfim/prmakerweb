@@ -13,6 +13,8 @@ import {
   WorkItemType,
   WorkTask,
   WorkTaskAction,
+  WorkTaskControlRequest,
+  WorkTaskMove,
   TASK_ACTION_LABELS,
   TICKET_STATUS_DONE,
   TicketStatus,
@@ -24,6 +26,14 @@ import { WorkItemEditorDialogComponent, WorkItemEditorDialogData, WorkItemEditor
 import { WorkTaskDialogComponent, WorkTaskDialogData } from './work-task-dialog.component';
 import { WorkItemFilesDialogComponent, WorkItemFilesDialogData } from './work-item-files-dialog.component';
 import { WorkPromptDialogComponent, WorkPromptDialogData, WorkPromptDialogResult } from './work-prompt-dialog.component';
+import { CancelTaskDialogComponent, CancelTaskDialogData, CancelTaskDialogResult } from './cancel-task-dialog.component';
+
+const MOVE_DONE: Record<WorkTaskMove, string> = {
+  first: 'foi para o início',
+  up: 'subiu uma posição',
+  down: 'desceu uma posição',
+  last: 'foi para o fim'
+};
 
 /** Catálogo guardado por card por pouco tempo (o editor e os modais abrem várias vezes). */
 const CATALOG_TTL_MS = 60_000;
@@ -167,6 +177,40 @@ export class WorkItemActionsService {
       this.fail(e);
       return false;
     }
+  }
+
+  /**
+   * Card 78680: muda a ordem / pausa / continua uma sub-tarefa sem cancelar o item — devolve o item atualizado (ou
+   * undefined se falhou; a recusa por dependência vem com o motivo no snackbar).
+   */
+  async controlTask(task: Pick<WorkTask, 'number'>, req: WorkTaskControlRequest): Promise<WorkItem | undefined> {
+    try {
+      const it = await firstValueFrom(this.api.controlTask(task.number, req));
+      const n = formatWorkNumber(task.number);
+      const restarted = it.status === 'queued' || it.status === 'running' ? ' A execução segue na ordem nova.' : '';
+      switch (req.action) {
+        case 'move': this.ok(`${n} ${MOVE_DONE[req.position as WorkTaskMove] ?? 'mudou de lugar'}.${restarted}`); break;
+        case 'pause': this.ok(`${n} pausada — o Claude não a faz (nem as que dependem dela) até você continuar.`); break;
+        case 'resume': this.ok(`${n} continua.${restarted}`); break;
+        case 'cancel': this.ok(`${n} cancelada — o item segue com as outras.`); break;
+      }
+      return it;
+    } catch (e) {
+      this.fail(e);
+      return undefined;
+    }
+  }
+
+  /** Card 78680: cancela só a sub-tarefa (pergunta o motivo e, se outras dependem dela, se cancelam junto). */
+  async cancelTask(item: Pick<WorkItem, 'tasks'>, task: WorkTask): Promise<WorkItem | undefined> {
+    const dependents = (task.controls?.dependents ?? [])
+      .map((n) => item.tasks.find((t) => t.number === n))
+      .filter((t): t is WorkTask => !!t)
+      .map((t) => ({ number: t.number, title: t.title }));
+    const res = await firstValueFrom(this.dialog.open<CancelTaskDialogComponent, CancelTaskDialogData, CancelTaskDialogResult>(
+      CancelTaskDialogComponent, workDialogConfig({ task: { number: task.number, title: task.title }, dependents }, '520px')).afterClosed());
+    if (!res) return undefined;
+    return this.controlTask(task, { action: 'cancel', reason: res.reason, dependents: res.dependents });
   }
 
   /** "Já resolvi": a sub-tarefa volta a andar e o Claude retoma o item — devolve o item atualizado (ou undefined se falhou). */

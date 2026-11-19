@@ -105,6 +105,58 @@ export interface WorkTask {
   completedAt?: string | null;
   /** Chamado na Bancada: chamados e PRs ligados à sub-tarefa (ausente = `[]`). */
   links?: WorkTaskLink[] | null;
+  /** Card 78680: pausada pela pessoa — o Claude não a faz (nem as que dependem dela) até alguém continuar. */
+  held?: boolean | null;
+  heldBy?: string | null;
+  /** Card 78680: dependências e o que dá para fazer agora (null = pode; texto = por que não). */
+  controls?: WorkTaskControls | null;
+}
+
+/** Card 78680: regras de mover/pausar/cancelar uma sub-tarefa, calculadas no servidor. */
+export interface WorkTaskControls {
+  /** Sub-tarefas (números) de que ela depende. */
+  dependsOn: number[];
+  /** Dependência deduzida pelo tipo (PR precisa do código, chamado do script...). */
+  implicit?: boolean;
+  /** Ainda não feitas que dependem dela (direta ou indiretamente). */
+  dependents: number[];
+  heldBy?: string | null;
+  /** Espera esta sub-tarefa, que está pausada. */
+  waitsForHeld?: number | null;
+  first?: string | null;
+  up?: string | null;
+  down?: string | null;
+  last?: string | null;
+  pause?: string | null;
+  canResume?: boolean;
+  cancel?: string | null;
+}
+
+export type WorkTaskMove = 'first' | 'up' | 'down' | 'last';
+
+/** Card 78680: `POST WorkItems/tasks/{n}/control`. */
+export interface WorkTaskControlRequest {
+  action: 'move' | 'pause' | 'resume' | 'cancel';
+  position?: WorkTaskMove | 'before' | null;
+  before?: number | null;
+  reason?: string | null;
+  /** cancel com dependentes: cancela junto ou seguem sem ela. */
+  dependents?: 'cancel' | 'keep' | null;
+  execute?: boolean | null;
+}
+
+/** Card 78680: sub-tarefa que ainda dá para mexer (item aberto e ela ainda não feita). */
+export function canControlTask(item: Pick<WorkItem, 'status'> | null | undefined, task: Pick<WorkTask, 'status' | 'controls'>): boolean {
+  if (!item || !task.controls) return false;
+  if (['completed', 'cancelled', 'reverted', 'reverting'].includes(item.status)) return false;
+  return ['pending', 'running', 'waiting', 'failed'].includes(task.status);
+}
+
+/** Card 78680: dependências ainda não feitas da sub-tarefa (as que seguram ela), com o título para a dica. */
+export function openDependencies(item: Pick<WorkItem, 'tasks'> | null | undefined, task: Pick<WorkTask, 'controls'>): WorkTask[] {
+  const deps = task.controls?.dependsOn ?? [];
+  if (!item || !deps.length) return [];
+  return item.tasks.filter((t) => deps.includes(t.number) && ['pending', 'running', 'waiting', 'failed'].includes(t.status));
 }
 
 export interface WorkItemLog {

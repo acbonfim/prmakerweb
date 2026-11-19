@@ -16,6 +16,7 @@ import {
   WorkItemError,
   WorkItemLive,
   WorkTaskAction,
+  WorkTaskControlRequest,
   formatWorkNumber,
   itemStatusLook
 } from '../components/work-items/work-item.model';
@@ -241,6 +242,15 @@ export class WorkItemsService {
   taskAction(taskNumber: number, action: WorkTaskAction, body: { result?: string | null; output?: Record<string, unknown> | null } = {}): Observable<WorkItem> {
     return this.http.post<WorkItem>(`${this.apiUrl}/tasks/${taskNumber}/${action}`, { result: body.result ?? null, output: body.output ?? null })
       .pipe(this.fail(`Não foi possível atualizar a sub-tarefa ${formatWorkNumber(taskNumber)}.`));
+  }
+
+  /**
+   * Card 78680: mexe numa sub-tarefa sem cancelar o item (avulso ou do plano) — mover, pausar, continuar ou cancelar só
+   * ela. A execução atropelada é parada e retomada na ordem nova. Devolve o item atualizado.
+   */
+  controlTask(taskNumber: number, req: WorkTaskControlRequest): Observable<WorkItem> {
+    return this.http.post<WorkItem>(`${this.apiUrl}/tasks/${taskNumber}/control`, req)
+      .pipe(this.fail(`Não foi possível mudar a sub-tarefa ${formatWorkNumber(taskNumber)}.`));
   }
 
   /** "Já resolvi": a sub-tarefa do Claude que esperava a pessoa volta a andar e o item é retomado — devolve o item atualizado. */
