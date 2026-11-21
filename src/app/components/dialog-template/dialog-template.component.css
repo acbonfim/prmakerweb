@@ -61,32 +61,6 @@
   margin-left: 8px;
 }
 
-/* Scrollbar personalizada para o conteúdo */
-.scrollable-content::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.scrollable-content::-webkit-scrollbar-track {
-  background: var(--mat-sys-surface-variant);
-  border-radius: 4px;
-}
-
-.scrollable-content::-webkit-scrollbar-thumb {
-  background: var(--mat-sys-outline);
-  border-radius: 4px;
-}
-
-.scrollable-content::-webkit-scrollbar-thumb:hover {
-  background: var(--mat-sys-on-surface-variant);
-}
-
-/* Para Firefox */
-.scrollable-content {
-  scrollbar-width: thin;
-  scrollbar-color: var(--mat-sys-outline) var(--mat-sys-surface-variant);
-}
-
 /* Responsividade */
 @media (max-width: 768px) {
   .dialog-container {

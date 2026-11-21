@@ -74,7 +74,7 @@ const RADIUS = 14;
     @keyframes al-bob { 0%, 100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-2px) rotate(-6deg); } 75% { transform: translateY(1px) rotate(6deg); } }
     @media (prefers-reduced-motion: reduce) { .al__glow, .al__glow::after, .al__icon { animation: none !important; } }
 
-    .al-pop { width: min(460px, calc(100vw - 24px)); max-height: min(72vh, 620px); overflow-y: auto; scrollbar-width: thin;
+    .al-pop { width: min(460px, calc(100vw - 24px)); max-height: min(72vh, 620px); overflow-y: auto; overflow-x: hidden;
       border-radius: ${RADIUS}px; background: var(--surface-2, #323232); color: var(--mat-sys-on-surface);
       border: 1px solid color-mix(in srgb, #bc8cff 28%, rgba(255,255,255,.08));
       box-shadow: 0 12px 32px rgba(0,0,0,.45), 0 0 0 3px color-mix(in srgb, #d2a8ff 10%, transparent); }

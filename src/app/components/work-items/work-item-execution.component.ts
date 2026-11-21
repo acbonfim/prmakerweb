@@ -402,7 +402,7 @@ const FLASH_MS = 1_600;
     .wie__progress { position: relative; height: 3px; background: rgba(255,255,255,.08); overflow: hidden; flex: none; }
     .wie__progress-fill { position: absolute; inset: 0 auto 0 0; transition: width .5s ease; }
     .wie__progress-run { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(88,166,255,.75), transparent); background-size: 40% 100%; background-repeat: no-repeat; }
-    .wie__body { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+    .wie__body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 12px; padding: 12px; }
     .wie__note { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 10px; font-size: 12.5px;
       background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent); border: 1px solid color-mix(in srgb, var(--mat-sys-primary) 25%, transparent); }
     .wie__note mat-icon { font-size: 17px; width: 17px; height: 17px; flex: none; }

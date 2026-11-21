@@ -433,7 +433,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
     /* Desktop (≥ 1024): a lista ocupa a altura que sobra e rola sozinha (a barra de rolagem fica junto da lista, não depois da
        sessão); a sessão tem a rolagem dela. */
     .wil__layout--fill { flex: 1 1 auto; min-height: 0; }
-    .wil__layout--fill .wil__main { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 3px; scrollbar-width: thin; }
+    .wil__layout--fill .wil__main { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 3px; }
     .wil__layout--fill.wil__layout--split .wil__session { flex: 0 1 auto; max-height: 58%; min-height: 220px; }
     .wil__layout--fill.wil__layout--split .wil__main { min-height: 140px; }
     @container wilhost (min-width: 760px) {

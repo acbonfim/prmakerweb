@@ -238,30 +238,6 @@ interface FileChange {
     .line-info .line-number {
       background-color: #161b22;
     }
-
-    /* Customizar scrollbar */
-    .diff-container-wrapper::-webkit-scrollbar {
-      width: 12px;
-      height: 12px;
-    }
-
-    .diff-container-wrapper::-webkit-scrollbar-track {
-      background: #161b22;
-      border-radius: 6px;
-    }
-
-    .diff-container-wrapper::-webkit-scrollbar-thumb {
-      background: #30363d;
-      border-radius: 6px;
-    }
-
-    .diff-container-wrapper::-webkit-scrollbar-thumb:hover {
-      background: #484f58;
-    }
-
-    .diff-container-wrapper::-webkit-scrollbar-corner {
-      background: #161b22;
-    }
   `]
 })
 export class GitDiffViewerComponent {

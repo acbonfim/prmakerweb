@@ -123,7 +123,7 @@ export interface HistoryRow {
     .ph-chip:hover { background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent); }
     .ph-chip--on { border-color: var(--ph-run); color: var(--ph-run); background: color-mix(in srgb, var(--ph-run) 12%, transparent); }
     .ph-chip__n { opacity: .7; margin-left: 2px; }
-    .ph-list { display: flex; flex-direction: column; gap: 2px; padding: 6px 0 0; max-height: min(520px, calc(100dvh - 200px)); overflow-y: auto; overscroll-behavior: contain; }
+    .ph-list { display: flex; flex-direction: column; gap: 2px; padding: 6px 0 0; max-height: min(520px, calc(100dvh - 200px)); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
     .ph-row { display: flex; gap: 10px; align-items: flex-start; text-align: left; width: 100%; padding: 8px; border: 0; border-radius: 8px;
               background: transparent; color: inherit; font: inherit; cursor: pointer; border-left: 3px solid transparent; }
     .ph-row:hover, .ph-row:focus-visible { background: color-mix(in srgb, var(--mat-sys-on-surface) 8%, transparent); outline: none; }

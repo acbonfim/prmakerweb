@@ -100,7 +100,7 @@ export interface CaseProposalDialogData {
     .pd__badge { font-size: 11.5px; padding: 3px 10px; border-radius: 12px; background: color-mix(in srgb, #c4a7ff 15%, transparent); color: #c4a7ff; }
     .pd__badge--accepted { color: #3fb950; background: color-mix(in srgb, #3fb950 12%, transparent); }
     .pd__badge--rejected, .pd__badge--superseded { color: #9a9ca3; background: rgba(255,255,255,.06); }
-    .pd__body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+    .pd__body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
     .pd__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .pd__cols h4 { margin: 0 0 8px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; opacity: .7; font-weight: 600; }
     .pd__cols h4 mat-icon { font-size: 16px; width: 16px; height: 16px; }

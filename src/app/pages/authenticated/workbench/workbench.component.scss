@@ -330,7 +330,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow: auto;
+  // Só rola na vertical: um filho alguns pixels mais largo não pode criar barra horizontal.
+  overflow-y: auto;
+  overflow-x: hidden;
 
   // A lista ocupa o resto da altura e rola por dentro (barra de filtros fixa); o painel só rola se as sugestões não couberem.
   > app-work-item-list { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
@@ -395,8 +397,8 @@
   flex-direction: column;
   gap: 8px;
   max-height: 42%;
-  overflow: auto;
-  scrollbar-width: thin;
+  overflow-y: auto;
+  overflow-x: hidden;
 
   &:empty { display: none; }
   > app-card-situation:empty { display: none; }
