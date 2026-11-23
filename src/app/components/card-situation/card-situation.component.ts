@@ -34,9 +34,12 @@ const COLLAPSED_KEY = 'prmake.situation-collapsed';
   imports: [MatButtonModule, MatIconModule, MatSlideToggleModule, MatTooltipModule, CodeRefHostDirective],
   templateUrl: './card-situation.component.html',
   styleUrl: './card-situation.component.css',
+  host: { '[class.sit-host--pop]': "variant() === 'popover'" },
 })
 export class CardSituationComponent {
   readonly cardNumber = input<string | number | null | undefined>(null);
+  /** `popover`: dentro do botão da barra de horas da Bancada — sempre aberto, sem recolher e sem moldura própria. */
+  readonly variant = input<'card' | 'popover'>('card');
 
   private svc = inject(CardSituationService);
   private clipboard = inject(CliipboardService);
@@ -58,7 +61,8 @@ export class CardSituationComponent {
 
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
-  readonly collapsed = signal(loadCollapsed());
+  private readonly collapsedPref = signal(loadCollapsed());
+  readonly collapsed = computed(() => this.variant() !== 'popover' && this.collapsedPref());
   readonly showDone = signal(false);
   readonly confirmPublish = signal(false);
   readonly publishing = signal(false);
@@ -172,8 +176,8 @@ export class CardSituationComponent {
   }
 
   toggleCollapsed(): void {
-    const v = !this.collapsed();
-    this.collapsed.set(v);
+    const v = !this.collapsedPref();
+    this.collapsedPref.set(v);
     try { localStorage.setItem(COLLAPSED_KEY, v ? '1' : '0'); } catch { /* sem storage */ }
   }
 

@@ -75,12 +75,16 @@ import { WorkItemActionsService } from './work-item-actions.service';
 import { WorkTaskControlsComponent } from './work-task-controls.component';
 import { listenWorkItems } from './work-items-live';
 import { WorkItemQuestionsComponent } from './work-item-questions.component';
-import { EXECUTION_PLAN_EVENT, ExecutionPlanRealtimePayload, ExecutionQuestion } from '../execution-plan/execution-plan.model';
+import { EXECUTION_PLAN_EVENT, ExecutionPlan, ExecutionPlanRealtimePayload, ExecutionQuestion } from '../execution-plan/execution-plan.model';
+import { TaskPendencyComponent } from './task-pendency.component';
+import { taskPendency } from './task-pendency';
 import { ExecutionPlanService } from '../../services/execution-plan.service';
 import { WorkItemFilesStore } from './work-item-files.store';
 
 /** Debounce dos eventos do tempo real (rajadas de atividade viram um GET só). */
 const LIVE_DEBOUNCE_MS = 300;
+/** Eventos do plano que mudam a espera do item (perguntas, divergência no registro, motivo/status da etapa). */
+const PLAN_WAIT_ACTIONS: ReadonlySet<string> = new Set(['question', 'log', 'step', 'status']);
 /** Polling de segurança: só enquanto o item roda e sem evento recente. */
 const POLL_IDLE_MS = 10_000;
 /** 0095: de quanto em quanto tempo pergunta ao executor local se o navegador da skill está aberto. */
@@ -111,7 +115,7 @@ const FLASH_MS = 1_600;
 @Component({
   selector: 'app-work-item-execution',
   standalone: true,
-  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, WiTypeIconComponent, WorkItemQuestionsComponent,
+  imports: [DatePipe, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, PlanMarkdownPipe, TaskPendencyComponent, WiTypeIconComponent, WorkItemQuestionsComponent,
     WorkTaskControlsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -181,7 +185,11 @@ const FLASH_MS = 1_600;
               <mat-icon>front_hand</mat-icon>
               <span>O Claude parou em <b>{{ num(rt.number) }}</b> esperando você. Resolva o que ele pede e avise para ele continuar.</span>
             </div>
-            @if (rt.result) { <div class="wie__unblock-why wie__md" [innerHTML]="rt.result | planMarkdown"></div> }
+            <!-- Card 78655: o problema numa linha (o detalhe e como resolver ficam na sub-tarefa) -->
+            @if (pendency(); as pd) {
+              <app-task-pendency variant="compact" [pendency]="pd" [planId]="item()?.planId" [card]="card() || item()?.cardNumber"
+                                 [readOnly]="readOnly()" (confirmed)="onPlanChanged()" />
+            }
             <!-- Nota compacta: uma linha que cresce com o texto; o botão do canto abre uma área maior para escrever com calma -->
             <div class="wie__unblock-compose" [class.wie__unblock-compose--open]="resolveWide()">
               <textarea #resolveEl class="wie__unblock-note" rows="1" [value]="resolveNote()" (input)="onResolveInput($any($event.target))"
@@ -195,7 +203,7 @@ const FLASH_MS = 1_600;
               </button>
             </div>
             <div class="wie__unblock-actions">
-              <button mat-button (click)="openTask(item()!, rt)">Ver a sub-tarefa</button>
+              <button mat-button (click)="openTask(item()!, rt)">{{ pendency() ? 'Ver detalhes e como resolver' : 'Ver a sub-tarefa' }}</button>
               @if (!readOnly()) {
                 <button mat-flat-button color="primary" (click)="resolve(rt)" [disabled]="busyTask() === rt.number"
                         matTooltip="A sub-tarefa volta a andar e o Claude retoma o item de onde parou">
@@ -618,6 +626,9 @@ export class WorkItemExecutionComponent {
   /** Perguntas do plano do item enquanto ele espera a pessoa (lidas do plano a cada carga do item em espera). */
   private plans = inject(ExecutionPlanService);
   private readonly planQuestions = signal<ExecutionQuestion[]>([]);
+  /** Card 78655: o plano do item em espera (divergência, motivo da espera da etapa) — a pendência da sub-tarefa parada. */
+  private readonly planData = signal<ExecutionPlan | null>(null);
+  readonly pendency = computed(() => taskPendency(this.planData(), this.resolvable()));
   /** Respondidas nesta tela: continuam à vista (com a resposta) até o item sair da espera. */
   private readonly answeredHere = signal<ReadonlySet<string>>(new Set());
   private questionsSeq = 0;
@@ -876,6 +887,7 @@ export class WorkItemExecutionComponent {
     if (!it.planId || it.status !== 'waiting') {
       this.questionsKey = null;
       this.planQuestions.set([]);
+      this.planData.set(null);
       this.answeredHere.set(new Set());
       return;
     }
@@ -888,6 +900,7 @@ export class WorkItemExecutionComponent {
       next: (plan) => {
         if (seq !== this.questionsSeq || n !== this.current) return;
         this.planQuestions.set(plan?.questions ?? []);
+        this.planData.set(plan ?? null);
       },
       error: () => { if (seq === this.questionsSeq) this.questionsKey = null; }
     });
@@ -895,10 +908,16 @@ export class WorkItemExecutionComponent {
 
   private readonly onPlanEvent = (p: ExecutionPlanRealtimePayload): void => {
     const it = this.item();
-    if (!it?.planId || p?.planId !== it.planId || p.action !== 'question') return;
+    if (!it?.planId || p?.planId !== it.planId || !PLAN_WAIT_ACTIONS.has(p.action)) return;
     this.questionsKey = null;
     this.loadQuestions(it);
   };
+
+  /** Divergência confirmada aqui: relê o plano e o item (o Claude retoma). */
+  onPlanChanged(): void {
+    this.questionsKey = null;
+    this.reload();
+  }
 
   /** Resposta confirmada: fica à vista com a resposta e o item recarrega (a sub-tarefa sai da espera quando o Claude seguir). */
   onAnswered(q: ExecutionQuestion): void {

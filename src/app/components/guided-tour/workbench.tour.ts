@@ -25,7 +25,7 @@ import { TourDefinition } from './tour.model';
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 9,
+  version: 10,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -110,11 +110,12 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'entrega com as sub-tarefas. Tudo aparece na lista, ao vivo.'
     },
     {
-      id: 'suggest', anchor: 'wb-suggest', group: 'Itens de trabalho', since: 9, phase: 'card', side: 'bottom', align: 'start',
-      optional: true, prepare: 'tab:items',
+      id: 'suggest', anchor: 'wb-suggest', group: 'Itens de trabalho', since: 10, phase: 'card', side: 'bottom', align: 'end',
+      optional: true,
       title: 'Situação do card',
-      body: 'Como na tela de PR: a <b>situação atual</b> do card — o que é aguardado, desde quando e o próximo passo.',
-      detail: 'A situação pode ser copiada ou publicada no DevOps. Na aba Execução ela fica nos detalhes do próprio plano.'
+      body: 'Na barra de horas, o botão laranja mostra a <b>situação atual</b> do card — o que é aguardado, desde quando e o ' +
+        'próximo passo. Ele pisca quando a espera é sua.',
+      detail: 'Clique para abrir; dá para copiar ou publicar no DevOps. Na aba Execução a situação fica nos detalhes do próprio plano.'
     },
     {
       id: 'suggestions', anchor: 'wb-suggestions', group: 'Itens de trabalho', since: 9, phase: 'card', side: 'bottom', align: 'end',

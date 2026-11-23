@@ -24,7 +24,7 @@ import { CardFull } from '../../../components/card-details-dialog/card-full.mode
 import { CardAssistantLauncherComponent } from '../../../components/card-assistant/card-assistant-launcher.component';
 import { CardHoursComponent } from '../../../components/card-assistant/card-hours.component';
 import { bugInsight, hasNoEstimate, usInsight } from '../../../components/card-hours-insight/hours-insight';
-import { CardSituationComponent } from '../../../components/card-situation/card-situation.component';
+import { CardSituationLauncherComponent } from '../../../components/card-situation/card-situation-launcher.component';
 import { CardSituationService } from '../../../components/card-situation/card-situation.service';
 import { CardTimelineComponent } from '../../../components/card-timeline/card-timeline.component';
 import { CaseCompactComponent } from '../../../components/case-chat/case-compact.component';
@@ -185,7 +185,7 @@ function writeFlag(key: string, on: boolean): void {
     FormsModule, OverlayModule, MatButtonModule, MatFormFieldModule, MatIconModule,
     MatInputModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
     CardAlertBarComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
-    CardSituationComponent, CardAssistantLauncherComponent, CardHoursComponent, WorkItemListComponent, WorkbenchPrsComponent,
+    CardSituationLauncherComponent, CardAssistantLauncherComponent, CardHoursComponent, WorkItemListComponent, WorkbenchPrsComponent,
     WorkbenchCardComponent, CardFilesComponent
   ],
   templateUrl: './workbench.component.html',

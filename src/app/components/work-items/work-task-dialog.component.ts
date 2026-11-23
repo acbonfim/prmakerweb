@@ -10,6 +10,10 @@ import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { CodeSnapshotsComponent } from '../code-ref/code-snapshots.component';
 import { WorkItemsService } from '../../services/work-items.service';
+import { ExecutionPlanService } from '../../services/execution-plan.service';
+import { ExecutionPlan } from '../execution-plan/execution-plan.model';
+import { TaskPendencyComponent } from './task-pendency.component';
+import { taskPendency } from './task-pendency';
 import { WsService } from '../../services/ws.service';
 import {
   TASK_ACTION_LABELS,
@@ -70,7 +74,7 @@ export interface WorkTaskDialogData {
 @Component({
   selector: 'app-work-task-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, CodeSnapshotsComponent, WorkItemFilesComponent, WorkDeliverablesComponent, WorkEvidenceGalleryComponent],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, CodeSnapshotsComponent, TaskPendencyComponent, WorkItemFilesComponent, WorkDeliverablesComponent, WorkEvidenceGalleryComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <!-- 0087: links de código (ref:) e de itens da engenharia reversa/Base Solvace abrem o popover aqui também -->
@@ -220,8 +224,15 @@ export interface WorkTaskDialogData {
           @if (resolvable()) {
             <section class="wi-sec wtd__user">
               <h4 class="wi-sec__title">O Claude está esperando você</h4>
+              <!-- Card 78655: o que falta e como destravar, aqui mesmo (antes só a aba Execução mostrava) -->
+              @if (pendency(); as pd) {
+                <app-task-pendency [pendency]="pd" [planId]="item()?.planId" [card]="data.card" (confirmed)="onConfirmed()" />
+              } @else {
+                <p class="wi-muted wtd__small">O Claude parou esta sub-tarefa esperando você. Se não souber o que fazer, abra a conversa com o
+                  especialista do caso.</p>
+              }
               <textarea class="wi-textarea" rows="2" [(ngModel)]="resultText"
-                        placeholder="O que você fez para destravar (opcional — o Claude lê ao retomar)"></textarea>
+                        placeholder="Sua resposta ou o que você fez para destravar (opcional — o Claude lê ao retomar)"></textarea>
             </section>
           }
           @if (actions().length) {
@@ -303,6 +314,11 @@ export class WorkTaskDialogComponent {
   readonly actions = computed(() => { const t = this.task(); return t && !this.data.readOnly ? userTaskActions(t) : []; });
   /** "Já resolvi": sub-tarefa do Claude parada esperando a pessoa. */
   readonly resolvable = computed(() => { const t = this.task(); return !this.data.readOnly && !!t && canResolveWait(t); });
+  /** Card 78655: a pendência da sub-tarefa parada (divergência, motivo da espera da etapa), lida do plano do item. */
+  private plans = inject(ExecutionPlanService);
+  private readonly planData = signal<ExecutionPlan | null>(null);
+  private planKey: string | null = null;
+  readonly pendency = computed(() => (this.resolvable() ? taskPendency(this.planData(), this.task()) : null));
   /**
    * Parâmetros com o rótulo do catálogo (na ordem do catálogo; os de fora no fim), o valor legível (commits "card" =
    * todos os do card) e o link do GitHub para repositório/branch quando a URL base é conhecida.
@@ -373,9 +389,28 @@ export class WorkTaskDialogComponent {
 
   reload(): void {
     this.api.get(this.data.itemNumber).subscribe({
-      next: (it) => { this.item.set(it); this.error.set(null); },
+      next: (it) => { this.item.set(it); this.error.set(null); this.loadPlan(); },
       error: (e) => { if (!this.item()) this.error.set(e.message); }
     });
+  }
+
+  /** O plano só quando a sub-tarefa espera a pessoa (e uma vez por versão do item). */
+  private loadPlan(): void {
+    const it = this.item();
+    if (!it?.planId || !this.resolvable()) { this.planKey = null; this.planData.set(null); return; }
+    const key = `${it.planId}|${it.updatedAt}`;
+    if (key === this.planKey) return;
+    this.planKey = key;
+    this.plans.get(it.planId).subscribe({
+      next: (plan) => { if (this.planKey === key) this.planData.set(plan ?? null); },
+      error: () => { if (this.planKey === key) this.planKey = null; }
+    });
+  }
+
+  /** Divergência confirmada: o Claude retoma — relê o item e o plano. */
+  onConfirmed(): void {
+    this.planKey = null;
+    this.reload();
   }
 
   act(action: WorkTaskAction): void {
