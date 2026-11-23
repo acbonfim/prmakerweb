@@ -29,7 +29,7 @@ import {
   formatWorkNumber,
   isItemBusy,
   itemProgress,
-  itemStatusLook,
+  itemLook,
   kindInfo,
   linkIcon,
   originIcon,
@@ -396,7 +396,7 @@ export class WorkItemDialogComponent {
   /** Rodada 5: arquivos do item (contagem na aba, lista ao vivo). */
   readonly files = new WorkItemFilesStore();
 
-  readonly look = computed(() => itemStatusLook(this.item()?.status));
+  readonly look = computed(() => itemLook(this.item()));
   readonly progress = computed(() => { const it = this.item(); return it ? itemProgress(it) : { done: 0, total: 0, pct: 0 }; });
   readonly busyItem = computed(() => { const it = this.item(); return !!it && isItemBusy(it); });
   readonly canRun = computed(() => { const it = this.item(); return !!it && canExecute(it); });

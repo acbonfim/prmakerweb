@@ -883,6 +883,34 @@ export function waitingForResolve(item: Pick<WorkItem, 'tasks'> | null | undefin
 }
 
 const FINISHED_TASK: ReadonlySet<string> = new Set(['completed', 'skipped', 'cancelled', 'reverted']);
+
+/**
+ * Card 78720: sub-tarefa da pessoa em que é a vez dela — em espera, ou pendente sem pausa e com as dependências
+ * terminadas (sem dependências informadas: as anteriores, pela ordem).
+ */
+export function personTurnTask(item: Pick<WorkItem, 'tasks'> | null | undefined): WorkTask | null {
+  const tasks = item?.tasks ?? [];
+  const byNumber = new Map(tasks.map((t) => [t.number, t]));
+  return tasks.slice().sort((a, b) => a.order - b.order).find((t) => {
+    if (t.executor !== 'user') return false;
+    if (t.status === 'waiting') return true;
+    if (t.status !== 'pending' || t.held || t.controls?.waitsForHeld) return false;
+    const deps = t.controls?.dependsOn;
+    return deps ? deps.every((n) => FINISHED_TASK.has(byNumber.get(n)?.status ?? 'completed')) : isTaskTurn(item, t);
+  }) ?? null;
+}
+
+/** O item aguarda a pessoa: em espera por uma sub-tarefa dela ou por uma que ela precisa destravar. */
+export function waitsForPerson(item: Pick<WorkItem, 'status' | 'tasks'> | null | undefined): boolean {
+  return item?.status === 'waiting' && (!!waitingForResolve(item) || !!personTurnTask(item));
+}
+
+const WAITS_FOR_YOU: StatusLook = { label: 'Aguardando você', icon: 'front_hand', color: '#d29922' };
+
+/** Aparência do status do item — "Aguardando" vira "Aguardando você" quando a vez é da pessoa. */
+export function itemLook(item: Pick<WorkItem, 'status' | 'tasks'> | null | undefined): StatusLook {
+  return waitsForPerson(item) ? WAITS_FOR_YOU : itemStatusLook(item?.status);
+}
 /** Item fechado/cancelado/desfeito (ou desfazendo): a Bancada só mostra. */
 const READONLY_ITEM: ReadonlySet<string> = new Set(['completed', 'cancelled', 'reverting', 'reverted']);
 

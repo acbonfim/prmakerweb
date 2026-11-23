@@ -54,7 +54,9 @@ import {
   formatWorkNumber,
   isExecutingItem,
   itemProgress,
+  itemLook,
   itemStatusLook,
+  personTurnTask,
   kindInfo,
   prStatusLabel,
   pullRequestLinks,
@@ -223,7 +225,7 @@ const FLASH_MS = 1_600;
             } @else if (item()?.status === 'queued') {
               <mat-icon class="wie__now-ico">schedule</mat-icon><span class="wie__now-text">Na fila do executor — começa em instantes.</span>
             } @else if (item()?.status === 'waiting') {
-              <mat-icon class="wie__now-ico">front_hand</mat-icon><span class="wie__now-text">{{ resolvable() ? 'Aguardando você — veja acima o que destravar.' : 'Aguardando uma ação para continuar.' }}</span>
+              <mat-icon class="wie__now-ico">front_hand</mat-icon><span class="wie__now-text">{{ resolvable() ? 'Aguardando você — veja acima o que destravar.' : personTurn() ? 'Aguardando você — ' + num(personTurn()!.number) + ' ' + personTurn()!.title + '.' : 'Aguardando uma ação para continuar.' }}</span>
             } @else {
               <mat-icon class="wie__now-ico wie__pulse">psychology</mat-icon><span class="wie__now-text">{{ item()?.activity || 'Pensando…' }}</span>
             }
@@ -644,7 +646,9 @@ export class WorkItemExecutionComponent {
     return t ? this.num(t.number) : null;
   });
 
-  readonly look = computed(() => itemStatusLook(this.status()));
+  readonly look = computed(() => (this.item() ? itemLook(this.item()) : itemStatusLook(this.status())));
+  /** Card 78720: sub-tarefa da pessoa em que é a vez dela (validar em QA, aprovar...). */
+  readonly personTurn = computed(() => (this.item()?.status === 'waiting' ? personTurnTask(this.item()) : null));
   readonly status = computed(() => this.item()?.status ?? (this.liveData()?.status as WorkItem['status'] | undefined) ?? null);
   readonly live = computed(() => isExecutingItem(this.status() ? { status: this.status()! } : null));
   readonly running = computed(() => this.status() === 'running' || this.status() === 'reverting');

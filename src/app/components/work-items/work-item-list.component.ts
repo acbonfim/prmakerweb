@@ -33,7 +33,9 @@ import {
   isItemBusy,
   isOpenItem,
   itemProgress,
+  itemLook,
   itemStatusLook,
+  waitsForPerson,
   kindInfo,
   matchesFilter,
   matchesSearch,
@@ -43,8 +45,7 @@ import {
   relatedSourceLabel,
   sortByCreation,
   taskStatusLook,
-  userTaskActions,
-  waitingForResolve
+  userTaskActions
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
 import { WorkTaskControlsComponent } from './work-task-controls.component';
@@ -585,7 +586,7 @@ export class WorkItemListComponent {
   readonly relIcon = relatedSourceIcon;
   readonly relMeta = (n: number) => this.relatedMeta().get(n) ?? null;
   readonly executor = executorLabel;
-  readonly look = (it: WorkItem) => itemStatusLook(it.status);
+  readonly look = (it: WorkItem) => itemLook(it);
   readonly progress = (it: WorkItem) => itemProgress(it);
   readonly busy = (it: WorkItem) => isItemBusy(it);
   readonly isLive = (it: WorkItem) => isExecutingItem(it);
@@ -596,7 +597,7 @@ export class WorkItemListComponent {
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
   /** "Já resolvi": sub-tarefa do Claude parada esperando a pessoa. */
   readonly canResolve = (t: WorkTask) => canResolveWait(t);
-  readonly waitsForYou = (it: WorkItem) => !!waitingForResolve(it);
+  readonly waitsForYou = (it: WorkItem) => waitsForPerson(it);
   readonly quick = (t: WorkTask) => userTaskActions(t).filter((a) => a === 'complete' || a === 'skip');
   readonly actionLook = (a: WorkTaskAction) => TASK_ACTION_LABELS[a];
 
