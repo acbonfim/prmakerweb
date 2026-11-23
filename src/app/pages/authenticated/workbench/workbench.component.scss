@@ -212,7 +212,7 @@
 
 // Linha do segmentado (Itens de trabalho | Execução | Arquivos | Card) + a linha de horas do card à direita, numa linha só.
 // Quando aperta, a linha se adapta em vez de quebrar: as abas encurtam ("Itens"; depois só o ícone nas não ativas) e as
-// horas perdem primeiro o que é menos útil (rótulo, média do time, barra, Original) — Remaining, Completed e o +1h ficam.
+// horas se compactam medindo o que cabe (rótulo, média do time, rótulos curtos, barra e, por fim, a pastilha com popover).
 .wb-segrow {
   flex: none;
   display: flex;
@@ -232,10 +232,9 @@
   border-radius: 10px;
   border: 1px solid var(--wb-border);
   background: var(--surface-1, #262b33);
-  container-type: inline-size;
-  container-name: wb-hours;
 
-  // As horas encolhem (e cortam) antes; o botão das sugestões fica sempre inteiro, colado à direita (o brilho dele vaza).
+  // As horas se compactam por medição (app-card-hours adaptive: rótulo, média, rótulos curtos, barra, pastilha); os
+  // botões da situação e das sugestões ficam sempre inteiros, colados à direita (o brilho deles vaza).
   .wb-hoursline__hours { flex: 1 1 0; min-width: 0; overflow: hidden; }
   .wb-hoursline__sugg { flex: none; margin-left: auto; }
   .wb-hoursline__sugg2 { flex: none; }
@@ -245,22 +244,6 @@
     .hr__facts { flex-wrap: nowrap; white-space: nowrap; min-width: 0; }
     .hr__muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .hr__bar { flex-basis: 64px; }
-  }
-}
-@container wb-hours (max-width: 560px) {
-  .wb-hoursline ::ng-deep { .hr__icon, .hr__label { display: none; } }
-}
-@container wb-hours (max-width: 470px) {
-  .wb-hoursline ::ng-deep .hr__avg { display: none; }
-}
-@container wb-hours (max-width: 380px) {
-  .wb-hoursline ::ng-deep .hr__bar { display: none; }
-}
-@container wb-hours (max-width: 300px) {
-  .wb-hoursline ::ng-deep {
-    .hr__fact--orig { display: none; }
-    // Mais específico que o separador "·" do app-card-hours (.hr__fact + .hr__fact::before), senão o "·" sobra à esquerda.
-    .hr .hr__fact.hr__fact--done::before { content: none; }
   }
 }
 @container wb-segrow (max-width: 900px) {
@@ -629,10 +612,6 @@
 
   .wb-body { display: flex; flex-direction: column; gap: 10px; }
   .wb-seg { display: none; }
-  .wb-hoursline ::ng-deep {
-    .hr { flex-wrap: wrap; }
-    .hr__facts { flex-wrap: wrap; white-space: normal; }
-  }
   .wb-main, .wb-side { min-height: calc(100dvh - var(--cime-topbar-total, 70px) - var(--cime-tabs-h, 30px) - var(--wb-tabs-h) - 140px); }
   .wb-pane, .wb-pane--plan { overflow: visible; }
 

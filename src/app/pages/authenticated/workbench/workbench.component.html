@@ -318,7 +318,7 @@
         <!-- Linha de horas do card (a mesma do assistente), sempre à vista ao lado das abas; à direita, os botões da situação atual
              (card 78655: era um banner fixo acima da lista) e das sugestões do PRMake -->
         <div class="wb-hoursline" data-tour="wb-hoursline">
-          <app-card-hours class="wb-hoursline__hours" [cardNumber]="card()"></app-card-hours>
+          <app-card-hours class="wb-hoursline__hours" [adaptive]="true" [cardNumber]="card()"></app-card-hours>
           <app-card-situation-launcher class="wb-hoursline__sugg" data-tour="wb-suggest" [cardNumber]="card()"></app-card-situation-launcher>
           <app-card-assistant-launcher class="wb-hoursline__sugg2" data-tour="wb-suggestions" [cardNumber]="card()"></app-card-assistant-launcher>
         </div>
