@@ -40,7 +40,7 @@ import {
 } from '../../../components/work-items/cancel-work-dialog.component';
 import { workDialogConfig } from '../../../components/work-items/work-dialog-config';
 import { WorkItemActionsService } from '../../../components/work-items/work-item-actions.service';
-import { WorkItem, WorkItemStatus, formatWorkNumber, itemStatusLook, waitingForResolve } from '../../../components/work-items/work-item.model';
+import { WorkItem, WorkItemStatus, formatWorkNumber, itemLook, waitingForResolve, waitsForPerson } from '../../../components/work-items/work-item.model';
 import { listenWorkItems } from '../../../components/work-items/work-items-live';
 import { WorkbenchCardComponent } from '../../../components/workbench-card/workbench-card.component';
 import { openWorkbenchCard } from '../../../components/workbench-card/workbench-card-dialog.component';
@@ -102,8 +102,8 @@ export function loneItemOptions(items: readonly WorkItem[]): LoneItemOption[] {
     .filter((i) => !i.planId)
     .sort((a, b) => rank(a) - rank(b) || b.number - a.number)
     .map((i) => {
-      const look = itemStatusLook(i.status);
-      const waitsForYou = !!waitingForResolve(i);
+      const look = itemLook(i);
+      const waitsForYou = !!waitingForResolve(i) || waitsForPerson(i);
       return { number: i.number, title: i.title, statusLabel: waitsForYou ? 'aguardando você' : look.label.toLowerCase(), icon: look.icon, color: look.color, waitsForYou };
     });
 }
@@ -366,7 +366,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     .filter((i) => !!i.planId)
     .sort((a, b) => b.number - a.number)
     .map((i) => {
-      const look = itemStatusLook(i.status);
+      const look = itemLook(i);
       const statusLabel = look.label.toLowerCase();
       return {
         number: i.number, planId: i.planId!, title: i.title, status: i.status, statusLabel,

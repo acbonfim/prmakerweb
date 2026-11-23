@@ -13,7 +13,7 @@ import {
   formatWorkNumber,
   isUrl,
   itemProgress,
-  itemStatusLook,
+  itemLook,
   linkIcon,
   prStatusLabel,
   pullRequestLinks,
@@ -182,7 +182,7 @@ export class WorkItemPopoverComponent {
     return it?.matchedTaskNumber ? (it.tasks ?? []).find((t) => t.number === it.matchedTaskNumber) ?? null : null;
   });
   readonly type = computed(() => itemTypeLook(this.item()?.type));
-  readonly status = computed(() => itemStatusLook(this.item()?.status));
+  readonly status = computed(() => itemLook(this.item()));
   readonly progress = computed(() => { const it = this.item(); return it ? itemProgress(it) : { done: 0, total: 0, pct: 0 }; });
   readonly tasks = computed(() => {
     const all = (this.item()?.tasks ?? []).slice().sort((a, b) => a.order - b.order);
