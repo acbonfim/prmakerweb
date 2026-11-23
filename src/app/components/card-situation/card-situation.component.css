@@ -247,3 +247,6 @@
 @media (prefers-reduced-motion: reduce) {
   .sit, .sit__sync { animation: none; }
 }
+
+/* Popover do botão da barra de horas (Bancada): o popover já é a moldura. */
+:host(.sit-host--pop) .sit { margin: 0; border: 0; border-radius: 0; background: transparent; animation: none; }

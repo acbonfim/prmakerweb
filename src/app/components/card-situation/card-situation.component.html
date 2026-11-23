@@ -24,11 +24,13 @@
               matTooltip="Publicar no DevOps (discussion do card)" aria-label="Publicar o resumo no DevOps">
         <mat-icon>campaign</mat-icon>
       </button>
-      <button mat-icon-button class="sit__btn" (click)="toggleCollapsed()"
-              [matTooltip]="collapsed() ? 'Mostrar detalhes' : 'Recolher'"
-              [attr.aria-expanded]="!collapsed()" aria-label="Mostrar ou recolher os detalhes da situação">
-        <mat-icon>{{ collapsed() ? 'expand_more' : 'expand_less' }}</mat-icon>
-      </button>
+      @if (variant() !== 'popover') {
+        <button mat-icon-button class="sit__btn" (click)="toggleCollapsed()"
+                [matTooltip]="collapsed() ? 'Mostrar detalhes' : 'Recolher'"
+                [attr.aria-expanded]="!collapsed()" aria-label="Mostrar ou recolher os detalhes da situação">
+          <mat-icon>{{ collapsed() ? 'expand_more' : 'expand_less' }}</mat-icon>
+        </button>
+      }
     </header>
 
     <!-- Recolhido: uma linha só (etapa, DevOps e a publicação num chip) — sobra espaço para a lista e a sessão do item -->

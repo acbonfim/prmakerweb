@@ -238,6 +238,7 @@
   // As horas encolhem (e cortam) antes; o botão das sugestões fica sempre inteiro, colado à direita (o brilho dele vaza).
   .wb-hoursline__hours { flex: 1 1 0; min-width: 0; overflow: hidden; }
   .wb-hoursline__sugg { flex: none; margin-left: auto; }
+  .wb-hoursline__sugg2 { flex: none; }
 
   ::ng-deep {
     .hr { flex-wrap: nowrap; gap: 4px 8px; }
@@ -387,20 +388,6 @@
 }
 .wb-first-wait__bot { flex: none; color: var(--mat-sys-primary); animation: wb-run-bob 1.4s ease-in-out infinite; }
 
-// Situação do card (só na aba Itens; o plano mostra a dele). As sugestões do PRMake ficam no botão da barra de horas.
-// Altura limitada: a lista de itens continua à vista.
-.wb-sugg {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 42%;
-  overflow: auto;
-  scrollbar-width: thin;
-
-  &:empty { display: none; }
-  > app-card-situation:empty { display: none; }
-}
 // A linha de horas do assistente já está ao lado das abas (wb-hoursline): no assistente dentro do plano (aba Execução)
 // ela fica escondida. A tela de PR não usa este estilo.
 :host ::ng-deep app-card-assistant .as__hours { display: none; }
