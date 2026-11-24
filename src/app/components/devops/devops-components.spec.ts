@@ -7,6 +7,7 @@ import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { DevOpsService } from '../../services/devops.service';
 import { EpicsService } from '../../services/epics.service';
+import { RoleService } from '../../services/role.service';
 import { WsService } from '../../services/ws.service';
 import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
 import { DevOpsBoardComponent } from './devops-board.component';
@@ -116,6 +117,8 @@ describe('Componentes do DevOps (0099)', () => {
         { provide: DevOpsService, useValue: api },
         { provide: WsService, useValue: ws },
         { provide: EpicsService, useValue: epics },
+        // Ajustes 2: o painel lê os papéis ("Abrir na Bancada" só para admin/dev).
+        { provide: RoleService, useValue: { canOpenWorkbenchFromDesk: true } },
         { provide: WorkItemPickerSource, useValue: new FakePickers() },
         { provide: MatSnackBar, useValue: { open: (m: string) => { snacks.push(m); return { onAction: () => of() }; } } },
       ],

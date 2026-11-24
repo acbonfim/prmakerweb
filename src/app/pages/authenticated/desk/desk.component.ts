@@ -18,6 +18,8 @@ import { DevOpsCardPanelComponent } from '../../../components/devops/devops-card
 import { openDevOpsCardCreate } from '../../../components/devops/devops-card-create';
 import { openEpicDialog } from '../../../components/epics/epic-dialog.component';
 import { EpicStoriesComponent } from '../../../components/epics/epic-stories.component';
+import { EpicMonitorComponent } from '../../../components/epics/epic-monitor.component';
+import { CardsView, defaultCardsView } from '../../../components/epics/epic-monitor.logic';
 import {
   DeskTab, EPIC_STATUSES, EPIC_STATUS_FILTERS, Epic, EpicCard, EpicStatus, EpicStatusFilter, EpicSummary,
   countByStatusFilter, devOpsTypeColor, epicCardRoleLook, epicColor, epicKey, epicStatusLook, filterEpics, parseCardId,
@@ -34,6 +36,7 @@ import { WorkItem } from '../../../components/work-items/work-item.model';
 import { listenWorkItems } from '../../../components/work-items/work-items-live';
 import { CaseChatStore } from '../../../services/case-chat-store.service';
 import { EpicCardLive, EpicsService, epicApiError } from '../../../services/epics.service';
+import { RoleService } from '../../../services/role.service';
 import { TabsService } from '../../../services/tabs.service';
 import { WorkItemsService } from '../../../services/work-items.service';
 import { WsService } from '../../../services/ws.service';
@@ -48,6 +51,7 @@ const RAIL_COLLAPSED_KEY = 'dk.rail.collapsed';
 const RAIL_MINE_KEY = 'dk.rail.mine';
 const RAIL_STATUS_KEY = 'dk.rail.status';
 const BOARD_SCOPE_KEY = 'dk.board.scope';
+const CARDS_VIEW_KEY = 'dk.cards.view';
 /** Duração da animação de recolher/mostrar a lateral (igual à transição no scss). */
 const SLIDE_MS = 320;
 
@@ -81,7 +85,7 @@ const writeFlag = (key: string, on: boolean) => writeText(key, on ? '1' : null);
   imports: [
     DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
     PlanMarkdownPipe, CaseCompactComponent, WorkItemListComponent, CardFilesComponent, DevOpsBoardComponent, DevOpsCardPanelComponent,
-    EpicStoriesComponent
+    EpicStoriesComponent, EpicMonitorComponent
   ],
   templateUrl: './desk.component.html',
   styleUrl: './desk.component.scss'
@@ -128,6 +132,12 @@ export class DeskComponent implements OnInit, OnDestroy {
     return e ? { color: epicColor(e.color), status: epicStatusLook(e.status) } : null;
   });
   readonly cards = computed(() => sortEpicCards(this.epic()?.cards ?? []));
+  readonly cardIds = computed(() => this.cards().map((c) => c.card));
+  /** Ajustes 2: aba Cards em "Lista" ou "Acompanhamento" (PRs e ambientes) — management começa no Acompanhamento. */
+  private roles = inject(RoleService);
+  readonly cardsView = signal<CardsView>(defaultCardsView(readText(CARDS_VIEW_KEY), this.roles.isManagement));
+  /** "Abrir na Bancada" só para admin ou desenvolvedor (management sem papel de dev não acessa a Bancada). */
+  readonly canOpenWorkbench = this.roles.canOpenWorkbenchFromDesk;
   readonly hasBoard = computed(() => !!this.epic()?.devOpsTeam && !!this.epic()?.devOpsBoard);
   readonly descOpen = signal(false);
   readonly statusBusy = signal(false);
@@ -581,7 +591,13 @@ export class DeskComponent implements OnInit, OnDestroy {
     });
   }
 
+  setCardsView(view: CardsView): void {
+    this.cardsView.set(view);
+    writeText(CARDS_VIEW_KEY, view);
+  }
+
   openInWorkbench(card: string): void {
+    if (!this.canOpenWorkbench) return;
     void this.router.navigate(['/auth/workbench'], { queryParams: { card } });
   }
 

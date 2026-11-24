@@ -300,9 +300,19 @@
             @if (addingCard()) { <mat-spinner diameter="14"></mat-spinner> } @else { <mat-icon>add</mat-icon> }Adicionar card
           </button>
           <span class="dk-spacer"></span>
+          <!-- Ajustes 2: Lista | Acompanhamento (PRs e ambientes de cada card) -->
+          <div class="dk-seg dk-seg--sm" role="tablist" aria-label="Visão dos cards">
+            <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="cardsView() === 'list'" [attr.aria-selected]="cardsView() === 'list'"
+                    (click)="setCardsView('list')"><mat-icon>view_list</mat-icon>Lista</button>
+            <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="cardsView() === 'monitor'" [attr.aria-selected]="cardsView() === 'monitor'"
+                    (click)="setCardsView('monitor')" matTooltip="PRs, branch de destino e em quais ambientes o código já está" matTooltipShowDelay="600">
+              <mat-icon>monitor_heart</mat-icon>Acompanhamento</button>
+          </div>
           <button mat-flat-button color="primary" type="button" class="dk-act" (click)="newCard()"><mat-icon>add_card</mat-icon>Novo card no DevOps</button>
         </div>
-        @if (!cards().length) {
+        @if (cardsView() === 'monitor' && cards().length) {
+          <app-epic-monitor [epic]="e!.number" [cards]="cardIds()" (openCard)="openCard($event)"></app-epic-monitor>
+        } @else if (!cards().length) {
           <div class="dk-empty dk-empty--inline">
             <mat-icon class="dk-empty__icon">style</mat-icon>
             <h2>Nenhum card neste épico</h2>
@@ -331,8 +341,10 @@
                   </span>
                 </button>
                 <span class="dk-cardrow__actions">
-                  <button mat-icon-button type="button" class="dk-icon-btn" (click)="openInWorkbench(c.card)" matTooltip="Abrir na Bancada"
-                          aria-label="Abrir na Bancada"><mat-icon>handyman</mat-icon></button>
+                  @if (canOpenWorkbench) {
+                    <button mat-icon-button type="button" class="dk-icon-btn" (click)="openInWorkbench(c.card)" matTooltip="Abrir na Bancada"
+                            aria-label="Abrir na Bancada"><mat-icon>handyman</mat-icon></button>
+                  }
                   <button mat-icon-button type="button" class="dk-icon-btn dk-icon-btn--danger" (click)="removeCard(c)" [disabled]="removing() === c.card"
                           matTooltip="Tirar do épico (o card continua no DevOps)" aria-label="Tirar o card do épico"><mat-icon>link_off</mat-icon></button>
                 </span>

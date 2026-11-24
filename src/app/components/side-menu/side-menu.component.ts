@@ -1,4 +1,4 @@
-import {Component, EventEmitter, inject, Input, OnInit, Output} from '@angular/core';
+import {Component, EventEmitter, inject, Input, Output} from '@angular/core';
 import {CommonModule} from '@angular/common';
 import {MatListModule} from '@angular/material/list';
 import {MatIconModule} from '@angular/material/icon';
@@ -6,7 +6,8 @@ import {MatTooltipModule} from '@angular/material/tooltip';
 import {NavigationEnd, Router, RouterLink} from '@angular/router';
 import {MatDialog} from '@angular/material/dialog';
 import {filter} from 'rxjs';
-import {StorageService} from '../../services/storage.service';
+import {RoleService} from '../../services/role.service';
+import {RoleAccess} from '../../services/role.logic';
 
 @Component({
   selector: 'app-side-menu',
@@ -15,32 +16,37 @@ import {StorageService} from '../../services/storage.service';
   imports: [CommonModule, MatListModule, MatIconModule, MatTooltipModule],
   standalone: true,
 })
-export class SideMenuComponent implements OnInit {
+export class SideMenuComponent {
 
   @Input() isCollapsed: boolean = false;
   @Output() toggleSidebar = new EventEmitter<void>();
   readonly router = inject(Router);
-  private storageService = inject(StorageService);
+  private roles = inject(RoleService);
 
   currentRoute: string = '';
-  private userRoles: string[] = [];
-
-  menu: { label: string; icon: string; link: string; allowedRoles?: string[] }[] = [
+  // allowedRoles = precisa de um destes papéis; access = regra nomeada do RoleService (0099 ajustes 2).
+  menu: { label: string; icon: string; link: string; allowedRoles?: string[]; access?: RoleAccess }[] = [
     {
       label: 'Início',
       icon: 'home',
-      link: 'auth/dashboard'
+      link: 'auth/dashboard',
+      // Management sem papel de dev começa na Mesa (a rota redireciona).
+      access: 'not-management-only'
     },
     {
       label: 'Bancada',
       icon: 'handyman',
-      link: 'auth/workbench'
+      link: 'auth/workbench',
+      // 0099 (ajustes 2): management sem papel de dev não acessa a Bancada.
+      access: 'workbench'
     },
     {
       // 0099: Mesa de gestão — épicos, tarefas administrativas e os cards do DevOps (par da Bancada).
       label: 'Gestão',
       icon: 'space_dashboard',
-      link: 'auth/desk'
+      link: 'auth/desk',
+      // 0099 (ajustes 2): só admin ou management.
+      access: 'desk'
     },
     // Tela de Pull Request desativada (o card é tratado na Bancada) — reativar junto com a rota em authenticated.routes.
     // {
@@ -112,27 +118,10 @@ export class SideMenuComponent implements OnInit {
     this.currentRoute = this.router.url;
   }
 
-  ngOnInit() {
-    this.loadUserRoles();
-  }
-
-  private loadUserRoles() {
-    const token = this.storageService.getItem('apiKey');
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const roleKey = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
-        const rawRoles = payload[roleKey] ?? payload['role'];
-        this.userRoles = Array.isArray(rawRoles) ? rawRoles : (rawRoles ? [rawRoles] : []);
-      } catch {
-        this.userRoles = [];
-      }
-    }
-  }
-
-  isMenuItemVisible(item: { allowedRoles?: string[] }): boolean {
+  isMenuItemVisible(item: { allowedRoles?: string[]; access?: RoleAccess }): boolean {
+    if (item.access && !this.roles.allows(item.access)) return false;
     if (!item.allowedRoles || item.allowedRoles.length === 0) return true;
-    return item.allowedRoles.some(role => this.userRoles.includes(role));
+    return this.roles.has(...item.allowedRoles);
   }
 
 

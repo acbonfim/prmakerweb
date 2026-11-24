@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { RoleService } from './role.service';
 
 export interface UserIntegrationField {
   key: string;
@@ -55,8 +56,17 @@ export class UserIntegrationService {
   readonly status = signal<UserIntegrationStatus | null>(null);
   readonly loading = signal(false);
 
-  /** true enquanto houver plugin de uso pessoal sem configuração (ou status ainda desconhecido = false). */
-  readonly hasPending = computed(() => (this.status()?.pending.length ?? 0) > 0);
+  private roles = inject(RoleService);
+
+  /**
+   * true enquanto houver plugin de uso pessoal sem configuração (ou status ainda desconhecido = false). 0099 (ajustes 2):
+   * para o perfil Gestão (management sem papel de dev) só o Azure DevOps conta — GitHub, Teams etc. não são do perfil.
+   */
+  readonly hasPending = computed(() => {
+    const pending = this.status()?.pending ?? [];
+    const managementOnly = this.roles.isManagementOnly;
+    return pending.some(p => !managementOnly || p.description === 'AzureDevOps Configurations');
+  });
 
   async loadStatus(): Promise<UserIntegrationStatus | null> {
     try {

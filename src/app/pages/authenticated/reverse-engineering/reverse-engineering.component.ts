@@ -13,7 +13,7 @@ import { CodeRefHostDirective } from '../../../components/code-ref/code-ref-host
 import { LazyMarkdownComponent, MarkdownPartsSource } from '../../../components/lazy-markdown/lazy-markdown.component';
 import { ArchitectureService } from '../../../services/architecture.service';
 import { WsService } from '../../../services/ws.service';
-import { StorageService } from '../../../services/storage.service';
+import { RoleService } from '../../../services/role.service';
 import { TabStatus, TabsService } from '../../../services/tabs.service';
 import {
   REVERSE_DOCS, REVERSE_EVENT, ReverseDoc, ReverseDocStatus, ReverseDocType, ReverseEngineeringService, ReverseIndexHit, ReverseModule, ReverseModuleSummary,
@@ -57,7 +57,6 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   private snack = inject(MatSnackBar);
   private host = inject(ElementRef<HTMLElement>);
   private tabs = inject(TabsService);
-  private storage = inject(StorageService);
   /** Abas internas (0065): só a aba ativa dá nome/status à aba (a tela fica viva em segundo plano). */
   private tabScreen = this.tabs.bindScreen(inject(DestroyRef));
   /**
@@ -83,7 +82,7 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
    * 0097: todo usuário autenticado lê a engenharia reversa; gerar (comandos, anexos, andamento) continua de administrador.
    * Aprovar/publicar/configurar segue o `canApprove` que a API devolve.
    */
-  readonly canGenerate = signal(this.readIsAdmin());
+  readonly canGenerate = signal(inject(RoleService).isAdmin);
 
   view = signal<View>('modulos');
   settings = signal<ReverseSettings | null>(null);
@@ -460,17 +459,6 @@ export class ReverseEngineeringComponent implements OnInit, OnDestroy {
   pct(v?: number | null) { return v == null ? '—' : `${Math.floor(v * 100)}%`; }
   worldIcon(w: string) { return ({ legado: 'history', revamp: 'auto_awesome', front: 'web', 'integração': 'sync_alt', login: 'lock' } as any)[w] ?? 'widgets'; }
   statusLabel(s: string) { return ({ draft: 'rascunho', review: 'em revisão', changes: 'ajustes pedidos', approved: 'aprovada', published: 'publicada', discarded: 'descartada', superseded: 'substituída' } as any)[s] ?? s; }
-  private readIsAdmin(): boolean {
-    try {
-      const token = this.storage.getItem('apiKey');
-      if (!token) return false;
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const raw = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? payload['role'];
-      return (Array.isArray(raw) ? raw : raw ? [raw] : []).includes('admin');
-    } catch {
-      return false;
-    }
-  }
   private normalize(v: string) { return (v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim(); }
   private toast(e: any) { this.snack.open(e?.error?.error ?? 'Não foi possível carregar.', 'OK', { duration: 6000 }); }
 }
