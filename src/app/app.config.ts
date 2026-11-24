@@ -12,6 +12,7 @@ import {AuthInterceptor} from './auth/auth.interceptor';
 import {PersonalIntegrationInterceptor} from './auth/personal-integration.interceptor';
 import {AiUsageInterceptor} from './auth/ai-usage.interceptor';
 import {UsageInterceptor} from './auth/usage.interceptor';
+import {GovernanceInterceptor} from './auth/governance.interceptor';
 import {provideServiceWorker} from '@angular/service-worker';
 import {MAT_TOOLTIP_DEFAULT_OPTIONS, MatTooltipDefaultOptions} from '@angular/material/tooltip';
 import {MAT_DIALOG_DEFAULT_OPTIONS, MatDialogConfig} from '@angular/material/dialog';
@@ -38,6 +39,12 @@ export const appConfig: ApplicationConfig = {
       // 403 de integração pessoal pendente → aviso + "Minhas integrações" (feature 0002).
       provide: HTTP_INTERCEPTORS,
       useClass: PersonalIntegrationInterceptor,
+      multi: true
+    },
+    {
+      // Governança (0098): 403 governance_blocked → aviso com o motivo e a regra; X-Governance-Warning → aviso sem bloquear.
+      provide: HTTP_INTERCEPTORS,
+      useClass: GovernanceInterceptor,
       multi: true
     },
     {

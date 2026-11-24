@@ -1,0 +1,76 @@
+@if (error()) {
+  <div class="notice">{{ error() }}</div>
+}
+
+<div class="split" [class.split--open]="!!store.selectedCard()">
+  <section class="panel">
+    <div class="panel__head">
+      <h2>Cards</h2>
+      <span class="muted">clique para ver a linha do tempo</span>
+      <span class="ms-auto"></span>
+      <input class="f-search" type="search" placeholder="Número ou título (Enter)" [ngModel]="search()" (ngModelChange)="search.set($event)"
+             (keyup.enter)="openTyped()" (search)="load(0)" data-usage-ignore>
+      <label class="f-field f-field--inline"><span>Pessoa</span>
+        <select [ngModel]="user()" (ngModelChange)="user.set($event); load(0)">
+          <option value="">Todas</option>
+          @for (u of store.userOptions(); track u.id) { <option [value]="u.id">{{ u.name }}</option> }
+        </select>
+      </label>
+      @if (loading()) { <mat-spinner diameter="18"></mat-spinner> }
+    </div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Card</th><th>Título</th><th>Tipo</th><th>Pessoas</th>
+            <th matTooltip="Primeira atividade registrada no card">Iniciou</th>
+            <th class="num" matTooltip="Duração do plano de análise">Análise</th>
+            <th class="num" matTooltip="Duração do plano de correção">Correção</th>
+            <th class="num" matTooltip="Da primeira à última atividade">Lead time</th>
+            <th class="num">Itens</th><th class="num">Sub-tarefas</th><th class="num">Barradas</th>
+            <th>Marcos</th><th>Situação</th><th>Última</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of rows(); track c.cardNumber) {
+            <tr class="clickable" [class.selected]="store.selectedCard() === c.cardNumber" (click)="open(c)">
+              <td class="mono">{{ c.cardNumber }}</td>
+              <td class="ellipsis" [title]="c.title">{{ c.title }}</td>
+              <td>{{ c.kind || '—' }}</td>
+              <td class="ellipsis" [title]="c.users.join(', ')">{{ c.users.join(', ') || '—' }}</td>
+              <td>{{ dt(c.firstActivityAt) }}</td>
+              <td class="num">{{ dur(c.analysisMs) }}</td>
+              <td class="num">{{ dur(c.correctionMs) }}</td>
+              <td class="num">{{ dur(c.leadTimeMs) }}</td>
+              <td class="num">{{ num(c.workItems) }}</td>
+              <td class="num">{{ num(c.tasksDone) }}</td>
+              <td class="num" [class.bad]="c.blocked > 0">{{ num(c.blocked) }}</td>
+              <td>
+                <span class="dots" [matTooltip]="milestoneText(c)">
+                  @for (m of c.milestones; track m.key) { <i></i> }
+                  <small>{{ c.milestones.length }}</small>
+                </span>
+              </td>
+              <td>{{ statusLabel(c.status) }}</td>
+              <td>{{ dt(c.lastActivityAt) }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="14" class="muted">{{ loading() ? 'Carregando…' : 'Nenhum card com atividade no período.' }}</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span class="muted">{{ num(total()) }} cards</span>
+      @if (pageCount() > 1) {
+        <button mat-icon-button (click)="go(-1)" [disabled]="page() === 0" aria-label="Página anterior"><mat-icon>chevron_left</mat-icon></button>
+        <span>{{ page() + 1 }} / {{ pageCount() }}</span>
+        <button mat-icon-button (click)="go(1)" [disabled]="page() + 1 >= pageCount()" aria-label="Próxima página"><mat-icon>chevron_right</mat-icon></button>
+      }
+    </div>
+  </section>
+
+  @if (store.selectedCard(); as card) {
+    <app-gov-card-timeline class="panel detail" [card]="card" (closed)="close()"></app-gov-card-timeline>
+  }
+</div>

@@ -1,0 +1,102 @@
+<div class="detail__head">
+  <div>
+    <p class="detail__title">Card {{ card() }}{{ detail()?.card?.title ? ' — ' + detail()!.card.title : '' }}</p>
+    @if (detail(); as d) {
+      <span class="muted">{{ d.card.kind || '—' }} · {{ d.card.status ? statusLabel(d.card.status) : 'sem situação' }} · {{ d.card.users.join(', ') || '—' }}</span>
+    }
+  </div>
+  <span class="ms-auto"></span>
+  @if (loading()) { <mat-spinner diameter="18"></mat-spinner> }
+  <a mat-icon-button [routerLink]="['/auth/workbench']" [queryParams]="{ card: card() }" matTooltip="Abrir na Bancada"><mat-icon>handyman</mat-icon></a>
+  <button mat-icon-button type="button" matTooltip="Ver eventos do card na auditoria" (click)="store.openAudit({ card: card() })"><mat-icon>manage_search</mat-icon></button>
+  <button mat-icon-button type="button" (click)="closed.emit()" aria-label="Fechar linha do tempo"><mat-icon>close</mat-icon></button>
+</div>
+
+@if (error()) { <div class="notice">{{ error() }}</div> }
+
+@if (view(); as v) {
+  @if (v.startedAt) {
+    <p class="lead">
+      <mat-icon>play_circle</mat-icon>
+      <span>Iniciou em <b>{{ dt(v.startedAt) }}</b>{{ v.startedBy ? ' por ' : '' }}<b>{{ v.startedBy }}</b>
+        e levou <b>{{ dur(v.totalMs) }}</b> até {{ statusUntil(detail()?.card?.status) }}
+        ({{ dt(v.endedAt) }}).</span>
+    </p>
+  }
+
+  @if (detail(); as d) {
+    <div class="tiles tiles--sm">
+      <div class="tile"><span class="tile__label">Análise</span><span class="tile__value">{{ dur(d.card.analysisMs) }}</span></div>
+      <div class="tile"><span class="tile__label">Correção</span><span class="tile__value">{{ dur(d.card.correctionMs) }}</span></div>
+      <div class="tile"><span class="tile__label">Lead time</span><span class="tile__value">{{ dur(d.card.leadTimeMs ?? v.totalMs) }}</span></div>
+      <div class="tile"><span class="tile__label">Itens · sub-tarefas</span><span class="tile__value">{{ num(d.card.workItems) }} · {{ num(d.card.tasksDone) }}</span></div>
+      <div class="tile" [class.tile--bad]="d.card.blocked > 0"><span class="tile__label">Barradas</span><span class="tile__value">{{ num(d.card.blocked) }}</span></div>
+    </div>
+  }
+
+  <div class="panel__head sub"><h3>Marcos</h3><span class="muted">tempo desde o marco anterior</span></div>
+  @if (v.milestones.length) {
+    <ol class="milestones">
+      @for (m of v.milestones; track $index) {
+        <li class="ms">
+          <span class="ms__dot"></span>
+          <span class="ms__label">{{ m.label }}</span>
+          <span class="ms__at">{{ dt(m.at) }}</span>
+          <span class="ms__delta">{{ m.sincePrevMs == null ? 'início' : '+' + dur(m.sincePrevMs) }}</span>
+          @if (m.sincePrevMs != null) { <span class="ms__total muted">{{ dur(m.sinceStartMs) }} desde o início</span> }
+        </li>
+      }
+    </ol>
+  } @else {
+    <p class="muted">Nenhum marco registrado ainda.</p>
+  }
+
+  @if (v.byKind.length) {
+    <div class="panel__head sub"><h3>Tempo por tipo de ação</h3><span class="muted">soma das durações</span></div>
+    <div class="bykind">
+      @for (k of v.byKind; track k.kind) {
+        <span class="pill"><mat-icon>{{ kindIcon[k.kind] }}</mat-icon>{{ kindLabel[k.kind] }}: {{ num(k.count) }} · {{ dur(k.totalMs) }}</span>
+      }
+    </div>
+  }
+
+  <div class="panel__head sub">
+    <h3>Linha do tempo</h3>
+    <span class="muted">cada ação com início, fim e duração</span>
+  </div>
+  <div class="kind-filter" role="group" aria-label="Tipos mostrados">
+    @for (k of kindsPresent(); track k.key) {
+      <label><input type="checkbox" [checked]="shown().has(k.key)" (change)="toggle(k.key)"> {{ k.label }} <small class="muted">{{ k.count }}</small></label>
+    }
+  </div>
+
+  <ol class="tl">
+    @for (r of rows(); track $index) {
+      @if (r.kind === 'milestone') {
+        <li class="tl__ms">
+          <mat-icon>flag</mat-icon><b>{{ r.title }}</b>
+          <span class="muted">{{ dt(r.at) }}{{ r.offsetMs > 0 ? ' · ' + dur(r.offsetMs) + ' desde o início' : '' }}</span>
+        </li>
+      } @else {
+        <li class="tl__row">
+          <mat-icon class="tl__icon" [matTooltip]="kindLabel[r.kind]">{{ kindIcon[r.kind] }}</mat-icon>
+          <div class="tl__main">
+            <div class="tl__title">
+              <span class="ellipsis-inline" [title]="r.title">{{ r.title }}</span>
+              @if (r.outcome) { <span class="badge {{ outcomeClass(r.outcome) }}">{{ outcomeText(r.outcome) }}</span> }
+            </div>
+            <div class="tl__meta muted">
+              {{ kindLabel[r.kind] }}{{ r.user ? ' · ' + r.user : '' }} · início {{ dt(r.at) }}{{ r.endMs ? ' · fim ' + dt(r.endAt ?? null) : '' }}
+            </div>
+            <div class="tl__track" [matTooltip]="'Começou ' + dur(r.offsetMs) + ' depois do início do card'">
+              <span class="tl__bar tl__bar--{{ r.kind }}" [style.left.%]="r.leftPct" [style.width.%]="r.widthPct"></span>
+            </div>
+          </div>
+          <span class="tl__dur" [class.muted]="r.effectiveMs == null">{{ r.effectiveMs == null ? 'em aberto' : dur(r.effectiveMs) }}</span>
+        </li>
+      }
+    } @empty {
+      <li class="muted">Nada para mostrar com os tipos escolhidos.</li>
+    }
+  </ol>
+}

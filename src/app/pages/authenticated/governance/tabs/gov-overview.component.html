@@ -1,0 +1,52 @@
+@if (error()) {
+  <div class="notice">{{ error() }}</div>
+}
+
+<div class="panel__head">
+  <h2>Indicadores do período</h2>
+  <span class="muted">durações são medianas · clique em barradas/avisos/erros para ver na auditoria</span>
+  @if (loading()) { <mat-spinner diameter="18"></mat-spinner> }
+</div>
+
+<div class="tiles">
+  <div class="tile"><span class="tile__label">Eventos</span><span class="tile__value">{{ num(kpis()?.events) }}</span></div>
+  <div class="tile"><span class="tile__label">Pessoas</span><span class="tile__value">{{ num(kpis()?.users) }}</span></div>
+  <div class="tile"><span class="tile__label">Cards tratados</span><span class="tile__value">{{ num(kpis()?.cards) }}</span></div>
+  <div class="tile"><span class="tile__label">Planos iniciados</span><span class="tile__value">{{ num(kpis()?.plansStarted) }}</span></div>
+  <div class="tile"><span class="tile__label">Análises concluídas</span><span class="tile__value">{{ num(kpis()?.analysesDone) }}</span></div>
+  <div class="tile"><span class="tile__label">Correções concluídas</span><span class="tile__value">{{ num(kpis()?.correctionsDone) }}</span></div>
+  <div class="tile"><span class="tile__label">Itens concluídos</span><span class="tile__value">{{ num(kpis()?.workItemsDone) }}</span></div>
+  <div class="tile"><span class="tile__label">Sub-tarefas concluídas</span><span class="tile__value">{{ num(kpis()?.tasksDone) }}</span></div>
+  <div class="tile" matTooltip="Do início da tarefa até a análise inicial concluída (mediana por card)">
+    <span class="tile__label">Até a 1ª análise</span><span class="tile__value">{{ dur(kpis()?.medianFirstAnalysisMs) }}</span></div>
+  <div class="tile" matTooltip="Duração do plano de análise (mediana)">
+    <span class="tile__label">Análise (mediana)</span><span class="tile__value">{{ dur(kpis()?.medianAnalysisMs) }}</span></div>
+  <div class="tile" matTooltip="Duração do plano de correção (mediana)">
+    <span class="tile__label">Correção (mediana)</span><span class="tile__value">{{ dur(kpis()?.medianCorrectionMs) }}</span></div>
+  <div class="tile"><span class="tile__label">Custo de IA</span><span class="tile__value">{{ usd(kpis()?.aiCostUsd) }}</span></div>
+  <button type="button" class="tile tile--btn" [class.tile--bad]="(kpis()?.blocked ?? 0) > 0" (click)="auditOutcome('blocked')">
+    <span class="tile__label">Barradas</span><span class="tile__value">{{ num(kpis()?.blocked) }}</span></button>
+  <button type="button" class="tile tile--btn" [class.tile--warn]="(kpis()?.warned ?? 0) > 0" (click)="auditOutcome('warned')">
+    <span class="tile__label">Avisos</span><span class="tile__value">{{ num(kpis()?.warned) }}</span></button>
+  <button type="button" class="tile tile--btn" [class.tile--bad]="(kpis()?.errors ?? 0) > 0" (click)="auditOutcome('error')">
+    <span class="tile__label">Erros</span><span class="tile__value">{{ num(kpis()?.errors) }}</span></button>
+</div>
+
+<div class="charts">
+  <section class="panel panel--wide">
+    <div class="panel__head"><h2>Eventos por dia</h2><span class="muted">por resultado</span></div>
+    <app-usage-bars [data]="perDay()" [series]="series" ariaLabel="Eventos por dia: ok, avisado, barrado e erro"></app-usage-bars>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>Por origem</h2><span class="muted">tela, MCP, skill, executor, hooks…</span></div>
+    <app-usage-hbars [items]="bySource()"></app-usage-hbars>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>Regras que mais dispararam</h2><span class="muted">casou · barradas</span></div>
+    <app-usage-hbars [items]="topRules()" color="#d03b3b"></app-usage-hbars>
+  </section>
+  <section class="panel panel--wide">
+    <div class="panel__head"><h2>Ações mais frequentes</h2><span class="muted">vezes · duração mediana</span></div>
+    <app-usage-hbars [items]="topActions()" [limit]="12"></app-usage-hbars>
+  </section>
+</div>

@@ -1,0 +1,163 @@
+@if (error()) {
+  <div class="notice">{{ error() }}</div>
+}
+
+@if (draft(); as d) {
+  <section class="panel">
+    <div class="panel__head">
+      <h2>Modo global</h2>
+      @if (d.updatedAt) { <span class="muted">alterado {{ dt(d.updatedAt) }}{{ d.updatedBy ? ' por ' + d.updatedBy : '' }}</span> }
+      @if (loading()) { <mat-spinner diameter="18"></mat-spinner> }
+    </div>
+    <div class="modes" role="radiogroup" aria-label="Modo global">
+      @for (m of modes; track m) {
+        <label class="mode-card mode-card--{{ m }}" [class.on]="d.mode === m">
+          <input type="radio" name="gov-mode" [value]="m" [checked]="d.mode === m" (change)="patch({ mode: modeOf(m) })">
+          <span class="mode-card__title"><span class="dot"></span>{{ modeLabel[m] }}
+            @if (savedMode() === m) { <span class="badge">atual</span> }</span>
+          <span class="mode-card__text">{{ modeHint[m] }}</span>
+        </label>
+      }
+    </div>
+    @if (d.mode !== savedMode()) {
+      <p class="f-hint pending">O modo só muda ao salvar{{ d.mode === 'enforce' ? ' (vai pedir confirmação)' : '' }}.</p>
+    }
+  </section>
+
+  <div class="charts">
+    <section class="panel">
+      <div class="panel__head"><h2>Trilha</h2></div>
+      <div class="form-grid">
+        <label class="f-field" [class.f-field--invalid]="errors()['retentionDays']"><span>Guardar eventos por (dias)</span>
+          <input type="number" min="7" max="3650" [ngModel]="d.retentionDays" (ngModelChange)="patch({ retentionDays: num($event) })">
+          @if (errors()['retentionDays']) { <span class="f-error">{{ errors()['retentionDays'] }}</span> }
+          @else { <span class="f-hint">Eventos mais antigos são apagados uma vez por dia.</span> }
+        </label>
+        <div class="f-field span-all"><span>Origens gravadas</span>
+          <div class="checks">
+            @for (s of sources; track s) {
+              <label><input type="checkbox" [checked]="d.recordSources.includes(s)" (change)="toggleSource(s)"> {{ sourceLabel[s] }}</label>
+            }
+          </div>
+          @if (!d.recordSources.length) { <span class="f-error">Nenhuma origem marcada: nada entra na trilha (as regras continuam valendo).</span> }
+          @else { <span class="f-hint">As regras valem para todas as origens; aqui só se escolhe o que fica registrado.</span> }
+        </div>
+        <div class="f-field span-all"><span>Papéis isentos (nunca barrados)</span>
+          <div class="checks">
+            @for (r of roles; track r) {
+              <label><input type="checkbox" [checked]="d.exemptRoles.includes(r)" (change)="toggleRole(r)"> {{ roleLabel[r] }}</label>
+            }
+          </div>
+          <span class="f-hint">Quem tem esses papéis só é registrado (o que barraria aparece como "teria barrado").</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__head"><h2>Hooks do Claude Code</h2></div>
+      <div class="form-grid">
+        <label class="f-field f-field--toggle span-all"><span>Se o PRMake não responder</span>
+          <mat-slide-toggle [checked]="d.hookFailOpen" (change)="patch({ hookFailOpen: $event.checked })">
+            {{ d.hookFailOpen ? 'Deixar passar (recomendado)' : 'Barrar a ação' }}</mat-slide-toggle>
+          <span class="f-hint">{{ d.hookFailOpen ? 'Sem rede ou com o PRMake fora, o Claude Code segue trabalhando (a rede de segurança local do executor continua).' : 'Atenção: sem rede ou com o PRMake fora, toda ferramenta avaliada fica barrada.' }}</span>
+        </label>
+        <label class="f-field" [class.f-field--invalid]="errors()['hookTimeoutMs']"><span>Tempo máximo da consulta (ms)</span>
+          <input type="number" min="100" max="10000" step="100" [ngModel]="d.hookTimeoutMs" (ngModelChange)="patch({ hookTimeoutMs: num($event) })">
+          @if (errors()['hookTimeoutMs']) { <span class="f-error">{{ errors()['hookTimeoutMs'] }}</span> }
+        </label>
+        <label class="f-field" [class.f-field--invalid]="errors()['hookCacheSeconds']"><span>Cache da configuração (s)</span>
+          <input type="number" min="0" max="3600" [ngModel]="d.hookCacheSeconds" (ngModelChange)="patch({ hookCacheSeconds: num($event) })">
+          @if (errors()['hookCacheSeconds']) { <span class="f-error">{{ errors()['hookCacheSeconds'] }}</span> }
+          @else { <span class="f-hint">Quanto tempo cada máquina reaproveita regras e hooks sem perguntar de novo.</span> }
+        </label>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel__head">
+      <h2>Marcos do card</h2>
+      <span class="muted">de onde vem a data de cada marco da linha do tempo (iniciou, análise inicial, protótipo, correção, PR, QA, fechado)</span>
+    </div>
+    @if (errors()['milestones']) { <div class="f-error">{{ errors()['milestones'] }}</div> }
+    <div class="table-wrap">
+      <table class="tbl ms-tbl">
+        <thead><tr><th></th><th>Nome</th><th>Chave</th><th>De onde</th><th>Fase</th><th>O que casa (glob)</th><th>Quando</th><th></th></tr></thead>
+        <tbody>
+          @for (m of d.milestones; track $index; let i = $index; let last = $last) {
+            <tr [class.invalid]="!!msErrors()[i]">
+              <td class="order">
+                <button type="button" class="icon-btn" (click)="moveMs(i, -1)" [disabled]="i === 0" aria-label="Subir"><mat-icon>arrow_upward</mat-icon></button>
+                <button type="button" class="icon-btn" (click)="moveMs(i, 1)" [disabled]="last" aria-label="Descer"><mat-icon>arrow_downward</mat-icon></button>
+              </td>
+              <td><input type="text" [value]="m.label" (change)="setMs(i, { label: $any($event.target).value })" aria-label="Nome do marco" data-usage-ignore></td>
+              <td><input type="text" class="mono" [value]="m.key" (change)="setMs(i, { key: $any($event.target).value.trim() })" aria-label="Chave do marco" data-usage-ignore></td>
+              <td>
+                <select [value]="m.from" (change)="setMs(i, { from: $any($event.target).value })" aria-label="De onde vem">
+                  @for (f of froms; track f) { <option [value]="f" [selected]="m.from === f">{{ fromLabel[f] }}</option> }
+                </select>
+              </td>
+              <td>
+                <select (change)="setPhase(i, $any($event.target).value)" [disabled]="m.from !== 'plan' && m.from !== 'step'" aria-label="Fase">
+                  <option value="" [selected]="!m.phase">qualquer</option>
+                  <option value="analysis" [selected]="m.phase === 'analysis'">análise</option>
+                  <option value="correction" [selected]="m.phase === 'correction'">correção</option>
+                </select>
+              </td>
+              <td><input type="text" class="mono" [value]="m.match ?? ''" [disabled]="m.from === 'plan'"
+                         [placeholder]="m.from === 'event' ? 'POST Azure/card/*/actions/*' : m.from === 'task' ? 'pr-open' : 'prototipo*'"
+                         (change)="setMs(i, { match: $any($event.target).value.trim() })" aria-label="O que casa" data-usage-ignore></td>
+              <td>
+                <select (change)="setMs(i, { at: $any($event.target).value })" aria-label="Quando">
+                  @for (a of ats; track a) { <option [value]="a" [selected]="m.at === a">{{ atLabel[a] }}</option> }
+                </select>
+              </td>
+              <td><button type="button" class="icon-btn" (click)="removeMs(i)" aria-label="Tirar marco" matTooltip="Tirar"><mat-icon>delete</mat-icon></button></td>
+            </tr>
+            @if (msErrors()[i]) { <tr class="err-row"><td></td><td colspan="7" class="f-error">{{ msErrors()[i] }}</td></tr> }
+          } @empty {
+            <tr><td colspan="8" class="muted">Nenhum marco: a linha do tempo mostra só as ações.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <button mat-button type="button" (click)="addMs()"><mat-icon>add</mat-icon> Adicionar marco</button>
+  </section>
+
+  @if (saveError()) { <div class="notice">{{ saveError() }}</div> }
+  <div class="panel actions-row save-bar">
+    <span class="muted">{{ errorCount() ? errorCount() + ' problema(s) para corrigir' : (dirty() ? 'alterações não salvas' : 'sem alterações') }}</span>
+    <span class="ms-auto"></span>
+    <button mat-button type="button" (click)="discard()" [disabled]="!dirty() || saving()">Descartar</button>
+    <button mat-flat-button type="button" (click)="save()" [disabled]="!dirty() || !!errorCount() || saving()">
+      @if (saving()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>save</mat-icon> } Salvar
+    </button>
+  </div>
+}
+
+<section class="panel">
+  <div class="panel__head">
+    <h2>Alterações</h2>
+    <span class="muted">quem mudou regras, hooks e configurações</span>
+    <span class="ms-auto"></span>
+    @if (changesLoading()) { <mat-spinner diameter="18"></mat-spinner> }
+    <button mat-icon-button type="button" matTooltip="Atualizar" (click)="loadChanges()"><mat-icon>refresh</mat-icon></button>
+  </div>
+  <div class="table-wrap">
+    <table class="tbl">
+      <thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>O que mudou</th></tr></thead>
+      <tbody>
+        @for (c of changes(); track c.id) {
+          <tr class="clickable" (click)="store.showEvent(c)">
+            <td>{{ dt(c.startedAt) }}</td>
+            <td>{{ c.userName || '—' }}</td>
+            <td class="mono">{{ c.action }}</td>
+            <td class="wrap">{{ c.detail || '—' }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="4" class="muted">{{ changesLoading() ? 'Carregando…' : 'Nenhuma alteração registrada.' }}</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>

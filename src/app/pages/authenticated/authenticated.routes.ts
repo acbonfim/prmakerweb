@@ -73,6 +73,13 @@ export const AUTHENTICATED_ROUTES: Routes = [
         loadComponent: () => import('./plugin-settings/plugin-settings-page.component').then(m => m.PluginSettingsPageComponent)
       },
       {
+        // 0098: governança do PRMake (admin) — trilha, métricas, regras/guardrails, hooks e configurações; aba em `?aba=`.
+        path: 'governance',
+        data: { tab: { title: 'Governança', icon: 'policy' } },
+        canActivate: [AuthGuard, AdminGuard],
+        loadComponent: () => import('./governance/governance-page.component').then(m => m.GovernancePageComponent)
+      },
+      {
         // 0097: leitura aberta a todo usuário autenticado (gerar/aprovar seguem os flags da API dentro da tela).
         path: 'reverse-engineering',
         data: { tab: { title: 'Engenharia reversa', icon: 'biotech' } },

@@ -1,0 +1,160 @@
+@if (error()) {
+  <div class="notice">{{ error() }}</div>
+}
+
+@if (store.mode() === 'monitor') {
+  <div class="notice notice--info">Modo <b>Monitorando</b>: as regras são avaliadas e registradas, mas nada é barrado. Ligue o modo "Aplicando" em Configurações quando estiver seguro.</div>
+} @else if (store.mode() === 'off') {
+  <div class="notice notice--warn">Governança <b>desligada</b>: as regras ficam guardadas, mas não são avaliadas nem registradas.</div>
+}
+
+<div class="split" [class.split--open]="!!draft()">
+  <section class="panel">
+    <div class="panel__head">
+      <h2>Regras e guardrails</h2>
+      <span class="muted">{{ activeCount() }} de {{ rules().length }} ligadas</span>
+      <span class="ms-auto"></span>
+      <input class="f-search" type="search" placeholder="Filtrar regras" [ngModel]="filter()" (ngModelChange)="filter.set($event)" data-usage-ignore>
+      @if (loading()) { <mat-spinner diameter="18"></mat-spinner> }
+      <button mat-flat-button type="button" (click)="create()"><mat-icon>add</mat-icon> Nova regra</button>
+    </div>
+
+    @for (g of groups(); track g.category) {
+      <div class="group">
+        <h3 class="group__title">{{ g.label }} <span class="muted">{{ g.rules.length }}</span></h3>
+        @for (r of g.rules; track r.id) {
+          <div class="rule" [class.rule--on]="draft()?.id === r.id" [class.rule--off]="!r.enabled">
+            <mat-slide-toggle [checked]="r.enabled" (change)="quick(r, { enabled: $event.checked })"
+                              [attr.aria-label]="(r.enabled ? 'Desligar ' : 'Ligar ') + r.name"></mat-slide-toggle>
+            <button type="button" class="rule__main" (click)="edit(r)">
+              <span class="rule__name">{{ r.name }}
+                @if (r.builtin) { <span class="badge badge--builtin" matTooltip="Embutida: dá para mudar efeito, escopo e mensagem, mas não apagar">embutida</span> }
+              </span>
+              <span class="rule__meta mono">{{ r.key }}</span>
+              <span class="rule__meta">{{ dimCount(r) }} · {{ scopeText(r) }}</span>
+            </button>
+            <select class="rule__effect badge--{{ r.effect }}" [ngModel]="r.effect" (ngModelChange)="quick(r, { effect: effectOf($event) })"
+                    [attr.aria-label]="'Efeito de ' + r.name" [matTooltip]="effectHint[r.effect]">
+              @for (e of effects; track e) { <option [value]="e">{{ effectLabel[e] }}</option> }
+            </select>
+          </div>
+        }
+      </div>
+    } @empty {
+      <p class="muted">{{ loading() ? 'Carregando…' : 'Nenhuma regra.' }}</p>
+    }
+  </section>
+
+  @if (draft(); as d) {
+    <section class="panel detail editor" aria-label="Editor de regra">
+      <div class="detail__head">
+        <div>
+          <p class="detail__title">{{ isNew() ? 'Nova regra' : d.name }}</p>
+          @if (d.updatedAt) { <span class="muted">alterada {{ dt(d.updatedAt) }}{{ d.updatedBy ? ' por ' + d.updatedBy : '' }}</span> }
+        </div>
+        <span class="ms-auto"></span>
+        @if (d.builtin) { <span class="badge badge--builtin">embutida</span> }
+        <button mat-icon-button type="button" (click)="cancel()" aria-label="Fechar editor"><mat-icon>close</mat-icon></button>
+      </div>
+
+      <div class="form-grid">
+        <label class="f-field span-all" [class.f-field--invalid]="err('name')"><span>Nome</span>
+          <input type="text" [ngModel]="d.name" (ngModelChange)="patch({ name: $event })" data-usage-ignore>
+          @if (err('name')) { <span class="f-error">{{ err('name') }}</span> }
+        </label>
+        <label class="f-field" [class.f-field--invalid]="err('key')"><span>Chave</span>
+          <input type="text" class="mono" [ngModel]="d.key" (ngModelChange)="setKey($event)" [disabled]="d.builtin || !!d.id"
+                 data-usage-ignore>
+          @if (err('key')) { <span class="f-error">{{ err('key') }}</span> }
+          @else if (d.builtin) { <span class="f-hint">Embutida: a chave não muda.</span> }
+          @else if (d.id) { <span class="f-hint">A chave não muda depois de criada (aparece na trilha).</span> }
+        </label>
+        <label class="f-field"><span>Categoria</span>
+          <select [ngModel]="d.category" (ngModelChange)="patch({ category: $event })">
+            @for (c of categories; track c) { <option [value]="c">{{ categoryLabel[c] }}</option> }
+            @if (!categories.includes(d.category)) { <option [value]="d.category">{{ d.category }}</option> }
+          </select>
+        </label>
+        <label class="f-field"><span>Efeito</span>
+          <select [ngModel]="d.effect" (ngModelChange)="patch({ effect: effectOf($event) })">
+            @for (e of effects; track e) { <option [value]="e">{{ effectLabel[e] }}</option> }
+          </select>
+          <span class="f-hint">{{ effectHint[d.effect] }}</span>
+        </label>
+        <label class="f-field f-field--toggle"><span>Situação</span>
+          <mat-slide-toggle [checked]="d.enabled" (change)="patch({ enabled: $event.checked })">{{ d.enabled ? 'Ligada' : 'Desligada' }}</mat-slide-toggle>
+        </label>
+        <label class="f-field span-all"><span>Descrição (para o admin)</span>
+          <textarea rows="2" class="plain" [ngModel]="d.description" (ngModelChange)="patch({ description: $event })" data-usage-ignore></textarea>
+        </label>
+        <label class="f-field span-all" [class.f-field--invalid]="err('message')"><span>Mensagem para quem foi barrado/avisado</span>
+          <textarea rows="2" class="plain" [ngModel]="d.message" (ngModelChange)="patch({ message: $event })"
+                    placeholder="Ex.: O Claude só abre PR; o merge é sempre humano." data-usage-ignore></textarea>
+          @if (err('message')) { <span class="f-error">{{ err('message') }}</span> }
+        </label>
+      </div>
+
+      <h3 class="section">Escopo <span class="muted">vazio = vale para todos</span></h3>
+      @if (err('scope')) { <div class="f-error">{{ err('scope') }}</div> }
+      <div class="form-grid">
+        <div class="f-field span-all"><span>Origens</span>
+          <div class="checks">
+            @for (s of sources; track s) {
+              <label><input type="checkbox" [checked]="d.scope.sources.includes(s)" (change)="toggleIn('sources', s)"> {{ sourceLabel[s] }}</label>
+            }
+          </div>
+        </div>
+        <div class="f-field"><span>Só para os papéis</span>
+          <div class="checks">
+            @for (r of roles; track r) {
+              <label><input type="checkbox" [checked]="d.scope.roles.includes(r)" (change)="toggleIn('roles', r)"> {{ roleLabel[r] }}</label>
+            }
+          </div>
+        </div>
+        <div class="f-field"><span>Papéis isentos</span>
+          <div class="checks">
+            @for (r of roles; track r) {
+              <label><input type="checkbox" [checked]="d.scope.exceptRoles.includes(r)" (change)="toggleIn('exceptRoles', r)"> {{ roleLabel[r] }}</label>
+            }
+          </div>
+        </div>
+        <div class="f-field"><span>Só para as pessoas</span>
+          <app-gov-list-input [items]="d.scope.users" (itemsChange)="setScope('users', $event)" label="pessoas" placeholder="id da pessoa"
+                              [suggestions]="userSuggestions()" [showNames]="true"></app-gov-list-input>
+        </div>
+        <div class="f-field"><span>Tipos de card</span>
+          <app-gov-list-input [items]="d.scope.cardTypes" (itemsChange)="setScope('cardTypes', $event)" label="tipos de card" placeholder="Bug, User Story…"
+                              [suggestions]="cardTypeSuggestions"></app-gov-list-input>
+        </div>
+      </div>
+
+      <h3 class="section">Casamentos <span class="muted">cada lista preenchida precisa casar</span></h3>
+      @if (err('match')) { <div class="f-error">{{ err('match') }}</div> }
+      <div class="form-grid">
+        @for (m of dims; track m.key) {
+          <div class="f-field"><span>{{ m.label }}</span>
+            <app-gov-list-input [items]="d.match[m.key]" (itemsChange)="setMatch(m.key, $event)" [kind]="m.kind" [label]="m.label"
+                                [placeholder]="m.kind === 'regex' ? 'regex (Enter)' : 'glob (Enter)'"></app-gov-list-input>
+            <span class="f-hint">{{ m.hint }}</span>
+          </div>
+        }
+      </div>
+
+      @if (saveError()) { <div class="notice">{{ saveError() }}</div> }
+      <div class="actions-row sticky-actions">
+        @if (d.id && !d.builtin) {
+          <button mat-button type="button" color="warn" (click)="remove()"><mat-icon>delete</mat-icon> Apagar</button>
+        }
+        <span class="ms-auto muted">{{ errorCount() ? errorCount() + ' problema(s) para corrigir' : (dirty() ? 'alterações não salvas' : 'sem alterações') }}</span>
+        <button mat-button type="button" (click)="cancel()">Fechar</button>
+        <button mat-flat-button type="button" (click)="save()" [disabled]="!dirty() || !!errorCount() || saving()">
+          @if (saving()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>save</mat-icon> } Salvar
+        </button>
+      </div>
+    </section>
+  }
+</div>
+
+<section class="panel">
+  <app-gov-rule-simulator [draft]="draft()"></app-gov-rule-simulator>
+</section>
