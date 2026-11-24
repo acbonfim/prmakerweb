@@ -132,15 +132,11 @@ export function decideRoleRoute(
   return true;
 }
 
-/** Rótulo amigável dos papéis (gestão de usuários, governança). */
+/** Rótulo amigável dos papéis (gestão de usuários); os demais aparecem pelo nome, como sempre. */
 export const ROLE_LABELS: Record<string, string> = {
-  admin: 'Administrador (admin)',
-  support: 'Suporte (support)',
-  user: 'Desenvolvedor (user)',
-  gestor: 'Gestor (gestor)',
   management: 'Gestão (management)',
 };
 
-export function roleLabel(role: string): string {
-  return ROLE_LABELS[`${role ?? ''}`.toLowerCase()] ?? role;
+export function roleLabel(role: string | null | undefined): string {
+  return ROLE_LABELS[`${role ?? ''}`.toLowerCase()] ?? `${role ?? ''}`;
 }

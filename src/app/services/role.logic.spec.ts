@@ -120,5 +120,6 @@ describe('role.logic (0099 ajustes 2)', () => {
   it('rótulo amigável dos papéis', () => {
     expect(roleLabel('management')).toBe('Gestão (management)');
     expect(roleLabel('outro')).toBe('outro');
+    expect(roleLabel('admin')).toBe('admin');
   });
 });
