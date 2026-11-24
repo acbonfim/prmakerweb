@@ -1,32 +1,35 @@
-import { Component, ViewEncapsulation, computed, effect, inject, input, model, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, ViewEncapsulation, computed, effect, inject, input, model, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
-import { MatIconModule } from '@angular/material/icon';
-import { MatTooltipModule } from '@angular/material/tooltip';
+import { Subscription } from 'rxjs';
 import { DevOpsService } from '../../services/devops.service';
 import { htmlToMd, mdToHtml } from '../../helpers/markdown';
-import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
-import { fold } from './board.logic';
+import { PmComboComponent, PmComboOption } from '../pm-combo/pm-combo.component';
 import { displayValue, inputKind } from './card-edit.logic';
 import {
-  DevOpsClassificationNode, DevOpsFieldDef, DevOpsPerson, identityImage, identityName
+  DevOpsClassificationNode, DevOpsFieldDef, DevOpsPerson, identityImage, identityKey, identityName
 } from './devops.model';
 import { DV_FORM_STYLES } from './devops.styles';
 
-/** Quantas opções o autocomplete mostra de uma vez (as listas de área/pessoas passam de mil). */
-const MAX_OPTIONS = 80;
+/** Quantas pessoas a busca pede ao servidor de uma vez. */
+const PEOPLE_TOP = 50;
+/** Qualquer texto vale (o DevOps valida; fora da lista fica o aviso). */
+const ANY_TEXT = (t: string): string | null => t;
+/** Pessoa fora da lista: só e-mail. */
+const EMAIL_ONLY = (t: string): string | null => (/@/.test(t) ? t : null);
 
 /**
- * 0099 (Mesa de gestão): um campo do card do DevOps com o controle do tipo — picklist com autocomplete quando há
- * `allowedValues`, Área/Iteração pela árvore (autocomplete do caminho), pessoas com autocomplete e avatar, número,
- * data, sim/não, texto, texto longo e HTML (editado como texto simples — markdown — com prévia). Campo somente
- * leitura só mostra o valor.
+ * 0099 (Mesa de gestão): um campo do card do DevOps com o controle do tipo — picklist quando há `allowedValues`,
+ * Área/Iteração pela árvore, pessoas com avatar, número, data, sim/não, texto, texto longo e HTML (editado como texto
+ * simples — markdown — com prévia). Campo somente leitura só mostra o valor.
+ *
+ * Ajustes 1: picklist, árvore e pessoas no `app-pm-combo` (digitação que filtra, teclado, painel do PRMake); pessoas
+ * com busca no servidor (`GET DevOps/meta/people?q=`, debounce de 250 ms) — acha quem não é membro de time.
  */
 @Component({
   selector: 'app-devops-field-input',
   standalone: true,
-  imports: [NgTemplateOutlet, FormsModule, MatAutocompleteModule, MatIconModule, MatTooltipModule, UserAvatarComponent],
+  imports: [NgTemplateOutlet, FormsModule, PmComboComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     @let f = field();
@@ -36,36 +39,19 @@ const MAX_OPTIONS = 80;
     } @else {
       @switch (k) {
         @case ('picklist') {
-          <input class="dv-input" [class.dv-input--warn]="outOfList()" [ngModel]="text()" (ngModelChange)="onText($event)"
-                 (focus)="query.set('')" (blur)="commitPick()" [matAutocomplete]="pickAuto" [disabled]="disabled()"
-                 [placeholder]="placeholder()" [attr.aria-label]="f.name" autocomplete="off">
-          <mat-autocomplete #pickAuto="matAutocomplete" class="dv-panel" (optionSelected)="setValue($event.option.value)">
-            <mat-option value=""><span class="dv-opt__name dv-hint">(vazio)</span></mat-option>
-            @for (o of pickOptions(); track o) { <mat-option [value]="o"><span class="dv-opt__name">{{ o }}</span></mat-option> }
-          </mat-autocomplete>
+          <app-pm-combo [options]="pickOptions()" [value]="strValue()" (valueChange)="setValue($event)" [allowEmpty]="true"
+                        [acceptCustom]="anyText" [warn]="outOfList()" [disabled]="disabled()" [placeholder]="placeholder()"
+                        [ariaLabel]="f.name" noOptionsText="Sem opções na lista do DevOps" />
           @if (outOfList()) { <span class="dv-hint dv-hint--warn">Valor fora da lista do DevOps</span> }
         }
         @case ('area') { <ng-container *ngTemplateOutlet="tree" /> }
         @case ('iteration') { <ng-container *ngTemplateOutlet="tree" /> }
         @case ('identity') {
-          <div class="dv-line">
-            @if (value()) { <app-user-avatar [name]="shown()" [imageUrl]="avatar()" [size]="22" /> }
-            <input class="dv-input" [ngModel]="text()" (ngModelChange)="onText($event)" (focus)="loadPeople(); query.set('')"
-                   (blur)="commitIdentity()" [matAutocomplete]="peopleAuto" [disabled]="disabled()"
-                   [placeholder]="placeholder() || 'Sem responsável'" [attr.aria-label]="f.name" autocomplete="off">
-          </div>
-          <mat-autocomplete #peopleAuto="matAutocomplete" class="dv-panel" [displayWith]="personLabel" (optionSelected)="pickPerson($event.option.value)">
-            <mat-option [value]="null"><span class="dv-opt__name dv-hint">(ninguém)</span></mat-option>
-            @for (p of peopleOptions(); track p.uniqueName) {
-              <mat-option [value]="p">
-                <app-user-avatar [name]="p.displayName" [imageUrl]="p.imageUrl" [size]="20" />
-                <span class="dv-opt__name">{{ p.displayName }}</span>
-                <span class="dv-opt__hint">{{ p.uniqueName }}</span>
-              </mat-option>
-            }
-            @if (loading()) { <mat-option class="dv-opt--status" disabled>Carregando as pessoas…</mat-option> }
-            @else if (loadError()) { <mat-option class="dv-opt--status" disabled>{{ loadError() }}</mat-option> }
-          </mat-autocomplete>
+          <app-pm-combo [options]="peopleOptions()" [value]="personKey()" (valueChange)="pickPerson($event)" [displayText]="shown()"
+                        [remote]="true" [debounceMs]="250" (queryChange)="searchPeople($event)" [loading]="loading()" [error]="loadError()"
+                        loadingText="Buscando…" emptyText="Ninguém com esse nome" noOptionsText="Digite o nome ou o e-mail"
+                        [allowEmpty]="true" emptyLabel="(ninguém)" [acceptCustom]="emailOnly" icon="person_outline"
+                        [disabled]="disabled()" [placeholder]="placeholder() || 'Sem responsável'" [ariaLabel]="f.name" />
         }
         @case ('number') {
           <input class="dv-input" type="number" [ngModel]="value()" (ngModelChange)="setValue($event === '' || $event == null ? null : +$event)"
@@ -114,19 +100,11 @@ const MAX_OPTIONS = 80;
     }
 
     <ng-template #tree>
-      <input class="dv-input" [class.dv-input--warn]="outOfList()" [ngModel]="text()" (ngModelChange)="onText($event)"
-             (focus)="loadNodes(); query.set('')" (blur)="commitPick()" [matAutocomplete]="treeAuto" [disabled]="disabled()"
-             [placeholder]="placeholder() || (kind() === 'area' ? 'Área' : 'Iteração')" [attr.aria-label]="field().name" autocomplete="off">
-      <mat-autocomplete #treeAuto="matAutocomplete" class="dv-panel" (optionSelected)="setValue($event.option.value)">
-        @for (n of nodeOptions(); track n.path) {
-          <mat-option [value]="n.path" [matTooltip]="n.path" matTooltipShowDelay="600">
-            <span class="dv-opt__name" [style.padding-left.px]="query() ? 0 : n.depth * 12">{{ query() ? n.path : n.name }}</span>
-          </mat-option>
-        }
-        @if (loading()) { <mat-option class="dv-opt--status" disabled>Carregando…</mat-option> }
-        @else if (loadError()) { <mat-option class="dv-opt--status" disabled>{{ loadError() }}</mat-option> }
-        @else if (!nodeOptions().length) { <mat-option class="dv-opt--status" disabled>Nenhum caminho com esse texto</mat-option> }
-      </mat-autocomplete>
+      <app-pm-combo [options]="nodeOptions()" [value]="strValue()" (valueChange)="setValue($event)" (opened)="loadNodes()"
+                    [acceptCustom]="anyText" [warn]="outOfList()" [loading]="loading()" [error]="loadError()" [limit]="400"
+                    [icon]="kind() === 'area' ? 'account_tree' : 'event_repeat'" emptyText="Nenhum caminho com esse texto"
+                    [disabled]="disabled()" [placeholder]="placeholder() || (kind() === 'area' ? 'Área' : 'Iteração')"
+                    [ariaLabel]="field().name" />
       @if (outOfList()) { <span class="dv-hint dv-hint--warn">Caminho não encontrado no projeto</span> }
     </ng-template>
   `,
@@ -134,6 +112,7 @@ const MAX_OPTIONS = 80;
 })
 export class DevOpsFieldInputComponent {
   private api = inject(DevOpsService);
+  private destroyRef = inject(DestroyRef);
 
   readonly field = input.required<DevOpsFieldDef>();
   readonly value = model<unknown>(null);
@@ -147,13 +126,24 @@ export class DevOpsFieldInputComponent {
     return this.kind() === 'identity' ? identityName(v) : displayValue(this.field(), v);
   });
   readonly avatar = computed(() => identityImage(this.value()));
+  /** Valor como texto (picklist/árvore). */
+  readonly strValue = computed(() => {
+    const v = this.value();
+    return v == null || v === '' ? null : `${v}`;
+  });
+  /** uniqueName da pessoa escolhida (chave do combo). */
+  readonly personKey = computed(() => identityKey(this.value()) || null);
+  readonly anyText = ANY_TEXT;
+  readonly emailOnly = EMAIL_ONLY;
 
-  /** Texto do campo (picklist/árvore/pessoa/texto) — separado do valor para digitar livremente. */
+  /** Texto dos campos simples (texto/texto longo) — separado do valor para digitar livremente. */
   readonly text = signal('');
-  readonly query = signal('');
   readonly loading = signal(false);
   readonly loadError = signal<string | null>(null);
-  private people = signal<DevOpsPerson[] | null>(null);
+  /** Pessoas da última busca no servidor e o texto buscado. */
+  private people = signal<DevOpsPerson[]>([]);
+  private peopleQuery = signal('');
+  private peopleSub: Subscription | null = null;
   private nodes = signal<DevOpsClassificationNode[] | null>(null);
 
   // HTML editado como texto simples (markdown) com prévia.
@@ -168,22 +158,22 @@ export class DevOpsFieldInputComponent {
   });
   readonly htmlText = computed(() => `${this.value() ?? ''}`);
 
-  readonly pickOptions = computed(() => {
-    const q = fold(this.query());
-    const all = this.field().allowedValues ?? [];
-    return (q ? all.filter((o) => fold(o).includes(q)) : all).slice(0, 200);
-  });
+  readonly pickOptions = computed<PmComboOption[]>(() =>
+    (this.field().allowedValues ?? []).map((o) => ({ value: o, label: o })));
 
-  readonly nodeOptions = computed(() => {
-    const q = fold(this.query());
-    const all = this.nodes() ?? [];
-    return (q ? all.filter((n) => fold(n.path).includes(q)) : all).slice(0, MAX_OPTIONS * 3);
-  });
+  /** Árvore: sem busca mostra o nome do nó com recuo; com busca, o caminho inteiro. */
+  readonly nodeOptions = computed<PmComboOption[]>(() =>
+    (this.nodes() ?? []).map((n) => ({ value: n.path, label: n.path, short: n.name, depth: n.depth })));
 
-  readonly peopleOptions = computed(() => {
-    const q = fold(this.query());
-    const all = this.people() ?? [];
-    return (q ? all.filter((p) => fold(`${p.displayName} ${p.uniqueName}`).includes(q)) : all).slice(0, MAX_OPTIONS);
+  /** Pessoas da busca; sem texto, a escolhida aparece no topo (o avatar dela vai para o campo). */
+  readonly peopleOptions = computed<PmComboOption[]>(() => {
+    const list = this.people().map(personOption);
+    const cur = this.value();
+    const key = identityKey(cur);
+    if (key && !this.peopleQuery() && !list.some((o) => o.value.toLowerCase() === key.toLowerCase())) {
+      list.unshift(personOption({ displayName: identityName(cur) || key, uniqueName: key, imageUrl: identityImage(cur) }));
+    }
+    return list;
   });
 
   /** Valor digitado que não está na lista (picklist) ou na árvore (área/iteração). */
@@ -199,86 +189,47 @@ export class DevOpsFieldInputComponent {
     return false;
   });
 
-  /** O autocomplete mostra o nome da pessoa escolhida (e o texto digitado como está). */
-  readonly personLabel = (p: DevOpsPerson | string | null) => (typeof p === 'string' ? p : p ? p.displayName : '');
-
   constructor() {
     // O texto acompanha o valor vindo de fora (carregar o card, desfazer).
     effect(() => {
       const v = this.value();
-      const k = this.kind();
       untracked(() => {
-        const t = k === 'identity' ? identityName(v) : v == null ? '' : `${v}`;
+        const t = v == null ? '' : `${v}`;
         if (t !== this.text()) this.text.set(t);
       });
     });
+    this.destroyRef.onDestroy(() => this.peopleSub?.unsubscribe());
   }
 
   setValue(v: unknown): void {
     this.value.set(v);
   }
 
-  onText(v: unknown): void {
-    if (v != null && typeof v !== 'string') return; // opção escolhida no autocomplete
-    const s = v ?? '';
-    this.text.set(s);
-    this.query.set(s);
-    if (this.kind() === 'picklist' || this.kind() === 'area' || this.kind() === 'iteration') {
-      if (!s.trim()) this.value.set(null);
-    } else if (this.kind() === 'identity') {
-      if (!s.trim()) this.value.set(null);
-    }
-  }
-
-  /** Ao sair do campo: aceita o texto digitado (o DevOps valida; fora da lista fica o aviso). */
-  commitPick(): void {
-    const t = this.text().trim();
-    const cur = `${this.value() ?? ''}`;
-    if (t === cur) return;
-    if (!t) { this.value.set(null); return; }
-    const k = this.kind();
-    if (k === 'picklist') {
-      const exact = (this.field().allowedValues ?? []).find((o) => o.toLowerCase() === t.toLowerCase());
-      this.value.set(exact ?? t);
-    } else {
-      const node = (this.nodes() ?? []).find((n) => n.path.toLowerCase() === t.toLowerCase());
-      this.value.set(node?.path ?? t);
-    }
-  }
-
   // ── Pessoas ──
 
-  loadPeople(): void {
-    if (this.people() || this.loading()) return;
+  /** Busca no servidor (o combo já espera 250 ms entre teclas); a resposta antiga não sobrescreve a nova. */
+  searchPeople(q: string): void {
+    const query = (q ?? '').trim();
+    this.peopleQuery.set(query);
+    this.peopleSub?.unsubscribe();
     this.loading.set(true);
     this.loadError.set(null);
-    this.api.people().subscribe({
+    this.peopleSub = this.api.people(query, PEOPLE_TOP).subscribe({
       next: (p) => { this.people.set(p); this.loading.set(false); },
-      error: () => { this.loadError.set('Não foi possível carregar as pessoas — digite o e-mail.'); this.loading.set(false); }
+      error: () => {
+        this.people.set([]);
+        this.loadError.set('Não foi possível buscar as pessoas — digite o e-mail.');
+        this.loading.set(false);
+      }
     });
   }
 
-  pickPerson(p: DevOpsPerson | null): void {
-    this.query.set('');
-    if (!p) { this.value.set(null); this.text.set(''); return; }
-    this.value.set({ displayName: p.displayName, uniqueName: p.uniqueName, imageUrl: p.imageUrl ?? null });
-    this.text.set(p.displayName);
-  }
-
-  /** Texto livre de pessoa: e-mail vira o valor; outro texto volta ao nome atual. */
-  commitIdentity(): void {
-    // Espera o optionSelected (que vem depois do blur) antes de decidir.
-    setTimeout(() => {
-      const t = this.text().trim();
-      const cur = this.value();
-      if (!t) { if (cur) this.value.set(null); return; }
-      if (t === identityName(cur)) return;
-      const match = (this.people() ?? []).find((p) => p.uniqueName.toLowerCase() === t.toLowerCase()
-        || p.displayName.toLowerCase() === t.toLowerCase());
-      if (match) { this.pickPerson(match); return; }
-      if (/@/.test(t)) { this.value.set(t); return; }
-      this.text.set(identityName(cur));
-    }, 150);
+  /** Pessoa escolhida no combo (pelo uniqueName); e-mail digitado vale como está; vazio limpa. */
+  pickPerson(key: string | null): void {
+    if (!key) { this.value.set(null); return; }
+    if (key.toLowerCase() === identityKey(this.value()).toLowerCase()) return;
+    const p = this.people().find((x) => x.uniqueName.toLowerCase() === key.toLowerCase());
+    this.value.set(p ? { displayName: p.displayName, uniqueName: p.uniqueName, imageUrl: p.imageUrl ?? null } : key);
   }
 
   // ── Área / Iteração ──
@@ -313,4 +264,14 @@ export class DevOpsFieldInputComponent {
     this.md.set(htmlToMd(`${this.value() ?? ''}`));
     this.htmlEdited.set(false);
   }
+}
+
+function personOption(p: DevOpsPerson): PmComboOption {
+  return {
+    value: p.uniqueName,
+    label: p.displayName || p.uniqueName,
+    hint: p.uniqueName && p.uniqueName !== p.displayName ? p.uniqueName : null,
+    avatar: { name: p.displayName || p.uniqueName, imageUrl: p.imageUrl ?? null },
+    data: p,
+  };
 }

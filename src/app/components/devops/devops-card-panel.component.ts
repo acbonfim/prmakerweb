@@ -1,4 +1,4 @@
-import { Component, ViewEncapsulation, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { Component, ViewEncapsulation, computed, effect, inject, input, linkedSignal, output, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -10,6 +10,7 @@ import { Router } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { DevOpsService } from '../../services/devops.service';
+import { PmComboComponent, PmComboOption } from '../pm-combo/pm-combo.component';
 import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
 import { canAccept, laneKey, boardLanes } from './board.logic';
 import { buildPatch, changedFields, displayValue, groupFields } from './card-edit.logic';
@@ -25,6 +26,12 @@ import { parseTags } from './tags.logic';
 const SNACK = { horizontalPosition: 'right', verticalPosition: 'top' } as const;
 const PARENT_REL = 'System.LinkTypes.Hierarchy-Reverse';
 const CHILD_REL = 'System.LinkTypes.Hierarchy-Forward';
+/** Valor da lane padrão no combo (a chave dela é vazia). */
+const DEFAULT_LANE = '__default__';
+/** Cor da bolinha do estado pela categoria do DevOps. */
+const STATE_CATEGORY_COLORS: Record<string, string> = {
+  proposed: '#8b949e', inprogress: '#58a6ff', resolved: '#d29922', completed: '#3fb950', removed: '#f85149',
+};
 
 /**
  * 0099 (Mesa de gestão): painel do card do DevOps — cabeçalho (tipo, id, título editável, link para o DevOps, "Abrir
@@ -33,11 +40,13 @@ const CHILD_REL = 'System.LinkTypes.Hierarchy-Forward';
  * "Salvar" que manda só o que mudou. Conflito/erro do DevOps aparece com a mensagem dele.
  *
  * Ocupa a altura do contêiner (a página decide se é gaveta lateral ou diálogo).
+ *
+ * Ajustes 1: estado, coluna e lane no `app-pm-combo` (sem `<select>` nativo).
  */
 @Component({
   selector: 'app-devops-card-panel',
   standalone: true,
-  imports: [NgTemplateOutlet, FormsModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule, DevOpsFieldInputComponent, DevOpsTagsInputComponent],
+  imports: [NgTemplateOutlet, FormsModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule, PmComboComponent, DevOpsFieldInputComponent, DevOpsTagsInputComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     @let d = detail();
@@ -96,24 +105,21 @@ const CHILD_REL = 'System.LinkTypes.Hierarchy-Forward';
             <div class="dvp__grid">
               <div class="dv-field">
                 <span class="dv-field__label">Estado @if (changed().has(stateRef)) { <i class="dv-changed"></i> }</span>
-                <select class="dv-select" [ngModel]="valueOf(stateRef)" (ngModelChange)="setValue(stateRef, $event)" aria-label="Estado">
-                  @for (s of stateOptions(); track s) { <option [value]="s">{{ s }}</option> }
-                </select>
+                <app-pm-combo [options]="stateCombo()" [value]="stateText()" (valueChange)="$event && setValue(stateRef, $event)"
+                              [clearable]="false" ariaLabel="Estado" placeholder="Estado" emptyText="Nenhum estado com esse nome" />
               </div>
               @if (board(); as cfg) {
                 <div class="dv-field">
                   <span class="dv-field__label">Coluna do board</span>
-                  <select #colSel class="dv-select" (change)="moveTo({ column: colSel.value }, colSel)" [disabled]="busy()" aria-label="Coluna do board">
-                    @if (!boardColumn()) { <option value="" selected>—</option> }
-                    @for (c of columnOptions(); track c.id) { <option [value]="c.name" [selected]="c.name === boardColumn()">{{ c.name }}</option> }
-                  </select>
+                  <app-pm-combo [options]="columnCombo()" [value]="columnPick()" (valueChange)="pickColumn($event)" [disabled]="busy()"
+                                [clearable]="false" icon="view_column" placeholder="—" ariaLabel="Coluna do board"
+                                emptyText="Nenhuma coluna com esse nome" />
                 </div>
                 @if (laneOptions().length > 1) {
                   <div class="dv-field">
                     <span class="dv-field__label">Lane</span>
-                    <select #laneSel class="dv-select" (change)="moveTo({ lane: laneSel.value }, laneSel)" [disabled]="busy()" aria-label="Lane">
-                      @for (l of laneOptions(); track l.key) { <option [value]="l.key" [selected]="l.key === boardLane()">{{ l.name }}</option> }
-                    </select>
+                    <app-pm-combo [options]="laneCombo()" [value]="lanePick()" (valueChange)="pickLane($event)" [disabled]="busy()"
+                                  [clearable]="false" ariaLabel="Lane" emptyText="Nenhuma lane com esse nome" />
                   </div>
                 }
                 @if (columnSplit()) {
@@ -276,6 +282,8 @@ export class DevOpsCardPanelComponent {
   readonly board = signal<BoardConfig | null>(null);
   private types = signal<DevOpsWorkItemType[]>([]);
   private states = signal<string[]>([]);
+  /** Categoria de cada estado (cor da bolinha). */
+  private stateCategories = signal<Record<string, string>>({});
   readonly loading = signal(false);
   readonly busy = signal(false);
   readonly saving = signal(false);
@@ -339,6 +347,18 @@ export class DevOpsCardPanelComponent {
     return cur && !list.includes(cur) ? [cur, ...list] : list;
   });
 
+  readonly stateText = computed(() => {
+    const v = this.values()[F.state] ?? this.detail()?.state;
+    return v == null || v === '' ? null : `${v}`;
+  });
+  readonly stateCombo = computed<PmComboOption[]>(() => {
+    const cats = this.stateCategories();
+    return this.stateOptions().map((name) => {
+      const cat = (cats[name.toLowerCase()] ?? '').replace(/\s+/g, '').toLowerCase();
+      return { value: name, label: name, color: STATE_CATEGORY_COLORS[cat] ?? '#8b949e' };
+    });
+  });
+
   readonly columnOptions = computed(() => {
     const cfg = this.board();
     const type = this.detail()?.type ?? '';
@@ -366,6 +386,12 @@ export class DevOpsCardPanelComponent {
     return !!(cfg && d && d.fields[cfg.fields.done]);
   });
   readonly columnSplit = computed(() => !!this.board()?.columns.find((c) => c.name === this.boardColumn())?.isSplit);
+  readonly columnCombo = computed<PmComboOption[]>(() => this.columnOptions().map((c) => ({ value: c.name, label: c.name })));
+  readonly laneCombo = computed<PmComboOption[]>(() =>
+    this.laneOptions().map((l) => ({ value: l.key || DEFAULT_LANE, label: l.name })));
+  /** O que o combo mostra (volta ao gravado quando o DevOps recusa o movimento). */
+  readonly columnPick = linkedSignal(() => this.boardColumn() || null);
+  readonly lanePick = linkedSignal(() => this.boardLane() || DEFAULT_LANE);
 
   constructor() {
     this.api.types().subscribe({ next: (t) => this.types.set(t ?? []), error: () => {} });
@@ -428,6 +454,7 @@ export class DevOpsCardPanelComponent {
           if (seq !== this.loadSeq) return;
           this.defs.set(defs ?? []);
           this.states.set((states?.states ?? []).map((s) => s.name));
+          this.stateCategories.set(Object.fromEntries((states?.states ?? []).map((s) => [s.name.toLowerCase(), s.category ?? ''])));
           this.applyDetail(d);
           this.loading.set(false);
         });
@@ -500,8 +527,21 @@ export class DevOpsCardPanelComponent {
     });
   }
 
+  pickColumn(column: string | null): void {
+    if (!column || column === this.boardColumn()) return;
+    this.columnPick.set(column);
+    this.moveTo({ column });
+  }
+
+  pickLane(value: string | null): void {
+    const lane = !value || value === DEFAULT_LANE ? '' : value;
+    if (lane === this.boardLane()) return;
+    this.lanePick.set(value || DEFAULT_LANE);
+    this.moveTo({ lane });
+  }
+
   /** Coluna/lane/Done do board: grava na hora (como arrastar no board). */
-  moveTo(change: { column?: string; lane?: string; done?: boolean }, el?: HTMLSelectElement | HTMLInputElement): void {
+  moveTo(change: { column?: string; lane?: string; done?: boolean }, el?: HTMLInputElement): void {
     const d = this.detail();
     const cfg = this.board();
     const team = this.team();
@@ -528,8 +568,9 @@ export class DevOpsCardPanelComponent {
       error: (e) => {
         this.busy.set(false);
         // O controle volta ao valor gravado.
-        if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = this.boardDone();
-        else if (el) el.value = change.lane !== undefined ? this.boardLane() : this.boardColumn();
+        if (el) el.checked = this.boardDone();
+        this.columnPick.set(this.boardColumn() || null);
+        this.lanePick.set(this.boardLane() || DEFAULT_LANE);
         this.snack.open(`Não foi possível mover o card ${d.id}: ${devOpsErrorMessage(e)}`, 'Ok', { ...SNACK, duration: 9000 });
       }
     });

@@ -74,11 +74,16 @@ export class DevOpsService {
       () => this.http.get<DevOpsClassificationNode[]>(`${this.base}meta/iterations`));
   }
 
-  /** Membros dos times (sem `q`, todos — a tela filtra; com `q`, busca no servidor). */
-  people(q = ''): Observable<DevOpsPerson[]> {
+  /**
+   * Pessoas do DevOps (ajustes 1: membros dos times + usuários da organização + busca de identidades + quem aparece
+   * em cards recentes). Com `q`, a busca é no servidor (sem acento/caixa); `top` limita a resposta.
+   */
+  people(q = '', top?: number): Observable<DevOpsPerson[]> {
     const query = q.trim();
-    const params = query ? new HttpParams().set('q', query) : undefined;
-    return this.cached(`people:${query.toLowerCase()}`, META_TTL_MS,
+    let params = new HttpParams();
+    if (query) params = params.set('q', query);
+    if (top) params = params.set('top', `${top}`);
+    return this.cached(`people:${query.toLowerCase()}|${top ?? ''}`, META_TTL_MS,
       () => this.http.get<DevOpsPerson[]>(`${this.base}meta/people`, { params }).pipe(map((p) => p ?? [])));
   }
 

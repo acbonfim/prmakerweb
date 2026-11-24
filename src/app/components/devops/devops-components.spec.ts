@@ -6,6 +6,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideRouter } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { DevOpsService } from '../../services/devops.service';
+import { EpicsService } from '../../services/epics.service';
 import { WsService } from '../../services/ws.service';
 import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
 import { DevOpsBoardComponent } from './devops-board.component';
@@ -76,6 +77,12 @@ class FakeDevOps {
   create(body: CreateCardRequest) { this.creates.push(body); return of(card({ id: 900 })); }
 }
 
+class FakeEpics {
+  saved: { epic: number; filters: unknown }[] = [];
+  saveBoardFilters(epic: number, filters: unknown) { this.saved.push({ epic, filters }); return of({}); }
+  tags() { return of([]); }
+}
+
 class FakeWs {
   groups: string[] = [];
   handlers = new Map<string, (...a: unknown[]) => void>();
@@ -93,11 +100,13 @@ class FakePickers {
 describe('Componentes do DevOps (0099)', () => {
   let api: FakeDevOps;
   let ws: FakeWs;
+  let epics: FakeEpics;
   let snacks: string[];
 
   beforeEach(() => {
     api = new FakeDevOps();
     ws = new FakeWs();
+    epics = new FakeEpics();
     snacks = [];
     TestBed.configureTestingModule({
       providers: [
@@ -106,17 +115,19 @@ describe('Componentes do DevOps (0099)', () => {
         provideRouter([]),
         { provide: DevOpsService, useValue: api },
         { provide: WsService, useValue: ws },
+        { provide: EpicsService, useValue: epics },
         { provide: WorkItemPickerSource, useValue: new FakePickers() },
         { provide: MatSnackBar, useValue: { open: (m: string) => { snacks.push(m); return { onAction: () => of() }; } } },
       ],
     });
   });
 
-  async function board() {
+  async function board(savedFilters: unknown = null) {
     const fixture = TestBed.createComponent(DevOpsBoardComponent);
     fixture.componentRef.setInput('team', 'Time A');
     fixture.componentRef.setInput('board', 'Stories');
     fixture.componentRef.setInput('epic', 12);
+    fixture.componentRef.setInput('savedFilters', savedFilters);
     fixture.detectChanges();
     await fixture.whenStable();
     await new Promise((r) => setTimeout(r)); // a carga do board é uma Promise (fora das tarefas que o whenStable espera)
@@ -150,6 +161,31 @@ describe('Componentes do DevOps (0099)', () => {
     fixture.componentInstance.setText('Card 4');
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelectorAll('.dvb-card').length).toBe(1);
+  });
+
+  it('board: filtros vêm do épico (lane) e mudar grava no épico com debounce (ajustes 1)', async () => {
+    const fixture = await board({ lanes: ['Expedite'], types: [], states: [], assignedTo: [], tags: [], text: '' });
+    const el: HTMLElement = fixture.nativeElement;
+    expect([...el.querySelectorAll('.dvb-card__id')].map((x) => x.textContent)).toEqual(['4']);
+    expect(el.querySelector('.dvb-saved')?.textContent).toContain('especialista');
+    expect(epics.saved.length).toBe(0); // carregar não grava
+
+    fixture.componentInstance.toggle('types', 'Bug', new Event('click'));
+    fixture.componentInstance.setText('card');
+    await new Promise((r) => setTimeout(r, 700));
+    expect(epics.saved.length).toBe(1);
+    expect(epics.saved[0]).toEqual({
+      epic: 12, filters: { text: 'card', types: ['Bug'], assignedTo: [], tags: [], states: [], lanes: ['Expedite'] },
+    });
+
+    // O épico relido traz o que foi gravado: não sobrescreve nem grava de novo.
+    fixture.componentRef.setInput('savedFilters', epics.saved[0].filters);
+    fixture.detectChanges();
+    expect(fixture.componentInstance.filter().text).toBe('card');
+    fixture.componentInstance.clearFilter();
+    await new Promise((r) => setTimeout(r, 700));
+    expect(epics.saved.length).toBe(2);
+    expect((epics.saved[1].filters as { lanes: string[] }).lanes).toEqual([]);
   });
 
   it('board: arrastar move otimista com vizinhos/lane/done e desfaz com aviso no erro', async () => {
