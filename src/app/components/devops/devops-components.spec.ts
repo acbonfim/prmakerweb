@@ -175,7 +175,7 @@ describe('Componentes do DevOps (0099)', () => {
     await new Promise((r) => setTimeout(r, 700));
     expect(epics.saved.length).toBe(1);
     expect(epics.saved[0]).toEqual({
-      epic: 12, filters: { text: 'card', types: ['Bug'], assignedTo: [], tags: [], states: [], lanes: ['Expedite'] },
+      epic: 12, filters: { text: 'card', types: ['Bug'], assignedTo: [], tags: [], states: [], lanes: ['Expedite'], hiddenColumns: [] },
     });
 
     // O épico relido traz o que foi gravado: não sobrescreve nem grava de novo.
@@ -186,6 +186,18 @@ describe('Componentes do DevOps (0099)', () => {
     await new Promise((r) => setTimeout(r, 700));
     expect(epics.saved.length).toBe(2);
     expect((epics.saved[1].filters as { lanes: string[] }).lanes).toEqual([]);
+
+    // Colunas ocultas saem do board e são gravadas junto; "Limpar filtros" não as mostra de volta.
+    fixture.componentInstance.toggleColumn('QA', new Event('click'));
+    fixture.detectChanges();
+    const heads = () => [...fixture.nativeElement.querySelectorAll('.dvb-head__name')].map((h: Element) => h.textContent?.trim());
+    expect(heads()).toEqual(['New', 'Active']);
+    fixture.componentInstance.clearFilter();
+    fixture.detectChanges();
+    expect(heads()).toEqual(['New', 'Active']);
+    await new Promise((r) => setTimeout(r, 700));
+    expect((epics.saved[2].filters as { hiddenColumns: string[] }).hiddenColumns).toEqual(['QA']);
+    expect(fixture.nativeElement.querySelector('.dvb-saved')?.textContent).toContain('Mostrar todas as colunas');
   });
 
   it('board: arrastar move otimista com vizinhos/lane/done e desfaz com aviso no erro', async () => {

@@ -1,7 +1,7 @@
 import {
   DEFAULT_LANE_NAME, EMPTY_FILTER, UNASSIGNED, applyMove, canAccept, columnCounts, columnOf, filterCount, filterItems, filterOptions,
-  groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, neighborsAt, normalizeBoardFilter, orderBetween, sameFilter,
-  stateFor, toggleValue, typeOnBoard
+  groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, limitBoard, neighborsAt, normalizeBoardFilter, orderBetween,
+  sameFilter, stateFor, toggleValue, typeOnBoard, visibleColumns
 } from './board.logic';
 import { BoardConfig, BoardItem } from './devops.model';
 
@@ -194,5 +194,28 @@ describe('board.logic (0099)', () => {
     expect(sameFilter({ ...EMPTY_FILTER, types: ['Bug', 'Task'] }, { ...EMPTY_FILTER, types: ['task', 'bug'] })).toBeTrue();
     expect(sameFilter({ ...EMPTY_FILTER, text: ' a ' }, { ...EMPTY_FILTER, text: 'a' })).toBeTrue();
     expect(sameFilter({ ...EMPTY_FILTER, lanes: ['A'] }, EMPTY_FILTER)).toBeFalse();
+  });
+
+  it('colunas ocultas: some do board, ocultar todas mostra todas, coluna nova aparece sozinha', () => {
+    const cfg = config();
+    expect(visibleColumns(cfg, ['qa', 'Closed']).map((c) => c.name)).toEqual(['New', 'Active']);
+    expect(visibleColumns(cfg, cfg.columns.map((c) => c.name)).length).toBe(4);
+    expect(visibleColumns(cfg, ['Sumiu']).length).toBe(4);
+    expect(normalizeBoardFilter({ hiddenColumns: ['QA'] }).hiddenColumns).toEqual(['QA']);
+    expect(isFilterActive({ ...EMPTY_FILTER, hiddenColumns: ['QA'] })).toBeFalse();
+    expect(sameFilter({ ...EMPTY_FILTER, hiddenColumns: ['QA'] }, EMPTY_FILTER)).toBeFalse();
+  });
+
+  it('limitBoard: só as colunas visíveis e só as lanes escolhidas, recontando a faixa', () => {
+    const cfg = config();
+    const items = [item(1), item(2, { column: 'QA', type: 'User Story' }), item(3, { lane: 'Expedite' })];
+    const views = groupBoard(cfg, items);
+    const cut = limitBoard(views, cfg, { lanes: [], hiddenColumns: ['QA'] });
+    expect(cut.length).toBe(2);
+    expect(cut[0].columns.map((c) => c.column.name)).toEqual(['New', 'Active', 'Closed']);
+    expect(cut[0].count).toBe(1);
+    const onlyExpedite = limitBoard(views, cfg, { lanes: ['expedite'], hiddenColumns: [] });
+    expect(onlyExpedite.map((v) => v.key)).toEqual(['Expedite']);
+    expect(limitBoard(views, cfg, { lanes: ['Sumiu'], hiddenColumns: [] }).length).toBe(2);
   });
 });

@@ -219,11 +219,16 @@ export interface BoardFilter {
   assignedTo: string[];
   tags: string[];
   states: string[];
-  /** Nomes das lanes (a padrão sem nome vira `DEFAULT_LANE_NAME`). */
+  /** Nomes das lanes (a padrão sem nome vira `DEFAULT_LANE_NAME`) — as escolhidas são as únicas faixas mostradas. */
   lanes: string[];
+  /**
+   * Colunas ocultas (nomes; vazio = todas). Não é filtro de cards — é a personalização do board salva junto com os
+   * filtros: "Limpar filtros" não mexe nelas e coluna nova do DevOps aparece sozinha.
+   */
+  hiddenColumns: string[];
 }
 
-export const EMPTY_FILTER: BoardFilter = { text: '', types: [], assignedTo: [], tags: [], states: [], lanes: [] };
+export const EMPTY_FILTER: BoardFilter = { text: '', types: [], assignedTo: [], tags: [], states: [], lanes: [], hiddenColumns: [] };
 
 /** Nome da lane padrão sem nome no filtro (o servidor entende "padrão"/"default"/vazio como a lane padrão). */
 export const DEFAULT_LANE_NAME = 'Padrão';
@@ -255,6 +260,7 @@ export function normalizeBoardFilter(raw: unknown): BoardFilter {
     tags: strList(r['tags']),
     states: strList(r['states']),
     lanes: strList(r['lanes']),
+    hiddenColumns: strList(r['hiddenColumns']),
   };
 }
 
@@ -264,7 +270,36 @@ export function sameFilter(a: BoardFilter | null | undefined, b: BoardFilter | n
   const y = normalizeBoardFilter(b);
   const list = (l: string[]) => l.map(lower).sort().join('\u0001');
   return x.text.trim() === y.text.trim() && list(x.types) === list(y.types) && list(x.assignedTo) === list(y.assignedTo)
-    && list(x.tags) === list(y.tags) && list(x.states) === list(y.states) && list(x.lanes) === list(y.lanes);
+    && list(x.tags) === list(y.tags) && list(x.states) === list(y.states) && list(x.lanes) === list(y.lanes)
+    && list(x.hiddenColumns) === list(y.hiddenColumns);
+}
+
+/** Colunas que aparecem: as que não estão ocultas (ocultar todas = mostrar todas, para o board não sumir). */
+export function visibleColumns(config: Pick<BoardConfig, 'columns'>, hidden: readonly string[] | null | undefined): BoardColumn[] {
+  const cols = config.columns ?? [];
+  if (!hidden?.length) return cols;
+  const off = new Set(hidden.map(lower));
+  const shown = cols.filter((c) => !off.has(lower(c.name)));
+  return shown.length ? shown : cols;
+}
+
+/**
+ * Recorta o board agrupado para a tela: só as colunas visíveis e, com lanes escolhidas, só essas faixas (lanes que
+ * não existem mais no board são ignoradas; nenhuma das escolhidas existe = todas). A contagem da faixa passa a ser a
+ * das células visíveis.
+ */
+export function limitBoard(views: BoardLaneView[], config: Pick<BoardConfig, 'columns'>, f: Pick<BoardFilter, 'lanes' | 'hiddenColumns'>): BoardLaneView[] {
+  const cols = new Set(visibleColumns(config, f.hiddenColumns).map((c) => c.name));
+  let lanes = views;
+  if (f.lanes?.length) {
+    const picked = views.filter((v) => f.lanes.some((n) => laneMatches(n, v.lane)));
+    if (picked.length) lanes = picked;
+  }
+  return lanes.map((v) => {
+    const columns = v.columns.filter((c) => cols.has(c.column.name));
+    const count = columns.reduce((n, c) => n + c.doing.items.length + (c.done?.items.length ?? 0), 0);
+    return { ...v, columns, count };
+  });
 }
 
 export function isFilterActive(f: BoardFilter): boolean {

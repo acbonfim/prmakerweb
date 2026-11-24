@@ -38,7 +38,8 @@ export interface EpicSummary {
 
 /**
  * Ajustes 1: filtros do board salvos no épico (`PUT Epics/{n}/board-filters`) — valem na tela ("Cards do épico" e
- * "Board do time") e para o especialista. `assignedTo` = uniqueName; `lanes` = nomes das lanes.
+ * "Board do time") e para o especialista. `assignedTo` = uniqueName; `lanes` = nomes das lanes (as únicas faixas
+ * mostradas); `hiddenColumns` = colunas que o board não mostra.
  */
 export interface EpicBoardFilters {
   lanes: string[];
@@ -47,6 +48,8 @@ export interface EpicBoardFilters {
   assignedTo: string[];
   tags: string[];
   text: string;
+  /** Colunas ocultas do board (nomes; vazio = todas — coluna nova do DevOps aparece sozinha). */
+  hiddenColumns: string[];
 }
 
 /** `EpicCardResponse`. */

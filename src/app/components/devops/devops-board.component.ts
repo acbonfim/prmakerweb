@@ -20,8 +20,8 @@ import { PmComboComponent, PmComboOption } from '../pm-combo/pm-combo.component'
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import {
   BoardCell, BoardFilter, ColumnCount, EMPTY_FILTER, applyMove, canAccept, columnCounts, filterCount, filterItems, filterOptions,
-  groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, boardLanes, neighborsAt, normalizeBoardFilter,
-  sameFilter, toggleValue, typeOnBoard
+  groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, limitBoard, boardLanes, neighborsAt, normalizeBoardFilter,
+  sameFilter, toggleValue, typeOnBoard, visibleColumns
 } from './board.logic';
 import { openDevOpsCardCreate } from './devops-card-create';
 import {
@@ -55,9 +55,10 @@ function storageSet(key: string, value: string): void {
  *
  * `team`/`board` são `model()`: sem valor, o board escolhe o último usado (ou o primeiro) e devolve a escolha.
  *
- * Ajustes 1: time/board no `app-pm-combo`, filtro de Lane e, com épico, os filtros vêm de `savedFilters`
- * (`epic.boardFilters`) e são gravados no épico (`PUT Epics/{n}/board-filters`, debounce de 600 ms) — valem para
- * "Cards do épico" e "Board do time" e o especialista os usa no board do time.
+ * Ajustes 1: time/board no `app-pm-combo`, filtro de Lane (as lanes escolhidas são as únicas faixas mostradas),
+ * "Colunas" para ocultar colunas e, com épico, filtros e colunas vêm de `savedFilters` (`epic.boardFilters`) e são
+ * gravados no épico (`PUT Epics/{n}/board-filters`, debounce de 600 ms) — valem para "Cards do épico" e "Board do
+ * time" e o especialista os usa no board do time.
  */
 @Component({
   selector: 'app-devops-board',
@@ -110,6 +111,13 @@ function storageSet(key: string, value: string): void {
             Lane @if (f.lanes.length) { <b>{{ f.lanes.length }}</b> }<mat-icon>arrow_drop_down</mat-icon>
           </button>
         }
+        @if (cfg) {
+          <button type="button" class="dvb-filter" [class.dvb-filter--on]="f.hiddenColumns.length" [matMenuTriggerFor]="columnsMenu"
+                  matTooltip="Escolher as colunas que o board mostra">
+            <mat-icon class="dvb-filter__lead">view_week</mat-icon>Colunas
+            @if (hiddenCount()) { <b>{{ shownColumns().length }}/{{ cfg.columns.length }}</b> }<mat-icon>arrow_drop_down</mat-icon>
+          </button>
+        }
         @if (filterActive()) {
           <button type="button" class="dv-linkbtn dvb-clear" (click)="clearFilter()">Limpar filtros ({{ filterCount() }})</button>
         }
@@ -125,17 +133,18 @@ function storageSet(key: string, value: string): void {
         </button>
       </div>
       @if (loading()) { <mat-progress-bar class="dvb-progress" mode="indeterminate" /> } @else { <div class="dvb-progress"></div> }
-      @if (epic() && filterActive()) {
+      @if (epic() && (filterActive() || hiddenCount())) {
         <div class="dvb-saved" [class.dvb-saved--err]="filterSave() === 'error'">
           <mat-icon>{{ filterSave() === 'error' ? 'sync_problem' : 'bookmark' }}</mat-icon>
           <span>
             @switch (filterSave()) {
               @case ('saving') { Salvando os filtros no épico… }
               @case ('error') { Não foi possível salvar os filtros no épico. <button type="button" class="dv-linkbtn" (click)="saveFiltersNow()">Tentar de novo</button> }
-              @default { Filtros salvos no épico — o especialista usa no board do time. }
+              @default { {{ filterActive() ? 'Filtros' : 'Colunas' }} salvos no épico — o especialista usa no board do time. }
             }
           </span>
-          <button type="button" class="dv-linkbtn" (click)="clearFilter()">Limpar filtros</button>
+          @if (filterActive()) { <button type="button" class="dv-linkbtn" (click)="clearFilter()">Limpar filtros</button> }
+          @if (hiddenCount()) { <button type="button" class="dv-linkbtn" (click)="showAllColumns()">Mostrar todas as colunas</button> }
         </div>
       }
 
@@ -161,7 +170,7 @@ function storageSet(key: string, value: string): void {
           <div class="dvb-grid" [style.min-width.px]="gridWidth()">
             <!-- Cabeçalho das colunas -->
             <div class="dvb-heads">
-              @for (col of cfg.columns; track col.id) {
+              @for (col of shownColumns(); track col.id) {
                 @let cnt = counts().get(col.name);
                 <div class="dvb-head" [style.width.px]="colWidth(col)" [class.dvb-head--blocked]="blocked(col)"
                      [class.dvb-head--accept]="accepts(col)">
@@ -273,6 +282,17 @@ function storageSet(key: string, value: string): void {
         </button>
       } @empty { <div class="dvb-menu__empty">Nenhuma tag</div> }
     </mat-menu>
+    <mat-menu #columnsMenu="matMenu" class="dvb-menu">
+      @for (col of cfg?.columns ?? []; track col.id) {
+        @let on = !isHidden(f.hiddenColumns, col.name);
+        <button mat-menu-item type="button" (click)="toggleColumn(col.name, $event)" [disabled]="on && shownColumns().length === 1">
+          <mat-icon>{{ on ? 'check_box' : 'check_box_outline_blank' }}</mat-icon><span>{{ col.name }}</span>
+        </button>
+      }
+      @if (f.hiddenColumns.length) {
+        <button mat-menu-item type="button" (click)="showAllColumns()"><mat-icon>view_week</mat-icon><span>Mostrar todas</span></button>
+      }
+    </mat-menu>
     <mat-menu #lanesMenu="matMenu" class="dvb-menu">
       @for (l of laneChoices(); track l.name) {
         <button mat-menu-item type="button" (click)="toggleLane$(l.lane, $event)">
@@ -316,6 +336,7 @@ function storageSet(key: string, value: string): void {
     .dvb-filter--on { color: var(--cc-text-1); border-color: color-mix(in srgb, var(--mat-sys-primary) 45%, transparent); }
     .dvb-filter b { font-size: 11px; background: var(--mat-sys-primary); color: var(--mat-sys-on-primary); border-radius: 999px; padding: 0 5px; margin-left: 3px; }
     .dvb-filter mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .dvb-filter .dvb-filter__lead { font-size: 16px; width: 16px; height: 16px; margin-right: 3px; }
     .dvb-total { font-size: 12px; color: var(--cc-text-3); white-space: nowrap; }
     .dvb-progress { height: 2px; flex: none; }
     .dvb-spin { animation: dvb-spin 1s linear infinite; }
@@ -454,8 +475,14 @@ export class DevOpsBoardComponent {
   readonly filterSave = signal<'idle' | 'saving' | 'saved' | 'error'>('idle');
   readonly lanes = computed(() => {
     const cfg = this.config();
-    return cfg ? groupBoard(cfg, this.visibleItems()) : [];
+    return cfg ? limitBoard(groupBoard(cfg, this.visibleItems()), cfg, this.filter()) : [];
   });
+  /** Colunas na tela (as ocultas saem; coluna nova do DevOps aparece sozinha). */
+  readonly shownColumns = computed(() => {
+    const cfg = this.config();
+    return cfg ? visibleColumns(cfg, this.filter().hiddenColumns) : [];
+  });
+  readonly hiddenCount = computed(() => (this.config()?.columns.length ?? 0) - this.shownColumns().length);
   readonly counts = computed(() => {
     const cfg = this.config();
     return cfg ? columnCounts(cfg, this.items()) : new Map<string, ColumnCount>();
@@ -477,7 +504,7 @@ export class DevOpsBoardComponent {
     const at = this.lastLoadAt();
     return at ? `Atualizar (atualizado às ${new Date(at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})` : 'Atualizar';
   });
-  readonly gridWidth = computed(() => (this.config()?.columns ?? []).reduce((w, c) => w + this.colWidth(c) + 8, 0));
+  readonly gridWidth = computed(() => this.shownColumns().reduce((w, c) => w + this.colWidth(c) + 8, 0));
 
   /** Cor e ícone por tipo: cor do board, senão a dos tipos do projeto. */
   private typeInfo = computed(() => {
@@ -756,8 +783,24 @@ export class DevOpsBoardComponent {
     this.filterChanged();
   }
 
+  /** Limpa os filtros de cards (as colunas ocultas ficam — é personalização do board). */
   clearFilter(): void {
-    this.filter.set(EMPTY_FILTER);
+    this.filter.update((f) => ({ ...EMPTY_FILTER, hiddenColumns: f.hiddenColumns }));
+    this.filterChanged();
+  }
+
+  isHidden(hidden: string[], column: string): boolean {
+    return hidden.some((h) => h.toLowerCase() === column.toLowerCase());
+  }
+
+  toggleColumn(column: string, e: Event): void {
+    e.stopPropagation(); // o menu fica aberto para marcar várias
+    this.filter.update((f) => ({ ...f, hiddenColumns: toggleValue(f.hiddenColumns, column) }));
+    this.filterChanged();
+  }
+
+  showAllColumns(): void {
+    this.filter.update((f) => ({ ...f, hiddenColumns: [] }));
     this.filterChanged();
   }
 

@@ -30,7 +30,8 @@ export type EpicDialogResult = Epic | undefined;
  * Salva aqui mesmo (o erro aparece no diálogo).
  *
  * Ajustes 1: tags com chips e sugestões (as dos épicos — `GET Epics/tags` — e as do DevOps) + criar nova; time/board
- * no `app-pm-combo`; seção "Board do time" com as lanes do board (multi) que viram `boardFilters.lanes` do épico.
+ * no `app-pm-combo`; seção "Board do time" com as lanes do board escolhido (multi — viram `boardFilters.lanes`, as
+ * únicas faixas mostradas) e as colunas exibidas (gravadas como `boardFilters.hiddenColumns`: as que ficaram de fora).
  */
 @Component({
   selector: 'app-epic-dialog',
@@ -103,17 +104,26 @@ export type EpicDialogResult = Epic | undefined;
             </div>
           </div>
           @if (team() && board()) {
-            <div class="wi-field">
-              <span>Lanes que o épico acompanha <small class="wi-muted">(opcional — sem nenhuma, todas)</small></span>
-              <app-pm-combo [multiple]="true" [options]="laneOptions()" [values]="lanes()" (valuesChange)="lanes.set($event)"
-                            [loading]="lanesLoading()" loadingText="Carregando as lanes do board…" [error]="lanesError()"
-                            noOptionsText="O board não tem lanes" emptyText="Nenhuma lane com esse nome"
-                            placeholder="Todas as lanes" ariaLabel="Lanes do board" />
+            <div class="ed__row">
+              <div class="wi-field ed__grow">
+                <span>Lanes mostradas <small class="wi-muted">(sem nenhuma, todas)</small></span>
+                <app-pm-combo [multiple]="true" [options]="laneOptions()" [values]="lanes()" (valuesChange)="lanes.set($event)"
+                              [loading]="lanesLoading()" loadingText="Carregando as lanes do board…" [error]="lanesError()"
+                              noOptionsText="O board não tem lanes" emptyText="Nenhuma lane com esse nome"
+                              placeholder="Todas as lanes" ariaLabel="Lanes mostradas" />
+              </div>
+              <div class="wi-field ed__grow">
+                <span>Colunas mostradas <small class="wi-muted">(sem nenhuma, todas)</small></span>
+                <app-pm-combo [multiple]="true" [options]="columnOptions()" [values]="shownColumns()" (valuesChange)="pickColumns($event)"
+                              [loading]="lanesLoading()" loadingText="Carregando as colunas do board…" [error]="lanesError()"
+                              noOptionsText="O board não tem colunas" emptyText="Nenhuma coluna com esse nome"
+                              placeholder="Todas as colunas" ariaLabel="Colunas mostradas" />
+              </div>
             </div>
           }
           @if (devOpsError()) { <small class="wi-err">{{ devOpsError() }}</small> }
           <small class="wi-muted">O board do épico abre neste time/board (dá para trocar para o board inteiro do time na aba Board). As lanes
-            escolhidas viram o filtro de Lane do board, salvo no épico — o especialista considera no board do time.</small>
+            e colunas escolhidas ficam salvas no épico (filtro de Lane e "Colunas" do board) — o especialista considera no board do time.</small>
         </div>
 
         <label class="wi-field">
@@ -196,6 +206,14 @@ export class EpicDialogComponent {
   readonly laneOptions = computed<PmComboOption[]>(() =>
     withCurrentList(this.boardLaneNames(), this.lanes()).map((n) => ({ value: n, label: n, icon: 'table_rows' })));
 
+  /** Colunas do board e as mostradas (vazio = todas; grava as de fora como `hiddenColumns`). */
+  readonly boardColumnNames = signal<string[]>([]);
+  readonly shownColumns = signal<string[]>([]);
+  /** Ocultas a gravar: começam nas salvas; mudam quando a pessoa escolhe as colunas ou troca o board. */
+  private hiddenColumns: string[] = this.savedFilters.hiddenColumns;
+  readonly columnOptions = computed<PmComboOption[]>(() =>
+    this.boardColumnNames().map((n) => ({ value: n, label: n, icon: 'view_week' })));
+
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -206,15 +224,21 @@ export class EpicDialogComponent {
     this.api.tags().subscribe({ next: (t) => this.epicTags.set(t ?? []), error: () => undefined });
   }
 
-  /** Lanes do board (`GET DevOps/board?team=&board=`); a padrão sem nome aparece como "Padrão". */
+  /** Lanes e colunas do board (`GET DevOps/board?team=&board=`); a lane padrão sem nome aparece como "Padrão". */
   private async loadLanes(team: string, board: string): Promise<void> {
     this.lanesLoading.set(true);
     this.lanesError.set(null);
     this.boardLaneNames.set([]);
+    this.boardColumnNames.set([]);
     try {
       const cfg = await firstValueFrom(this.devops.board(team, board));
       if (this.team() !== team || this.board() !== board) return;
       this.boardLaneNames.set(boardLanes(cfg).map(laneFilterName).filter(Boolean));
+      const cols = (cfg.columns ?? []).map((c) => c.name);
+      this.boardColumnNames.set(cols);
+      // Com colunas ocultas salvas, as mostradas são as outras (todas ocultas = todas).
+      const shown = this.hiddenColumns.length ? cols.filter((c) => !hasValue(this.hiddenColumns, c)) : [];
+      this.shownColumns.set(shown.length === cols.length ? [] : shown);
     } catch (e) {
       if (this.team() === team && this.board() === board) this.lanesError.set(epicApiError(e, 'Não foi possível ler as lanes do board.'));
     } finally {
@@ -253,28 +277,43 @@ export class EpicDialogComponent {
     this.team.set(team);
     this.board.set(null);
     this.boards.set([]);
-    this.lanes.set([]);
-    this.boardLaneNames.set([]);
+    this.resetBoardView();
     this.devOpsError.set(null);
     if (team) void this.loadBoards(team);
+  }
+
+  /** Outro time/board: lanes e colunas voltam a "todas". */
+  private resetBoardView(): void {
+    this.lanes.set([]);
+    this.boardLaneNames.set([]);
+    this.boardColumnNames.set([]);
+    this.shownColumns.set([]);
+    this.hiddenColumns = [];
+  }
+
+  /** Colunas mostradas → ocultas (as do board que ficaram de fora; nenhuma ou todas = nenhuma oculta). */
+  pickColumns(shown: string[]): void {
+    const all = this.boardColumnNames();
+    const full = !shown.length || all.every((c) => hasValue(shown, c));
+    this.shownColumns.set(full ? [] : shown);
+    this.hiddenColumns = full ? [] : all.filter((c) => !hasValue(shown, c));
   }
 
   pickBoard(board: string | null): void {
     if (board === this.board()) return;
     this.board.set(board);
-    this.lanes.set([]);
-    this.boardLaneNames.set([]);
+    this.resetBoardView();
     const team = this.team();
     if (team && board) void this.loadLanes(team, board);
   }
 
-  /** Filtros do board a gravar: só quando as lanes mudaram (null = o servidor não mexe). */
+  /** Filtros do board a gravar: só quando lanes/colunas mudaram (null = o servidor não mexe). */
   private boardFiltersToSave(): SaveEpicRequest['boardFilters'] {
     const lanes = this.lanes();
-    const before = this.savedFilters.lanes;
-    const changed = lanes.length !== before.length || lanes.some((l) => !hasValue(before, l));
-    if (!changed) return null;
-    return { ...this.savedFilters, lanes };
+    const hiddenColumns = this.hiddenColumns;
+    const differs = (a: string[], b: string[]) => a.length !== b.length || a.some((x) => !hasValue(b, x));
+    if (!differs(lanes, this.savedFilters.lanes) && !differs(hiddenColumns, this.savedFilters.hiddenColumns)) return null;
+    return { ...this.savedFilters, lanes, hiddenColumns };
   }
 
   async save(): Promise<void> {
