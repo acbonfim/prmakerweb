@@ -21,7 +21,7 @@ import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import {
   BoardCell, BoardFilter, ColumnCount, EMPTY_FILTER, applyMove, canAccept, columnCounts, filterCount, filterItems, filterOptions,
   groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, limitBoard, boardLanes, neighborsAt, normalizeBoardFilter,
-  sameFilter, toggleValue, typeOnBoard, visibleColumns
+  sameFilter, shownByColumn, shownTotal, toggleValue, typeOnBoard, visibleColumns
 } from './board.logic';
 import { openDevOpsCardCreate } from './devops-card-create';
 import {
@@ -177,9 +177,13 @@ function storageSet(key: string, value: string): void {
                   <div class="dvb-head__top">
                     <span class="dvb-head__name" [matTooltip]="col.description || ''" [matTooltipDisabled]="!col.description">{{ col.name }}</span>
                     @if (cnt) {
+                      @let shown = shownCounts().get(col.name) ?? 0;
+                      @if (shown !== cnt.count) {
+                        <span class="dvb-head__shown" [matTooltip]="shown + ' na tela (filtros/lanes) de ' + cnt.count + ' na coluna'">{{ shown }} de</span>
+                      }
                       <span class="dvb-head__count" [class.dvb-head__count--over]="cnt.over"
-                            [matTooltip]="cnt.limit ? (cnt.over ? 'Passou do limite WIP (' + cnt.limit + ')' : 'Limite WIP: ' + cnt.limit) : ''"
-                            [matTooltipDisabled]="!cnt.limit">{{ cnt.count }}@if (cnt.limit) {<span>/{{ cnt.limit }}</span>}</span>
+                            [matTooltip]="cnt.limit ? (cnt.over ? 'Passou do limite WIP (' + cnt.limit + ') — conta a coluna inteira, como o DevOps' : 'Limite WIP: ' + cnt.limit + ' (coluna inteira)') : 'Cards na coluna'"
+                            >{{ cnt.count }}@if (cnt.limit) {<span>/{{ cnt.limit }}</span>}</span>
                     }
                     <span class="dvb-bar__spacer"></span>
                     @if (creatable(col)) {
@@ -356,6 +360,7 @@ function storageSet(key: string, value: string): void {
     .dvb-head__top { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .dvb-head__name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dvb-head__count { font-size: 12px; color: var(--cc-text-2); white-space: nowrap; }
+    .dvb-head__shown { font-size: 12px; color: var(--cc-text-1); font-weight: 600; white-space: nowrap; margin-right: 3px; }
     .dvb-head__count span { color: var(--cc-text-3); }
     .dvb-head__count--over, .dvb-head__count--over span { color: #f85149; font-weight: 600; }
     .dvb-head__add { background: none; border: 0; padding: 0; color: var(--cc-text-3); cursor: pointer; display: inline-flex; border-radius: 6px; }
@@ -494,11 +499,14 @@ export class DevOpsBoardComponent {
   readonly options = computed(() => filterOptions(this.items()));
   readonly filterActive = computed(() => isFilterActive(this.filter()));
   readonly filterCount = computed(() => filterCount(this.filter()));
+  /** Cards na tela por coluna (com lanes escolhidas e filtros) — o cabeçalho mostra este e o total da coluna. */
+  readonly shownCounts = computed(() => shownByColumn(this.lanes()));
   readonly totalLabel = computed(() => {
     const all = this.items().length;
-    const vis = this.visibleItems().length;
+    // O que está na tela: filtros + lanes escolhidas + colunas ocultas (antes contava só os filtros).
+    const vis = shownTotal(this.lanes());
     const n = (x: number) => `${x} ${x === 1 ? 'card' : 'cards'}`;
-    return this.filterActive() ? `${vis} de ${n(all)}` : n(all);
+    return this.filterActive() || vis !== all ? `${vis} de ${n(all)}` : n(all);
   });
   readonly lastLoadLabel = computed(() => {
     const at = this.lastLoadAt();

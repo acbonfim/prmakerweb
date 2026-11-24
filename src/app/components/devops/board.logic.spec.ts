@@ -1,7 +1,7 @@
 import {
   DEFAULT_LANE_NAME, EMPTY_FILTER, UNASSIGNED, applyMove, canAccept, columnCounts, columnOf, filterCount, filterItems, filterOptions,
   groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, limitBoard, neighborsAt, normalizeBoardFilter, orderBetween,
-  sameFilter, stateFor, toggleValue, typeOnBoard, visibleColumns
+  sameFilter, shownByColumn, shownTotal, stateFor, toggleValue, typeOnBoard, visibleColumns
 } from './board.logic';
 import { BoardConfig, BoardItem } from './devops.model';
 
@@ -217,5 +217,16 @@ describe('board.logic (0099)', () => {
     const onlyExpedite = limitBoard(views, cfg, { lanes: ['expedite'], hiddenColumns: [] });
     expect(onlyExpedite.map((v) => v.key)).toEqual(['Expedite']);
     expect(limitBoard(views, cfg, { lanes: ['Sumiu'], hiddenColumns: [] }).length).toBe(2);
+  });
+
+  it('shownTotal/shownByColumn: contam só o que está na tela (lanes escolhidas e colunas ocultas)', () => {
+    const cfg = config();
+    const items = [item(1), item(2, { column: 'QA', type: 'User Story' }), item(3, { lane: 'Expedite' }), item(4, { lane: 'Expedite', column: 'QA', type: 'User Story' })];
+    const views = groupBoard(cfg, items);
+    expect(shownTotal(limitBoard(views, cfg, { lanes: [], hiddenColumns: [] }))).toBe(4);
+    const cut = limitBoard(views, cfg, { lanes: ['expedite'], hiddenColumns: ['QA'] });
+    expect(shownTotal(cut)).toBe(1);
+    expect(shownByColumn(cut).get('New')).toBe(1);
+    expect(shownByColumn(cut).has('QA')).toBeFalse();
   });
 });
