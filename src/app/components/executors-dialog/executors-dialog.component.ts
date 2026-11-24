@@ -12,6 +12,7 @@ import { ExecutionQueueService } from '../../services/execution-queue.service';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { StorageService } from '../../services/storage.service';
 import { RoleService } from '../../services/role.service';
+import { NOT_NEEDED_TEXT, SetupProfile, checkApplies, effectiveProfile, workerProblemCount } from '../setup-guide/setup-profile.logic';
 import { WsService } from '../../services/ws.service';
 import { planApiError } from '../../services/execution-plan.service';
 import { TokenUsageComponent } from '../token-usage/token-usage.component';
@@ -26,6 +27,7 @@ import {
   ExecutionUserSettings,
   ExecutionRepoMap,
   ExecutionWorker,
+  ExecutionDoctorCheck,
   REPOS_COMMAND,
   REQUEST_SOURCE_LABEL,
   REQUEST_STATUS_LABEL
@@ -111,9 +113,10 @@ const POLL_MS = 30_000;
               </div>
               <div class="ex__doctor-row">
               @if (w.doctor?.length) {
-                <button type="button" class="ex__doctor-toggle" [class.ex__doctor-toggle--bad]="w.doctorProblems > 0" (click)="toggleDoctor(w.id)">
-                  <mat-icon>{{ w.doctorProblems ? 'report' : 'verified' }}</mat-icon>
-                  {{ w.doctorProblems ? w.doctorProblems + (w.doctorProblems === 1 ? ' problema' : ' problemas') + ' no diagnóstico' : 'Diagnóstico ok' }}
+                @let np = problemCount(w);
+                <button type="button" class="ex__doctor-toggle" [class.ex__doctor-toggle--bad]="np > 0" (click)="toggleDoctor(w.id)">
+                  <mat-icon>{{ np ? 'report' : 'verified' }}</mat-icon>
+                  {{ np ? np + (np === 1 ? ' problema' : ' problemas') + ' no diagnóstico' : 'Diagnóstico ok' }}
                   · {{ ago(w.doctorAt) }}
                 </button>
               }
@@ -127,7 +130,9 @@ const POLL_MS = 30_000;
                   </button>
                 }
               </div>
-              @if (w.capabilities?.repoMap; as map) {
+              <!-- 0099 (ajustes 2): o perfil Gestão não usa repositórios (pedidos da Mesa rodam numa pasta neutra) -->
+              @if (profileOf(w) === 'management') {
+              } @else if (w.capabilities?.repoMap; as map) {
                 <button type="button" class="ex__doctor-toggle" [class.ex__doctor-toggle--warn]="repoPending(map)" (click)="toggleRepos(w.id)">
                   <mat-icon>{{ repoPending(map) ? 'warning' : 'folder_open' }}</mat-icon>
                   Repositórios ({{ map.total ?? map.items.length }}){{ repoPendingText(map) }}
@@ -179,10 +184,15 @@ const POLL_MS = 30_000;
                 @if (openDoctor() === w.id) {
                   <ul class="ex__doctor">
                     @for (c of w.doctor; track c.name) {
-                      <li [class.ex__doctor--bad]="!c.ok && c.severity !== 'warning'" [class.ex__doctor--warn]="!c.ok && c.severity === 'warning'">
-                        <mat-icon>{{ c.ok ? 'check_circle' : c.severity === 'warning' ? 'warning' : 'error' }}</mat-icon>
-                        <span><strong>{{ c.name }}</strong>{{ c.message ? ': ' + c.message : '' }}</span>
-                      </li>
+                      @if (!c.ok && notNeeded(c, w)) {
+                        <li class="ex__doctor--skip"><mat-icon>remove_circle_outline</mat-icon>
+                          <span><strong>{{ c.name }}</strong>: {{ notNeededText }}</span></li>
+                      } @else {
+                        <li [class.ex__doctor--bad]="!c.ok && c.severity !== 'warning'" [class.ex__doctor--warn]="!c.ok && c.severity === 'warning'">
+                          <mat-icon>{{ c.ok ? 'check_circle' : c.severity === 'warning' ? 'warning' : 'error' }}</mat-icon>
+                          <span><strong>{{ c.name }}</strong>{{ c.message ? ': ' + c.message : '' }}</span>
+                        </li>
+                      }
                     }
                   </ul>
                 }
@@ -346,6 +356,8 @@ const POLL_MS = 30_000;
     .ex__doctor .mat-icon { font-size: 15px; width: 15px; height: 15px; color: #3fb950; flex: none; }
     .ex__doctor--bad .mat-icon { color: #f0716a; }
     .ex__doctor--warn .mat-icon { color: #d29922; }
+    .ex__doctor--skip { opacity: .6; }
+    .ex__doctor--skip .mat-icon { color: #8b949e; }
     .ex__row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
     .ex__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin: 10px 0 4px; }
     .ex__field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
@@ -394,7 +406,24 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
   readonly usage = signal<ExecutionUsageReport | null>(null);
   readonly usageDays = signal(30);
   readonly usageAll = signal(false);
-  readonly isAdmin = inject(RoleService).isAdmin;
+  private readonly roles = inject(RoleService);
+  readonly isAdmin = this.roles.isAdmin;
+  readonly notNeededText = NOT_NEEDED_TEXT;
+
+  /** 0099 (ajustes 2): perfil da máquina (o servidor diz; senão, pelos papéis de quem vê). */
+  profileOf(w: ExecutionWorker): SetupProfile {
+    return effectiveProfile(w, this.roles.setupProfile);
+  }
+
+  /** Check fora do perfil (Gestão: repositórios, bancos, git, AWS, NuGet) — "não necessário", nunca erro. */
+  notNeeded(c: ExecutionDoctorCheck, w: ExecutionWorker): boolean {
+    return !checkApplies(c, this.profileOf(w), w.doctorRequiredFor);
+  }
+
+  /** Problemas do diagnóstico que contam para o perfil (`profileDoctorProblems` do servidor; senão a regra da tela). */
+  problemCount(w: ExecutionWorker): number {
+    return workerProblemCount(w, this.profileOf(w));
+  }
 
   budget: number | null = null;
   autoEnabled = false;

@@ -15,6 +15,7 @@ import { MyIntegrationsDialogComponent, MyIntegrationsDialogData } from '../my-i
 import { SkillsDialogComponent } from '../skills-dialog/skills-dialog.component';
 import { IntegrationGuide, devOpsContext, devOpsProfileGuide, fieldValue, guideFor } from './integration-guides';
 import { SetupGuideService, SetupStepId, SetupStepStatus } from './setup-guide.service';
+import { NOT_NEEDED_TEXT, profileProblems } from './setup-profile.logic';
 
 type Os = 'unix' | 'windows';
 type Section = SetupStepId | 'card';
@@ -46,7 +47,11 @@ const ORDER = ['AzureDevOps Configurations', 'devops-profile', 'Github Configura
         <mat-icon class="sg__lead">rocket_launch</mat-icon>
         <div class="sg__titles">
           <span class="sg__title">Primeiros passos no PRMake</span>
-          <span class="sg__sub">O que falta para o Claude analisar os seus cards pela tela — uns 15 minutos, uma vez só.</span>
+          @if (setup.isManagement()) {
+            <span class="sg__sub">O que falta para usar a Mesa de gestão com o Claude — uns 10 minutos, uma vez só.</span>
+          } @else {
+            <span class="sg__sub">O que falta para o Claude analisar os seus cards pela tela — uns 15 minutos, uma vez só.</span>
+          }
         </div>
         <button mat-icon-button (click)="ref.close()" aria-label="Fechar"><mat-icon>close</mat-icon></button>
       </header>
@@ -68,8 +73,14 @@ const ORDER = ['AzureDevOps Configurations', 'devops-profile', 'Github Configura
 
       <div class="sg__body">
         <div class="sg__need">
-          <b>Tenha em mãos:</b> acesso ao Azure DevOps{{ org() ? ' (' + org() + ')' : '' }}, conta do GitHub{{ owner() ? ' na organização ' + owner() : '' }},
-          a conta do Claude Code, uma chave de API de IA (Anthropic ou Google), a VPN e um computador que possa ficar ligado.
+          @if (setup.isManagement()) {
+            <!-- 0099 (ajustes 2): perfil Gestão — sem GitHub, repositórios, bancos nem VPN -->
+            <b>Tenha em mãos:</b> acesso ao Azure DevOps{{ org() ? ' (' + org() + ')' : '' }}, a conta do Claude Code e um computador que
+            possa ficar ligado. Chave de API de IA é opcional. Seu perfil (Gestão) não precisa de GitHub, repositórios, bancos nem VPN.
+          } @else {
+            <b>Tenha em mãos:</b> acesso ao Azure DevOps{{ org() ? ' (' + org() + ')' : '' }}, conta do GitHub{{ owner() ? ' na organização ' + owner() : '' }},
+            a conta do Claude Code, uma chave de API de IA (Anthropic ou Google), a VPN e um computador que possa ficar ligado.
+          }
         </div>
 
         <!-- 1. Integrações -->
@@ -85,8 +96,13 @@ const ORDER = ['AzureDevOps Configurations', 'devops-profile', 'Github Configura
           </button>
           @if (open() === 'integrations') {
             <div class="st__body">
-              <p>Cada pessoa usa as próprias credenciais: o PRMake lê e move o card no DevOps e abre os PRs no GitHub <b>em seu nome</b>.
-                Gere cada token pelo passo a passo e cole em <b>Minhas integrações</b>.</p>
+              @if (setup.isManagement()) {
+                <p>Cada pessoa usa as próprias credenciais: o PRMake lê, cria e move os cards no DevOps <b>em seu nome</b>. Para o seu perfil
+                  basta o <b>Azure DevOps</b>; o provedor de IA é opcional. Gere o token pelo passo a passo e cole em <b>Minhas integrações</b>.</p>
+              } @else {
+                <p>Cada pessoa usa as próprias credenciais: o PRMake lê e move o card no DevOps e abre os PRs no GitHub <b>em seu nome</b>.
+                  Gere cada token pelo passo a passo e cole em <b>Minhas integrações</b>.</p>
+              }
               @if (setup.integrationsError()) {
                 <p class="err"><mat-icon>error_outline</mat-icon> Não consegui ler as suas integrações. Tente "Verificar" ou abra Minhas integrações.</p>
               }
@@ -205,7 +221,8 @@ const ORDER = ['AzureDevOps Configurations', 'devops-profile', 'Github Configura
           }
         </section>
 
-        <!-- 4. Bancos -->
+        <!-- 4. Bancos (o perfil Gestão não precisa) -->
+        @if (!setup.isManagement()) {
         <section class="st" [class.st--open]="open() === 'databases'">
           <button type="button" class="st__head" (click)="toggle('databases')" [attr.aria-expanded]="open() === 'databases'">
             <ng-container *ngTemplateOutlet="num; context: { n: 4, s: status('databases') }"></ng-container>
@@ -230,11 +247,12 @@ const ORDER = ['AzureDevOps Configurations', 'devops-profile', 'Github Configura
             </div>
           }
         </section>
+        }
 
         <!-- 5. Executor -->
         <section class="st" [class.st--open]="open() === 'executor'">
           <button type="button" class="st__head" (click)="toggle('executor')" [attr.aria-expanded]="open() === 'executor'">
-            <ng-container *ngTemplateOutlet="num; context: { n: 5, s: status('executor') }"></ng-container>
+            <ng-container *ngTemplateOutlet="num; context: { n: executorNumber(), s: status('executor') }"></ng-container>
             <span class="st__titles">
               <span class="st__title">Executor — o Claude rodando pela tela</span>
               <span class="st__detail">{{ status('executor').detail }}</span>
@@ -245,13 +263,18 @@ const ORDER = ['AzureDevOps Configurations', 'devops-profile', 'Github Configura
           @if (open() === 'executor') {
             <div class="st__body">
               <p>O executor deixa a sua máquina pegar as análises pedidas pela tela (<b>Analisar com Claude</b>, respostas, <b>Continuar</b>)
-                sem abrir o terminal. Ele também roda o <b>diagnóstico</b> que confirma as etapas 2 a 4 aqui.</p>
+                sem abrir o terminal. Ele também roda o <b>diagnóstico</b> que confirma as etapas {{ setup.isManagement() ? '2 e 3' : '2 a 4' }} aqui.</p>
               <ol class="gd__steps">
                 <li>Com as skills instaladas, rode {{ os() === 'windows' ? 'no Git Bash' : 'no terminal' }}:
                   <ng-container *ngTemplateOutlet="cmd; context: { c: agentCommand }"></ng-container></li>
-                <li>Tenha os repositórios clonados (em qualquer pasta — o executor procura) e com permissão de <b>push</b> pelo seu git.
-                  Mais de um clone do mesmo repositório? Escolha em Meus executores → Repositórios.</li>
-                <li>Deixe a máquina ligada, com o Claude Code logado (e a VPN, para os bancos).</li>
+                @if (setup.isManagement()) {
+                  <li>Deixe a máquina ligada, com o Claude Code logado. Os pedidos da Mesa rodam numa pasta neutra (<code>~/.prmake/desk</code>) —
+                    sem repositórios nem git. O executor se atualiza sozinho: mantenha-o na versão mais nova.</li>
+                } @else {
+                  <li>Tenha os repositórios clonados (em qualquer pasta — o executor procura) e com permissão de <b>push</b> pelo seu git.
+                    Mais de um clone do mesmo repositório? Escolha em Meus executores → Repositórios.</li>
+                  <li>Deixe a máquina ligada, com o Claude Code logado (e a VPN, para os bancos).</li>
+                }
               </ol>
               @if (setup.worker(); as w) {
                 <div class="wk">
@@ -263,10 +286,14 @@ const ORDER = ['AzureDevOps Configurations', 'devops-profile', 'Github Configura
                 @if (problems().length) {
                   <ul class="dr">
                     @for (c of problems(); track c.name) {
-                      <li [class.dr--warn]="c.severity === 'warning'">
-                        <mat-icon>{{ c.severity === 'warning' ? 'warning' : 'error' }}</mat-icon>
-                        <span><b>{{ c.name }}</b>{{ c.message ? ': ' + c.message : '' }}</span>
-                      </li>
+                      @if (c.notNeeded) {
+                        <li class="dr--skip"><mat-icon>remove_circle_outline</mat-icon><span><b>{{ c.name }}</b>: {{ notNeededText }}</span></li>
+                      } @else {
+                        <li [class.dr--warn]="c.severity === 'warning'">
+                          <mat-icon>{{ c.severity === 'warning' ? 'warning' : 'error' }}</mat-icon>
+                          <span><b>{{ c.name }}</b>{{ c.message ? ': ' + c.message : '' }}</span>
+                        </li>
+                      }
                     }
                   </ul>
                 }
@@ -281,23 +308,34 @@ const ORDER = ['AzureDevOps Configurations', 'devops-profile', 'Github Configura
         <!-- 6. Primeiro card -->
         <section class="st" [class.st--open]="open() === 'card'">
           <button type="button" class="st__head" (click)="toggle('card')" [attr.aria-expanded]="open() === 'card'">
-            <span class="num" [class.num--done]="setup.complete()">@if (setup.complete()) { <mat-icon>flag</mat-icon> } @else { 6 }</span>
+            <span class="num" [class.num--done]="setup.complete()">@if (setup.complete()) { <mat-icon>flag</mat-icon> } @else { {{ executorNumber() + 1 }} }</span>
             <span class="st__titles">
-              <span class="st__title">Analise o primeiro card</span>
+              <span class="st__title">{{ setup.isManagement() ? 'Abra a Mesa de gestão' : 'Analise o primeiro card' }}</span>
               <span class="st__detail">{{ setup.complete() ? 'Tudo pronto — pode começar' : 'Depois das etapas obrigatórias' }}</span>
             </span>
             <mat-icon class="st__chevron">expand_more</mat-icon>
           </button>
           @if (open() === 'card') {
             <div class="st__body">
-              <ol class="gd__steps">
-                <li>Na tela do card, digite o número do card do DevOps e aperte <b>Enter</b>.</li>
-                <li>Clique em <b>Analisar com Claude</b>: o plano aparece ao vivo, etapa por etapa.</li>
-                <li>Quando uma etapa perguntar algo, <b>responda nela</b>. Dúvidas vão para o <b>Especialista do caso</b>.</li>
-              </ol>
-              <div class="st__actions">
-                <button mat-flat-button color="primary" (click)="ref.close('card')"><mat-icon>arrow_forward</mat-icon>Ir para a tela do card</button>
-              </div>
+              @if (setup.isManagement()) {
+                <ol class="gd__steps">
+                  <li>Na <b>Mesa de gestão</b>, crie um épico para o tema que você acompanha (ou abra um que já existe).</li>
+                  <li>Na aba <b>Cards</b>, o <b>Acompanhamento</b> mostra os PRs e em quais ambientes cada card já está.</li>
+                  <li>Peça ao <b>Especialista</b> do épico: relatórios, duplicados, criar ou mover cards — ele usa a Base Solvace e as ferramentas do PRMake.</li>
+                </ol>
+                <div class="st__actions">
+                  <button mat-flat-button color="primary" (click)="ref.close('card')"><mat-icon>arrow_forward</mat-icon>Ir para a Mesa de gestão</button>
+                </div>
+              } @else {
+                <ol class="gd__steps">
+                  <li>Na tela do card, digite o número do card do DevOps e aperte <b>Enter</b>.</li>
+                  <li>Clique em <b>Analisar com Claude</b>: o plano aparece ao vivo, etapa por etapa.</li>
+                  <li>Quando uma etapa perguntar algo, <b>responda nela</b>. Dúvidas vão para o <b>Especialista do caso</b>.</li>
+                </ol>
+                <div class="st__actions">
+                  <button mat-flat-button color="primary" (click)="ref.close('card')"><mat-icon>arrow_forward</mat-icon>Ir para a tela do card</button>
+                </div>
+              }
             </div>
           }
         </section>
@@ -419,6 +457,8 @@ const ORDER = ['AzureDevOps Configurations', 'devops-profile', 'Github Configura
     .dr li { display: flex; gap: 6px; align-items: flex-start; }
     .dr .mat-icon { flex: none; font-size: 16px; width: 16px; height: 16px; color: #f85149; }
     .dr--warn .mat-icon { color: #d29922; }
+    .dr--skip { opacity: .6; }
+    .dr--skip .mat-icon { color: #8b949e; }
 
     @media (max-width: 600px) {
       .st__body { padding-left: 14px; }
@@ -438,6 +478,9 @@ export class SetupGuideDialogComponent implements OnInit, OnDestroy {
   readonly os = signal<Os>(/win/i.test(navigator.userAgent) ? 'windows' : 'unix');
 
   readonly agentCommand = AGENT_INSTALL_COMMAND;
+  readonly notNeededText = NOT_NEEDED_TEXT;
+  /** Número da etapa do executor (sem a de bancos no perfil Gestão). */
+  readonly executorNumber = computed(() => (this.setup.isManagement() ? 4 : 5));
   readonly doctorCommand = 'bash ~/.claude/skills/.prmake/prmake-skills.sh doctor';
   readonly dbCommand = 'bash ~/.claude/skills/.prmake/prmake-skills.sh db-credentials';
   readonly claudeInstall = computed(() => this.os() === 'windows'
@@ -453,7 +496,8 @@ export class SetupGuideDialogComponent implements OnInit, OnDestroy {
 
   /** Integrações na ordem do passo a passo, com "Seus dados no Azure DevOps" logo depois do PAT. */
   readonly rows = computed<IntegrationRow[]>(() => {
-    const list = this.setup.integrations();
+    // 0099 (ajustes 2): só as integrações do perfil (Gestão: Azure DevOps + provedor de IA opcional).
+    const list = this.setup.visibleIntegrations();
     const provider = fieldValue(list.find((i) => i.description === 'AI Configurations'), 'Provider').toLowerCase();
     const rows: IntegrationRow[] = list.map((i) => ({
       key: i.description,
@@ -472,9 +516,7 @@ export class SetupGuideDialogComponent implements OnInit, OnDestroy {
   });
 
   /** Problemas do diagnóstico da máquina (erros primeiro). */
-  readonly problems = computed(() => (this.setup.worker()?.doctor ?? [])
-    .filter((c) => !c.ok)
-    .sort((a, b) => (a.severity === 'warning' ? 1 : 0) - (b.severity === 'warning' ? 1 : 0)));
+  readonly problems = computed(() => profileProblems(this.setup.worker()?.doctor, this.setup.profile(), this.setup.worker()?.doctorRequiredFor));
 
   private timer?: ReturnType<typeof setInterval>;
 
