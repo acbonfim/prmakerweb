@@ -5,9 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import {
-  GovernanceCardDetail, TIMELINE_KIND_ICON, TIMELINE_KIND_LABEL, TimelineKind,
-} from '../../../../services/governance/governance.model';
+import { GovernanceCardDetail, TIMELINE_KIND_ICON, TIMELINE_KIND_LABEL, TimelineKind, statusLabel, statusUntil } from '../../../../services/governance/governance.model';
 import { buildCardTimeline, fmtMs, fmtNum } from '../../../../services/governance/governance.logic';
 import { formatDateTime } from '../../../../services/usage/usage.model';
 import { GovernanceStore } from '../governance.store';
@@ -26,6 +24,8 @@ const KINDS: TimelineKind[] = ['milestone', 'plan', 'step', 'work-item', 'task',
   styleUrls: ['../governance-shared.css', './gov-card-timeline.component.css'],
 })
 export class GovCardTimelineComponent {
+  readonly statusLabel = statusLabel;
+  readonly statusUntil = statusUntil;
   readonly store = inject(GovernanceStore);
   readonly card = input.required<number>();
   readonly closed = output<void>();

@@ -51,7 +51,7 @@
                   <small>{{ c.milestones.length }}</small>
                 </span>
               </td>
-              <td>{{ c.status || '—' }}</td>
+              <td>{{ statusLabel(c.status) }}</td>
               <td>{{ dt(c.lastActivityAt) }}</td>
             </tr>
           } @empty {

@@ -2,7 +2,7 @@
   <div>
     <p class="detail__title">Card {{ card() }}{{ detail()?.card?.title ? ' — ' + detail()!.card.title : '' }}</p>
     @if (detail(); as d) {
-      <span class="muted">{{ d.card.kind || '—' }} · {{ d.card.status || 'sem situação' }} · {{ d.card.users.join(', ') || '—' }}</span>
+      <span class="muted">{{ d.card.kind || '—' }} · {{ d.card.status ? statusLabel(d.card.status) : 'sem situação' }} · {{ d.card.users.join(', ') || '—' }}</span>
     }
   </div>
   <span class="ms-auto"></span>
@@ -19,7 +19,7 @@
     <p class="lead">
       <mat-icon>play_circle</mat-icon>
       <span>Iniciou em <b>{{ dt(v.startedAt) }}</b>{{ v.startedBy ? ' por ' : '' }}<b>{{ v.startedBy }}</b>
-        e levou <b>{{ dur(v.totalMs) }}</b> até {{ detail()?.card?.status ? (detail()!.card.status | lowercase) : 'a última atividade' }}
+        e levou <b>{{ dur(v.totalMs) }}</b> até {{ statusUntil(detail()?.card?.status) }}
         ({{ dt(v.endedAt) }}).</span>
     </p>
   }

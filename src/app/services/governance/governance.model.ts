@@ -311,6 +311,17 @@ export const OUTCOME_LABEL: Record<GovOutcome, string> = {
 };
 export const OUTCOMES = Object.keys(OUTCOME_LABEL) as GovOutcome[];
 
+/** 0098: situação de plano/item/sub-tarefa/pedido vinda do backend (inglês) → rótulo da tela. */
+export const STATUS_LABEL: Record<string, string> = {
+  pending: 'Pendente', queued: 'Na fila', claimed: 'Pego pelo executor', running: 'Em andamento', paused: 'Pausado',
+  waiting: 'Aguardando', completed: 'Concluído', done: 'Concluído', failed: 'Falhou', cancelled: 'Cancelado',
+  expired: 'Expirado', skipped: 'Pulado', reverting: 'Desfazendo', reverted: 'Desfeito',
+};
+export const statusLabel = (s: string | null | undefined): string => (s ? STATUS_LABEL[s] ?? s : '—');
+/** Fim da frase "levou X até …" da linha do tempo do card. */
+export const statusUntil = (s: string | null | undefined): string =>
+  s === 'completed' ? 'concluir' : s === 'cancelled' ? 'ser cancelado' : s === 'failed' ? 'falhar' : 'a última atividade';
+
 export const DECISION_LABEL: Record<GovDecision, string> = {
   allow: 'Deixa passar',
   warn: 'Deixa passar com aviso',

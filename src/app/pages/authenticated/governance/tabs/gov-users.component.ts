@@ -5,9 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { UserAvatarComponent } from '../../../../components/user-avatar/user-avatar.component';
-import {
-  GovernanceUserDetail, GovernanceUserRow, OUTCOME_LABEL, SOURCE_LABEL, labelOf,
-} from '../../../../services/governance/governance.model';
+import { GovernanceUserDetail, GovernanceUserRow, OUTCOME_LABEL, SOURCE_LABEL, labelOf, statusLabel } from '../../../../services/governance/governance.model';
 import { SortState, fmtMs, fmtNum, fmtUsd, sortRows, toggleSort } from '../../../../services/governance/governance.logic';
 import { formatAgo, formatDateTime } from '../../../../services/usage/usage.model';
 import { GovernanceStore } from '../governance.store';
@@ -24,6 +22,7 @@ type UserSort = keyof Pick<GovernanceUserRow, 'userName' | 'events' | 'cards' | 
   styleUrls: ['../governance-shared.css'],
 })
 export class GovUsersComponent {
+  readonly statusLabel = statusLabel;
   readonly store = inject(GovernanceStore);
 
   readonly rows = signal<GovernanceUserRow[]>([]);

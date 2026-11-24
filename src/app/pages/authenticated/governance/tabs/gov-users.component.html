@@ -103,7 +103,7 @@
                   <td>{{ dt(c.firstActivityAt) }}</td>
                   <td class="num">{{ dur(c.analysisMs) }}</td>
                   <td class="num">{{ dur(c.leadTimeMs) }}</td>
-                  <td>{{ c.status || '—' }}</td>
+                  <td>{{ statusLabel(c.status) }}</td>
                 </tr>
               } @empty { <tr><td colspan="6" class="muted">Nenhum card no período.</td></tr> }
             </tbody>

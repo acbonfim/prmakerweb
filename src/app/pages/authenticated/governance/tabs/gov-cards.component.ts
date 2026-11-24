@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { GovernanceCardRow } from '../../../../services/governance/governance.model';
+import { GovernanceCardRow, statusLabel } from '../../../../services/governance/governance.model';
 import { fmtMs, fmtNum } from '../../../../services/governance/governance.logic';
 import { formatDateTime } from '../../../../services/usage/usage.model';
 import { GovernanceStore } from '../governance.store';
@@ -21,6 +21,7 @@ const PAGE_SIZE = 20;
   styleUrls: ['../governance-shared.css'],
 })
 export class GovCardsComponent {
+  readonly statusLabel = statusLabel;
   readonly store = inject(GovernanceStore);
 
   readonly rows = signal<GovernanceCardRow[]>([]);
