@@ -126,6 +126,9 @@
 
           @if (open && pipes.length) {
             <div class="pt" role="table" [attr.aria-label]="'Esteiras de ' + (env.label || env.key)">
+              @for (r of envRepos(env); track r.repository) {
+                <div class="pt__repo"><mat-icon>source</mat-icon><b>{{ repoName(r.repository) }}</b>@if (r.kindLabel) { <span>— {{ r.kindLabel }}</span> }</div>
+              }
               <div class="pt__head" role="row">
                 <span role="columnheader">{{ hasApps(env) ? 'App / esteira' : 'Esteira' }}</span>
                 <span role="columnheader">Status da esteira</span>
@@ -139,10 +142,12 @@
                 <div class="pt__row" role="row" [class.pt__row--secondary]="secondary(p)">
                   <span class="pt__app" role="cell">
                     @if (hasApps(env)) { <b>{{ app(p) }}</b> }
+                    @if (p.kind) { <span class="aws-chip aws-tone--muted">{{ p.kind }}</span> }
                     @if (p.consoleUrl) {
                       <a [href]="p.consoleUrl" target="_blank" rel="noopener" [matTooltip]="'Abrir no console da AWS'">{{ p.name }}<mat-icon>open_in_new</mat-icon></a>
                     } @else { <span class="pipe__muted">{{ p.name }}</span> }
                     @if (secondary(p)) { <span class="aws-chip aws-tone--muted" matTooltip="Não decide o veredito do ambiente: a esteira principal é a que publica no servidor do ambiente">secundária</span> }
+                    @if (p.what) { <span class="pt__what">{{ p.what }}</span> }
                   </span>
                   <span role="cell">
                     <span class="aws-chip aws-tone--{{ st.tone }}" [matTooltip]="p.lastRunAt ? 'Última execução ' + fullDate(p.lastRunAt) + (p.stage ? ' · ' + p.stage : '') : ''">

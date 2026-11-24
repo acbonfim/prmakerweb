@@ -65,6 +65,9 @@ export interface AwsEnvPipeline {
   /** Esteira quebrada: desde quando falha e se já falhava antes do nosso código (verdict `broken` = não é do card). */
   brokenSince?: string | null;
   brokenBeforeUs?: boolean | null;
+  /** Tipo do que a esteira entrega ("Front Angular", "Legado"…) e o que ela faz, em português. */
+  kind?: string | null;
+  what?: string | null;
 }
 
 export interface AwsLogError {
@@ -109,6 +112,9 @@ export interface AwsCommit {
 
 export interface AwsRepository {
   repository: string;
+  /** revamp-frontend | legacy | revamp-backend | integration-api — e o texto para quem lê. */
+  kind?: string | null;
+  kindLabel?: string | null;
   localPath?: boolean | string | null;
   fetchedAt?: string | null;
   commits?: AwsCommit[] | null;
