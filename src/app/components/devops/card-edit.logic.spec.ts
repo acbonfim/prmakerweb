@@ -1,0 +1,130 @@
+import {
+  buildCreate, buildPatch, changedFields, createFields, displayValue, groupFields, inputKind, missingRequired,
+  outgoingValue, sameValue
+} from './card-edit.logic';
+import { DevOpsFieldDef } from './devops.model';
+
+function def(referenceName: string, type: string, extra: Partial<DevOpsFieldDef> = {}): DevOpsFieldDef {
+  return { referenceName, name: referenceName.split('.').pop()!, type, required: false, readOnly: false, allowedValues: [], ...extra };
+}
+
+const DEFS: DevOpsFieldDef[] = [
+  def('System.Title', 'string', { required: true }),
+  def('System.State', 'string', { allowedValues: ['New', 'Active'] }),
+  def('System.AssignedTo', 'identity'),
+  def('System.AreaPath', 'treePath'),
+  def('System.IterationPath', 'treePath'),
+  def('Microsoft.VSTS.Common.Priority', 'integer', { allowedValues: ['1', '2', '3', '4'] }),
+  def('Microsoft.VSTS.Common.Severity', 'string', { allowedValues: ['1 - Critical', '2 - High'] }),
+  def('Custom.BugType', 'string', { allowedValues: ['Code', 'Data'] }),
+  def('System.Description', 'html'),
+  def('Microsoft.VSTS.TCM.ReproSteps', 'html'),
+  def('Custom.Notes', 'plainText'),
+  def('Custom.Client', 'string', { required: true }),
+  def('Custom.Hours', 'double'),
+  def('Custom.Blocked', 'boolean'),
+  def('Custom.Due', 'dateTime'),
+  def('System.CreatedDate', 'dateTime', { readOnly: true }),
+  def('System.ChangedBy', 'identity', { readOnly: true }),
+  def('WEF_ABC_Kanban.Column', 'string'),
+];
+const byRef = (r: string) => DEFS.find((d) => d.referenceName === r)!;
+
+describe('card-edit.logic (0099)', () => {
+  it('controle por tipo de campo', () => {
+    expect(inputKind(byRef('System.AssignedTo'))).toBe('identity');
+    expect(inputKind(byRef('System.AreaPath'))).toBe('area');
+    expect(inputKind(byRef('System.IterationPath'))).toBe('iteration');
+    expect(inputKind(byRef('Microsoft.VSTS.Common.Priority'))).toBe('picklist');
+    expect(inputKind(byRef('Custom.Hours'))).toBe('number');
+    expect(inputKind(byRef('Custom.Due'))).toBe('date');
+    expect(inputKind(byRef('Custom.Blocked'))).toBe('boolean');
+    expect(inputKind(byRef('System.Description'))).toBe('html');
+    expect(inputKind(byRef('Custom.Notes'))).toBe('multiline');
+    expect(inputKind(byRef('Custom.Client'))).toBe('text');
+  });
+
+  it('agrupa: principais primeiro (com as picklists), textos, outros e somente leitura; esconde os do sistema', () => {
+    const g = groupFields(DEFS, { 'System.CreatedDate': '2026-11-20T10:00:00', 'Custom.Hours': 3 });
+    expect(g.main.map((f) => f.referenceName)).toEqual([
+      'System.AssignedTo', 'System.AreaPath', 'System.IterationPath', 'Microsoft.VSTS.Common.Priority',
+      'Microsoft.VSTS.Common.Severity', 'Custom.BugType',
+    ]);
+    expect(g.texts.map((f) => f.referenceName)).toEqual(['System.Description', 'Microsoft.VSTS.TCM.ReproSteps']);
+    expect(g.others.map((f) => f.referenceName)).toEqual(['Custom.Client', 'Custom.Hours']);
+    expect(g.readOnly.map((f) => f.referenceName)).toEqual(['System.CreatedDate']);
+    const all = groupFields(DEFS, {}, true);
+    expect(all.others.map((f) => f.referenceName)).toEqual(['Custom.Blocked', 'Custom.Client', 'Custom.Due', 'Custom.Hours']);
+    expect(all.texts.map((f) => f.referenceName)).toContain('Custom.Notes');
+  });
+
+  it('campos do criar: comuns + obrigatórios, textos por último', () => {
+    expect(createFields(DEFS).map((f) => f.referenceName)).toEqual([
+      'System.AssignedTo', 'System.AreaPath', 'System.IterationPath', 'Microsoft.VSTS.Common.Priority', 'Custom.Client',
+      'System.Description', 'Microsoft.VSTS.TCM.ReproSteps',
+    ]);
+  });
+
+  it('compara valores pelo sentido do campo', () => {
+    const who = byRef('System.AssignedTo');
+    expect(sameValue(who, { displayName: 'Ana', uniqueName: 'ana@x.com' }, 'Ana <ANA@x.com>')).toBeTrue();
+    expect(sameValue(who, { uniqueName: 'ana@x.com' }, 'bia@x.com')).toBeFalse();
+    expect(sameValue(byRef('Custom.Hours'), 3, '3')).toBeTrue();
+    expect(sameValue(byRef('Custom.Client'), null, '')).toBeTrue();
+    expect(sameValue(byRef('Custom.Client'), null, 'x')).toBeFalse();
+    expect(sameValue(byRef('Custom.Due'), '2026-11-20T00:00:00Z', '2026-11-20')).toBeTrue();
+  });
+
+  it('valor de saída: vazio limpa, identidade pelo uniqueName, número', () => {
+    expect(outgoingValue(byRef('Custom.Client'), '  ')).toBeNull();
+    expect(outgoingValue(byRef('System.AssignedTo'), { displayName: 'Ana', uniqueName: 'ana@x.com' })).toBe('ana@x.com');
+    expect(outgoingValue(byRef('Custom.Hours'), '2.5')).toBe(2.5);
+    expect(outgoingValue(byRef('Custom.Blocked'), 1)).toBeTrue();
+  });
+
+  it('PATCH só com o que mudou (campos, título, tags, comentário)', () => {
+    const original = {
+      title: 'Erro ao exportar',
+      tags: ['Cliente', 'UX'],
+      fields: {
+        'System.AssignedTo': { displayName: 'Ana', uniqueName: 'ana@x.com' },
+        'Microsoft.VSTS.Common.Priority': 2,
+        'Custom.Client': 'Gerdau',
+        'System.CreatedDate': '2026-11-20',
+      } as Record<string, unknown>,
+    };
+    const values: Record<string, unknown> = {
+      'System.AssignedTo': 'Ana <ana@x.com>',
+      'Microsoft.VSTS.Common.Priority': '1',
+      'Custom.Client': '',
+      'System.CreatedDate': '2026-11-21',
+    };
+    const patch = buildPatch(original, DEFS, values, ' Erro ao exportar o PDF ', ['cliente', 'Nova'], ' veja ');
+    expect(patch).toEqual({
+      fields: { 'Microsoft.VSTS.Common.Priority': 1, 'Custom.Client': null, 'System.Title': 'Erro ao exportar o PDF' },
+      addTags: ['Nova'],
+      removeTags: ['UX'],
+      comment: 'veja',
+    });
+    expect(buildPatch(original, DEFS, { 'Custom.Client': 'Gerdau' }, 'Erro ao exportar', ['Cliente', 'UX'])).toBeNull();
+    expect([...changedFields(original, DEFS, values)].sort()).toEqual(
+      ['Custom.Client', 'Microsoft.VSTS.Common.Priority']);
+  });
+
+  it('POST de criar só com os preenchidos', () => {
+    const body = buildCreate('Bug', ' Falha ', DEFS, { 'Custom.Client': 'Gerdau', 'System.AreaPath': '', 'Microsoft.VSTS.Common.Priority': '2' },
+      ['Cliente'], { epic: 12, parentId: null });
+    expect(body).toEqual({
+      type: 'Bug', title: 'Falha', epic: 12, parentId: null,
+      fields: { 'Custom.Client': 'Gerdau', 'Microsoft.VSTS.Common.Priority': 2 }, tags: ['Cliente'],
+    });
+    expect(missingRequired(DEFS, { 'Custom.Client': ' ' })).toEqual(['Client']);
+  });
+
+  it('valor somente leitura para exibir', () => {
+    expect(displayValue(byRef('System.ChangedBy'), { displayName: 'Ana', uniqueName: 'a@x' })).toBe('Ana');
+    expect(displayValue(byRef('Custom.Blocked'), false)).toBe('Não');
+    expect(displayValue(byRef('System.Description'), '<p>Oi&nbsp;<b>você</b></p>')).toBe('Oi você');
+    expect(displayValue(byRef('Custom.Client'), null)).toBe('—');
+  });
+});

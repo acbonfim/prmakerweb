@@ -23,6 +23,14 @@ export const AUTHENTICATED_ROUTES: Routes = [
         canActivate: [AuthGuard],
         loadComponent: () => import('./workbench/workbench.component').then(m => m.WorkbenchComponent)
       },
+      {
+        // 0099: Mesa de gestão — épicos (temas de trabalho), itens de gestão, cards e board do DevOps.
+        // URL: ?epic=<n>&card=<id>&item=<n>&tab=board|items|cards|files|reported
+        path: 'desk',
+        data: { tab: { title: 'Gestão', icon: 'space_dashboard', card: false } },
+        canActivate: [AuthGuard],
+        loadComponent: () => import('./desk/desk.component').then(m => m.DeskComponent)
+      },
       // ── Tela de Pull Request (DESATIVADA): o tratamento do card é feito pela Bancada; o componente continua no código.
       // Link antigo (favorito, aba salva) → Bancada com o mesmo card; sem card → Início, onde fica o aviso do desligamento.
       // Para reativar: troque o redirecionamento pela rota comentada abaixo e descomente o item "Pull Requests" no side-menu.

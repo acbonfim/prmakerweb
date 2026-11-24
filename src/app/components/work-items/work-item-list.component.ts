@@ -12,7 +12,7 @@ import { ExecutionPlanService } from '../../services/execution-plan.service';
 import { WsService } from '../../services/ws.service';
 import { ExecutionPlanSummary } from '../execution-plan/execution-plan.model';
 import { planTerms } from '../execution-plan/plan-terms';
-import { registerWorkItemTypeIcons } from '../../helpers/work-item-type-icons';
+import { registerWorkItemTypeIcons, CaseCardType } from '../../helpers/work-item-type-icons';
 import { WiTypeIconComponent } from './wi-type-icon.component';
 import {
   TASK_ACTION_LABELS,
@@ -78,7 +78,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
  * respondeu "só a análise por enquanto"), um aviso no topo oferece "Criar e iniciar" / "Criar sem iniciar" — o Claude do
  * tratamento monta o plano (que vira o item de trabalho) pela fila (`ExecutionQueue/card/{card}/delivery`).
  *
- * API pública: `[card]`, `[cardType]` ('bug' | 'user-story', padrão do item novo), `[openItem]` (número — abre o modal
+ * API pública: `[card]`, `[cardType]` ('bug' | 'user-story' | 'epic' — 0099, padrão do item novo), `[openItem]` (número — abre o modal
  * do item; vem do `?item=`), `[openSessionOf]` (número — abre a sessão de execução do item), `(countChange)` (quantidade de itens do card a cada carga), `(executingChange)` (números
  * dos itens em execução — na fila, rodando, esperando ou desfazendo — a cada mudança). O ícone do item é o do **tipo do item** (rodada 4).
  */
@@ -212,8 +212,13 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
         } @else {
           <div class="wil__empty">
             <mat-icon class="wil__empty-ico">checklist</mat-icon>
-            <p><b>Nenhum item de trabalho neste card.</b><br>
-              <span>Itens são entregas com sub-tarefas (branch, cherry-pick, código, PR, estado no DevOps…) que o Claude executa — vários em paralelo.</span></p>
+            @if (cardType() === 'epic') {
+              <p><b>Nenhuma tarefa de gestão neste épico.</b><br>
+                <span>Tarefas de gestão são entregas com sub-tarefas (consultar o DevOps, relatório, duplicados, entendimento, RCA, PDF, criar e mover cards…) que o Claude executa — várias em paralelo.</span></p>
+            } @else {
+              <p><b>Nenhum item de trabalho neste card.</b><br>
+                <span>Itens são entregas com sub-tarefas (branch, cherry-pick, código, PR, estado no DevOps…) que o Claude executa — vários em paralelo.</span></p>
+            }
             <div class="wil__empty-actions">
               <button mat-flat-button color="primary" (click)="create()" [disabled]="!card()"><mat-icon>add</mat-icon>Novo item</button>
               @if (correctionPlan(); as p) {
@@ -505,7 +510,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
 })
 export class WorkItemListComponent {
   readonly card = input<string | null>();
-  readonly cardType = input<'bug' | 'user-story'>('bug');
+  readonly cardType = input<CaseCardType>('bug');
   /** 0094: aba "Relatado" — somente leitura (sem criar/editar/executar/cancelar/resolver). */
   readonly readOnly = input(false);
   /** 0094: fonte dos itens — `card` (os do card) ou `related` (os relatados, de outros cards). */
@@ -790,9 +795,10 @@ export class WorkItemListComponent {
         this.loadError.set(null);
         if (first) this.restoreExpanded(card, sorted);
         this.countChange.emit(sorted.length);
-        // Avisos e planos só fazem sentido para os itens do próprio card.
-        if (!related && !sorted.length) this.findCorrectionPlan(card);
-        if (!related && (first || countChanged)) this.findAnalysisDone(card);
+        // Avisos e planos só fazem sentido para os itens do próprio card (0099: épico não tem análise/correção).
+        const epic = this.cardType() === 'epic';
+        if (!related && !epic && !sorted.length) this.findCorrectionPlan(card);
+        if (!related && !epic && (first || countChanged)) this.findAnalysisDone(card);
       },
       error: (e) => {
         if (seq !== this.loadSeq || card !== this.currentCard) return;

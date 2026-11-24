@@ -41,13 +41,18 @@ import {
 import { workDialogConfig } from '../../../components/work-items/work-dialog-config';
 import { WorkItemActionsService } from '../../../components/work-items/work-item-actions.service';
 import { WorkItem, WorkItemStatus, formatWorkNumber, itemLook, waitingForResolve, waitsForPerson } from '../../../components/work-items/work-item.model';
-import { listenWorkItems } from '../../../components/work-items/work-items-live';
+import { listenAws, listenWorkItems } from '../../../components/work-items/work-items-live';
+import { AwsDeployPanelComponent } from '../../../components/aws-deploy/aws-deploy-panel.component';
+import { snapshotAlert } from '../../../components/aws-deploy/aws-deploy.model';
+import { AwsDeployService } from '../../../services/aws-deploy.service';
 import { WorkbenchCardComponent } from '../../../components/workbench-card/workbench-card.component';
+import { FullscreenPanel } from '../../../helpers/fullscreen-panel';
 import { openWorkbenchCard } from '../../../components/workbench-card/workbench-card-dialog.component';
 import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workbench-prs.component';
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
 import { CardFilesComponent } from '../../../components/card-files/card-files.component';
 import { CardFilesStore } from '../../../components/work-items/card-files.store';
+import { EpicChipsComponent } from '../../../components/epics/epic-chips.component';
 import { planDocumentFiles } from '../../../components/work-items/work-item-files';
 import {
   registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel, workItemTypeOf
@@ -117,7 +122,7 @@ export function defaultPlanItem(items: readonly WorkItem[]): WorkItem | null {
 }
 
 /** Aba da coluna principal (desktop) — Itens de trabalho | Execução (plano do item) | Card. */
-export type WorkbenchMainTab = 'items' | 'plan' | 'reported' | 'files' | 'card';
+export type WorkbenchMainTab = 'items' | 'plan' | 'reported' | 'files' | 'aws' | 'card';
 /** Aba no celular (< 1024 px) — Itens | Plano | Especialista | Card. */
 export type WorkbenchMobileTab = WorkbenchMainTab | 'chat' | 'card';
 type CardState = 'idle' | 'loading' | 'found' | 'missing' | 'error';
@@ -151,7 +156,7 @@ export function devOpsWebUrl(url: string | null | undefined): string | null {
  * 0085: Bancada do card — onde o card é trabalhado: itens de trabalho (com sub-tarefas), o plano do Claude, o
  * Especialista do caso, os PRs (com as ações do GitHub/DevOps), as horas, o texto do card e a timeline. Estado próprio em signals (não usa o `CardPrStateService`, que é
  * da tela de PR). Desktop: coluna principal (Itens | Plano | Card) + coluna lateral; celular: abas Itens | Plano |
- * Especialista | Card. URL: `?card=` (+ `item=`, `focus=plan|items|card|timeline|chat`).
+ * Especialista | Card. URL: `?card=` (+ `item=`, `focus=plan|items|files|aws|card|timeline|chat`).
  *
  * Ajustes (0085): como na tela de PR — barra de etiquetas do card (`app-pr-info-card`), timeline num botão (tela
  * cheia), lateral só do Especialista; robô do Claude e perda de conexão no cabeçalho; situação/sugestões e a sugestão
@@ -186,7 +191,7 @@ function writeFlag(key: string, on: boolean): void {
     MatInputModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
     CardAlertBarComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
     CardSituationLauncherComponent, CardAssistantLauncherComponent, CardHoursComponent, WorkItemListComponent, WorkbenchPrsComponent,
-    WorkbenchCardComponent, CardFilesComponent
+    WorkbenchCardComponent, CardFilesComponent, EpicChipsComponent, AwsDeployPanelComponent
   ],
   templateUrl: './workbench.component.html',
   styleUrl: './workbench.component.scss'
@@ -208,11 +213,30 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   private actions = inject(WorkItemActionsService);
   private host = inject(ElementRef<HTMLElement>);
   private photos = inject(UserPhotoService);
+  private awsApi = inject(AwsDeployService);
   /** Abas internas (0065): só a aba ativa mexe na URL e no nome da aba. */
   private tabScreen = this.tabs.bindScreen(inject(DestroyRef));
 
   private readonly planCmp = viewChild(ExecutionPlanComponent);
   private readonly timelineCmp = viewChild(CardTimelineComponent);
+  private readonly execHost = viewChild<ElementRef<HTMLElement>>('execHost');
+  private readonly execPanel = viewChild<ElementRef<HTMLElement>>('execPanel');
+
+  /**
+   * 0100: a seção Execução inteira (aviso + seletor do item + plano) em tela cheia, com a mesma animação do Card e da
+   * Linha do tempo. O plano dentro dela usa o layout dividido (`[wide]`: etapas | detalhes) e o botão de tela cheia do
+   * próprio plano some (um botão só).
+   */
+  readonly execFull = new FullscreenPanel({
+    host: () => this.execHost()!.nativeElement,
+    panel: () => this.execPanel()?.nativeElement,
+    expandedClass: 'wb-execwrap--expanded',
+    maxWidth: 1320
+  });
+  readonly execExpanded = this.execFull.expanded;
+
+  /** 0100: ponto na aba AWS quando algum ambiente está com deploy falhado/em andamento (um GET por card + tempo real). */
+  readonly awsAlert = signal<'failed' | 'deploying' | null>(null);
 
   /** Número digitado na busca. */
   query = '';
@@ -543,6 +567,33 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       untracked(() => this.tabs.setMeta(this.tabScreen.tabId(), { label: null, status }));
     });
 
+    // 0100: ponto da aba AWS — lê o retrato uma vez por card e acompanha o evento "aws" do tempo real.
+    effect((onCleanup) => {
+      const card = this.hasBody() ? this.card() : null;
+      untracked(() => {
+        this.awsAlert.set(null);
+        if (!card) return;
+        let sub: Subscription | undefined;
+        const read = () => {
+          sub?.unsubscribe();
+          sub = this.awsApi.card(card).subscribe({
+            next: (s) => { if (this.card() === card) this.awsAlert.set(snapshotAlert(s?.snapshot)); },
+            error: () => undefined
+          });
+        };
+        read();
+        const stop = listenAws(this.ws, card, read);
+        onCleanup(() => { stop(); sub?.unsubscribe(); });
+      });
+    });
+
+    // Outro card (ou o corpo sumiu): a Execução em tela cheia volta para o lugar.
+    effect(() => {
+      this.card();
+      this.hasBody();
+      untracked(() => { if (this.execExpanded()) this.execFull.close(); });
+    });
+
     // Card aberto: o tour continua/começa com os passos do card.
     effect(() => {
       if (this.cardState() === 'found' && this.tabScreen.active()) {
@@ -560,6 +611,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.execFull.destroy();
     this.narrowMedia?.removeEventListener('change', this.onNarrowChange);
     this.stopPlanItems?.();
     this.cardSub?.unsubscribe();
@@ -663,13 +715,20 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   // ── Abas ────────────────────────────────────────────────────────────────────────────────────
 
   selectMain(tab: WorkbenchMainTab): void {
+    if (tab !== 'plan') this.closeExecFull();
     this.pickedTab.set(tab);
     this.pickedMobileTab.set(null);
   }
 
   selectMobile(tab: WorkbenchMobileTab): void {
+    if (tab !== 'plan') this.closeExecFull();
     if (tab !== 'chat') this.pickedTab.set(tab);
     this.pickedMobileTab.set(tab);
+  }
+
+  /** Outra aba (ou o Especialista) pedida com a Execução em tela cheia: ela volta para o lugar antes. */
+  private closeExecFull(): void {
+    if (this.execExpanded()) this.execFull.close();
   }
 
   // ── Execução do item ────────────────────────────────────────────────────────────────────────
@@ -755,7 +814,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   private applyFocus(focus: string): void {
-    if (focus === 'items' || focus === 'plan' || focus === 'files' || focus === 'card') {
+    if (focus === 'items' || focus === 'plan' || focus === 'files' || focus === 'aws' || focus === 'card') {
       this.selectMobile(focus);
     } else if (focus === 'chat') {
       this.selectMobile('chat');
@@ -782,6 +841,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   private flashChat(): void {
+    this.closeExecFull();
     this.setChatCollapsed(false);
     clearTimeout(this.flashTimer);
     this.chatFlash.set(true);
