@@ -1,5 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -11,13 +10,15 @@ import { AwsDeployError, AwsDeployService } from '../../services/aws-deploy.serv
 import { WsService } from '../../services/ws.service';
 import { listenAws } from '../work-items/work-items-live';
 import {
-  AwsCardSnapshot, AwsCardState, AwsDeployConfig, AwsEnvPipeline, AwsEnvironment, AwsLook, PIPES_INLINE_MAX, PipelineGroups,
-  awsCollectCommand, environmentMessage, firstLine, formatDuration, formatFullDate, formatShortDate, groupPipelines, isSecondary, normalizeVerdict,
-  orderEnvironments, pipelineStatusLook, refreshStatusText, relativeAgo, shortSha, verdictLook
+  AwsCardSnapshot, AwsCardState, AwsDeployConfig, AwsEnvPipeline, AwsEnvironment, AwsLook, appName, awsCollectCommand, codeLook,
+  environmentLook, firstLine, formatDuration, formatFullDate, formatShortDate, isSecondary, lastDeployAt, orderEnvironments,
+  pipelineStatusLook, refreshStatusText, relativeAgo, shortSha, sortPipelines
 } from './aws-deploy.model';
 
 /** Com o pedido de coleta na fila/rodando, relê o estado de tempos em tempos (caso o tempo real perca o evento). */
 const ACTIVE_POLL_MS = 6000;
+/** Acima de quantas esteiras a tabela do ambiente recolhe as já implantadas. */
+const FOLD_OVER = 8;
 
 /**
  * 0100: aba **AWS** da Bancada — por ambiente (DEV, QA, Sandboxefeso…), um veredito grande ("Nosso código está em QA")
@@ -28,7 +29,7 @@ const ACTIVE_POLL_MS = 6000;
 @Component({
   selector: 'app-aws-deploy-panel',
   standalone: true,
-  imports: [NgTemplateOutlet, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
   templateUrl: './aws-deploy-panel.component.html',
   styleUrl: './aws-deploy-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -37,7 +38,6 @@ export class AwsDeployPanelComponent {
   private api = inject(AwsDeployService);
   private ws = inject(WsService);
   private snack = inject(MatSnackBar);
-  private host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly cardNumber = input.required<string>();
 
@@ -69,6 +69,9 @@ export class AwsDeployPanelComponent {
   readonly hasOther = computed(() => this.lambdas().length + this.alarms().length + this.distributions().length > 0);
   readonly denied = computed(() => (this.snapshot()?.denied ?? []).map((d) => d.toUpperCase()));
   readonly warnings = computed(() => this.snapshot()?.warnings ?? []);
+  readonly notes = computed(() => this.snapshot()?.notes ?? []);
+  /** Ambientes com as esteiras abertas na tabela (nenhum de início: a linha já responde). */
+  readonly openEnvs = signal<ReadonlySet<string>>(new Set());
 
   /** Pedido de coleta a mostrar: na fila/rodando sempre; falhou/expirou só se for mais novo que o retrato. */
   readonly refreshInfo = computed(() => {
@@ -166,51 +169,62 @@ export class AwsDeployPanelComponent {
     );
   }
 
-  /** Selo do resumo → cartão do ambiente. */
-  scrollToEnv(key: string): void {
-    const el = this.host.nativeElement.querySelector<HTMLElement>(`[id="aws-env-${CSS.escape(key)}"]`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  toggleEnv(key: string): void {
+    this.openEnvs.update((set) => {
+      const next = new Set(set);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }
+
+  isOpen(key: string): boolean {
+    return this.openEnvs().has(key);
+  }
+
+  /** Lista longa (monorepo): de início só o que pede atenção; os apps já implantados ficam atrás do "mostrar". */
+  readonly allRows = signal<ReadonlySet<string>>(new Set());
+  showAll(key: string): void {
+    this.allRows.update((set) => new Set(set).add(key));
+  }
+
+  visibleRows(env: AwsEnvironment): AwsEnvPipeline[] {
+    const rows = this.pipeRows(env);
+    if (rows.length <= FOLD_OVER || this.allRows().has(env.key)) return rows;
+    const pending = rows.filter((p) => !p.deployed);
+    return pending.length ? pending : rows.slice(0, FOLD_OVER);
   }
 
   // ── Template ───────────────────────────────────────────────────────────────────────────────
 
-  verdictOf(env: AwsEnvironment): AwsLook & { verdict: string; message: string } {
-    const verdict = normalizeVerdict(env.verdict);
-    return { ...verdictLook(verdict), verdict, message: environmentMessage(env) };
+  private readonly lookCache = new WeakMap<AwsEnvironment, ReturnType<typeof environmentLook>>();
+  envLook(env: AwsEnvironment): ReturnType<typeof environmentLook> {
+    let v = this.lookCache.get(env);
+    if (!v) this.lookCache.set(env, (v = environmentLook(env)));
+    return v;
   }
 
-  pipelines(env: AwsEnvironment): AwsEnvPipeline[] {
-    return env.pipelines ?? [];
+  private readonly rowsCache = new WeakMap<AwsEnvironment, AwsEnvPipeline[]>();
+  pipeRows(env: AwsEnvironment): AwsEnvPipeline[] {
+    let r = this.rowsCache.get(env);
+    if (!r) this.rowsCache.set(env, (r = sortPipelines(env.pipelines ?? [])));
+    return r;
   }
 
-  /** Esteiras do ambiente agrupadas (principais antes; lista longa recolhe as já implantadas). Memo por ambiente. */
-  private readonly groupsCache = new WeakMap<AwsEnvironment, PipelineGroups>();
-  groups(env: AwsEnvironment): PipelineGroups {
-    let g = this.groupsCache.get(env);
-    if (!g) this.groupsCache.set(env, (g = groupPipelines(this.pipelines(env))));
-    return g;
+  /** Monorepo (várias esteiras com app): a coluna mostra o app em destaque. */
+  hasApps(env: AwsEnvironment): boolean {
+    return (env.pipelines ?? []).some((p) => !!p.app && p.app !== p.name) && (env.pipelines ?? []).length > 1;
   }
 
-  /** Lista aberta de início: curta, ou com falha/deploy em andamento (aí só as que pedem atenção ficam à vista). */
-  pipesOpen(env: AwsEnvironment): boolean {
-    const v = normalizeVerdict(env.verdict);
-    return this.pipelines(env).length <= PIPES_INLINE_MAX || v === 'failed' || v === 'deploying' || v === 'waiting';
+  lastDeploy(env: AwsEnvironment): string | null {
+    return lastDeployAt(env);
   }
 
   readonly secondary = isSecondary;
-
-  envErrors(env: AwsEnvironment): number {
-    return (env.logs ?? []).reduce((n, l) => n + (l.errors?.length ?? 0), 0);
-  }
+  readonly app = appName;
+  readonly code = codeLook;
 
   statusLook(p: AwsEnvPipeline): AwsLook {
     return pipelineStatusLook(p.status);
-  }
-
-  /** Execução mais nova que a implantada (rodando agora ou falhou depois). */
-  latestDiffers(p: AwsEnvPipeline): boolean {
-    const sha = p.latest?.sha;
-    return !!p.latest && !!sha && shortSha(sha) !== shortSha(p.deployedSha) && !!p.latest.status;
   }
 
   readonly short = shortSha;
@@ -218,7 +232,6 @@ export class AwsDeployPanelComponent {
   readonly duration = formatDuration;
   readonly date = formatShortDate;
   readonly fullDate = formatFullDate;
-  readonly latestLook = pipelineStatusLook;
 
   ago(at: string | null | undefined): string {
     return relativeAgo(at, this.now());

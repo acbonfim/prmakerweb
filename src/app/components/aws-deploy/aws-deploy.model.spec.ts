@@ -1,5 +1,5 @@
 import {
-  awsCollectCommand, environmentMessage, firstLine, formatDuration, groupPipelines, normalizeVerdict, orderEnvironments, pipelineStatusLook,
+  appName, awsCollectCommand, codeLook, environmentLook, environmentMessage, firstLine, lastDeployAt, sortPipelines, formatDuration, groupPipelines, normalizeVerdict, orderEnvironments, pipelineStatusLook,
   refreshStatusText, relativeAgo, shortSha, snapshotAlert, verdictLook, verdictMessage
 } from './aws-deploy.model';
 import { AWS_CARD_STATE_MOCK } from './aws-deploy.mock';
@@ -86,5 +86,28 @@ describe('aws-deploy.model (0100/F2)', () => {
     expect(refreshStatusText({ id: '1', status: 'done' })).toBeNull();
     expect(refreshStatusText({ id: '1', status: 'failed', error: 'sem credencial' })?.text).toContain('sem credencial');
     expect(awsCollectCommand('77971')).toBe('bash ~/.claude/skills/aws-deploy/scripts/aws.sh collect 77971');
+  });
+
+  it('esteira quebrada antes do nosso código não pesa contra o card (card 78560)', () => {
+    expect(normalizeVerdict('broken')).toBe('broken');
+    expect(codeLook({ name: 'edv-solvace-centerline-dev', verdict: 'broken', brokenSince: '2026-11-12T14:41:00Z' }).label).toBe('Esteira quebrada');
+    expect(codeLook({ name: 'x', verdict: 'failed', deployed: true }).label).toBe('Implantado');
+    expect(codeLook({ name: 'x', verdict: 'waiting', branch: 'release-version' }).hint).toContain('release-version');
+    const order = sortPipelines([
+      { name: 'a', deployed: true, verdict: 'deployed' }, { name: 'b', verdict: 'broken' }, { name: 'c', verdict: 'waiting' },
+      { name: 'd', verdict: 'failed', primary: false }
+    ]).map((p) => p.name);
+    expect(order).toEqual(['c', 'b', 'a', 'd']);
+    expect(appName({ name: 'edv-solvace-centerline-dev', app: 'centerline' })).toBe('centerline');
+    expect(lastDeployAt({ key: 'qa', label: 'QA', verdict: 'deployed', pipelines: [
+      { name: 'a', deployedAt: '2026-11-24T17:00:00Z' }, { name: 'b', deployedAt: '2026-11-24T18:00:00Z' },
+      { name: 'c', deployedAt: '2026-11-25T18:00:00Z', primary: false }] })).toBe('2026-11-24T18:00:00Z');
+  });
+
+  it('ambiente parcial fica âmbar, não vermelho', () => {
+    const v = environmentLook({ key: 'rt', label: 'SandboxRT', verdict: 'waiting', summary: { apps: 24, withCode: 2 } });
+    expect(v.partial).toBeTrue();
+    expect(v.tone).toBe('warn');
+    expect(environmentLook({ key: 'qa', label: 'QA', verdict: 'deployed', summary: { apps: 25, withCode: 24 } }).tone).toBe('ok');
   });
 });

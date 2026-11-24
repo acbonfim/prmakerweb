@@ -84,74 +84,104 @@
       </ul>
     </section>
   } @else {
-    <!-- Resumo: um selo por ambiente (leva ao cartão) -->
-    @if (environments().length > 1) {
-      <nav class="aws__summary" aria-label="Resumo por ambiente">
-        @for (env of environments(); track env.key) {
-          @let v = verdictOf(env);
-          <a class="aws__pill aws-tone--{{ v.tone }}" [href]="'#aws-env-' + env.key" (click)="$event.preventDefault(); scrollToEnv(env.key)"
-             [matTooltip]="v.message">
-            <mat-icon [class.aws-spin]="v.spin">{{ v.icon }}</mat-icon>{{ env.label || env.key }}
-          </a>
-        }
-      </nav>
+    @for (n of notes(); track $index) {
+      <p class="aws__info" role="note"><mat-icon>info</mat-icon><span>{{ n }}</span></p>
     }
 
-    <div class="aws__envs">
+    <!-- Uma linha por ambiente: o nosso código está lá? Clique abre as esteiras daquele ambiente -->
+    <section class="envt" aria-label="O nosso código está em cada ambiente?">
+      <div class="envt__head" aria-hidden="true">
+        <span>Ambiente</span><span>O nosso código está lá?</span><span class="envt__when">Último deploy</span><span></span>
+      </div>
       @for (env of environments(); track env.key) {
-        @let v = verdictOf(env);
-        @let pipes = pipelines(env);
-        <section class="env aws-tone--{{ v.tone }}" [class.env--compact]="v.verdict === 'not-applicable'"
-                 [attr.id]="'aws-env-' + env.key" [attr.aria-label]="v.message">
-          <div class="env__verdict">
-            <mat-icon class="env__icon" [class.aws-spin]="v.spin" aria-hidden="true">{{ v.icon }}</mat-icon>
-            <div class="env__text">
-              <div class="env__msg">{{ v.message }}</div>
-              <div class="env__sub">
-                <b>{{ env.label || env.key }}</b>
-                @if (env.host) { · {{ env.host }} }
-                @if (env.tier) { · tier <code>{{ env.tier }}</code> }
-                @if (pipes.length) { · {{ pipes.length }} {{ pipes.length === 1 ? 'esteira' : 'esteiras' }} }
-                @if (envErrors(env); as n) { · <span class="env__errs">{{ n }} {{ n === 1 ? 'erro' : 'erros' }} nos logs</span> }
+        @let v = envLook(env);
+        @let pipes = pipeRows(env);
+        @let open = isOpen(env.key);
+        <div class="envt__item aws-tone--{{ v.tone }}" [class.envt__item--open]="open">
+          <button type="button" class="envt__row" [attr.aria-expanded]="open" [disabled]="!pipes.length"
+                  (click)="toggleEnv(env.key)" [attr.aria-label]="(env.label || env.key) + ': ' + v.message">
+            <span class="envt__env">
+              <b>{{ env.label || env.key }}</b>
+              @if (env.host) { <span class="envt__host">{{ env.host }}</span> }
+            </span>
+            <span class="envt__verdict">
+              <mat-icon class="envt__icon" [class.aws-spin]="v.spin" aria-hidden="true">{{ v.icon }}</mat-icon>
+              <span class="envt__texts">
+                <span class="envt__msg">{{ v.message }}</span>
+                @if (env.detail) { <span class="envt__detail">{{ env.detail }}</span> }
+                @if (v.verdict === 'unknown') { <span class="envt__detail">A máquina não conseguiu ler este ambiente — veja os avisos abaixo.</span> }
+              </span>
+            </span>
+            <span class="envt__when">
+              @if (lastDeploy(env); as at) { <span [matTooltip]="fullDate(at)">{{ date(at) }}</span><span class="pipe__muted">{{ ago(at) }}</span> }
+              @else { <span class="pipe__muted">—</span> }
+            </span>
+            <span class="envt__toggle">
+              @if (pipes.length) {
+                <span class="pipe__muted">{{ pipes.length }} {{ pipes.length === 1 ? 'esteira' : 'esteiras' }}</span>
+                <mat-icon>{{ open ? 'expand_less' : 'expand_more' }}</mat-icon>
+              }
+            </span>
+          </button>
+
+          @if (open && pipes.length) {
+            <div class="pt" role="table" [attr.aria-label]="'Esteiras de ' + (env.label || env.key)">
+              <div class="pt__head" role="row">
+                <span role="columnheader">{{ hasApps(env) ? 'App / esteira' : 'Esteira' }}</span>
+                <span role="columnheader">Status da esteira</span>
+                <span role="columnheader">Último deploy</span>
+                <span role="columnheader">Nosso código</span>
               </div>
-              @if (v.verdict === 'unknown') {
-                <div class="env__warn"><mat-icon>warning_amber</mat-icon>A máquina não conseguiu ler este ambiente (sem permissão ou erro na coleta) — veja os avisos abaixo.</div>
+              @let shown = visibleRows(env);
+              @for (p of shown; track p.name) {
+                @let st = statusLook(p);
+                @let c = code(p);
+                <div class="pt__row" role="row" [class.pt__row--secondary]="secondary(p)">
+                  <span class="pt__app" role="cell">
+                    @if (hasApps(env)) { <b>{{ app(p) }}</b> }
+                    @if (p.consoleUrl) {
+                      <a [href]="p.consoleUrl" target="_blank" rel="noopener" [matTooltip]="'Abrir no console da AWS'">{{ p.name }}<mat-icon>open_in_new</mat-icon></a>
+                    } @else { <span class="pipe__muted">{{ p.name }}</span> }
+                    @if (secondary(p)) { <span class="aws-chip aws-tone--muted" matTooltip="Não decide o veredito do ambiente: a esteira principal é a que publica no servidor do ambiente">secundária</span> }
+                  </span>
+                  <span role="cell">
+                    <span class="aws-chip aws-tone--{{ st.tone }}" [matTooltip]="p.lastRunAt ? 'Última execução ' + fullDate(p.lastRunAt) + (p.stage ? ' · ' + p.stage : '') : ''">
+                      <mat-icon [class.aws-spin]="st.spin">{{ st.icon }}</mat-icon>{{ st.label }}
+                    </span>
+                    @if (p.buildUrl) { <a class="pt__link" [href]="p.buildUrl" target="_blank" rel="noopener" matTooltip="Abrir o build"><mat-icon>build</mat-icon></a> }
+                  </span>
+                  <span role="cell" class="pt__when">
+                    @if (p.deployedAt) {
+                      <span [matTooltip]="(p.deployedSha ? short(p.deployedSha) + ' · ' : '') + line1(p.deployedMessage)">{{ date(p.deployedAt) }}</span>
+                      <span class="pipe__muted">{{ ago(p.deployedAt) }}</span>
+                    } @else if (p.brokenSince) { <span class="pipe__muted" [matTooltip]="fullDate(p.brokenSince)">falhando desde {{ date(p.brokenSince) }}</span> }
+                    @else { <span class="pipe__muted">sem sucesso recente</span> }
+                  </span>
+                  <span role="cell">
+                    <span class="aws-chip aws-tone--{{ c.tone }}" [matTooltip]="c.hint"><mat-icon [class.aws-spin]="c.spin">{{ c.icon }}</mat-icon>{{ c.label }}</span>
+                  </span>
+                  @if (p.failedLogTail?.length && !p.deployed) {
+                    <details class="pt__log">
+                      <summary><mat-icon>receipt_long</mat-icon>Fim do log do build que falhou</summary>
+                      <pre>{{ p.failedLogTail!.join('\n') }}</pre>
+                    </details>
+                  }
+                </div>
+              }
+              @if (shown.length < pipes.length) {
+                <button type="button" class="pt__more" (click)="showAll(env.key)">
+                  <mat-icon>expand_more</mat-icon>Mostrar os outros {{ pipes.length - shown.length }} apps — já com o nosso código implantado
+                </button>
               }
             </div>
-          </div>
-
-          @if (pipes.length && v.verdict !== 'not-applicable') {
-            @let g = groups(env);
-            <details class="env__pipes" [open]="pipesOpen(env)">
-              <summary>Esteiras de deploy <span class="aws__n">{{ g.total }}</span>
-                @if (g.total > 1) {
-                  <span class="env__pipes-count">{{ g.primaryDeployed }} de {{ g.primaryTotal }} {{ g.secondary ? (g.primaryTotal === 1 ? 'principal' : 'principais') + ' ' : '' }}com o nosso código@if (g.secondary) { · {{ g.secondary }} {{ g.secondary === 1 ? 'secundária' : 'secundárias' }} }</span>
-                }
-              </summary>
-              <ul class="pipes">
-                @for (p of g.shown; track p.name) {
-                  <li class="pipe" [class.pipe--secondary]="secondary(p)"><ng-container *ngTemplateOutlet="pipeTpl; context: { $implicit: p }"></ng-container></li>
-                }
-              </ul>
-              @if (g.folded.length) {
-                <details class="env__folded">
-                  <summary>Mais {{ g.folded.length }} {{ g.folded.length === 1 ? 'esteira' : 'esteiras' }}{{ g.shown.length && g.folded[0].deployed ? ' já com o nosso código' : '' }}</summary>
-                  <ul class="pipes">
-                    @for (p of g.folded; track p.name) {
-                      <li class="pipe" [class.pipe--secondary]="secondary(p)"><ng-container *ngTemplateOutlet="pipeTpl; context: { $implicit: p }"></ng-container></li>
-                    }
-                  </ul>
-                </details>
-              }
-            </details>
           }
-        </section>
+        </div>
       }
-    </div>
+    </section>
 
     <!-- Nosso código: de onde os vereditos saíram -->
     @if (repositories().length) {
-      <details class="aws__block" open>
+      <details class="aws__block">
         <summary><mat-icon>commit</mat-icon>Nosso código <span class="aws__n">{{ repositories().length }}</span>
           <span class="aws__hint">commits do card usados para os vereditos</span></summary>
         @for (r of repositories(); track r.repository) {
@@ -274,66 +304,3 @@
     }
   }
 </div>
-
-<!-- Uma esteira (pipeline) do ambiente -->
-<ng-template #pipeTpl let-p>
-  @let st = statusLook(p);
-  <div class="pipe__row">
-    @if (p.consoleUrl) {
-      <a class="pipe__name" [href]="p.consoleUrl" target="_blank" rel="noopener" [matTooltip]="'Abrir no console da AWS — ' + p.name">{{ p.name }}<mat-icon>open_in_new</mat-icon></a>
-    } @else {
-      <span class="pipe__name">{{ p.name }}</span>
-    }
-    @if (secondary(p)) {
-      <span class="aws-chip aws-tone--muted" matTooltip="Não decide o veredito do ambiente: a esteira principal é a que publica no servidor do ambiente">secundária</span>
-    }
-    <span class="aws-chip aws-tone--{{ st.tone }}" [matTooltip]="p.stage ? 'Estágio: ' + p.stage : ''">
-      <mat-icon [class.aws-spin]="st.spin">{{ st.icon }}</mat-icon>{{ st.label }}
-    </span>
-    @if (p.deployed === true) {
-      <span class="aws-chip aws-tone--ok" matTooltip="O commit implantado contém o nosso código"><mat-icon>check</mat-icon>contém nosso código</span>
-    } @else if (p.deployed === false) {
-      <span class="aws-chip aws-tone--muted" [matTooltip]="p.inBranch ? 'O nosso código já está na branch ' + (p.branch ?? '') + ', mas ainda não foi implantado' : 'O commit implantado não contém o nosso código'">
-        <mat-icon>close</mat-icon>{{ p.inBranch ? 'na branch, não implantado' : 'sem nosso código' }}
-      </span>
-    }
-  </div>
-  <div class="pipe__facts">
-    @if (p.lastRunAt) {
-      <span [matTooltip]="fullDate(p.lastRunAt)"><mat-icon>schedule</mat-icon>{{ date(p.lastRunAt) }} <span class="pipe__muted">({{ ago(p.lastRunAt) }})</span></span>
-    }
-    @if (duration(p.durationSec)) { <span><mat-icon>timer</mat-icon>{{ duration(p.durationSec) }}</span> }
-    @if (p.branch) { <span [matTooltip]="p.repository ?? ''"><mat-icon>call_split</mat-icon>{{ p.branch }}</span> }
-    @if (p.trigger) { <span class="pipe__muted">gatilho {{ p.trigger }}</span> }
-  </div>
-  @if (p.deployedSha) {
-    <div class="pipe__commit" [matTooltip]="p.deployedMessage ?? ''">
-      <span class="pipe__muted">implantado:</span>
-      <code>{{ short(p.deployedSha) }}</code>
-      <span class="pipe__msg">{{ line1(p.deployedMessage) }}</span>
-      @if (p.deployedAt) { <span class="pipe__muted">· {{ date(p.deployedAt) }}</span> }
-    </div>
-  }
-  @if (latestDiffers(p)) {
-    @let lt = latestLook(p.latest?.status);
-    <div class="pipe__latest aws-tone--{{ lt.tone }}">
-      <mat-icon [class.aws-spin]="lt.spin">{{ lt.icon }}</mat-icon>
-      Execução mais nova: <code>{{ short(p.latest?.sha) }}</code> · {{ lt.label }}
-      @if (p.latest?.startedAt) { <span class="pipe__muted">desde {{ date(p.latest?.startedAt) }}</span> }
-    </div>
-  }
-  @if (p.action || p.buildUrl) {
-    <div class="pipe__links">
-      @if (p.action) { <span class="pipe__muted" matTooltip="Ação de deploy desta pipeline neste ambiente">{{ p.action }}</span> }
-      @if (p.buildUrl) {
-        <a [href]="p.buildUrl" target="_blank" rel="noopener"><mat-icon>build</mat-icon>Build<mat-icon class="pipe__ext">open_in_new</mat-icon></a>
-      }
-    </div>
-  }
-  @if (p.failedLogTail?.length) {
-    <details class="pipe__log">
-      <summary><mat-icon>receipt_long</mat-icon>Fim do log do build que falhou ({{ p.failedLogTail!.length }} {{ p.failedLogTail!.length === 1 ? 'linha' : 'linhas' }})</summary>
-      <pre>{{ p.failedLogTail!.join('\n') }}</pre>
-    </details>
-  }
-</ng-template>
