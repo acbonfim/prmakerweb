@@ -54,4 +54,4 @@
 .tl__bar--task { background: #3fb950; }
 .tl__bar--request { background: #a371f7; }
 .tl__bar--event { background: #8b949e; }
-.tl__dur { font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 1px; }
+.tl__dur { min-width: 72px; text-align: right; font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 1px; }

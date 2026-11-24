@@ -75,7 +75,7 @@
       @if (r.kind === 'milestone') {
         <li class="tl__ms">
           <mat-icon>flag</mat-icon><b>{{ r.title }}</b>
-          <span class="muted">{{ dt(r.at) }} · {{ dur(r.offsetMs) }} desde o início</span>
+          <span class="muted">{{ dt(r.at) }}{{ r.offsetMs > 0 ? ' · ' + dur(r.offsetMs) + ' desde o início' : '' }}</span>
         </li>
       } @else {
         <li class="tl__row">
