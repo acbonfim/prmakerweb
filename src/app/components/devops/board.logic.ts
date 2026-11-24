@@ -302,6 +302,20 @@ export function limitBoard(views: BoardLaneView[], config: Pick<BoardConfig, 'co
   });
 }
 
+/** Cards na tela depois de todos os recortes (filtros, lanes escolhidas e colunas ocultas). */
+export function shownTotal(views: readonly BoardLaneView[]): number {
+  return views.reduce((n, v) => n + v.count, 0);
+}
+
+/** Cards na tela por coluna (todas as faixas visíveis, Doing + Done). */
+export function shownByColumn(views: readonly BoardLaneView[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const v of views)
+    for (const c of v.columns)
+      out.set(c.column.name, (out.get(c.column.name) ?? 0) + c.doing.items.length + (c.done?.items.length ?? 0));
+  return out;
+}
+
 export function isFilterActive(f: BoardFilter): boolean {
   return !!f.text.trim() || !!f.types.length || !!f.assignedTo.length || !!f.tags.length || !!f.states.length || !!f.lanes?.length;
 }
