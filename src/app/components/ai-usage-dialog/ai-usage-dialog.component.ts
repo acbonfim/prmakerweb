@@ -10,7 +10,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { TokenUsageComponent } from '../token-usage/token-usage.component';
 import { TokenUsagePanelComponent } from '../token-usage/token-usage-panel.component';
 import { TokenUsage } from '../../services/token-pricing.service';
-import { StorageService } from '../../services/storage.service';
+import { RoleService } from '../../services/role.service';
 import { AiUsageService, AiUsageSummary, AiUsageTotals, formatTokens, formatUsd } from '../../services/ai-usage.service';
 
 /**
@@ -26,10 +26,9 @@ import { AiUsageService, AiUsageSummary, AiUsageTotals, formatTokens, formatUsd 
 })
 export class AiUsageDialogComponent implements OnInit {
   private service = inject(AiUsageService);
-  private storage = inject(StorageService);
   readonly dialogRef = inject(MatDialogRef<AiUsageDialogComponent>);
 
-  readonly isAdmin = this.readIsAdmin();
+  readonly isAdmin = inject(RoleService).isAdmin;
   readonly days = signal(30);
   readonly scope = signal<'me' | 'all'>('me');
   readonly loading = signal(true);
@@ -124,15 +123,4 @@ export class AiUsageDialogComponent implements OnInit {
     this.dialogRef.close();
   }
 
-  private readIsAdmin(): boolean {
-    try {
-      const token = this.storage.getItem('apiKey');
-      if (!token) return false;
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const raw = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? payload['role'];
-      return (Array.isArray(raw) ? raw : raw ? [raw] : []).includes('admin');
-    } catch {
-      return false;
-    }
-  }
 }

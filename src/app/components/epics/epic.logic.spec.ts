@@ -113,6 +113,7 @@ describe('epic.logic (0099/F1)', () => {
 
   it('aba da URL', () => {
     expect(parseDeskTab('cards')).toBe('cards');
+    expect(parseDeskTab('stories')).toBe('stories');
     expect(parseDeskTab('plan')).toBeNull();
     expect(parseDeskTab(null)).toBeNull();
   });

@@ -14,11 +14,14 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { DevOpsService } from '../../services/devops.service';
+import { EpicBoardFilters, EpicsService, epicApiError } from '../../services/epics.service';
 import { WsService } from '../../services/ws.service';
+import { PmComboComponent, PmComboOption } from '../pm-combo/pm-combo.component';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import {
   BoardCell, BoardFilter, ColumnCount, EMPTY_FILTER, applyMove, canAccept, columnCounts, filterCount, filterItems, filterOptions,
-  groupBoard, isFilterActive, isRealMove, laneOf, boardLanes, neighborsAt, toggleValue, typeOnBoard
+  groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, limitBoard, boardLanes, neighborsAt, normalizeBoardFilter,
+  sameFilter, toggleValue, typeOnBoard, visibleColumns
 } from './board.logic';
 import { openDevOpsCardCreate } from './devops-card-create';
 import {
@@ -30,6 +33,8 @@ import {
 const REFRESH_MS = 60_000;
 /** Vários `devopsCardsUpdated` seguidos (um lote do especialista) viram uma consulta só. */
 const WS_DEBOUNCE_MS = 700;
+/** Ajustes 1: filtros mexidos em sequência (digitar, marcar vários) viram uma gravação só no épico. */
+const FILTER_SAVE_MS = 600;
 const SNACK = { horizontalPosition: 'right', verticalPosition: 'top' } as const;
 
 function storageGet(key: string): string | null {
@@ -49,12 +54,17 @@ function storageSet(key: string, value: string): void {
  * redesenha colunas/lanes (colunas e estados novos aparecem sem recarregar a tela).
  *
  * `team`/`board` são `model()`: sem valor, o board escolhe o último usado (ou o primeiro) e devolve a escolha.
+ *
+ * Ajustes 1: time/board no `app-pm-combo`, filtro de Lane (as lanes escolhidas são as únicas faixas mostradas),
+ * "Colunas" para ocultar colunas e, com épico, filtros e colunas vêm de `savedFilters` (`epic.boardFilters`) e são
+ * gravados no épico (`PUT Epics/{n}/board-filters`, debounce de 600 ms) — valem para "Cards do épico" e "Board do
+ * time" e o especialista os usa no board do time.
  */
 @Component({
   selector: 'app-devops-board',
   standalone: true,
   imports: [NgTemplateOutlet, FormsModule, DragDropModule, CdkScrollable, MatButtonModule, MatIconModule, MatMenuModule, MatProgressBarModule,
-    MatTooltipModule, UserAvatarComponent],
+    MatTooltipModule, PmComboComponent, UserAvatarComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     @let cfg = config();
@@ -63,16 +73,12 @@ function storageSet(key: string, value: string): void {
     <div class="dvb">
       <div class="dvb-bar">
         <div class="dvb-bar__group">
-          <select class="dvb-sel" [ngModel]="team() ?? ''" (ngModelChange)="pickTeam($event)" aria-label="Time" matTooltip="Time do DevOps">
-            @if (!team()) { <option value="" disabled>Time…</option> }
-            @for (t of teams(); track t.id) { <option [value]="t.name">{{ t.name }}</option> }
-            @if (team() && !hasTeam()) { <option [value]="team()">{{ team() }}</option> }
-          </select>
-          <select class="dvb-sel" [ngModel]="board() ?? ''" (ngModelChange)="pickBoard($event)" aria-label="Board" matTooltip="Board (backlog) do time">
-            @if (!board()) { <option value="" disabled>Board…</option> }
-            @for (b of boards(); track b.id) { <option [value]="b.name">{{ b.name }}</option> }
-            @if (board() && !hasBoard()) { <option [value]="board()">{{ board() }}</option> }
-          </select>
+          <app-pm-combo class="dvb-combo" size="sm" icon="groups" [options]="teamOptions()" [value]="team()" (valueChange)="pickTeam($event)"
+                        [clearable]="false" placeholder="Time…" ariaLabel="Time do DevOps" [loading]="!teams().length && pickingContext()"
+                        noOptionsText="Nenhum time" emptyText="Nenhum time com esse nome" panelWidth="300px" />
+          <app-pm-combo class="dvb-combo" size="sm" icon="view_kanban" [options]="boardOptions()" [value]="board()" (valueChange)="pickBoard($event)"
+                        [clearable]="false" [disabled]="!team()" placeholder="Board…" ariaLabel="Board (backlog) do time"
+                        noOptionsText="Nenhum board" emptyText="Nenhum board com esse nome" panelWidth="260px" />
         </div>
 
         @if (epic()) {
@@ -100,6 +106,18 @@ function storageSet(key: string, value: string): void {
         <button type="button" class="dvb-filter" [class.dvb-filter--on]="f.states.length" [matMenuTriggerFor]="statesMenu">
           Estado @if (f.states.length) { <b>{{ f.states.length }}</b> }<mat-icon>arrow_drop_down</mat-icon>
         </button>
+        @if (laneChoices().length > 1 || f.lanes.length) {
+          <button type="button" class="dvb-filter" [class.dvb-filter--on]="f.lanes.length" [matMenuTriggerFor]="lanesMenu">
+            Lane @if (f.lanes.length) { <b>{{ f.lanes.length }}</b> }<mat-icon>arrow_drop_down</mat-icon>
+          </button>
+        }
+        @if (cfg) {
+          <button type="button" class="dvb-filter" [class.dvb-filter--on]="f.hiddenColumns.length" [matMenuTriggerFor]="columnsMenu"
+                  matTooltip="Escolher as colunas que o board mostra">
+            <mat-icon class="dvb-filter__lead">view_week</mat-icon>Colunas
+            @if (hiddenCount()) { <b>{{ shownColumns().length }}/{{ cfg.columns.length }}</b> }<mat-icon>arrow_drop_down</mat-icon>
+          </button>
+        }
         @if (filterActive()) {
           <button type="button" class="dv-linkbtn dvb-clear" (click)="clearFilter()">Limpar filtros ({{ filterCount() }})</button>
         }
@@ -115,6 +133,20 @@ function storageSet(key: string, value: string): void {
         </button>
       </div>
       @if (loading()) { <mat-progress-bar class="dvb-progress" mode="indeterminate" /> } @else { <div class="dvb-progress"></div> }
+      @if (epic() && (filterActive() || hiddenCount())) {
+        <div class="dvb-saved" [class.dvb-saved--err]="filterSave() === 'error'">
+          <mat-icon>{{ filterSave() === 'error' ? 'sync_problem' : 'bookmark' }}</mat-icon>
+          <span>
+            @switch (filterSave()) {
+              @case ('saving') { Salvando os filtros no épico… }
+              @case ('error') { Não foi possível salvar os filtros no épico. <button type="button" class="dv-linkbtn" (click)="saveFiltersNow()">Tentar de novo</button> }
+              @default { {{ filterActive() ? 'Filtros' : 'Colunas' }} salvos no épico — o especialista usa no board do time. }
+            }
+          </span>
+          @if (filterActive()) { <button type="button" class="dv-linkbtn" (click)="clearFilter()">Limpar filtros</button> }
+          @if (hiddenCount()) { <button type="button" class="dv-linkbtn" (click)="showAllColumns()">Mostrar todas as colunas</button> }
+        </div>
+      }
 
       @if (error(); as e) {
         <div class="dvb-note dvb-note--err">
@@ -138,7 +170,7 @@ function storageSet(key: string, value: string): void {
           <div class="dvb-grid" [style.min-width.px]="gridWidth()">
             <!-- Cabeçalho das colunas -->
             <div class="dvb-heads">
-              @for (col of cfg.columns; track col.id) {
+              @for (col of shownColumns(); track col.id) {
                 @let cnt = counts().get(col.name);
                 <div class="dvb-head" [style.width.px]="colWidth(col)" [class.dvb-head--blocked]="blocked(col)"
                      [class.dvb-head--accept]="accepts(col)">
@@ -250,6 +282,24 @@ function storageSet(key: string, value: string): void {
         </button>
       } @empty { <div class="dvb-menu__empty">Nenhuma tag</div> }
     </mat-menu>
+    <mat-menu #columnsMenu="matMenu" class="dvb-menu">
+      @for (col of cfg?.columns ?? []; track col.id) {
+        @let on = !isHidden(f.hiddenColumns, col.name);
+        <button mat-menu-item type="button" (click)="toggleColumn(col.name, $event)" [disabled]="on && shownColumns().length === 1">
+          <mat-icon>{{ on ? 'check_box' : 'check_box_outline_blank' }}</mat-icon><span>{{ col.name }}</span>
+        </button>
+      }
+      @if (f.hiddenColumns.length) {
+        <button mat-menu-item type="button" (click)="showAllColumns()"><mat-icon>view_week</mat-icon><span>Mostrar todas</span></button>
+      }
+    </mat-menu>
+    <mat-menu #lanesMenu="matMenu" class="dvb-menu">
+      @for (l of laneChoices(); track l.name) {
+        <button mat-menu-item type="button" (click)="toggleLane$(l.lane, $event)">
+          <mat-icon>{{ laneOn(f.lanes, l.lane) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon><span>{{ l.name }}</span>
+        </button>
+      } @empty { <div class="dvb-menu__empty">O board não tem lanes</div> }
+    </mat-menu>
     <mat-menu #statesMenu="matMenu" class="dvb-menu">
       @for (s of opts.states; track s) {
         <button mat-menu-item type="button" (click)="toggle('states', s, $event)">
@@ -264,8 +314,12 @@ function storageSet(key: string, value: string): void {
     .dvb-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 8px; flex: none; }
     .dvb-bar__group { display: flex; gap: 6px; }
     .dvb-bar__spacer { flex: 1; }
-    .dvb-sel { border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); border-radius: 8px; background: var(--surface-input, #1a1f28);
-      color: inherit; font: inherit; font-size: 12.5px; padding: 5px 6px; max-width: 200px; }
+    .dvb-combo { width: 172px; }
+    .dvb-saved { display: flex; align-items: center; gap: 6px; margin: 0 8px 2px; padding: 2px 8px; font-size: 11.5px; color: var(--cc-text-3); flex: none; }
+    .dvb-saved mat-icon { font-size: 14px; width: 14px; height: 14px; flex: none; }
+    .dvb-saved .dv-linkbtn { font-size: 11.5px; }
+    .dvb-saved > .dv-linkbtn { margin-left: 4px; }
+    .dvb-saved--err { color: #d29922; }
     .dvb-seg { display: inline-flex; border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); border-radius: 8px; overflow: hidden; }
     .dvb-seg button { background: none; border: 0; color: var(--cc-text-2); font: inherit; font-size: 12.5px; padding: 5px 10px; cursor: pointer; }
     .dvb-seg button + button { border-left: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); }
@@ -282,6 +336,7 @@ function storageSet(key: string, value: string): void {
     .dvb-filter--on { color: var(--cc-text-1); border-color: color-mix(in srgb, var(--mat-sys-primary) 45%, transparent); }
     .dvb-filter b { font-size: 11px; background: var(--mat-sys-primary); color: var(--mat-sys-on-primary); border-radius: 999px; padding: 0 5px; margin-left: 3px; }
     .dvb-filter mat-icon { font-size: 18px; width: 18px; height: 18px; }
+    .dvb-filter .dvb-filter__lead { font-size: 16px; width: 16px; height: 16px; margin-right: 3px; }
     .dvb-total { font-size: 12px; color: var(--cc-text-3); white-space: nowrap; }
     .dvb-progress { height: 2px; flex: none; }
     .dvb-spin { animation: dvb-spin 1s linear infinite; }
@@ -361,6 +416,7 @@ function storageSet(key: string, value: string): void {
 })
 export class DevOpsBoardComponent {
   private api = inject(DevOpsService);
+  private epicsApi = inject(EpicsService);
   private ws = inject(WsService);
   private dialog = inject(MatDialog);
   private snack = inject(MatSnackBar);
@@ -373,6 +429,8 @@ export class DevOpsBoardComponent {
   /** Número do épico da Mesa (habilita "Cards do épico"). */
   readonly epic = input<number | null>(null);
   readonly scope = model<BoardScope>('epic');
+  /** Ajustes 1: filtros salvos no épico (`epic.boardFilters`); com `epic`, mudar o filtro grava no épico. */
+  readonly savedFilters = input<EpicBoardFilters | null>(null);
   /** Clique no título do cartão. */
   readonly cardOpened = output<number>();
 
@@ -392,11 +450,39 @@ export class DevOpsBoardComponent {
   private lastLoadAt = signal(0);
 
   readonly effectiveScope = computed<BoardScope>(() => (this.epic() ? this.scope() : 'board'));
-  readonly visibleItems = computed(() => filterItems(this.items(), this.filter()));
+  readonly visibleItems = computed(() => {
+    const cfg = this.config();
+    return filterItems(this.items(), this.filter(), cfg ? boardLanes(cfg) : null);
+  });
+  /** Lanes do board para o filtro (nome no filtro + a lane). */
+  readonly laneChoices = computed(() => {
+    const cfg = this.config();
+    return cfg ? boardLanes(cfg).map((lane) => ({ name: laneFilterName(lane), lane })) : [];
+  });
+  readonly teamOptions = computed<PmComboOption[]>(() => {
+    const names = this.teams().map((t) => t.name);
+    const cur = this.team();
+    if (cur && !names.includes(cur)) names.unshift(cur);
+    return names.map((n) => ({ value: n, label: n, icon: 'groups' }));
+  });
+  readonly boardOptions = computed<PmComboOption[]>(() => {
+    const names = this.boards().map((b) => b.name);
+    const cur = this.board();
+    if (cur && !names.includes(cur)) names.unshift(cur);
+    return names.map((n) => ({ value: n, label: n, icon: 'view_kanban' }));
+  });
+  /** Gravação dos filtros no épico. */
+  readonly filterSave = signal<'idle' | 'saving' | 'saved' | 'error'>('idle');
   readonly lanes = computed(() => {
     const cfg = this.config();
-    return cfg ? groupBoard(cfg, this.visibleItems()) : [];
+    return cfg ? limitBoard(groupBoard(cfg, this.visibleItems()), cfg, this.filter()) : [];
   });
+  /** Colunas na tela (as ocultas saem; coluna nova do DevOps aparece sozinha). */
+  readonly shownColumns = computed(() => {
+    const cfg = this.config();
+    return cfg ? visibleColumns(cfg, this.filter().hiddenColumns) : [];
+  });
+  readonly hiddenCount = computed(() => (this.config()?.columns.length ?? 0) - this.shownColumns().length);
   readonly counts = computed(() => {
     const cfg = this.config();
     return cfg ? columnCounts(cfg, this.items()) : new Map<string, ColumnCount>();
@@ -408,8 +494,6 @@ export class DevOpsBoardComponent {
   readonly options = computed(() => filterOptions(this.items()));
   readonly filterActive = computed(() => isFilterActive(this.filter()));
   readonly filterCount = computed(() => filterCount(this.filter()));
-  readonly hasTeam = computed(() => this.teams().some((t) => t.name === this.team()));
-  readonly hasBoard = computed(() => this.boards().some((b) => b.name === this.board()));
   readonly totalLabel = computed(() => {
     const all = this.items().length;
     const vis = this.visibleItems().length;
@@ -420,7 +504,7 @@ export class DevOpsBoardComponent {
     const at = this.lastLoadAt();
     return at ? `Atualizar (atualizado às ${new Date(at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})` : 'Atualizar';
   });
-  readonly gridWidth = computed(() => (this.config()?.columns ?? []).reduce((w, c) => w + this.colWidth(c) + 8, 0));
+  readonly gridWidth = computed(() => this.shownColumns().reduce((w, c) => w + this.colWidth(c) + 8, 0));
 
   /** Cor e ícone por tipo: cor do board, senão a dos tipos do projeto. */
   private typeInfo = computed(() => {
@@ -438,6 +522,11 @@ export class DevOpsBoardComponent {
   private wsTimer: ReturnType<typeof setTimeout> | null = null;
   private loadedKey = '';
   private subs: Subscription[] = [];
+  /** Filtros: épico a que pertencem, o último gravado (ou lido) e a gravação pendente. */
+  private filterEpic: number | null = null;
+  private lastSavedFilter: BoardFilter | null = null;
+  private filterTimer: ReturnType<typeof setTimeout> | null = null;
+  private filterSaving = false;
 
   constructor() {
     this.api.types().subscribe({ next: (t) => this.metaTypes.set(t ?? []), error: () => {} });
@@ -450,6 +539,13 @@ export class DevOpsBoardComponent {
       const epic = this.epic();
       const scope = this.effectiveScope();
       untracked(() => this.onContext(team, board, epic, scope));
+    });
+
+    // Filtros salvos no épico: aplica ao trocar de épico e quando outra tela/o especialista mudou (sem gravação pendente).
+    effect(() => {
+      const epic = this.epic();
+      const saved = this.savedFilters();
+      untracked(() => this.onSavedFilters(epic, saved));
     });
 
     // Boards do time escolhido (para o seletor).
@@ -473,6 +569,7 @@ export class DevOpsBoardComponent {
     document.addEventListener('visibilitychange', onVisible);
 
     this.destroyRef.onDestroy(() => {
+      this.flushFilterSave();
       clearInterval(tick);
       if (this.wsTimer) clearTimeout(this.wsTimer);
       document.removeEventListener('visibilitychange', onVisible);
@@ -529,14 +626,14 @@ export class DevOpsBoardComponent {
     });
   }
 
-  pickTeam(name: string): void {
+  pickTeam(name: string | null): void {
     if (!name || name === this.team()) return;
     storageSet('dvb-last-team', name);
     this.board.set(null);
     this.team.set(name);
   }
 
-  pickBoard(name: string): void {
+  pickBoard(name: string | null): void {
     if (!name || name === this.board()) return;
     const team = this.team();
     if (team) storageSet(`dvb-last-board:${team}`, name);
@@ -659,6 +756,7 @@ export class DevOpsBoardComponent {
 
   setText(text: string): void {
     this.filter.update((f) => ({ ...f, text: text ?? '' }));
+    this.filterChanged();
   }
 
   has(list: string[], v: string): boolean {
@@ -668,10 +766,102 @@ export class DevOpsBoardComponent {
   toggle(key: 'types' | 'assignedTo' | 'tags' | 'states', value: string, e: Event): void {
     e.stopPropagation(); // o menu fica aberto para marcar vários
     this.filter.update((f) => ({ ...f, [key]: toggleValue(f[key], value) }));
+    this.filterChanged();
   }
 
+  laneOn(values: string[], lane: { name: string | null; isDefault: boolean }): boolean {
+    return values.some((v) => laneMatches(v, lane));
+  }
+
+  /** Liga/desliga a lane (o valor salvo pode ser um apelido da padrão, como "default"). */
+  toggleLane$(lane: { name: string | null; isDefault: boolean }, e: Event): void {
+    e.stopPropagation();
+    this.filter.update((f) => ({
+      ...f,
+      lanes: this.laneOn(f.lanes, lane) ? f.lanes.filter((v) => !laneMatches(v, lane)) : [...f.lanes, laneFilterName(lane)],
+    }));
+    this.filterChanged();
+  }
+
+  /** Limpa os filtros de cards (as colunas ocultas ficam — é personalização do board). */
   clearFilter(): void {
-    this.filter.set(EMPTY_FILTER);
+    this.filter.update((f) => ({ ...EMPTY_FILTER, hiddenColumns: f.hiddenColumns }));
+    this.filterChanged();
+  }
+
+  isHidden(hidden: string[], column: string): boolean {
+    return hidden.some((h) => h.toLowerCase() === column.toLowerCase());
+  }
+
+  toggleColumn(column: string, e: Event): void {
+    e.stopPropagation(); // o menu fica aberto para marcar várias
+    this.filter.update((f) => ({ ...f, hiddenColumns: toggleValue(f.hiddenColumns, column) }));
+    this.filterChanged();
+  }
+
+  showAllColumns(): void {
+    this.filter.update((f) => ({ ...f, hiddenColumns: [] }));
+    this.filterChanged();
+  }
+
+  // ── Filtros salvos no épico (ajustes 1) ──
+
+  private onSavedFilters(epic: number | null, saved: EpicBoardFilters | null): void {
+    if (epic !== this.filterEpic) {
+      // Trocou de épico: grava o que estava pendente no anterior e carrega os filtros do novo.
+      this.flushFilterSave();
+      this.filterEpic = epic;
+      this.filterSave.set('idle');
+      const f = epic ? normalizeBoardFilter(saved) : EMPTY_FILTER;
+      this.lastSavedFilter = epic ? f : null;
+      this.filter.set(f);
+      return;
+    }
+    if (!epic || this.filterTimer || this.filterSaving) return; // a mudança local pendente vence
+    const f = normalizeBoardFilter(saved);
+    if (this.lastSavedFilter && sameFilter(f, this.lastSavedFilter)) return;
+    this.lastSavedFilter = f;
+    if (!sameFilter(f, this.filter())) this.filter.set(f);
+  }
+
+  private filterChanged(): void {
+    if (!this.epic()) return;
+    if (this.filterTimer) clearTimeout(this.filterTimer);
+    this.filterTimer = setTimeout(() => { this.filterTimer = null; this.saveFiltersNow(); }, FILTER_SAVE_MS);
+  }
+
+  /** Grava já o filtro atual no épico (fim do debounce, "Tentar de novo"). */
+  saveFiltersNow(): void {
+    const epic = this.filterEpic;
+    if (!epic) return;
+    const f = normalizeBoardFilter(this.filter());
+    if (this.lastSavedFilter && sameFilter(f, this.lastSavedFilter) && this.filterSave() !== 'error') return;
+    this.filterSaving = true;
+    this.filterSave.set('saving');
+    this.epicsApi.saveBoardFilters(epic, { ...f, text: f.text.trim() }).subscribe({
+      next: () => {
+        this.filterSaving = false;
+        if (this.filterEpic !== epic) return;
+        this.lastSavedFilter = f;
+        this.filterSave.set('saved');
+        // Mudou de novo enquanto gravava: grava a versão nova.
+        if (!sameFilter(this.filter(), f) && !this.filterTimer) this.filterChanged();
+      },
+      error: (e) => {
+        this.filterSaving = false;
+        if (this.filterEpic !== epic) return;
+        this.filterSave.set('error');
+        console.warn('[0099] filtros do board não gravados no épico', epicApiError(e, ''));
+      }
+    });
+  }
+
+  /** Gravação pendente vai agora (trocar de épico, sair da tela). */
+  private flushFilterSave(): void {
+    if (!this.filterTimer) return;
+    clearTimeout(this.filterTimer);
+    this.filterTimer = null;
+    this.saveFiltersNow();
   }
 
   // ── Arrastar ──

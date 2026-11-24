@@ -93,6 +93,8 @@ export interface BoardItemsRequest {
   tags?: string[];
   states?: string[];
   top?: number;
+  /** Ajustes 1: com `epic`, o servidor aplica os filtros salvos do épico (padrão false — a tela filtra sozinha). */
+  useEpicFilters?: boolean;
 }
 
 export interface DevOpsIdentityRef {
@@ -121,6 +123,8 @@ export interface BoardItem {
 export interface BoardItemsResponse {
   configHash: string;
   items: BoardItem[];
+  /** Ajustes 1: filtros do épico aplicados no servidor (`useEpicFilters`), ou null. */
+  filtersApplied?: unknown | null;
 }
 
 /** `POST DevOps/query`. */
