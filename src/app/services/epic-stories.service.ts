@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { ConvertEpicStoryRequest, EpicStory, SaveEpicStoryRequest } from '../components/epics/epic-stories.logic';
 import { EpicsService, EpicsUpdatedPayload } from './epics.service';
@@ -20,7 +20,8 @@ export class EpicStoriesService {
   private apiUrl = `${environment.apiUrl}EpicStories`;
 
   list(epic: number): Observable<EpicStory[]> {
-    return this.http.get<EpicStory[]>(`${this.epicsUrl}/${epic}/stories`);
+    // Todas, inclusive as descartadas (a tela filtra; o padrão do servidor esconde as descartadas).
+    return this.http.get<EpicStory[]>(`${this.epicsUrl}/${epic}/stories`, { params: { status: 'all' } });
   }
 
   create(epic: number, body: SaveEpicStoryRequest): Observable<EpicStory> {
@@ -43,7 +44,8 @@ export class EpicStoriesService {
 
   /** Cria o card no DevOps (entra no épico). Já convertida → 409 `{code:"alreadyConverted", cardId}`. */
   convert(number: number, body: ConvertEpicStoryRequest = {}): Observable<EpicStory> {
-    return this.http.post<EpicStory>(`${this.apiUrl}/${number}/convert`, body);
+    // O servidor responde `{story, card, summary}`; a tela só precisa da história (com `cardId`).
+    return this.http.post<{ story: EpicStory }>(`${this.apiUrl}/${number}/convert`, body).pipe(map((r) => r.story));
   }
 
   /**
