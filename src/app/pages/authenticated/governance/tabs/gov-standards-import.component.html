@@ -1,0 +1,168 @@
+@if (!draft()) {
+  <div class="sources">
+    <section class="panel" aria-label="Importar da wiki">
+      <div class="panel__head"><h2><mat-icon class="inline">menu_book</mat-icon> Da wiki</h2><span class="muted">banco de dados</span></div>
+      <p class="muted">Lê a página "Data Nomenclature and Rules (Nomenclatura e Regras de dados)" e as subpáginas (Check, Default, FK, Índice, PK,
+        Procedure, Tabela, Índice Único, View) com <b>a sua</b> integração do Azure DevOps. Nada é gravado até você aplicar.</p>
+      <label class="f-field"><span>Endereço da página</span>
+        <input type="url" class="url mono" [ngModel]="wikiUrl()" (ngModelChange)="wikiUrl.set($event)" data-usage-ignore>
+        <span class="f-hint">Padrão: página 236 (Solvace Product Improvement).</span>
+      </label>
+      <div class="actions-row">
+        <span class="ms-auto"></span>
+        <button mat-flat-button type="button" (click)="readWiki()" [disabled]="!!reading() || !wikiUrl().trim()">
+          @if (reading() === 'wiki') { <span class="busy"><mat-spinner diameter="16"></mat-spinner> Lendo…</span> } @else { <span class="busy"><mat-icon>cloud_download</mat-icon> Ler a wiki</span> }
+        </button>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Importar da engenharia reversa">
+      <div class="panel__head"><h2><mat-icon class="inline">biotech</mat-icon> Da engenharia reversa</h2><span class="muted">estrutura de aplicação</span></div>
+      <p class="muted">Propõe padrões por módulo (camadas, pastas, endpoints, acesso a dados, migrações) a partir da arquitetura publicada, sem IA.
+        Cada padrão <b>referencia</b> os itens da ER (módulo#ITEM), sem copiar o texto.</p>
+      <div class="f-field"><span>Módulos {{ pickedModules().size ? '(' + pickedModules().size + ' escolhido(s))' : '(nenhum marcado = todos os publicados)' }}</span>
+        @if (modulesError()) { <span class="f-error">{{ modulesError() }}</span> }
+        <div class="mods">
+          @for (m of modules(); track m.key) {
+            <label [class.unpub]="!m.published" [matTooltip]="m.published ? '' : 'Sem engenharia reversa publicada'">
+              <input type="checkbox" [checked]="pickedModules().has(m.key)" (change)="toggleModule(m.key)" [disabled]="!m.published"> {{ m.name }}
+            </label>
+          } @empty {
+            @if (!modulesError()) { <span class="muted">Carregando módulos…</span> }
+          }
+        </div>
+      </div>
+      <div class="actions-row">
+        @if (pickedModules().size) { <button mat-button type="button" (click)="clearModules()">Todos</button> }
+        <span class="ms-auto"></span>
+        <button mat-flat-button type="button" (click)="readReverse()" [disabled]="!!reading()">
+          @if (reading() === 'reverse-engineering') { <span class="busy"><mat-spinner diameter="16"></mat-spinner> Gerando…</span> } @else { <span class="busy"><mat-icon>auto_fix_high</mat-icon> Gerar rascunho</span> }
+        </button>
+      </div>
+    </section>
+  </div>
+  @if (readError()) { <div class="notice">{{ readError() }}</div> }
+} @else {
+  @let d = draft()!;
+  <section class="panel">
+    <div class="panel__head">
+      <h2>Rascunho — {{ d.source === 'wiki' ? 'wiki' : 'engenharia reversa' }}</h2>
+      @if (d.version) { <span class="badge">versão {{ d.version }}</span> }
+      @if (d.createdAt) { <span class="muted">lido {{ dt(d.createdAt) }}{{ d.createdBy ? ' por ' + d.createdBy : '' }}</span> }
+      <span class="ms-auto"></span>
+      @if (d.url) { <a class="muted" [href]="d.url" target="_blank" rel="noopener">abrir a origem <mat-icon class="inline">open_in_new</mat-icon></a> }
+      <button mat-button type="button" (click)="discard()"><mat-icon>close</mat-icon> Descartar</button>
+    </div>
+    <div class="notice notice--info">
+      Tudo entra em <b>Monitorar</b>: nada barra até você subir o efeito item a item.
+      @if (d.source === 'wiki') { Itens marcados <b>(NEW)</b> na wiki entram como <b>propostos</b> (aguardam o DBA) — {{ summary().proposed }} dos novos aqui. }
+      Nos alterados, o efeito, o estado e a conferência que você já ajustou ficam como estão.
+      @if (d.modules?.length) { Módulos: {{ d.modules!.join(', ') }}. }
+    </div>
+
+    <div class="tiles tiles--sm">
+      <button type="button" class="tile tile--btn" [class.on]="kindFilter() === 'added'" (click)="toggleKind('added')">
+        <span class="tile__label">Novos</span><span class="tile__value">{{ summary().added }}</span></button>
+      <button type="button" class="tile tile--btn" [class.on]="kindFilter() === 'changed'" (click)="toggleKind('changed')">
+        <span class="tile__label">Alterados</span><span class="tile__value">{{ summary().changed }}</span></button>
+      <button type="button" class="tile tile--btn" [class.on]="kindFilter() === 'removed'" (click)="toggleKind('removed')">
+        <span class="tile__label">Saíram da origem</span><span class="tile__value">{{ summary().removed }}</span></button>
+      <div class="tile"><span class="tile__label">Aceitos</span><span class="tile__value">{{ acceptedCount() }} / {{ rows().length }}</span></div>
+    </div>
+
+    <div class="actions-row">
+      <input class="f-search" type="search" placeholder="Filtrar por ID ou título" [ngModel]="search()" (ngModelChange)="search.set($event)" data-usage-ignore>
+      <button mat-button type="button" (click)="setAll(true, !!kindFilter() || !!search())"><mat-icon>done_all</mat-icon> Aceitar {{ kindFilter() || search() ? 'visíveis' : 'todos' }}</button>
+      <button mat-button type="button" (click)="setAll(false, !!kindFilter() || !!search())"><mat-icon>remove_done</mat-icon> Recusar {{ kindFilter() || search() ? 'visíveis' : 'todos' }}</button>
+    </div>
+
+    @if (!rows().length) {
+      <p class="muted">Nada mudou: o catálogo já está igual à origem.</p>
+    }
+
+    <div class="spacer"></div>
+    @for (r of visible(); track r.key) {
+      <div class="row" [class.row--off]="!isAccepted(r)">
+        <div class="row__head">
+          <input type="checkbox" [checked]="isAccepted(r)" (change)="setAccepted(r, !isAccepted(r))" [attr.aria-label]="'Aceitar ' + r.code">
+          <span class="kind kind--{{ r.kind }}">{{ kindLabel[r.kind] }}</span>
+          <button type="button" class="std__main" (click)="toggleExpand(r)">
+            <span class="std__name"><span class="code">{{ r.code }}</span><b class="std__title">{{ r.title }}</b></span>
+            <span class="std__meta">
+              <span class="muted">{{ areaLabel[r.area] }} · {{ topicName(r.topic) }}</span>
+              @if (r.kind === 'added' && r.after) {
+                <span class="badge badge--st-{{ r.after.status }}">entra {{ statusLabel[r.after.status].toLowerCase() }}{{ r.after.status === 'proposed' && d.source === 'wiki' ? ' (NEW)' : '' }}</span>
+                <span class="badge badge--{{ r.after.effect }}">{{ effectLabel[r.after.effect] }}</span>
+              }
+              @if (r.kind === 'changed') {
+                <span class="fields">@for (f of r.fields; track f.key) { <span class="badge">{{ f.label }}</span> }</span>
+              }
+              @if (r.kind === 'removed') { <span class="muted">não existe mais na origem — aceitar tira do catálogo</span> }
+            </span>
+          </button>
+          <button mat-icon-button type="button" (click)="toggleExpand(r)" [attr.aria-label]="expanded().has(r.key) ? 'Recolher' : 'Ver detalhes'">
+            <mat-icon>{{ expanded().has(r.key) ? 'expand_less' : 'expand_more' }}</mat-icon>
+          </button>
+        </div>
+        @if (expanded().has(r.key)) {
+          <div class="row__body">
+            @if (r.kind === 'changed' && r.before && r.after) {
+              @for (f of r.fields; track f.key) {
+                <div class="fld">
+                  <h5>{{ f.label }}</h5>
+                  @switch (f.key) {
+                    @case ('title') { <div class="diff">@for (x of diff(r.before.title, r.after.title); track $index) { @if (x.op === 'del') {<del>{{ x.text }}</del>} @else if (x.op === 'ins') {<ins>{{ x.text }}</ins>} @else {<span>{{ x.text }}</span>} }</div> }
+                    @case ('textPt') { <div class="diff">@for (x of diff(r.before.textPt, r.after.textPt); track $index) { @if (x.op === 'del') {<del>{{ x.text }}</del>} @else if (x.op === 'ins') {<ins>{{ x.text }}</ins>} @else {<span>{{ x.text }}</span>} }</div> }
+                    @case ('textEn') { <div class="diff">@for (x of diff(r.before.textEn, r.after.textEn); track $index) { @if (x.op === 'del') {<del>{{ x.text }}</del>} @else if (x.op === 'ins') {<ins>{{ x.text }}</ins>} @else {<span>{{ x.text }}</span>} }</div> }
+                    @case ('examples') { <div class="diff mono">@for (x of diff(examplesText(r.before), examplesText(r.after)); track $index) { @if (x.op === 'del') {<del>{{ x.text }}</del>} @else if (x.op === 'ins') {<ins>{{ x.text }}</ins>} @else {<span>{{ x.text }}</span>} }</div> }
+                    @case ('status') { <div class="ba">{{ statusLabel[r.before.status] }} <mat-icon class="inline">arrow_forward</mat-icon> {{ statusLabel[r.after.status] }}</div> }
+                    @case ('effect') { <div class="ba">{{ effectLabel[r.before.effect] }} <mat-icon class="inline">arrow_forward</mat-icon> {{ effectLabel[r.after.effect] }}</div> }
+                    @case ('check') { <div class="ba mono">{{ checkText(r.before) }} <mat-icon class="inline">arrow_forward</mat-icon> {{ checkText(r.after) }}</div> }
+                    @case ('appliesTo') { <div class="ba">{{ appliesText(r.before) }} <mat-icon class="inline">arrow_forward</mat-icon> {{ appliesText(r.after) }}</div> }
+                    @case ('topic') { <div class="ba">{{ topicName(r.before.topic) }} <mat-icon class="inline">arrow_forward</mat-icon> {{ topicName(r.after.topic) }}</div> }
+                    @case ('code') { <div class="ba mono">{{ r.before.code }} <mat-icon class="inline">arrow_forward</mat-icon> {{ r.after.code }}</div> }
+                    @case ('source') { <div class="ba">{{ sourceLabel[r.before.source.kind] }} {{ r.before.source.version ?? '' }} <mat-icon class="inline">arrow_forward</mat-icon> {{ sourceLabel[r.after.source.kind] }} {{ r.after.source.version ?? '' }}</div> }
+                  }
+                </div>
+              }
+              @if (!r.fields.length) { <p class="muted">Sem o antes no catálogo para comparar.</p> }
+            } @else {
+              @let s = r.after ?? r.before;
+              @if (s) {
+                <p class="text" [innerHTML]="md(s.textPt)"></p>
+                @if (s.textEn) { <p class="text text--en" [innerHTML]="md(s.textEn)"></p> }
+                @if (s.examples.good.length || s.examples.bad.length) { <pre class="pre diff mono">{{ examplesText(s) }}</pre> }
+                <div class="ba muted">Aplica-se a: {{ appliesText(s) }} · conferência: {{ checkText(s) }}
+                  @if (s.source.ref) { · origem <span class="mono">{{ s.source.ref }}</span> }</div>
+              }
+            }
+          </div>
+        }
+      </div>
+    } @empty {
+      @if (rows().length) { <p class="muted">Nenhum item com este filtro.</p> }
+    }
+
+    <div class="actions-row sticky-actions">
+      <span class="muted">{{ acceptedCount() }} de {{ rows().length }} aceito(s)</span>
+      <span class="ms-auto"></span>
+      <button mat-button type="button" (click)="discard()">Descartar</button>
+      <button mat-flat-button type="button" (click)="apply()" [disabled]="applying() || !acceptedCount()">
+        @if (applying()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>publish</mat-icon> } Aplicar no catálogo
+      </button>
+    </div>
+  </section>
+}
+
+<section class="panel">
+  <div class="panel__head"><h3>Últimas importações</h3><span class="muted">da trilha da governança</span></div>
+  @if (history().length) {
+    <ul class="hist">
+      @for (e of history(); track e.id) {
+        <li><span class="muted">{{ dt(e.startedAt) }}</span> · {{ e.userName || '—' }} · {{ e.detail || e.action }}</li>
+      }
+    </ul>
+  } @else {
+    <p class="muted">Nenhuma importação aplicada ainda.</p>
+  }
+</section>

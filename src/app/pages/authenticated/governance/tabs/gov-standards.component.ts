@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { GovernanceStore, STANDARDS_VIEWS, StandardsView } from '../governance.store';
 import { GovStandardsCatalogComponent } from './gov-standards-catalog.component';
+import { GovStandardsImportComponent } from './gov-standards-import.component';
 
 /**
  * Padrões de banco e de aplicação (0101): convenções que a análise e a correção seguem ao escrever SQL, migrações e
@@ -11,7 +12,7 @@ import { GovStandardsCatalogComponent } from './gov-standards-catalog.component'
 @Component({
   selector: 'app-gov-standards',
   standalone: true,
-  imports: [MatIconModule, GovStandardsCatalogComponent],
+  imports: [MatIconModule, GovStandardsCatalogComponent, GovStandardsImportComponent],
   template: `
     <div class="std-nav">
       <div class="seg" role="tablist" aria-label="Vistas dos padrões">
@@ -23,6 +24,7 @@ import { GovStandardsCatalogComponent } from './gov-standards-catalog.component'
       <span class="muted">Padrões são convenções que a análise e a correção seguem ao escrever SQL, migrações e código; as regras barram ações.</span>
     </div>
     @switch (store.standardsView()) {
+      @case ('importar') { <app-gov-standards-import></app-gov-standards-import> }
       @default { <app-gov-standards-catalog></app-gov-standards-catalog> }
     }
   `,
