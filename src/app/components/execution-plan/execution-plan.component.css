@@ -743,12 +743,12 @@
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
 }
-.plan--expanded .plan__steps {
+.plan--split .plan__steps {
   flex: 0 0 min(440px, 42%);
   border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
-.plan--expanded .step__chevron { display: none; }
-.plan--expanded .step--open {
+.plan--split .step__chevron { display: none; }
+.plan--split .step--open {
   background: color-mix(in srgb, var(--mat-sys-primary) 12%, transparent);
   box-shadow: inset 3px 0 0 var(--mat-sys-primary);
 }
@@ -1147,22 +1147,22 @@
     box-sizing: border-box;
     padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   }
-  .plan--expanded .plan__steps {
+  .plan--split .plan__steps {
     flex: 1 1 auto;
     border-right: none;
     overscroll-behavior: contain;
   }
-  .plan--expanded .step__chevron { display: inline-block; transform: rotate(-90deg); }
-  .plan--expanded .step--open { box-shadow: none; }
-  .plan--expanded .plan__detail { display: none; }
-  .plan--expanded.plan--detail-open .plan__steps { display: none; }
-  .plan--expanded.plan--detail-open .plan__detail {
+  .plan--split .step__chevron { display: inline-block; transform: rotate(-90deg); }
+  .plan--split .step--open { box-shadow: none; }
+  .plan--split .plan__detail { display: none; }
+  .plan--split.plan--detail-open .plan__steps { display: none; }
+  .plan--split.plan--detail-open .plan__detail {
     display: flex;
     padding: 0 16px 24px;
     overscroll-behavior: contain;
   }
 
-  .plan--expanded .plan__summary-btn {
+  .plan--split .plan__summary-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -1177,7 +1177,7 @@
     font-size: 14px;
     cursor: pointer;
   }
-  .plan--expanded .plan__summary-btn .mat-icon { font-size: 18px; width: 18px; height: 18px; }
+  .plan--split .plan__summary-btn .mat-icon { font-size: 18px; width: 18px; height: 18px; }
 
   .plan__detail-nav {
     position: sticky;
@@ -1195,9 +1195,9 @@
   .plan__detail-pos { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--plan-muted); }
 
   /* Leitura: corpo 16px, entrelinha folgada. */
-  .plan--expanded .plan__meta-title { white-space: normal; font-size: 15px; }
-  .plan--expanded .step__title { font-size: 15px; }
-  .plan--expanded .step__sub, .plan--expanded .step__activity { font-size: 13.5px; }
+  .plan--split .plan__meta-title { white-space: normal; font-size: 15px; }
+  .plan--split .step__title { font-size: 15px; }
+  .plan--split .step__sub, .plan--split .step__activity { font-size: 13.5px; }
   .plan__detail .plan__detail-title { font-size: 19px; line-height: 1.3; }
   .plan__detail .plan-md { font-size: 16px; line-height: 1.6; }
   .plan__detail .plan-md ::ng-deep h1,

@@ -43,6 +43,7 @@ import { WorkItemActionsService } from '../../../components/work-items/work-item
 import { WorkItem, WorkItemStatus, formatWorkNumber, itemLook, waitingForResolve, waitsForPerson } from '../../../components/work-items/work-item.model';
 import { listenWorkItems } from '../../../components/work-items/work-items-live';
 import { WorkbenchCardComponent } from '../../../components/workbench-card/workbench-card.component';
+import { FullscreenPanel } from '../../../helpers/fullscreen-panel';
 import { openWorkbenchCard } from '../../../components/workbench-card/workbench-card-dialog.component';
 import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workbench-prs.component';
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
@@ -213,6 +214,21 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
 
   private readonly planCmp = viewChild(ExecutionPlanComponent);
   private readonly timelineCmp = viewChild(CardTimelineComponent);
+  private readonly execHost = viewChild<ElementRef<HTMLElement>>('execHost');
+  private readonly execPanel = viewChild<ElementRef<HTMLElement>>('execPanel');
+
+  /**
+   * 0100: a seção Execução inteira (aviso + seletor do item + plano) em tela cheia, com a mesma animação do Card e da
+   * Linha do tempo. O plano dentro dela usa o layout dividido (`[wide]`: etapas | detalhes) e o botão de tela cheia do
+   * próprio plano some (um botão só).
+   */
+  readonly execFull = new FullscreenPanel({
+    host: () => this.execHost()!.nativeElement,
+    panel: () => this.execPanel()?.nativeElement,
+    expandedClass: 'wb-execwrap--expanded',
+    maxWidth: 1320
+  });
+  readonly execExpanded = this.execFull.expanded;
 
   /** Número digitado na busca. */
   query = '';
@@ -543,6 +559,13 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
       untracked(() => this.tabs.setMeta(this.tabScreen.tabId(), { label: null, status }));
     });
 
+    // Outro card (ou o corpo sumiu): a Execução em tela cheia volta para o lugar.
+    effect(() => {
+      this.card();
+      this.hasBody();
+      untracked(() => { if (this.execExpanded()) this.execFull.close(); });
+    });
+
     // Card aberto: o tour continua/começa com os passos do card.
     effect(() => {
       if (this.cardState() === 'found' && this.tabScreen.active()) {
@@ -560,6 +583,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.execFull.destroy();
     this.narrowMedia?.removeEventListener('change', this.onNarrowChange);
     this.stopPlanItems?.();
     this.cardSub?.unsubscribe();
@@ -663,13 +687,20 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   // ── Abas ────────────────────────────────────────────────────────────────────────────────────
 
   selectMain(tab: WorkbenchMainTab): void {
+    if (tab !== 'plan') this.closeExecFull();
     this.pickedTab.set(tab);
     this.pickedMobileTab.set(null);
   }
 
   selectMobile(tab: WorkbenchMobileTab): void {
+    if (tab !== 'plan') this.closeExecFull();
     if (tab !== 'chat') this.pickedTab.set(tab);
     this.pickedMobileTab.set(tab);
+  }
+
+  /** Outra aba (ou o Especialista) pedida com a Execução em tela cheia: ela volta para o lugar antes. */
+  private closeExecFull(): void {
+    if (this.execExpanded()) this.execFull.close();
   }
 
   // ── Execução do item ────────────────────────────────────────────────────────────────────────
@@ -782,6 +813,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   }
 
   private flashChat(): void {
+    this.closeExecFull();
     this.setChatCollapsed(false);
     clearTimeout(this.flashTimer);
     this.chatFlash.set(true);

@@ -2,7 +2,8 @@
      [attr.role]="expanded() ? 'dialog' : null" [attr.aria-modal]="expanded() ? 'true' : null"
      [attr.aria-label]="expanded() ? 'Plano de execução em tela cheia' : null"
      [class.plan--dropping]="panelDropping()"
-     [class.plan--detail-open]="expanded() && narrow() && mobileDetail()"
+     [class.plan--split]="split()"
+     [class.plan--detail-open]="split() && narrow() && mobileDetail()"
      (pointerdown)="markInteraction()" (wheel)="markInteraction()" (touchmove)="markInteraction()"
      (dragover)="onPanelDragOver($event)" (dragleave)="onPanelDragLeave($event)" (drop)="onPanelDrop($event)"
      (paste)="onPanelPaste($event)">
@@ -257,11 +258,13 @@
         }
       </mat-menu>
     }
-    <button mat-icon-button class="plan__expand" (click)="fullscreen.toggle()"
-            [matTooltip]="expanded() ? 'Sair da tela cheia (Esc)' : 'Abrir em tela cheia'"
-            [attr.aria-label]="expanded() ? 'Sair da tela cheia' : 'Abrir em tela cheia'">
-      <mat-icon>{{ expanded() ? 'close_fullscreen' : 'open_in_full' }}</mat-icon>
-    </button>
+    @if (showExpand()) {
+      <button mat-icon-button class="plan__expand" (click)="fullscreen.toggle()"
+              [matTooltip]="expanded() ? 'Sair da tela cheia (Esc)' : 'Abrir em tela cheia'"
+              [attr.aria-label]="expanded() ? 'Sair da tela cheia' : 'Abrir em tela cheia'">
+        <mat-icon>{{ expanded() ? 'close_fullscreen' : 'open_in_full' }}</mat-icon>
+      </button>
+    }
   </div>
 
   @if (plan(); as p) {
@@ -547,7 +550,7 @@
         <div class="plan__meta">
           <span class="plan__meta-kicker">{{ p.phase === 'correction' ? terms().fixPlan : 'Plano de análise' }}</span>
           <span class="plan__meta-title" [matTooltip]="p.title">{{ p.title }}</span>
-          @if (expanded() && narrow()) {
+          @if (split() && narrow()) {
             <button type="button" class="plan__summary-btn" (click)="openMobileDetail(null)">
               <mat-icon>subject</mat-icon> Resumo e andamento geral do plano
             </button>
@@ -642,13 +645,13 @@
                     <span class="step__time" [class.step__time--you]="step.you === 'unblock'"
                           [matTooltip]="step.you === 'unblock' ? 'Tempo desde o início da etapa — ela está parada esperando você' : ''">{{ duration(step) }}</span>
                   }
-                  @if (!expanded()) {
+                  @if (!split()) {
                     <mat-icon class="step__chevron">expand_more</mat-icon>
                   }
                 </span>
               </button>
 
-              @if (step.you && isActive() && (expanded() || selectedKey() !== step.key)) {
+              @if (step.you && isActive() && (split() || selectedKey() !== step.key)) {
                 <!-- 0037: a ação do usuário fica na própria linha, sem precisar abrir a etapa. -->
                 <div class="step__cta">
                   @if (step.you === 'unblock') {
@@ -665,7 +668,7 @@
                 </div>
               }
 
-              @if (!expanded() && selectedKey() === step.key) {
+              @if (!split() && selectedKey() === step.key) {
                 <div class="step__details">
                   <ng-container *ngTemplateOutlet="details; context: { $implicit: step }"></ng-container>
                 </div>
@@ -678,7 +681,7 @@
       }
     </div>
 
-    @if (expanded() && plan()) {
+    @if (split() && plan()) {
       <div class="plan__detail" #detailBody data-keep-scroll>
         @if (narrow()) {
           <!-- 0043: celular — volta para a lista e anda entre as etapas sem sair da tela cheia. -->

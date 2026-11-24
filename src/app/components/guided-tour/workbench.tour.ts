@@ -22,10 +22,12 @@ import { TourDefinition } from './tour.model';
  * Arquivos); "Cancelar e desfazer" virou ícone no cabeçalho do plano; o aviso da Execução fecha e volta pelo ⓘ.
  * v9: as **sugestões do PRMake** saíram da aba Itens para um botão na barra de horas (pisca quando há sugestão e abre um
  * popover); a aba Itens mostra só a situação do card acima da lista.
+ * v11 (0100): as abas ocupam uma linha inteira e as horas (+ situação e sugestões) ganham uma linha própria abaixo; a
+ * seção **Execução** inteira abre em **tela cheia** (mesma animação do Card e da Linha do tempo); nova aba **AWS**.
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 10,
+  version: 11,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -88,7 +90,7 @@ export const WORKBENCH_TOUR: TourDefinition = {
       prepare: 'tab:card',
       title: 'Aba Card: horas e texto',
       body: 'A aba <b>Card</b> reúne as horas (lance <b>+1h</b>, <b>+2h</b>, <b>+4h</b> ou outro valor), os dados principais e o texto ' +
-        'do card. O botão <b>Card</b> da barra abre o mesmo conteúdo num modal; a linha de horas fica sempre ao lado das abas.',
+        'do card. O botão <b>Card</b> da barra abre o mesmo conteúdo num modal; a linha de horas fica sempre logo abaixo das abas.',
       detail: 'No Bug, as horas lançadas comparadas com a média dos bugs (acima ou abaixo); na US, o planejado × o realizado. ' +
         'Lançar horas pede uma confirmação curta e grava no DevOps (soma em Completed e tira do Remaining). Também ficam aqui ' +
         'estado, área, iteração, responsável, prioridade, datas, anexos/links e o texto (Repro Steps no Bug; descrição e ' +
@@ -175,6 +177,15 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'as regras da Base Solvace e os arquivos e imagens do item.',
       detail: 'Itens e sub-tarefas de código trazem a descrição do que muda, o link <code>caminho:linhas</code> que abre o popover com o ' +
         'código atual e o diff, os itens da engenharia reversa (<code>modulo#RN-012</code>) e os arquivos do item na visão geral.'
+    },
+    {
+      id: 'exec-full', anchor: 'wb-exec-full', group: 'Execução', since: 11, phase: 'card', side: 'bottom', align: 'end',
+      optional: true, prepare: 'tab:plan',
+      title: 'Execução em tela cheia',
+      body: 'Este botão abre a <b>Execução inteira</b> — o seletor do item e o plano — em tela cheia: as etapas à esquerda e o ' +
+        'detalhe da etapa à direita. <b>Esc</b> ou o mesmo botão voltam.',
+      detail: 'A tela cheia leva a mesma seção (nada recarrega: o tempo real e a rolagem continuam) e dá para trocar de item ' +
+        'por lá. No celular ela ocupa a tela toda, uma coluna por vez (lista → etapa).'
     },
     {
       id: 'plan-files', anchor: 'plan-files', group: 'Execução', since: 8, phase: 'card', side: 'bottom', align: 'end',

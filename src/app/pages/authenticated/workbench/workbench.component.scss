@@ -210,20 +210,18 @@
   gap: 8px;
 }
 
-// Linha do segmentado (Itens de trabalho | Execução | Arquivos | Card) + a linha de horas do card à direita, numa linha só.
-// Quando aperta, a linha se adapta em vez de quebrar: as abas encurtam ("Itens"; depois só o ícone nas não ativas) e as
-// horas se compactam medindo o que cabe (rótulo, média do time, rótulos curtos, barra e, por fim, a pastilha com popover).
+// 0100: as abas ocupam uma linha inteira da coluna principal (até o Especialista), com os botões esticados; as horas do
+// card (+ situação e sugestões) ficam numa linha própria logo abaixo. Quando a coluna aperta, as abas encurtam ("Itens") e,
+// depois, as não ativas ficam só com o ícone (o tooltip diz o nome).
 .wb-segrow {
   flex: none;
   display: flex;
-  align-items: center;
-  gap: 6px 10px;
   min-width: 0;
   container-type: inline-size;
   container-name: wb-segrow;
 }
 .wb-hoursline {
-  flex: 1 1 0;
+  flex: none;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -246,19 +244,21 @@
     .hr__bar { flex-basis: 64px; }
   }
 }
-@container wb-segrow (max-width: 900px) {
+@container wb-segrow (max-width: 780px) {
   .wb-seg .wb-seg__long { display: none; }
   .wb-seg .wb-seg__short { display: inline; }
 }
-@container wb-segrow (max-width: 680px) {
-  .wb-seg__btn:not(.wb-seg__btn--on) { padding: 0 9px; }
+@container wb-segrow (max-width: 580px) {
+  .wb-seg__btn:not(.wb-seg__btn--on) { flex: 0 1 auto; padding: 0 10px; }
   .wb-seg__btn:not(.wb-seg__btn--on) .wb-seg__label { display: none; }
+  .wb-seg__btn--on { flex: 1 1 auto; }
 }
 
 // Controle segmentado Itens de trabalho | Plano | Card
 .wb-seg {
-  flex: none;
-  display: inline-flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
   padding: 3px;
   gap: 2px;
   border-radius: 10px;
@@ -266,8 +266,12 @@
   border: 1px solid var(--wb-border);
 }
 .wb-seg__btn {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   height: 30px;
   padding: 0 12px;
@@ -376,6 +380,56 @@
 :host ::ng-deep app-card-assistant .as__hours { display: none; }
 .wb-pane--plan { overflow: hidden; }
 .wb-plan { display: block; flex: 1 1 auto; min-height: 0; }
+
+// 0100: a seção Execução (aviso + seletor + plano) — no lugar, ocupa a aba; em tela cheia (FullscreenPanel), vira o modal.
+// Fora do :host quando aberta (vai para o <body>): as variáveis da Bancada são repetidas aqui.
+.wb-execwrap {
+  --wb-border: var(--cc-surface-border, rgba(255, 255, 255, .08));
+  --wb-muted: var(--cc-text-2, rgba(255, 255, 255, .66));
+  --wb-faint: var(--cc-text-3, rgba(255, 255, 255, .45));
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--mat-sys-on-surface);
+}
+.wb-execwrap--expanded {
+  position: fixed;
+  z-index: 1000;
+  box-sizing: border-box;
+  padding: 12px 14px 14px;
+  border-radius: 14px;
+  background: var(--surface-3, #212730);
+  border: 1px solid rgba(255, 255, 255, .1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .55);
+  overflow: hidden;
+
+  .wb-exec__about { margin-bottom: 0; }
+  // Em tela cheia a barra de etapas volta (há altura) e o plano usa o resto da altura.
+  .wb-plan { flex: 1 1 auto; min-height: 0; height: auto; }
+}
+@media (max-width: 768px) {
+  .wb-execwrap--expanded {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px))
+             calc(8px + env(safe-area-inset-bottom, 0px)) calc(8px + env(safe-area-inset-left, 0px));
+  }
+}
+.wb-exec__full.mat-mdc-icon-button {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 5px;
+  --mdc-icon-button-state-layer-size: 34px;
+  color: var(--wb-muted);
+
+  .mat-icon { font-size: 20px; width: 20px; height: 20px; }
+  &:hover { color: var(--mat-sys-primary); }
+}
+.wb-execwrap--expanded .wb-exec__full.mat-mdc-icon-button { color: var(--mat-sys-primary); }
 
 // Execução do item (rodada 3): seletor dos itens com plano — a versão é o item de trabalho. Uma linha só: o título do
 // item trunca e, em largura menor, saem o rótulo "Execução do item" e o texto de "Arquivos do item" (fica o ícone).
@@ -611,7 +665,7 @@
   }
 
   .wb-body { display: flex; flex-direction: column; gap: 10px; }
-  .wb-seg { display: none; }
+  .wb-seg, .wb-segrow { display: none; }
   .wb-main, .wb-side { min-height: calc(100dvh - var(--cime-topbar-total, 70px) - var(--cime-tabs-h, 30px) - var(--wb-tabs-h) - 140px); }
   .wb-pane, .wb-pane--plan { overflow: visible; }
 
@@ -687,6 +741,7 @@
   .mat-icon { font-size: 17px; width: 17px; height: 17px; }
 }
 .wb-exec__files { margin-left: auto; flex: none; white-space: nowrap; }
+.wb-exec__none + .wb-exec__full { margin-left: auto; }
 .wb-exec__files mat-icon { margin-right: 4px; }
 @keyframes wb-about-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .wb-exec__about { animation: none; } }
@@ -697,5 +752,5 @@
 /* A barra de etapas do plano repete a lista de baixo (serve para rolar até a etapa): em telas baixas ou estreitas
    (notebook) ela some para sobrar espaço; em tela grande e com o plano em tela cheia continua. */
 @media (min-width: 1024px) and (max-height: 880px), (min-width: 1024px) and (max-width: 1280px) {
-  .wb-plan ::ng-deep .plan:not(.plan--expanded) .vbar--steps-only { display: none; }
+  .wb-plan ::ng-deep .plan:not(.plan--split) .vbar--steps-only { display: none; }
 }
