@@ -4,9 +4,12 @@ import { GovCardFilter, GovEventFilter, GovRange, GovernanceApi, RuleTestRequest
 import {
   EvaluateResponse, GovOutcome, GovPage, GovSource, GovernanceCardDetail, GovernanceCardRow, GovernanceEvent, GovernanceHook,
   GovernanceOverview, GovernanceRule, GovernanceSettings, GovernanceTaskRow, GovernanceUserDetail, GovernanceUserRow, SOURCES,
+  Standard, StandardCheckRequest, StandardCheckResponse, StandardDraft, StandardFilter, StandardImportResult, StandardModuleOption,
   TimelineRow,
 } from './governance.model';
 import { evaluateLocally, median, normalizeRule, percentile } from './governance.logic';
+import { changedFields, checkLocally, filterStandards, normalizeStandard } from './standards.logic';
+import { DEMO_MODULES, DEMO_STANDARDS, appStandardsFor, demoWikiSnapshot } from './standards.demo';
 import { parseApiDate } from '../usage/usage.model';
 
 /**
@@ -104,10 +107,13 @@ export class GovernanceDemoApi implements GovernanceApi {
   private readonly cardsState: DemoCard[] = [];
   private readonly eventsState: GovernanceEvent[] = [];
   private changesState: GovernanceEvent[] = [];
+  private standardsState: Standard[] = DEMO_STANDARDS.map((s) => structuredClone(s));
+  private readonly drafts = new Map<string, StandardDraft>();
   private nextId = 1;
 
   constructor() {
     for (let i = 0; i < 30; i++) this.genCard(i);
+    this.genStandardFindings();
     this.eventsState.sort((a, b) => (parseApiDate(b.startedAt) ?? 0) - (parseApiDate(a.startedAt) ?? 0));
     this.changesState = [
       this.ev({ user: USERS[0], source: 'screen', action: 'PUT Governance/rules/{id}', category: 'governance', start: this.now - 4 * 24 * H, dur: 180, detail: 'qa-only-support: efeito Monitorar → Avisar' }),
@@ -166,7 +172,7 @@ export class GovernanceDemoApi implements GovernanceApi {
         .map(([key, list]) => ({ key, count: list.length, medianMs: median(list.map((e) => e.durationMs ?? 0)) }))
         .sort((a, b) => b.count - a.count).slice(0, 12),
       topRules: [...ruleHits.entries()]
-        .map(([key, v]) => ({ key, name: this.rulesState.find((x) => x.key === key)?.name ?? key, ...v }))
+        .map(([key, v]) => ({ key, name: this.rulesState.find((x) => x.key === key)?.name ?? this.standardsState.find((x) => x.key === key)?.title ?? key, ...v }))
         .sort((a, b) => b.count - a.count),
     });
   }
@@ -323,6 +329,173 @@ export class GovernanceDemoApi implements GovernanceApi {
 
   changes(take = 100): Observable<GovernanceEvent[]> {
     return later(this.changesState.slice(0, take));
+  }
+
+  // ---- padrões (0101) ----
+
+  standards(f: StandardFilter = {}): Observable<Standard[]> {
+    return later(filterStandards(this.standardsState, {
+      area: f.area ?? null, status: f.status ?? null, topic: f.topic ?? null, repository: f.repository ?? null, module: f.module ?? null,
+      search: f.search ?? null,
+    }).map((s) => structuredClone(s)));
+  }
+
+  createStandard(s: Standard): Observable<Standard> {
+    if (this.standardsState.some((x) => x.key === s.key)) return failLater(409, 'Já existe padrão com essa chave.');
+    const saved = normalizeStandard({ ...structuredClone(s), id: `st-${Date.now()}`, source: { kind: 'manual', ref: '', version: null, url: null },
+      updatedAt: localIso(Date.now()), updatedBy: 'Você (exemplo)' });
+    this.standardsState.push(saved);
+    this.change('POST Governance/standards', `${saved.key}: criado`);
+    return later(structuredClone(saved));
+  }
+
+  updateStandard(s: Standard): Observable<Standard> {
+    const i = this.standardsState.findIndex((x) => x.id === s.id);
+    if (i < 0) return failLater(404, 'Padrão não encontrado.');
+    const cur = this.standardsState[i];
+    const saved = normalizeStandard({ ...structuredClone(s), key: cur.key, source: cur.source, updatedAt: localIso(Date.now()), updatedBy: 'Você (exemplo)' });
+    this.standardsState[i] = saved;
+    this.change('PUT Governance/standards/{id}', `${saved.key}: ${changedFields(cur, saved).map((f) => f.label.toLowerCase()).join(', ') || 'sem mudança'}`);
+    return later(structuredClone(saved));
+  }
+
+  deleteStandard(id: string): Observable<unknown> {
+    const cur = this.standardsState.find((x) => x.id === id);
+    if (!cur) return failLater(404, 'Padrão não encontrado.');
+    if (cur.source.kind !== 'manual') return failLater(409, 'Só padrões manuais podem ser apagados (descontinue os importados).');
+    this.standardsState = this.standardsState.filter((x) => x.id !== id);
+    this.change('DELETE Governance/standards/{id}', `${cur.key}: apagado`);
+    return later(null);
+  }
+
+  checkStandards(req: StandardCheckRequest): Observable<StandardCheckResponse> {
+    // A conferência embutida "fk-name" do backend vira uma regex aqui (só para a demonstração).
+    const list = this.standardsState.map((s) => (s.check.kind === 'builtin' && s.check.pattern === 'fk-name'
+      ? { ...s, check: { ...s.check, kind: 'regex' as const, pattern: '\\bCONSTRAINT\\s+(?!FK_)\\[?\\w+\\]?\\s+FOREIGN\\s+KEY' } } : s));
+    const r = checkLocally(list, req, this.settingsState.mode === 'off' ? 'monitor' : this.settingsState.mode);
+    if (r.findings.length) {
+      const outcome: GovOutcome = r.decision === 'block' ? 'blocked' : r.decision === 'warn' ? 'warned' : 'monitored';
+      this.eventsState.unshift(this.ev({
+        user: { id: 'u-demo', name: 'Você (exemplo)', role: 'admin' }, source: 'screen', action: 'POST Governance/standards/check', category: 'standard',
+        start: Date.now(), dur: 90, card: req.card, outcome, rules: [...new Set(r.findings.map((f) => f.key))],
+        detail: `${req.repository ? `repo: ${req.repository} · ` : ''}${req.path ?? req.target} · ${r.findings.length} achado(s)`,
+      }));
+    }
+    return later(r);
+  }
+
+  importStandardsWiki(url: string): Observable<StandardDraft> {
+    if (!/_wiki\//.test(url)) return failLater(400, 'O endereço não é de uma página de wiki do Azure DevOps.');
+    const snap = demoWikiSnapshot();
+    const cur = this.standardsState.filter((s) => s.source.kind === 'wiki');
+    return later(this.draft('wiki', snap, cur, '2.1', { url }));
+  }
+
+  importStandardsReverse(modules: string[] | null): Observable<StandardDraft> {
+    const keys = modules?.length ? modules : DEMO_MODULES.filter((m) => m.published).map((m) => m.key);
+    const proposed = keys.flatMap((m) => appStandardsFor(m, 1));
+    const cur = this.standardsState.filter((s) => s.source.kind === 'reverse-engineering' && s.appliesTo.modules.some((m) => keys.includes(m)));
+    return later(this.draft('reverse-engineering', proposed, cur, 'ER publicada em 24/11', { modules: keys }));
+  }
+
+  applyStandardsImport(draftId: string, accept: string[]): Observable<StandardImportResult | null> {
+    const d = this.drafts.get(draftId);
+    if (!d) return failLater(404, 'Rascunho não encontrado (expirou?). Leia a origem de novo.');
+    const ok = new Set(accept);
+    let added = 0;
+    let changed = 0;
+    let removed = 0;
+    for (const a of d.added) {
+      if (!ok.has(a.key) || this.standardsState.some((x) => x.key === a.key)) continue;
+      this.standardsState.push(normalizeStandard({ ...structuredClone(a), id: `st-${a.key}`, updatedAt: localIso(Date.now()), updatedBy: 'Você (exemplo)' }));
+      added++;
+    }
+    for (const c of d.changed) {
+      const after = 'after' in c ? c.after : c;
+      const i = this.standardsState.findIndex((x) => x.key === after.key);
+      if (!ok.has(after.key) || i < 0) continue;
+      this.standardsState[i] = normalizeStandard({ ...structuredClone(after), id: this.standardsState[i].id, updatedAt: localIso(Date.now()), updatedBy: 'Você (exemplo)' });
+      changed++;
+    }
+    for (const r of d.removed) {
+      const key = typeof r === 'string' ? r : r.key;
+      if (!ok.has(key)) continue;
+      this.standardsState = this.standardsState.filter((x) => x.key !== key);
+      removed++;
+    }
+    this.drafts.delete(draftId);
+    this.change(`POST Governance/standards/import/{id}/apply`,
+      `${d.source === 'wiki' ? `wiki v${d.version}` : 'engenharia reversa'}: ${added} novo(s), ${changed} alterado(s), ${removed} removido(s)`);
+    return later({ added, changed, removed, applied: added + changed + removed });
+  }
+
+  standardModules(): Observable<StandardModuleOption[]> {
+    return later(DEMO_MODULES.map((m) => ({ ...m })));
+  }
+
+  /** Diferença entre a origem e o catálogo: efeito, estado e conferência do catálogo são preservados nos alterados. */
+  private draft(source: 'wiki' | 'reverse-engineering', incoming: Standard[], current: Standard[], version: string,
+    extra: Partial<StandardDraft>): StandardDraft {
+    const byKey = new Map(current.map((s) => [s.key, s]));
+    const inKeys = new Set(incoming.map((s) => s.key));
+    const added: Standard[] = [];
+    const changed: { before: Standard; after: Standard }[] = [];
+    for (const s of incoming) {
+      const before = byKey.get(s.key);
+      if (!before) {
+        added.push(normalizeStandard({ ...structuredClone(s), id: '' }));
+        continue;
+      }
+      const after = normalizeStandard({ ...structuredClone(before), title: s.title, textPt: s.textPt, textEn: s.textEn, examples: s.examples, source: s.source });
+      const content = changedFields(before, after).filter((f) => f.key !== 'source');
+      if (content.length) changed.push({ before: structuredClone(before), after });
+    }
+    const removed = current.filter((s) => !inKeys.has(s.key)).map((s) => structuredClone(s));
+    const id = `d-${Date.now()}`;
+    const d: StandardDraft = { id, added, changed, removed, version, source, createdAt: localIso(Date.now()), createdBy: 'Você (exemplo)', ...extra };
+    this.drafts.set(id, d);
+    return structuredClone(d);
+  }
+
+  /** Achados de padrão na trilha (categoria `standard`), nos cards de exemplo. */
+  private genStandardFindings(): void {
+    const rnd = mulberry32(101);
+    const pick = <T>(a: T[]) => a[Math.floor(rnd() * a.length)];
+    const hits: [string, string, string][] = [
+      ['db-c1', 'Scripts/99_{card}_relatorio.sql', 'SELECT * FROM actionPlan.ActionPlan'],
+      ['db-fk5', 'Scripts/99_{card}_fk.sql', 'FOREIGN KEY (AreaId) REFERENCES area.Area (AreaId) ON DELETE CASCADE'],
+      ['db-fk7', 'Migrations/20261118_AddAreaFk.cs', 'FK_actionPlan_ActionPlan_AreaId sem índice de suporte'],
+      ['db-n14', 'Scripts/99_{card}_proc.sql', 'CREATE PROCEDURE dbo.sp_ListaPlanos'],
+      ['db-ix3', 'Scripts/99_{card}_indice.sql', 'CREATE INDEX IX_ActionPlan_SiteId ON actionPlan.ActionPlan (SiteId)'],
+      ['db-g7', 'Migrations/20261120_Initial.cs', '.OnDelete(DeleteBehavior.Cascade)'],
+      ['db-c2', 'Scripts/99_{card}_custo.sql', 'Cost MONEY NOT NULL'],
+      ['db-pk10', 'Scripts/99_{card}_tabela.sql', 'PRIMARY KEY (LossId)'],
+      ['app-actionplan-api', 'src/actionplan.api/Controllers/ExportController.cs', '[Route("export/[action]")]'],
+      ['app-actionplan-data-access', 'src/actionplan.application/Services/ReportService.cs', 'using var cn = new SqlConnection(cs);'],
+      ['manual-sql-script-name', 'fix.sql', 'fix.sql'],
+    ];
+    const weights = [9, 4, 7, 3, 6, 3, 2, 2, 2, 2, 3];
+    const bag = hits.flatMap((h, i) => Array<[string, string, string]>(weights[i]).fill(h));
+    const repoOf = (key: string, file: string) =>
+      key.startsWith('app-actionplan') ? 'solvace-revamp-actionplan-api' : file.startsWith('Migrations') ? pick(['solvace-revamp-kpi-api', 'solvace-revamp-actionplan-api']) : pick(['edv-solvace-api', 'edv-solvace-api', 'solvace-loss-tree-api']);
+    for (let i = 0; i < 70; i++) {
+      const c = pick(this.cardsState);
+      const first = parseApiDate(c.row.firstActivityAt) ?? this.now;
+      const last = parseApiDate(c.row.lastActivityAt) ?? this.now;
+      const owner = USERS.find((u) => u.name === c.row.users[0]) ?? USERS[0];
+      const [key, fileT, excerpt] = pick(bag);
+      const file = fileT.replace('{card}', `${c.row.cardNumber}`);
+      const std = this.standardsState.find((s) => s.key === key);
+      const effect = std?.status === 'active' ? std.effect : 'monitor';
+      const outcome: GovOutcome = effect === 'monitor' ? 'monitored' : this.settingsState.mode === 'enforce' ? (effect === 'block' ? 'blocked' : 'warned') : 'monitored';
+      const src = pick<GovSource>(['hook', 'hook', 'skill', 'mcp']);
+      this.eventsState.push(this.ev({
+        user: owner, source: src, card: c.row.cardNumber, category: 'standard', outcome, rules: [key],
+        action: src === 'hook' ? 'hook:PostToolUse:Write' : src === 'mcp' ? 'mcp:prmake_file' : 'POST Governance/standards/check',
+        start: first + rnd() * Math.max(1, last - first), dur: 40 + rnd() * 400,
+        detail: `repo: ${repoOf(key, file)} · ${file}:${1 + Math.floor(rnd() * 80)} · ${excerpt}`,
+      }));
+    }
   }
 
   // ---- geração ----

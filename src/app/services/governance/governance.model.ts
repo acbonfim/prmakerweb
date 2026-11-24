@@ -352,6 +352,7 @@ export const EVENT_CATEGORY_LABEL: Record<string, string> = {
   case: 'Caso (especialista)',
   config: 'Configuração',
   governance: 'Governança',
+  standard: 'Padrão (0101)',
   knowledge: 'Base Solvace',
   session: 'Sessão',
   tool: 'Ferramenta',
@@ -427,3 +428,211 @@ export function labelOf(map: Record<string, string>, key: string | null | undefi
   if (!key) return '—';
   return map[key] ?? key;
 }
+
+// ───────────────────────── 0101: padrões de banco e de aplicação ─────────────────────────
+// Fonte da verdade: `features/0101/plan.md` (Contratos) no backend. Padrão ≠ regra: é convenção que a análise e a
+// correção seguem ao escrever SQL, migrações e código; achados entram na trilha com a categoria `standard`.
+
+export type StandardArea = 'database' | 'application';
+export type StandardStatus = 'proposed' | 'active' | 'deprecated';
+export type StandardEffect = 'monitor' | 'warn' | 'block';
+/** `builtin` = conferência embutida no código do backend (ex.: nome de FK fora do padrão); `pattern` = nome dela. */
+export type StandardCheckKind = 'none' | 'regex' | 'path' | 'sql' | 'builtin';
+export type StandardCheckTarget = 'sql' | 'migration' | 'code' | 'path';
+export type StandardObjectScope = 'new' | 'migrated' | 'legacy';
+export type StandardSourceKind = 'wiki' | 'reverse-engineering' | 'manual';
+
+export interface StandardCheck {
+  kind: StandardCheckKind;
+  target: StandardCheckTarget | null;
+  pattern: string | null;
+  /** true = o texto/caminho PRECISA casar (não casar é o achado); false = casar é o achado. */
+  mustMatch: boolean;
+  sql: string | null;
+  /** Dica mostrada no achado (o backend aceita; fora do contrato da 0101). */
+  hint?: string | null;
+}
+
+export interface Standard {
+  id: string;
+  /** 'db-fk7', 'app-revamp-actionplan-layers' */
+  key: string;
+  /** ID na origem: 'FK7' */
+  code: string;
+  area: StandardArea;
+  /** table|column|schema|pk|fk|index|unique-index|default|check|view|procedure|query|general | layers|folders|naming|api|data-access|migrations */
+  topic: string;
+  title: string;
+  textPt: string;
+  textEn: string | null;
+  examples: { good: string[]; bad: string[] };
+  appliesTo: { platforms: string[]; repositories: string[]; modules: string[]; objects: StandardObjectScope[] };
+  source: { kind: StandardSourceKind; ref: string; version: string | null; url: string | null };
+  status: StandardStatus;
+  effect: StandardEffect;
+  check: StandardCheck;
+  order?: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+export interface StandardFinding {
+  key: string;
+  code: string;
+  title: string;
+  effect: string;
+  line: number | null;
+  excerpt: string;
+  hint: string;
+}
+
+export interface StandardCheckRequest {
+  text: string;
+  target: StandardCheckTarget;
+  path?: string;
+  repository?: string;
+  card?: number;
+}
+
+export interface StandardCheckResponse {
+  decision: GovDecision;
+  findings: StandardFinding[];
+  /** Se a API mandar (como no evaluate da 0098). */
+  mode?: GovMode;
+  wouldDecide?: GovDecision;
+}
+
+export interface StandardFilter {
+  area?: StandardArea | null;
+  status?: StandardStatus | null;
+  topic?: string | null;
+  repository?: string | null;
+  module?: string | null;
+  search?: string | null;
+}
+
+/** Item alterado no rascunho de importação: o antes (catálogo) e o depois (origem). */
+export interface StandardDraftChange {
+  before: Standard;
+  after: Standard;
+}
+
+/**
+ * Rascunho de importação (wiki ou engenharia reversa). O contrato diz `{ id, added[], changed[], removed[], version }`;
+ * `changed` pode vir como `{ before, after }` ou só o padrão novo, e `removed` como padrões ou chaves —
+ * `normalizeDraft` aceita os dois formatos.
+ */
+export interface StandardDraft {
+  id: string;
+  added: Standard[];
+  changed: (StandardDraftChange | Standard)[];
+  removed: (Standard | string)[];
+  version: string | null;
+  source?: StandardSourceKind | null;
+  url?: string | null;
+  modules?: string[] | null;
+  createdAt?: string | null;
+  createdBy?: string | null;
+}
+
+export interface StandardImportResult {
+  added?: number;
+  changed?: number;
+  removed?: number;
+  applied?: number;
+}
+
+/** Módulo da engenharia reversa (para importar a estrutura de aplicação). */
+export interface StandardModuleOption {
+  key: string;
+  name: string;
+  published: boolean;
+}
+
+/** Página 236 da wiki "Data Nomenclature and Rules (Nomenclatura e Regras de dados)". */
+export const STANDARDS_WIKI_URL =
+  'https://dev.azure.com/solvacelabs/Solvace%20Product%20Improvement/_wiki/wikis/Solvace-Product-Improvement.wiki/236';
+
+export const STANDARD_AREA_LABEL: Record<StandardArea, string> = {
+  database: 'Banco de dados',
+  application: 'Aplicação',
+};
+export const STANDARD_AREAS = Object.keys(STANDARD_AREA_LABEL) as StandardArea[];
+
+export const STANDARD_TOPIC_LABEL: Record<string, string> = {
+  general: 'Regras gerais',
+  schema: 'Schema',
+  table: 'Tabela',
+  column: 'Coluna e nomes',
+  pk: 'Chave primária',
+  fk: 'Chave estrangeira',
+  index: 'Índice',
+  'unique-index': 'Índice único',
+  default: 'Default',
+  check: 'Check',
+  view: 'View',
+  procedure: 'Procedure',
+  query: 'Consultas e tipos',
+  layers: 'Camadas',
+  folders: 'Pastas',
+  naming: 'Nomes',
+  api: 'API / endpoints',
+  'data-access': 'Acesso a dados',
+  migrations: 'Migrações',
+};
+/** Ordem dos assuntos na lista (os desconhecidos vão para o fim). */
+export const STANDARD_TOPICS = Object.keys(STANDARD_TOPIC_LABEL);
+
+export const STANDARD_STATUS_LABEL: Record<StandardStatus, string> = {
+  proposed: 'Proposto',
+  active: 'Vigente',
+  deprecated: 'Descontinuado',
+};
+export const STANDARD_STATUS_HINT: Record<StandardStatus, string> = {
+  proposed: 'Proposta (ex.: itens (NEW) da wiki): aguarda o DBA. Só monitora, qualquer que seja o efeito.',
+  active: 'Vale: a análise e a correção seguem; a conferência aplica o efeito.',
+  deprecated: 'Não vale mais: fica guardado para histórico e só monitora.',
+};
+export const STANDARD_STATUSES = Object.keys(STANDARD_STATUS_LABEL) as StandardStatus[];
+
+export const STANDARD_EFFECTS: StandardEffect[] = ['monitor', 'warn', 'block'];
+
+export const STANDARD_CHECK_KIND_LABEL: Record<StandardCheckKind, string> = {
+  none: 'Sem conferência',
+  regex: 'Expressão regular no texto',
+  path: 'Caminho do arquivo (glob)',
+  sql: 'Consulta de validação (banco)',
+  builtin: 'Conferência embutida',
+};
+export const STANDARD_CHECK_KIND_HINT: Record<StandardCheckKind, string> = {
+  none: 'Só orienta a análise e a correção; nada é conferido automaticamente.',
+  regex: 'Procura a expressão no SQL/DDL/código gravado pelas skills ou editado no Claude Code.',
+  path: 'Confere onde o arquivo fica (glob, ** atravessa pastas).',
+  sql: 'Consulta somente leitura da wiki, rodada sob demanda pela skill no banco de um ambiente; cada linha devolvida é um achado.',
+  builtin: 'Conferência feita pelo código do PRMake (ex.: nome de FK fora do padrão); o padrão abaixo é o nome dela.',
+};
+export const STANDARD_CHECK_KINDS = Object.keys(STANDARD_CHECK_KIND_LABEL) as StandardCheckKind[];
+
+export const STANDARD_CHECK_TARGET_LABEL: Record<StandardCheckTarget, string> = {
+  sql: 'SQL / DDL',
+  migration: 'Migração',
+  code: 'Código',
+  path: 'Caminho',
+};
+export const STANDARD_CHECK_TARGETS = Object.keys(STANDARD_CHECK_TARGET_LABEL) as StandardCheckTarget[];
+
+export const STANDARD_OBJECT_LABEL: Record<StandardObjectScope, string> = {
+  new: 'Objetos novos',
+  migrated: 'Módulos em migração',
+  legacy: 'Legado (dbo)',
+};
+export const STANDARD_OBJECTS = Object.keys(STANDARD_OBJECT_LABEL) as StandardObjectScope[];
+
+export const STANDARD_SOURCE_LABEL: Record<StandardSourceKind, string> = {
+  wiki: 'Wiki',
+  'reverse-engineering': 'Engenharia reversa',
+  manual: 'Manual',
+};
+export const STANDARD_SOURCES = Object.keys(STANDARD_SOURCE_LABEL) as StandardSourceKind[];
+
+export const STANDARD_PLATFORMS = ['sqlserver', 'postgresql', 'dotnet', 'angular', 'node'];

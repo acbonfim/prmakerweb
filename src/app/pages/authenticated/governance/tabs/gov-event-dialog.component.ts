@@ -3,18 +3,21 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import {
-  EVENT_CATEGORY_LABEL, GovernanceEvent, GovernanceRule, OUTCOME_LABEL, SOURCE_LABEL, labelOf,
+  EVENT_CATEGORY_LABEL, GovernanceEvent, GovernanceRule, OUTCOME_LABEL, SOURCE_LABEL, Standard, labelOf,
 } from '../../../../services/governance/governance.model';
+import { standardLookup } from '../../../../services/governance/standards.logic';
 import { fmtMs } from '../../../../services/governance/governance.logic';
 import { formatDateTime } from '../../../../services/usage/usage.model';
 
 export interface GovEventDialogData {
   event: GovernanceEvent;
   rules?: GovernanceRule[];
+  /** 0101: padrões (achados da categoria `standard` trazem a chave do padrão em `rules`). */
+  standards?: Standard[];
 }
 
 /** Resultado: navegar para o card/usuário do evento (quem abriu decide). */
-export type GovEventDialogResult = { go: 'card'; card: number } | { go: 'user'; userId: string } | undefined;
+export type GovEventDialogResult = { go: 'card'; card: number } | { go: 'user'; userId: string } | { go: 'standard'; key: string } | undefined;
 
 /** Detalhe de um evento da trilha (0098): todos os campos e as regras que dispararam. */
 @Component({
@@ -50,15 +53,23 @@ export type GovEventDialogResult = { go: 'card'; card: number } | { go: 'user'; 
         <h3>Detalhe</h3>
         <pre class="pre">{{ e.detail }}</pre>
       }
-      <h3>Regras que dispararam</h3>
+      <h3>{{ e.category === 'standard' ? 'Padrões com achado' : 'Regras que dispararam' }}</h3>
       @if (e.rules.length) {
         <ul class="rules">
           @for (k of e.rules; track k) {
             @let r = ruleOf(k);
+            @let s = r ? null : standardOf(k);
             <li>
-              <b>{{ r?.name ?? k }}</b> <span class="mono muted">{{ k }}</span>
-              @if (r) { <span class="badge badge--{{ r.effect }}">{{ r.effect }}</span> }
-              @if (r?.message) { <div class="muted">{{ r!.message }}</div> }
+              @if (s) {
+                <b>{{ s.code }} · {{ s.title }}</b> <span class="mono muted">{{ s.key }}</span>
+                <span class="badge badge--{{ s.effect }}">{{ s.effect }}</span>
+                <button mat-button type="button" class="open-std" (click)="ref.close({ go: 'standard', key: s.key })">Abrir padrão</button>
+                @if (s.check.hint) { <div class="muted">{{ s.check.hint }}</div> }
+              } @else {
+                <b>{{ r?.name ?? k }}</b> <span class="mono muted">{{ k }}</span>
+                @if (r) { <span class="badge badge--{{ r.effect }}">{{ r.effect }}</span> }
+                @if (r?.message) { <div class="muted">{{ r!.message }}</div> }
+              }
             </li>
           }
         </ul>
@@ -79,6 +90,7 @@ export type GovEventDialogResult = { go: 'card'; card: number } | { go: 'user'; 
     .title { display: flex; align-items: center; gap: 8px; font-size: 15px; overflow-wrap: anywhere; }
     h3 { font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
     .pre { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-1); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin: 0; }
+    .open-std { min-width: 0; height: 24px; line-height: 24px; padding: 0 6px; font-size: 12px; }
     .rules { margin: 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
     .note { font-size: 12.5px; padding: 8px 10px; border-radius: 8px; border: 1px dashed color-mix(in srgb, #d29922 70%, transparent); }
     mat-dialog-actions { flex-wrap: wrap; }
@@ -91,8 +103,14 @@ export class GovEventDialogComponent {
   readonly sources = SOURCE_LABEL;
   readonly categories = EVENT_CATEGORY_LABEL;
 
+  private readonly findStandard = standardLookup(this.data.standards ?? []);
+
   ruleOf(key: string): GovernanceRule | undefined {
     return this.data.rules?.find((r) => r.key === key);
+  }
+
+  standardOf(key: string): Standard | null {
+    return this.findStandard(key);
   }
 
   outcome(o: string): string {

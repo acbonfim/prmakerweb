@@ -4,7 +4,7 @@ import { ActivatedRoute } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { GOV_TABS, GovTab, GovernanceStore } from './governance.store';
+import { GOV_TABS, GovTab, GovernanceStore, STANDARDS_VIEWS, StandardsView } from './governance.store';
 import { MODE_HINT, MODE_LABEL } from '../../../services/governance/governance.model';
 import { GovPeriod, PERIODS } from '../../../services/governance/governance.logic';
 import { GovOverviewComponent } from './tabs/gov-overview.component';
@@ -15,6 +15,7 @@ import { GovAuditComponent } from './tabs/gov-audit.component';
 import { GovRulesComponent } from './tabs/gov-rules.component';
 import { GovHooksComponent } from './tabs/gov-hooks.component';
 import { GovSettingsComponent } from './tabs/gov-settings.component';
+import { GovStandardsComponent } from './tabs/gov-standards.component';
 
 /**
  * Governança do PRMake (0098, admin): casca com as abas internas (aba na query `?aba=`), o filtro de período
@@ -24,7 +25,7 @@ import { GovSettingsComponent } from './tabs/gov-settings.component';
   selector: 'app-governance-page',
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, GovOverviewComponent, GovUsersComponent, GovCardsComponent, GovTasksComponent,
-    GovAuditComponent, GovRulesComponent, GovHooksComponent, GovSettingsComponent],
+    GovAuditComponent, GovRulesComponent, GovStandardsComponent, GovHooksComponent, GovSettingsComponent],
   providers: [GovernanceStore],
   templateUrl: './governance-page.component.html',
   styleUrls: ['./governance-shared.css', './governance-page.component.css'],
@@ -36,6 +37,8 @@ export class GovernancePageComponent {
   readonly tabs = GOV_TABS;
   readonly periods = PERIODS;
   readonly current = computed(() => GOV_TABS.find((t) => t.key === this.store.tab()) ?? GOV_TABS[0]);
+  /** A aderência dos padrões (0101) usa o período; o resto da aba não. */
+  readonly usesPeriod = computed(() => this.current().usesPeriod || (this.store.tab() === 'padroes' && this.store.standardsView() === 'aderencia'));
   readonly modeLabel = computed(() => {
     const m = this.store.mode();
     return m ? MODE_LABEL[m] : '…';
@@ -52,6 +55,9 @@ export class GovernancePageComponent {
       const card = Number(q.get('card'));
       this.store.selectedCard.set(Number.isInteger(card) && card > 0 ? card : null);
       this.store.selectedUser.set(q.get('usuario') || null);
+      const vista = q.get('vista') as StandardsView | null;
+      this.store.standardsView.set(STANDARDS_VIEWS.some((v) => v.key === vista) ? vista! : 'catalogo');
+      this.store.selectedStandard.set(q.get('padrao') || null);
     });
     inject(DestroyRef).onDestroy(() => sub.unsubscribe());
     this.store.loadSettings();

@@ -151,10 +151,13 @@ export class GovAuditComponent {
       this.card.set(preset.card != null ? `${preset.card}` : '');
       this.outcome.set(preset.outcome ?? '');
       this.action.set(preset.action ?? '');
+      this.category.set(preset.category ?? '');
+      this.search.set(preset.search ?? '');
       this.store.auditPreset.set(null);
     }
     this.lastCard = this.card();
     this.store.ensureRules();
+    this.store.ensureStandards();
     if (!this.store.userOptions().length) {
       this.store.api.users(this.store.range()).subscribe({ next: (u) => this.store.mergeUsers(u ?? []), error: () => undefined });
     }
