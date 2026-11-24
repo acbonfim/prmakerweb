@@ -32,6 +32,23 @@
     <span class="tile__label">Erros</span><span class="tile__value">{{ num(kpis()?.errors) }}</span></button>
 </div>
 
+<section class="panel">
+  <div class="panel__head">
+    <h2>Padrões</h2>
+    <span class="muted">convenções de banco e de aplicação que a análise e a correção seguem</span>
+    <span class="ms-auto"></span>
+    <button type="button" class="linkbtn" (click)="store.openStandards('catalogo')">abrir os padrões</button>
+  </div>
+  <div class="tiles tiles--sm">
+    <button type="button" class="tile tile--btn" (click)="store.openStandards('catalogo')">
+      <span class="tile__label">Vigentes</span><span class="tile__value">{{ num(standardCounts()?.active) }}</span></button>
+    <button type="button" class="tile tile--btn" (click)="store.openStandards('catalogo')" matTooltip="Propostas (ex.: itens (NEW) da wiki) que aguardam o DBA: só monitoram">
+      <span class="tile__label">Propostos</span><span class="tile__value">{{ num(standardCounts()?.proposed) }}</span></button>
+    <button type="button" class="tile tile--btn" [class.tile--warn]="(standardFindings() ?? 0) > 0" (click)="store.openStandards('aderencia')">
+      <span class="tile__label">Achados no período</span><span class="tile__value">{{ num(standardFindings()) }}</span></button>
+  </div>
+</section>
+
 <div class="charts">
   <section class="panel panel--wide">
     <div class="panel__head"><h2>Eventos por dia</h2><span class="muted">por resultado</span></div>

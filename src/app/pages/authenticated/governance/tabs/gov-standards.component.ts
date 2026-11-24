@@ -3,6 +3,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { GovernanceStore, STANDARDS_VIEWS, StandardsView } from '../governance.store';
 import { GovStandardsCatalogComponent } from './gov-standards-catalog.component';
 import { GovStandardsImportComponent } from './gov-standards-import.component';
+import { GovStandardsAdherenceComponent } from './gov-standards-adherence.component';
 
 /**
  * Padrões de banco e de aplicação (0101): convenções que a análise e a correção seguem ao escrever SQL, migrações e
@@ -12,7 +13,7 @@ import { GovStandardsImportComponent } from './gov-standards-import.component';
 @Component({
   selector: 'app-gov-standards',
   standalone: true,
-  imports: [MatIconModule, GovStandardsCatalogComponent, GovStandardsImportComponent],
+  imports: [MatIconModule, GovStandardsCatalogComponent, GovStandardsImportComponent, GovStandardsAdherenceComponent],
   template: `
     <div class="std-nav">
       <div class="seg" role="tablist" aria-label="Vistas dos padrões">
@@ -25,6 +26,7 @@ import { GovStandardsImportComponent } from './gov-standards-import.component';
     </div>
     @switch (store.standardsView()) {
       @case ('importar') { <app-gov-standards-import></app-gov-standards-import> }
+      @case ('aderencia') { <app-gov-standards-adherence></app-gov-standards-adherence> }
       @default { <app-gov-standards-catalog></app-gov-standards-catalog> }
     }
   `,

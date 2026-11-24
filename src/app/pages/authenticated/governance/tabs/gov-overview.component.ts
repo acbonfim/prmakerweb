@@ -22,6 +22,7 @@ export const OUTCOME_SERIES: BarSeries[] = [
   imports: [MatIconModule, MatProgressSpinnerModule, MatTooltipModule, UsageBarsComponent, UsageHBarsComponent],
   templateUrl: './gov-overview.component.html',
   styleUrls: ['../governance-shared.css'],
+  styles: [`.linkbtn { border: none; background: none; padding: 0; color: var(--mat-sys-primary); font: inherit; font-size: 12.5px; cursor: pointer; }`],
 })
 export class GovOverviewComponent {
   readonly store = inject(GovernanceStore);
@@ -31,6 +32,14 @@ export class GovOverviewComponent {
   readonly error = signal<string | null>(null);
 
   readonly kpis = computed(() => this.data()?.kpis ?? null);
+
+  /** 0101: bloco "Padrões" (vigentes/propostos do catálogo e achados da trilha no período). */
+  readonly standardFindings = signal<number | null>(null);
+  readonly standardCounts = computed(() => {
+    const list = this.store.standards();
+    if (!list) return null;
+    return { active: list.filter((s) => s.status === 'active').length, proposed: list.filter((s) => s.status === 'proposed').length, total: list.length };
+  });
   readonly series = OUTCOME_SERIES;
 
   readonly perDay = computed<BarDatum[]>(() => {
@@ -52,6 +61,7 @@ export class GovOverviewComponent {
   })));
 
   constructor() {
+    this.store.ensureStandards();
     effect(() => {
       const r = this.store.range();
       untracked(() => this.load(r));
@@ -59,6 +69,11 @@ export class GovOverviewComponent {
   }
 
   private load(r: { from: string; to: string }): void {
+    this.standardFindings.set(null);
+    this.store.api.events({ ...r, category: 'standard', page: 0, size: 1 }).subscribe({
+      next: (p) => this.standardFindings.set(p.total ?? 0),
+      error: () => this.standardFindings.set(null),
+    });
     this.loading.set(true);
     this.error.set(null);
     this.store.api.overview(r).subscribe({
