@@ -1,0 +1,149 @@
+@if (error()) {
+  <div class="notice">{{ error() }}</div>
+}
+
+<div class="split" [class.split--open]="!!draft()">
+  <div class="stack">
+    <section class="panel">
+      <div class="panel__head">
+        <h2>Hooks do Claude Code</h2>
+        <span class="muted">instalados com as skills (terminal e executor) · leem esta lista a cada {{ store.settings()?.hookCacheSeconds ?? 60 }} s</span>
+        <span class="ms-auto"></span>
+        @if (loading()) { <mat-spinner diameter="18"></mat-spinner> }
+        <button mat-stroked-button type="button" (click)="create(false)"><mat-icon>add</mat-icon> Novo</button>
+      </div>
+      <ng-container *ngTemplateOutlet="list; context: { $implicit: claudeHooks() }"></ng-container>
+    </section>
+
+    <section class="panel">
+      <div class="panel__head">
+        <h2>Gatilhos do servidor</h2>
+        <span class="muted">evento da trilha que casa → Timeline do card ou webhook (depois de gravar, sem travar a ação)</span>
+        <span class="ms-auto"></span>
+        <button mat-stroked-button type="button" (click)="create(true)"><mat-icon>add</mat-icon> Novo</button>
+      </div>
+      <ng-container *ngTemplateOutlet="list; context: { $implicit: serverHooks() }"></ng-container>
+    </section>
+  </div>
+
+  @if (draft(); as d) {
+    <section class="panel detail editor" aria-label="Editor de hook">
+      <div class="detail__head">
+        <div>
+          <p class="detail__title">{{ isNew() ? 'Novo hook' : d.name }}</p>
+          @if (d.updatedAt) { <span class="muted">alterado {{ dt(d.updatedAt) }}{{ d.updatedBy ? ' por ' + d.updatedBy : '' }}</span> }
+        </div>
+        <span class="ms-auto"></span>
+        @if (d.builtin) { <span class="badge badge--builtin">embutido</span> }
+        <button mat-icon-button type="button" (click)="cancel()" aria-label="Fechar editor"><mat-icon>close</mat-icon></button>
+      </div>
+
+      <div class="form-grid">
+        <label class="f-field span-all" [class.f-field--invalid]="err('name')"><span>Nome</span>
+          <input type="text" [ngModel]="d.name" (ngModelChange)="patch({ name: $event })" data-usage-ignore>
+          @if (err('name')) { <span class="f-error">{{ err('name') }}</span> }
+        </label>
+        <label class="f-field" [class.f-field--invalid]="err('key')"><span>Chave</span>
+          <input type="text" class="mono" [ngModel]="d.key" (ngModelChange)="setKey($event)" [disabled]="d.builtin || !!d.id" data-usage-ignore>
+          @if (err('key')) { <span class="f-error">{{ err('key') }}</span> }
+        </label>
+        <label class="f-field f-field--toggle"><span>Situação</span>
+          <mat-slide-toggle [checked]="d.enabled" (change)="patch({ enabled: $event.checked })">{{ d.enabled ? 'Ligado' : 'Desligado' }}</mat-slide-toggle>
+        </label>
+        <label class="f-field span-all"><span>Descrição</span>
+          <textarea rows="2" class="plain" [ngModel]="d.description" (ngModelChange)="patch({ description: $event })" data-usage-ignore></textarea>
+        </label>
+
+        <div class="f-field span-all"><span>Quando</span>
+          <div class="seg" role="radiogroup" aria-label="Tipo de evento">
+            <button type="button" class="seg__item" [class.on]="!isServer()" [disabled]="d.builtin" (click)="setEventKind('claude')">Claude Code</button>
+            <button type="button" class="seg__item" [class.on]="isServer()" [disabled]="d.builtin" (click)="setEventKind('server')">Servidor (trilha)</button>
+          </div>
+        </div>
+        @if (isServer()) {
+          <label class="f-field span-all" [class.f-field--invalid]="err('event')"><span>Ação da trilha (glob)</span>
+            <input type="text" class="mono" [ngModel]="serverGlob()" (ngModelChange)="setServerGlob($event)" placeholder="* ou POST Azure/card/*/actions/*"
+                   data-usage-ignore>
+            @if (err('event')) { <span class="f-error">{{ err('event') }}</span> }
+            @else { <span class="f-hint">Glob sobre a ação do evento (ex.: <code>mcp:prmake_pr_open</code>, <code>POST ExecutionPlan/*</code>); <code>*</code> = todos.</span> }
+          </label>
+        } @else {
+          <label class="f-field span-all" [class.f-field--invalid]="err('event')"><span>Evento do Claude Code</span>
+            <select [ngModel]="d.event" (ngModelChange)="patch({ event: $event })" [disabled]="d.builtin">
+              @for (e of claudeEvents; track e) { <option [value]="e">{{ eventLabel[e] }}</option> }
+              @if (!claudeEvents.includes(d.event)) { <option [value]="d.event">{{ d.event }}</option> }
+            </select>
+            @if (err('event')) { <span class="f-error">{{ err('event') }}</span> }
+          </label>
+        }
+        <label class="f-field" [class.f-field--invalid]="err('matcher')"><span>{{ isServer() ? 'Categoria (glob)' : 'Ferramenta (glob)' }}</span>
+          <input type="text" class="mono" [ngModel]="d.matcher" (ngModelChange)="patch({ matcher: $event })"
+                 [placeholder]="isServer() ? 'governance, pr, devops… (vazio = todas)' : 'Bash|Write|mcp__prmake__* (vazio = todas)'" data-usage-ignore>
+          @if (err('matcher')) { <span class="f-error">{{ err('matcher') }}</span> }
+        </label>
+        <label class="f-field" [class.f-field--invalid]="err('action')"><span>O que fazer</span>
+          <select [ngModel]="d.action" (ngModelChange)="patch({ action: actionOf($event) })">
+            @for (a of actions; track a) { <option [value]="a">{{ actionLabel[a] }}</option> }
+          </select>
+          @if (err('action')) { <span class="f-error">{{ err('action') }}</span> }
+        </label>
+      </div>
+
+      <h3 class="section">Configuração <span class="muted">chave = valor</span></h3>
+      @if (err('config')) { <div class="f-error">{{ err('config') }}</div> }
+      @for (r of kv(); track $index; let i = $index) {
+        <div class="kvrow">
+          <input type="text" class="mono" [value]="r.key" (change)="setKv(i, { key: $any($event.target).value })" placeholder="chave" aria-label="Chave">
+          <input [type]="isSecret(r.key) ? 'password' : 'text'" [value]="r.value" (input)="setKv(i, { value: $any($event.target).value })"
+                 [class.invalid]="!!err('config.' + r.key)" [placeholder]="hintOf(r.key) ?? 'valor'" aria-label="Valor" autocomplete="off" data-usage-ignore>
+          <button type="button" class="icon-btn" (click)="removeKv(i)" aria-label="Tirar" matTooltip="Tirar"><mat-icon>close</mat-icon></button>
+        </div>
+        @if (err('config.' + r.key)) { <div class="f-error">{{ err('config.' + r.key) }}</div> }
+        @if (r.value === masked) { <div class="f-hint">Valor guardado (não é exibido). Deixe <code>***</code> para manter ou digite um novo.</div> }
+        @else if (hintOf(r.key)) { <div class="f-hint">{{ hintOf(r.key) }}</div> }
+      } @empty {
+        <p class="muted">Sem configuração.</p>
+      }
+      <button mat-button type="button" (click)="addKv()"><mat-icon>add</mat-icon> Adicionar chave</button>
+      @if (d.action === 'timeline') {
+        <p class="f-hint">Variáveis do texto: <code>{{ '{' }}user{{ '}' }}</code>, <code>{{ '{' }}action{{ '}' }}</code>, <code>{{ '{' }}card{{ '}' }}</code>, <code>{{ '{' }}rule{{ '}' }}</code>, <code>{{ '{' }}outcome{{ '}' }}</code>.</p>
+      }
+
+      @if (saveError()) { <div class="notice">{{ saveError() }}</div> }
+      <div class="actions-row sticky-actions">
+        @if (d.id && !d.builtin) {
+          <button mat-button type="button" color="warn" (click)="remove()"><mat-icon>delete</mat-icon> Apagar</button>
+        }
+        <span class="ms-auto muted">{{ errorCount() ? errorCount() + ' problema(s) para corrigir' : (dirty() ? 'alterações não salvas' : 'sem alterações') }}</span>
+        <button mat-button type="button" (click)="cancel()">Fechar</button>
+        <button mat-flat-button type="button" (click)="save()" [disabled]="!dirty() || !!errorCount() || saving()">
+          @if (saving()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>save</mat-icon> } Salvar
+        </button>
+      </div>
+    </section>
+  }
+</div>
+
+<ng-template #list let-items>
+  <div class="table-wrap">
+    <table class="tbl">
+      <thead><tr><th></th><th>Hook</th><th>Quando</th><th>Filtro</th><th>O que faz</th><th>Alterado</th></tr></thead>
+      <tbody>
+        @for (h of items; track h.id) {
+          <tr class="clickable" [class.selected]="draft()?.id === h.id" (click)="edit(h)">
+            <td (click)="$event.stopPropagation()">
+              <mat-slide-toggle [checked]="h.enabled" (change)="toggle(h, $event.checked)" [attr.aria-label]="(h.enabled ? 'Desligar ' : 'Ligar ') + h.name"></mat-slide-toggle>
+            </td>
+            <td class="wrap"><b>{{ h.name }}</b> @if (h.builtin) { <span class="badge badge--builtin">embutido</span> }<br><span class="mono muted">{{ h.key }}</span></td>
+            <td class="wrap">{{ eventText(h) }}</td>
+            <td class="mono">{{ h.matcher || 'tudo' }}</td>
+            <td>{{ actionText(h) }}</td>
+            <td class="muted">{{ h.updatedAt ? dt(h.updatedAt) : '—' }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6" class="muted">{{ loading() ? 'Carregando…' : 'Nenhum.' }}</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</ng-template>

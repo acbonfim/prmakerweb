@@ -53,6 +53,8 @@ export const DEMO_HOOKS: GovernanceHook[] = [
   hook('claude-stop', 'Resposta concluída', 'claude:Stop', '', 'record', 50),
   { ...hook('server-blocked-timeline', 'Barrado → Timeline do card', 'server:*', 'governance', 'timeline', 60), enabled: false,
     config: { template: '{user} foi barrado pela regra {rule} ao tentar {action} no card {card}' } },
+  { ...hook('pr-aberto-webhook', 'PR aberto → webhook do time', 'server:mcp:prmake_pr_open', 'pr', 'webhook', 70), builtin: false, enabled: false,
+    config: { url: 'https://hooks.exemplo.com/prmake/pr', secret: '***' }, updatedAt: '2026-11-21T15:40:00', updatedBy: 'Alex Carlos' },
 ];
 
 export const DEMO_SETTINGS: GovernanceSettings = {
