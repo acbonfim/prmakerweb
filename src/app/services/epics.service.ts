@@ -3,12 +3,13 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
-  EPICS_EVENT, EPICS_GROUP, Epic, EpicCard, EpicCardRole, EpicStatus, EpicSummary, EpicsUpdatedPayload, SaveEpicRequest
+  EPICS_EVENT, EPICS_GROUP, Epic, EpicBoardFilters, EpicCard, EpicCardRole, EpicStatus, EpicSummary, EpicsUpdatedPayload,
+  SaveEpicRequest
 } from '../components/epics/epic.logic';
 import { WsService } from './ws.service';
 
 export type {
-  Epic, EpicCard, EpicCardRole, EpicStatus, EpicSummary, EpicsUpdatedPayload, SaveEpicRequest
+  Epic, EpicBoardFilters, EpicCard, EpicCardRole, EpicStatus, EpicSummary, EpicsUpdatedPayload, SaveEpicRequest
 } from '../components/epics/epic.logic';
 
 /** Filtros do `GET Epics`. */
@@ -60,6 +61,17 @@ export class EpicsService {
 
   update(number: number, body: SaveEpicRequest): Observable<Epic> {
     return this.http.put<Epic>(`${this.apiUrl}/${number}`, body);
+  }
+
+  /** Ajustes 1: grava os filtros do board no épico (a tela salva com debounce; o especialista lê). */
+  saveBoardFilters(number: number, filters: EpicBoardFilters): Observable<unknown> {
+    return this.http.put(`${this.apiUrl}/${number}/board-filters`, filters);
+  }
+
+  /** Ajustes 1: tags usadas nos épicos (mais usadas primeiro) — sugestões do diálogo do épico. */
+  tags(q?: string | null): Observable<string[]> {
+    const params = q?.trim() ? new HttpParams().set('q', q.trim()) : undefined;
+    return this.http.get<string[]>(`${this.apiUrl}/tags`, { params });
   }
 
   setStatus(number: number, status: EpicStatus): Observable<unknown> {

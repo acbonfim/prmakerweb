@@ -219,16 +219,60 @@ export interface BoardFilter {
   assignedTo: string[];
   tags: string[];
   states: string[];
+  /** Nomes das lanes (a padrão sem nome vira `DEFAULT_LANE_NAME`). */
+  lanes: string[];
 }
 
-export const EMPTY_FILTER: BoardFilter = { text: '', types: [], assignedTo: [], tags: [], states: [] };
+export const EMPTY_FILTER: BoardFilter = { text: '', types: [], assignedTo: [], tags: [], states: [], lanes: [] };
+
+/** Nome da lane padrão sem nome no filtro (o servidor entende "padrão"/"default"/vazio como a lane padrão). */
+export const DEFAULT_LANE_NAME = 'Padrão';
+
+/** Nome da lane no filtro (ajustes 1): o do DevOps, ou `DEFAULT_LANE_NAME` na padrão sem nome. */
+export function laneFilterName(lane: Pick<BoardLane, 'name' | 'isDefault'>): string {
+  return lane.isDefault ? (lane.name?.trim() || DEFAULT_LANE_NAME) : (lane.name?.trim() || '');
+}
+
+const DEFAULT_LANE_ALIASES = new Set(['', 'default', 'padrao']);
+
+/** O valor do filtro de lane aponta para a lane (nome igual; "padrão"/"default"/vazio = a padrão). */
+export function laneMatches(value: string, lane: Pick<BoardLane, 'name' | 'isDefault'>): boolean {
+  const v = fold(value);
+  if (lane.isDefault && DEFAULT_LANE_ALIASES.has(v)) return true;
+  return v === fold(laneFilterName(lane));
+}
+
+const strList = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).map((x) => (x as string).trim()) : [];
+
+/** Filtro salvo (do épico — `boardFilters`) para o filtro do board: listas vazias e texto vazio por padrão. */
+export function normalizeBoardFilter(raw: unknown): BoardFilter {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    text: typeof r['text'] === 'string' ? (r['text'] as string) : '',
+    types: strList(r['types']),
+    assignedTo: strList(r['assignedTo']),
+    tags: strList(r['tags']),
+    states: strList(r['states']),
+    lanes: strList(r['lanes']),
+  };
+}
+
+/** Mesmos filtros (ignora caixa e a ordem das listas; texto sem espaços nas pontas). */
+export function sameFilter(a: BoardFilter | null | undefined, b: BoardFilter | null | undefined): boolean {
+  const x = normalizeBoardFilter(a);
+  const y = normalizeBoardFilter(b);
+  const list = (l: string[]) => l.map(lower).sort().join('\u0001');
+  return x.text.trim() === y.text.trim() && list(x.types) === list(y.types) && list(x.assignedTo) === list(y.assignedTo)
+    && list(x.tags) === list(y.tags) && list(x.states) === list(y.states) && list(x.lanes) === list(y.lanes);
+}
 
 export function isFilterActive(f: BoardFilter): boolean {
-  return !!f.text.trim() || !!f.types.length || !!f.assignedTo.length || !!f.tags.length || !!f.states.length;
+  return !!f.text.trim() || !!f.types.length || !!f.assignedTo.length || !!f.tags.length || !!f.states.length || !!f.lanes?.length;
 }
 
 export function filterCount(f: BoardFilter): number {
-  return (f.text.trim() ? 1 : 0) + f.types.length + f.assignedTo.length + f.tags.length + f.states.length;
+  return (f.text.trim() ? 1 : 0) + f.types.length + f.assignedTo.length + f.tags.length + f.states.length + (f.lanes?.length ?? 0);
 }
 
 /** Chave do responsável no filtro (uniqueName; sem responsável → `UNASSIGNED`). */
@@ -238,19 +282,25 @@ export function assigneeKey(item: Pick<BoardItem, 'assignedTo'>): string {
 
 /**
  * Filtra como o DevOps: texto (id, título, tags, responsável), e cada lista é "qualquer um de" (OU dentro, E entre
- * filtros). Tags exigem todas as escolhidas, como no filtro de tags do board.
+ * filtros). Tags exigem todas as escolhidas, como no filtro de tags do board. Lanes precisam das lanes do board
+ * (`lanes`); sem elas o filtro de lane não se aplica.
  */
-export function filterItems(items: BoardItem[], f: BoardFilter): BoardItem[] {
+export function filterItems(items: BoardItem[], f: BoardFilter, lanes?: BoardLane[] | null): BoardItem[] {
   if (!isFilterActive(f)) return items;
   const words = fold(f.text).replace(/^#/, '').split(/\s+/).filter(Boolean);
   const types = new Set(f.types.map(lower));
   const people = new Set(f.assignedTo.map(lower));
   const tags = f.tags.map(lower);
   const states = new Set(f.states.map(lower));
+  const laneList = lanes?.length ? lanes : null;
+  const wantedLanes = laneList && f.lanes?.length
+    ? new Set(laneList.filter((l) => f.lanes.some((v) => laneMatches(v, l))).map(laneKey))
+    : null;
   return items.filter((i) => {
     if (types.size && !types.has(lower(i.type))) return false;
     if (states.size && !states.has(lower(i.state))) return false;
     if (people.size && !people.has(assigneeKey(i))) return false;
+    if (wantedLanes && !wantedLanes.has(laneOf(laneList!, i))) return false;
     if (tags.length) {
       const own = new Set((i.tags ?? []).map(lower));
       if (!tags.every((t) => own.has(t))) return false;

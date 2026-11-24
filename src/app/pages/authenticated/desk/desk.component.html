@@ -261,7 +261,7 @@
       <div class="dk-pane dk-pane--board" [class.dk-hidden]="main !== 'board'" data-tour="dk-board">
         @if (main === 'board') {
           <app-devops-board class="dk-board" [team]="e!.devOpsTeam ?? null" [board]="e!.devOpsBoard ?? null" [epic]="e!.number"
-                            [scope]="boardScope()" (scopeChange)="setBoardScope($event)"
+                            [savedFilters]="e!.boardFilters ?? null" [scope]="boardScope()" (scopeChange)="setBoardScope($event)"
                             (teamChange)="onBoardPicked($event, null)" (boardChange)="onBoardPicked(null, $event)"
                             (cardOpened)="openCard($event)"></app-devops-board>
         }

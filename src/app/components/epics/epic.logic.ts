@@ -32,6 +32,21 @@ export interface EpicSummary {
   createdAt: string;
   updatedAt: string;
   counts: EpicCounts;
+  /** Ajustes 1: filtros do board salvos no épico (o especialista usa no board do time). */
+  boardFilters?: EpicBoardFilters | null;
+}
+
+/**
+ * Ajustes 1: filtros do board salvos no épico (`PUT Epics/{n}/board-filters`) — valem na tela ("Cards do épico" e
+ * "Board do time") e para o especialista. `assignedTo` = uniqueName; `lanes` = nomes das lanes.
+ */
+export interface EpicBoardFilters {
+  lanes: string[];
+  types: string[];
+  states: string[];
+  assignedTo: string[];
+  tags: string[];
+  text: string;
 }
 
 /** `EpicCardResponse`. */
@@ -59,6 +74,8 @@ export interface SaveEpicRequest {
   devOpsTeam?: string | null;
   devOpsBoard?: string | null;
   devOpsCardId?: string | null;
+  /** Ajustes 1: filtros do board (null/ausente = não mexe). */
+  boardFilters?: EpicBoardFilters | null;
 }
 
 /** Evento de tempo real do grupo `epics`. */
@@ -66,7 +83,7 @@ export const EPICS_EVENT = 'epicsUpdated';
 export const EPICS_GROUP = 'epics';
 export interface EpicsUpdatedPayload {
   number: number;
-  action: 'created' | 'updated' | 'status' | 'cards' | string;
+  action: 'created' | 'updated' | 'status' | 'cards' | 'filters' | string;
 }
 
 // ── Chave do dono ────────────────────────────────────────────────────────────────────────────
