@@ -48,6 +48,7 @@ import { WorkbenchPrsComponent } from '../../../components/workbench-prs/workben
 import { WorkItemListComponent } from '../../../components/work-items/work-item-list.component';
 import { CardFilesComponent } from '../../../components/card-files/card-files.component';
 import { CardFilesStore } from '../../../components/work-items/card-files.store';
+import { EpicChipsComponent } from '../../../components/epics/epic-chips.component';
 import { planDocumentFiles } from '../../../components/work-items/work-item-files';
 import {
   registerWorkItemTypeIcons, workItemTypeIcon, workItemTypeLabel, workItemTypeOf
@@ -186,7 +187,7 @@ function writeFlag(key: string, on: boolean): void {
     MatInputModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
     CardAlertBarComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
     CardSituationLauncherComponent, CardAssistantLauncherComponent, CardHoursComponent, WorkItemListComponent, WorkbenchPrsComponent,
-    WorkbenchCardComponent, CardFilesComponent
+    WorkbenchCardComponent, CardFilesComponent, EpicChipsComponent
   ],
   templateUrl: './workbench.component.html',
   styleUrl: './workbench.component.scss'
