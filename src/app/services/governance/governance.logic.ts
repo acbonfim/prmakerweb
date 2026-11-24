@@ -592,7 +592,8 @@ export function parseBlockedBody(body: unknown): BlockedNotice | null {
       return { key, name: `${x['name'] ?? key}` };
     }).filter((r) => r.key || r.name)
     : [];
-  const message = `${o['message'] ?? ''}`.trim() || 'Ação barrada pela governança do PRMake.';
+  // A API já manda "Barrado pela governança: <motivo>"; o aviso tem esse título, então fica só o motivo.
+  const message = `${o['message'] ?? ''}`.trim().replace(/^barrado pela governança:\s*/i, '') || 'Ação barrada pela governança do PRMake.';
   return { message, rules };
 }
 
@@ -621,9 +622,3 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
 
 /** Valor de segredo que a API devolve mascarado; mandado de volta igual, mantém o valor guardado. */
 export const MASKED_SECRET = '***';
-
-/** Texto curto de uma lista ("a, b e c"). */
-export function joinPt(items: string[]): string {
-  if (items.length <= 1) return items[0] ?? '';
-  return `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`;
-}

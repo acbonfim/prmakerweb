@@ -1,5 +1,5 @@
 import {
-  apiErrorMessage, buildCardTimeline, decodeWarningHeader, dayKeys, evaluateLocally, fmtMs, globMatch, groupRulesByCategory, joinPt, median,
+  apiErrorMessage, buildCardTimeline, decodeWarningHeader, dayKeys, evaluateLocally, fmtMs, globMatch, groupRulesByCategory, median,
   moveItem, newHook, newRule, normalizeRule, normalizeUserDetail, parseBlockedBody, percentile, perDayStack, periodRange, renumber, ruleMatches,
   slugify, sortRows, toggleSort, validateGlob, validateHook, validateKey, validateMilestones, validateRegex, validateRule,
 } from './governance.logic';
@@ -284,6 +284,7 @@ describe('governance.logic (0098)', () => {
         .toEqual({ message: 'Sem merge', rules: [{ key: 'no-merge', name: 'Nunca mesclar' }] });
       expect(parseBlockedBody('{"code":"governance_blocked","message":"x","rules":["a"]}')!.rules).toEqual([{ key: 'a', name: 'a' }]);
       expect(parseBlockedBody({ code: 'governance_blocked' })!.message).toContain('barrada');
+      expect(parseBlockedBody({ code: 'governance_blocked', message: 'Barrado pela governança: sem merge (regra no-merge)' })!.message).toBe('sem merge (regra no-merge)');
       expect(parseBlockedBody({ code: 'PERSONAL_INTEGRATION_REQUIRED' })).toBeNull();
       expect(parseBlockedBody('não é json')).toBeNull();
       expect(parseBlockedBody(null)).toBeNull();
@@ -296,7 +297,6 @@ describe('governance.logic (0098)', () => {
       expect(decodeWarningHeader('  ')).toBeNull();
       expect(apiErrorMessage({ status: 409, error: { message: 'Regra embutida não pode ser apagada.' } }, 'x')).toBe('Regra embutida não pode ser apagada.');
       expect(apiErrorMessage({ status: 500, error: '<html>' }, 'Falhou.')).toBe('Falhou.');
-      expect(joinPt(['a', 'b', 'c'])).toBe('a, b e c');
     });
   });
 
