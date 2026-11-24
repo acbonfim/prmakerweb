@@ -22,10 +22,12 @@ import { TourDefinition } from './tour.model';
  * Arquivos); "Cancelar e desfazer" virou ícone no cabeçalho do plano; o aviso da Execução fecha e volta pelo ⓘ.
  * v9: as **sugestões do PRMake** saíram da aba Itens para um botão na barra de horas (pisca quando há sugestão e abre um
  * popover); a aba Itens mostra só a situação do card acima da lista.
+ * v11 (0100): as abas ocupam uma linha inteira e as horas (+ situação e sugestões) ganham uma linha própria abaixo; a
+ * seção **Execução** inteira abre em **tela cheia** (mesma animação do Card e da Linha do tempo); nova aba **AWS**.
  */
 export const WORKBENCH_TOUR: TourDefinition = {
   id: 'workbench',
-  version: 10,
+  version: 11,
   title: 'Como usar a Bancada do card',
   steps: [
     {
@@ -42,7 +44,7 @@ export const WORKBENCH_TOUR: TourDefinition = {
       title: 'Comece pelo número do card',
       body: 'Digite o número e aperte <b>Enter</b>. O endereço da página guarda o card — dá para mandar o link.',
       detail: 'Digite o número do card e aperte Enter (ou a lupa). O link da página leva o card (<code>?card=</code>) e pode levar ' +
-        'um item (<code>&item=</code>) ou a parte da tela (<code>&focus=plan|items|timeline|chat</code>).'
+        'um item (<code>&item=</code>) ou a parte da tela (<code>&focus=plan|items|files|aws|timeline|chat</code>).'
     },
     {
       id: 'card', anchor: 'wb-card', group: 'O card', since: 2, phase: 'card', side: 'bottom', align: 'start',
@@ -88,7 +90,7 @@ export const WORKBENCH_TOUR: TourDefinition = {
       prepare: 'tab:card',
       title: 'Aba Card: horas e texto',
       body: 'A aba <b>Card</b> reúne as horas (lance <b>+1h</b>, <b>+2h</b>, <b>+4h</b> ou outro valor), os dados principais e o texto ' +
-        'do card. O botão <b>Card</b> da barra abre o mesmo conteúdo num modal; a linha de horas fica sempre ao lado das abas.',
+        'do card. O botão <b>Card</b> da barra abre o mesmo conteúdo num modal; a linha de horas fica sempre logo abaixo das abas.',
       detail: 'No Bug, as horas lançadas comparadas com a média dos bugs (acima ou abaixo); na US, o planejado × o realizado. ' +
         'Lançar horas pede uma confirmação curta e grava no DevOps (soma em Completed e tira do Remaining). Também ficam aqui ' +
         'estado, área, iteração, responsável, prioridade, datas, anexos/links e o texto (Repro Steps no Bug; descrição e ' +
@@ -177,6 +179,15 @@ export const WORKBENCH_TOUR: TourDefinition = {
         'código atual e o diff, os itens da engenharia reversa (<code>modulo#RN-012</code>) e os arquivos do item na visão geral.'
     },
     {
+      id: 'exec-full', anchor: 'wb-exec-full', group: 'Execução', since: 11, phase: 'card', side: 'bottom', align: 'end',
+      optional: true, prepare: 'tab:plan',
+      title: 'Execução em tela cheia',
+      body: 'Este botão abre a <b>Execução inteira</b> — o seletor do item e o plano — em tela cheia: as etapas à esquerda e o ' +
+        'detalhe da etapa à direita. <b>Esc</b> ou o mesmo botão voltam.',
+      detail: 'A tela cheia leva a mesma seção (nada recarrega: o tempo real e a rolagem continuam) e dá para trocar de item ' +
+        'por lá. No celular ela ocupa a tela toda, uma coluna por vez (lista → etapa).'
+    },
+    {
       id: 'plan-files', anchor: 'plan-files', group: 'Execução', since: 8, phase: 'card', side: 'bottom', align: 'end',
       optional: true, prepare: 'tab:plan',
       title: 'Arquivos do plano',
@@ -192,6 +203,16 @@ export const WORKBENCH_TOUR: TourDefinition = {
       body: 'O ↶ no cabeçalho do plano para o item em execução (o plano e os itens dele) — e, se você marcar, <b>desfaz</b> o que já foi feito (fecha PRs, apaga branches criadas…).',
       detail: 'O desfazer vira um pedido na fila e roda em ordem reversa. Para só mudar o rumo do plano, prefira conversar com ' +
         'o Especialista do caso.'
+    },
+    {
+      id: 'aws', anchor: 'wb-aws-tab', group: 'AWS', since: 11, phase: 'card', side: 'bottom', align: 'start',
+      title: 'AWS: o nosso código já está lá?',
+      body: 'Para cada ambiente (DEV, QA, Sandboxefeso…), as <b>esteiras de deploy</b> do repositório do card e um veredito claro: ' +
+        '<b>"Nosso código está em QA"</b>, <b>"Ainda não está em Sandboxefeso"</b>, deploy em andamento ou com falha.',
+      detail: 'Os dados vêm da <b>sua máquina</b>: o executor do PRMake roda a CLI da AWS (somente leitura) quando você clica em ' +
+        '<b>Atualizar</b> — ou a sub-tarefa <code>aws-deploy-map</code> dos itens que alteram código faz isso sozinha. Cada pipeline ' +
+        'mostra status, última execução, o commit implantado e se ele contém o nosso código; abaixo ficam os logs com erros recentes ' +
+        'e outros recursos do caso (lambdas, alarmes, CloudFront). Nada é alterado na AWS.'
     },
     {
       id: 'chat', anchor: 'wb-chat', group: 'Conversa e histórico', since: 2, phase: 'card', side: 'left', align: 'start', prepare: 'tab:chat',

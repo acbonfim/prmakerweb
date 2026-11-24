@@ -268,6 +268,11 @@
             (click)="selectMobile('reported')">
       <mat-icon>hub</mat-icon><span>Relatado</span>
     </button>
+    <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'aws'" [attr.aria-selected]="mtab === 'aws'"
+            (click)="selectMobile('aws')">
+      <mat-icon>cloud</mat-icon><span>AWS</span>
+      @if (awsAlert(); as a) { <span class="wb-dot wb-dot--{{ a }}" aria-hidden="true"></span> }
+    </button>
     <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'chat'" [attr.aria-selected]="mtab === 'chat'"
             (click)="selectMobile('chat')">
       <mat-icon>psychology</mat-icon><span>Especialista</span>
@@ -310,18 +315,25 @@
                   matTooltipShowDelay="600">
             <mat-icon>hub</mat-icon><span class="wb-seg__label">Relatado</span>
           </button>
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'aws'" data-tour="wb-aws-tab"
+                  [attr.aria-selected]="main === 'aws'" (click)="selectMain('aws')"
+                  [matTooltip]="awsAlert() === 'failed' ? 'AWS — um deploy falhou' : awsAlert() === 'deploying' ? 'AWS — deploy em andamento' : 'Esteiras de deploy por ambiente e se o nosso código já está em cada um (somente leitura)'"
+                  matTooltipShowDelay="600">
+            <mat-icon>cloud</mat-icon><span class="wb-seg__label">AWS</span>
+            @if (awsAlert(); as a) { <span class="wb-dot wb-dot--{{ a }}" aria-hidden="true"></span> }
+          </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'card'" data-tour="wb-card-tab"
                   [attr.aria-selected]="main === 'card'" (click)="selectMain('card')">
             <mat-icon>description</mat-icon><span class="wb-seg__label">Card</span>
           </button>
         </div>
-        <!-- Linha de horas do card (a mesma do assistente), sempre à vista ao lado das abas; à direita, os botões da situação atual
-             (card 78655: era um banner fixo acima da lista) e das sugestões do PRMake -->
-        <div class="wb-hoursline" data-tour="wb-hoursline">
-          <app-card-hours class="wb-hoursline__hours" [adaptive]="true" [cardNumber]="card()"></app-card-hours>
-          <app-card-situation-launcher class="wb-hoursline__sugg" data-tour="wb-suggest" [cardNumber]="card()"></app-card-situation-launcher>
-          <app-card-assistant-launcher class="wb-hoursline__sugg2" data-tour="wb-suggestions" [cardNumber]="card()"></app-card-assistant-launcher>
-        </div>
+      </div>
+      <!-- 0100: linha própria (abaixo das abas) com as horas do card (a mesma do assistente) e, à direita, os botões da situação
+           atual (card 78655) e das sugestões do PRMake -->
+      <div class="wb-hoursline" data-tour="wb-hoursline">
+        <app-card-hours class="wb-hoursline__hours" [adaptive]="true" [cardNumber]="card()"></app-card-hours>
+        <app-card-situation-launcher class="wb-hoursline__sugg" data-tour="wb-suggest" [cardNumber]="card()"></app-card-situation-launcher>
+        <app-card-assistant-launcher class="wb-hoursline__sugg2" data-tour="wb-suggestions" [cardNumber]="card()"></app-card-assistant-launcher>
       </div>
 
       <div class="wb-pane" [class.wb-hidden]="main !== 'items'" data-tour="wb-items">
@@ -362,7 +374,12 @@
         }
       </div>
 
-      <div class="wb-pane wb-pane--plan" [class.wb-hidden]="main !== 'plan'" data-tour="wb-plan">
+      <div class="wb-pane wb-pane--plan" #execHost [class.wb-hidden]="main !== 'plan'" data-tour="wb-plan">
+        <!-- 0100: a seção inteira (aviso + seletor do item + plano) vai para a tela cheia pelo botão do seletor, com a mesma
+             animação do Card e da Linha do tempo (FullscreenPanel). Tem de ser o primeiro filho do host (volta para o lugar). -->
+        <div class="wb-execwrap" #execPanel [class.wb-execwrap--on]="execExpanded()"
+             [attr.role]="execExpanded() ? 'dialog' : null" [attr.aria-modal]="execExpanded() ? 'true' : null"
+             [attr.aria-label]="execExpanded() ? 'Execução do card #' + card() + ' em tela cheia' : null">
         <!-- Execução do item (rodada 3): a versão é o item de trabalho — o seletor troca entre os itens que têm plano -->
         @let sel = selectedPlanItem();
         <!-- O aviso pode ser fechado (fica lembrado); depois volta pelo ícone ⓘ no cabeçalho do plano -->
@@ -420,6 +437,11 @@
           } @else {
             <span class="wb-exec__none">Nenhum item de trabalho com execução ainda.</span>
           }
+          <button mat-icon-button type="button" class="wb-exec__full" data-tour="wb-exec-full" (click)="execFull.toggle()"
+                  [matTooltip]="execExpanded() ? 'Sair da tela cheia (Esc)' : 'Abrir a execução em tela cheia'" matTooltipShowDelay="400"
+                  [attr.aria-label]="execExpanded() ? 'Sair da tela cheia' : 'Abrir a execução em tela cheia'">
+            <mat-icon>{{ execExpanded() ? 'close_fullscreen' : 'open_in_full' }}</mat-icon>
+          </button>
         </div>
 
         @if (closedPlanItem(); as ci) {
@@ -436,7 +458,7 @@
         <!-- Telas menores: sem a faixa de arquivos (o "Arquivos e textos" do cabeçalho tem tudo, inclusive o plano completo) e
              sem o botão do especialista (ele já está na lateral). O ⓘ e o "Cancelar e desfazer" moram no cabeçalho do plano. -->
         <app-execution-plan class="wb-plan" [cardNumber]="card()" [planId]="selectedPlanId()" [hideVersions]="true"
-                            [compactActions]="true" [showSpecialist]="false"
+                            [compactActions]="true" [showSpecialist]="false" [showExpand]="false" [wide]="execExpanded()"
                             [itemNumber]="sel?.number ?? null" (headline)="onHeadline($event)">
           @if (execAboutHidden()) {
             <button planHeadLead mat-icon-button type="button" class="wb-plan-icon" (click)="setExecAboutHidden(false)"
@@ -450,12 +472,20 @@
                     aria-label="Cancelar e desfazer"><mat-icon>undo</mat-icon></button>
           }
         </app-execution-plan>
+        </div>
       </div>
 
       <!-- 0087: Arquivos do card inteiro (qualquer item), com filtro por item de trabalho. Montada para a contagem ficar viva. -->
       <div class="wb-pane wb-pane--files" [class.wb-hidden]="main !== 'files'" data-tour="wb-files">
         <app-card-files [store]="cardFiles" [card]="card()" [cardType]="cardType()" [items]="planItems()" [(selected)]="filesItem"></app-card-files>
       </div>
+
+      <!-- 0100: AWS — esteiras de deploy por ambiente e se o nosso código já está em cada um (somente leitura; só quando aberta) -->
+      @if (main === 'aws') {
+        <div class="wb-pane wb-pane--aws" data-tour="wb-aws">
+          <app-aws-deploy-panel [cardNumber]="card()!"></app-aws-deploy-panel>
+        </div>
+      }
 
       <!-- Aba Card (desktop e celular): horas + lançar horas, dados principais, anexos/links e o texto do card -->
       @if (main === 'card') {
