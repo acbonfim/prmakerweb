@@ -21,6 +21,8 @@ import { CaseComposer, CaseComposerService } from './case-composer.service';
 import { ComposerAction, ComposerSuggestion } from './composer-suggest';
 import { ComposerSuggestComponent } from './composer-suggest.component';
 import { CaseCardType } from '../../helpers/work-item-type-icons';
+import { VoiceRecorder, VoiceResult } from './voice-recorder';
+import { composerHint, silentTail } from './specialist-call';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_FILES = 20;
@@ -119,6 +121,25 @@ export class CaseCompactComponent implements OnDestroy {
   readonly agreedText = computed(() => this.agreed().map((p) => '• ' + p.text).join('\n'));
   readonly files = computed(() => this.chat()?.files ?? []);
   readonly people = computed(() => this.chat()?.participants ?? []);
+  /** Com 2+ pessoas o especialista só entra com "?" ou @especialista — a caixa lembra e a mensagem que não chamou ganha "Chamar". */
+  readonly placeholder = computed(() => composerHint(this.people().length, this.working()));
+  readonly silent = computed(() => this.working() ? new Set<string>() : silentTail(this.messages(), this.people().length));
+  readonly calling = signal(false);
+
+  /** @ menciona as pessoas da conversa (e o especialista), como na conversa grande. */
+  readonly mentionQuery = signal<string | null>(null);
+  readonly mentionOptions = computed(() => {
+    const q = (this.mentionQuery() ?? '').toLowerCase();
+    const names = [SPECIALIST_NAME.split(' ')[0], ...this.people().map((p) => p.name.split(' ')[0])];
+    return Array.from(new Set(names)).filter((n) => n.toLowerCase().startsWith(q)).slice(0, 6);
+  });
+
+  /** Mensagem de voz (mesmo gravador da conversa grande). */
+  readonly voice = new VoiceRecorder();
+  readonly voiceReview = signal<VoiceResult | null>(null);
+  voiceTranscript = '';
+  readonly canRecord = VoiceRecorder.supported();
+  readonly sendingVoice = signal(false);
   readonly typingNames = computed(() => {
     const now = this.now();
     return Object.entries(this.room()?.typing() ?? {}).filter(([, at]) => now - at < TYPING_TTL_MS).map(([name]) => name);
@@ -153,6 +174,7 @@ export class CaseCompactComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.voice.recording()) this.voice.cancel();
     if (this.watching) this.store.unwatch(this.watching);
     clearInterval(this.clock);
     clearTimeout(this.launchTimer);
@@ -244,6 +266,17 @@ export class CaseCompactComponent implements OnDestroy {
       if (action) this.applyComposer(action);
       return;
     }
+    if (this.mentionQuery() !== null && this.mentionOptions().length && (event.key === 'Enter' || event.key === 'Tab')) {
+      event.preventDefault();
+      this.pickMention(this.mentionOptions()[0]);
+      return;
+    }
+    if (event.key === 'Escape' && this.mentionQuery() !== null) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.mentionQuery.set(null);
+      return;
+    }
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       this.send();
@@ -253,6 +286,10 @@ export class CaseCompactComponent implements OnDestroy {
   onInput(): void {
     const c = this.card();
     this.onCaret();
+    const box = this.boxRef?.nativeElement;
+    const before = box ? this.draft.slice(0, box.selectionStart ?? this.draft.length) : this.draft;
+    const m = /(?:^|\s)@([\p{L}\p{N}._-]*)$/u.exec(before);
+    this.mentionQuery.set(m ? m[1] : null);
     const now = Date.now();
     if (c && this.draft.trim() && now - this.lastTypingSent > TYPING_EVERY_MS) {
       this.lastTypingSent = now;
@@ -265,6 +302,81 @@ export class CaseCompactComponent implements OnDestroy {
     if (event && ['ArrowUp', 'ArrowDown', 'Enter', 'Tab', 'Escape', 'Shift'].includes(event.key)) return;
     const box = this.boxRef?.nativeElement;
     this.composer.update(this.draft, box?.selectionStart ?? this.draft.length);
+  }
+
+  pickMention(name: string): void {
+    const box = this.boxRef?.nativeElement;
+    const current = box?.value ?? this.draft;
+    const caret = box?.selectionStart ?? current.length;
+    const before = current.slice(0, caret).replace(/@([\p{L}\p{N}._-]*)$/u, `@${name} `);
+    const next = before + current.slice(caret);
+    this.draft = next;
+    if (box) {
+      box.value = next;
+      box.focus();
+      box.setSelectionRange(before.length, before.length);
+    }
+    this.mentionQuery.set(null);
+  }
+
+  /** "Chamar": o especialista lê as mensagens que ainda não respondeu (sem repetir a mensagem). */
+  callSpecialist(): void {
+    const c = this.card();
+    if (!c || this.calling()) return;
+    this.calling.set(true);
+    this.api.ask(c).subscribe({
+      next: () => this.calling.set(false),
+      error: (err) => {
+        this.calling.set(false);
+        this.snack.open(planApiError(err, 'Não foi possível chamar o especialista.'), 'Fechar', { duration: 8000 });
+      }
+    });
+  }
+
+  async startVoice(): Promise<void> {
+    this.voiceReview.set(null);
+    await this.voice.start((m) => this.snack.open(m, 'Ok', { duration: 6000 }));
+  }
+
+  async stopVoice(): Promise<void> {
+    const r = await this.voice.stop();
+    if (!r) return;
+    this.voiceTranscript = r.transcript;
+    this.voiceReview.set(r);
+  }
+
+  cancelVoice(): void {
+    if (this.voice.recording()) this.voice.cancel();
+    this.voiceReview.set(null);
+    this.voiceTranscript = '';
+  }
+
+  sendVoice(): void {
+    const c = this.card();
+    const r = this.voiceReview();
+    if (!c || !r || this.sendingVoice()) return;
+    this.sendingVoice.set(true);
+    this.api.post(c, {
+      voice: true, transcript: this.voiceTranscript.trim(), files: [r.file], peopleOnly: false, deep: false,
+      replyTo: this.replyTo()?.number ?? null
+    }).subscribe({
+      next: (m) => {
+        this.sendingVoice.set(false);
+        this.voiceReview.set(null);
+        this.voiceTranscript = '';
+        this.room()?.replyTo.set(null);
+        this.store.appendMine(c, m);
+        this.sticky.toEnd();
+      },
+      error: (err) => {
+        this.sendingVoice.set(false);
+        this.snack.open(planApiError(err, 'Não foi possível enviar o áudio.'), 'Fechar', { duration: 8000 });
+      }
+    });
+  }
+
+  seconds(s: number): string {
+    return `${Math.floor(s / 60)}:${`${s % 60}`.padStart(2, '0')}`;
   }
 
   pickSuggestion(s: ComposerSuggestion): void {

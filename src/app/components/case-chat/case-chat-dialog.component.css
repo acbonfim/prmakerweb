@@ -257,3 +257,10 @@
   .sp-av--pulse, .rec-dot, .cc__spin, .dots i { animation: none; }
   .msg--in, .cc__jump, .tick mat-icon, .comp__send--go mat-icon, .msg__img--up::after { animation: none !important; }
 }
+
+/* "não chamou o especialista" (2+ pessoas, sem ? nem @especialista) */
+.msg__silent { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 11.5px; color: var(--cc-muted); }
+.msg__silent mat-icon { font-size: 14px; width: 14px; height: 14px; }
+.msg__silent button { border: 1px solid color-mix(in srgb, var(--spec) 45%, transparent); background: transparent; color: inherit; border-radius: 10px;
+  padding: 1px 8px; font: inherit; cursor: pointer; }
+.msg__silent button:hover:not([disabled]) { background: color-mix(in srgb, var(--spec) 16%, transparent); }

@@ -165,3 +165,29 @@
 @media (prefers-reduced-motion: reduce) {
   .km--in, .ck__jump, .tick mat-icon, .ck__send--go mat-icon, .km__img--up::after { animation: none !important; }
 }
+
+/* @ menciona as pessoas da conversa (como na conversa grande) */
+.ck__mentions { position: absolute; left: 44px; bottom: calc(100% - 2px); z-index: 6; display: flex; flex-direction: column; min-width: 170px; padding: 4px;
+  border-radius: 10px; background: var(--surface-3, #3a3f48); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.ck__mentions button { text-align: left; border: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.ck__mentions button:hover, .ck__mentions button:first-child { background: rgba(142,108,240,.18); }
+
+/* Mensagem de voz */
+.ck__voice { display: flex; align-items: center; gap: 8px; min-height: 40px; border-radius: 20px; padding: 2px 2px 2px 12px; background: var(--surface-1, #2a2a2a);
+  border: 1px solid rgba(244,112,103,.35); }
+.ck__voice--review { border-color: rgba(142,108,240,.45); }
+.ck__voice > mat-icon { color: #d9c6ff; }
+.ck__transcript { flex: 1; min-width: 0; resize: none; border: 0; background: transparent; color: inherit; font: inherit; font-size: 12.5px; outline: none; }
+.rec-dot { width: 9px; height: 9px; border-radius: 50%; background: #f47067; flex: none; animation: ck-rec 1.4s infinite; }
+@keyframes ck-rec { 50% { opacity: .35; } }
+.rec-time { font-variant-numeric: tabular-nums; font-size: 12px; color: #f2b8b2; }
+.rec-wave { display: flex; align-items: center; gap: 2px; height: 22px; }
+.rec-wave i { width: 3px; border-radius: 2px; background: #f2b8b2; }
+.rec-text { flex: 1; min-width: 0; font-size: 12px; font-style: italic; color: var(--cc-text-3, #9aa0aa); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* "não chamou o especialista" (2+ pessoas, sem ? nem @especialista) */
+.km__silent { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 11px; color: var(--cc-text-3, #9aa0aa); }
+.km--mine .km__silent { align-self: flex-end; }
+.km__silent mat-icon { font-size: 13px; width: 13px; height: 13px; }
+.km__silent button { border: 1px solid rgba(196,167,255,.4); background: transparent; color: #d9c6ff; border-radius: 10px; padding: 1px 8px; font: inherit; cursor: pointer; }
+.km__silent button:hover:not([disabled]) { background: rgba(142,108,240,.18); }
