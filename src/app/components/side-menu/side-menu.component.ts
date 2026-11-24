@@ -72,6 +72,13 @@ export class SideMenuComponent implements OnInit {
       allowedRoles: ['admin']
     },
     {
+      // 0098: governança do PRMake (trilha, métricas, regras, hooks).
+      label: 'Governança',
+      icon: 'policy',
+      link: 'auth/governance',
+      allowedRoles: ['admin']
+    },
+    {
       label: 'Serviços',
       icon: 'lan',
       link: 'auth/services',

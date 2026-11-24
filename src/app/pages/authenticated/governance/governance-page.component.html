@@ -1,0 +1,54 @@
+<div class="page-header">
+  <mat-icon class="header-icon">policy</mat-icon>
+  <span class="header-title">Governança</span>
+  <button type="button" class="mode mode--{{ store.mode() ?? 'loading' }}" [matTooltip]="modeHint()" (click)="setTab('configuracoes')"
+          aria-label="Modo global da governança">
+    <span class="mode__dot"></span>{{ modeLabel() }}
+  </button>
+  @if (store.demo) {
+    <span class="pill pill--demo" matTooltip="?exemplo=1: dados de demonstração gerados no navegador; gravar só muda esta tela.">dados de exemplo</span>
+  }
+  <div class="ms-auto header-actions">
+    <button mat-icon-button matTooltip="Atualizar" (click)="store.refresh()"><mat-icon>refresh</mat-icon></button>
+  </div>
+</div>
+
+@if (store.settingsError()) {
+  <div class="notice">{{ store.settingsError() }}</div>
+}
+
+<nav class="gov-tabs" role="tablist" aria-label="Áreas da governança">
+  @for (t of tabs; track t.key) {
+    <button type="button" role="tab" class="gov-tab" [class.on]="store.tab() === t.key" [attr.aria-selected]="store.tab() === t.key"
+            (click)="setTab(t.key)">
+      <mat-icon>{{ t.icon }}</mat-icon><span>{{ t.label }}</span>
+    </button>
+  }
+</nav>
+
+@if (current().usesPeriod) {
+  <div class="filters" role="group" aria-label="Período">
+    <div class="seg" role="radiogroup" aria-label="Período">
+      @for (p of periods; track p.key) {
+        <button type="button" class="seg__item" [class.on]="store.period() === p.key" role="radio" [attr.aria-checked]="store.period() === p.key"
+                (click)="setPeriod(p.key)">{{ p.label }}</button>
+      }
+    </div>
+    @if (store.period() === 'custom') {
+      <label class="f-field"><span>De</span>
+        <input type="date" [ngModel]="store.customFrom()" (ngModelChange)="store.customFrom.set($event)">
+      </label>
+      <label class="f-field"><span>Até</span>
+        <input type="date" [ngModel]="store.customTo()" (ngModelChange)="store.customTo.set($event)">
+      </label>
+    }
+  </div>
+}
+
+<div class="gov-body">
+  @switch (store.tab()) {
+    @default {
+      <section class="panel"><p class="muted">Em construção.</p></section>
+    }
+  }
+</div>

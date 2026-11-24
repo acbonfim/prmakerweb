@@ -1,0 +1,73 @@
+/* ── Cabeçalho (igual à análise de uso) ── */
+.page-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background-color: var(--surface-3, #252525);
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+.header-icon { color: var(--mat-sys-primary); }
+.header-title { font-size: 20px; font-weight: 500; }
+.header-actions { display: flex; align-items: center; gap: 6px; }
+.pill--demo { background: color-mix(in srgb, #d29922 24%, transparent); }
+
+/* Selo do modo global */
+.mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--cc-surface-border-strong);
+  background: var(--surface-1);
+  color: var(--cc-text-1);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.mode__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cc-text-3); }
+.mode--off .mode__dot { background: #8b949e; }
+.mode--monitor { border-color: color-mix(in srgb, #3987e5 60%, transparent); }
+.mode--monitor .mode__dot { background: #3987e5; }
+.mode--enforce { border-color: color-mix(in srgb, #3fb950 60%, transparent); }
+.mode--enforce .mode__dot { background: #3fb950; box-shadow: 0 0 0 3px color-mix(in srgb, #3fb950 25%, transparent); }
+
+/* Abas internas */
+.gov-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mat-sys-on-surface) 6%, transparent);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.gov-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--cc-text-2);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gov-tab mat-icon { font-size: 18px; width: 18px; height: 18px; }
+.gov-tab:hover { color: var(--cc-text-1); }
+.gov-tab.on { background: color-mix(in srgb, var(--mat-sys-primary) 24%, transparent); color: var(--cc-text-1); font-weight: 600; }
+
+.gov-body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+@media (max-width: 576px) {
+  .page-header { row-gap: 8px; padding: 10px 12px; }
+  .header-title { font-size: 17px; }
+  .gov-tab span { display: none; }
+  .gov-tab.on span { display: inline; }
+}
