@@ -173,6 +173,12 @@
                     <button type="button" (click)="discard(m)" matTooltip="Desistir (o texto volta para o campo)"><mat-icon>close</mat-icon>Descartar</button>
                   </div>
                 }
+                @if (!m.outgoing && silent().has(m.id)) {
+                  <div class="km__silent">
+                    <mat-icon>notifications_off</mat-icon><span matTooltip="Com 2 ou mais pessoas na conversa, o especialista só entra quando a mensagem tem ? ou @especialista">não chamou o especialista</span>
+                    <button type="button" (click)="callSpecialist()" [disabled]="calling()">{{ calling() ? 'Chamando…' : 'Chamar' }}</button>
+                  </div>
+                }
                 @if (!m.outgoing) {
                   <button type="button" class="km__reply" (click)="reply(m)" matTooltip="Responder a esta mensagem" aria-label="Responder"><mat-icon>reply</mat-icon></button>
                 }
@@ -213,17 +219,42 @@
         <app-composer-suggest class="ck__suggest" [suggestions]="composer.suggestions()" [active]="composer.active()"
                               [heading]="composer.heading() ?? 'Comandos e ferramentas'"
                               [loading]="composer.loadingTools()" (picked)="pickSuggestion($event)" (hovered)="composer.active.set($event)"></app-composer-suggest>
+      } @else if (mentionQuery() !== null && mentionOptions().length) {
+        <div class="ck__mentions" role="listbox" aria-label="Mencionar">
+          @for (n of mentionOptions(); track n) { <button type="button" role="option" (mousedown)="$event.preventDefault(); pickMention(n)">&#64;{{ n }}</button> }
+        </div>
       }
+      @if (voice.recording()) {
+        <div class="ck__voice" role="status">
+          <span class="rec-dot"></span><span class="rec-time">{{ seconds(voice.seconds()) }}</span>
+          <span class="rec-wave">@for (l of voice.levels(); track $index) { <i [style.height.px]="4 + l * 18"></i> }</span>
+          <span class="rec-text">{{ voice.transcript() || (voice.transcribes ? 'Fale — a transcrição aparece aqui…' : 'Gravando (este navegador não transcreve)') }}</span>
+          <button mat-icon-button (click)="cancelVoice()" matTooltip="Descartar" aria-label="Descartar"><mat-icon>delete</mat-icon></button>
+          <button mat-icon-button class="ck__send" (click)="stopVoice()" matTooltip="Parar e revisar" aria-label="Parar"><mat-icon>stop</mat-icon></button>
+        </div>
+      } @else if (voiceReview(); as v) {
+        <div class="ck__voice ck__voice--review">
+          <mat-icon>graphic_eq</mat-icon><span class="rec-time">{{ seconds(v.seconds) }}</span>
+          <textarea class="ck__transcript" [(ngModel)]="voiceTranscript" rows="2" placeholder="Transcrição (revise — é o que o especialista lê)"></textarea>
+          <button mat-icon-button (click)="cancelVoice()" matTooltip="Descartar" aria-label="Descartar"><mat-icon>delete</mat-icon></button>
+          <button mat-icon-button class="ck__send" (click)="sendVoice()" [disabled]="sendingVoice()" matTooltip="Enviar o áudio" aria-label="Enviar o áudio"><mat-icon>send</mat-icon></button>
+        </div>
+      } @else {
       <div class="ck__row">
         <button mat-icon-button (click)="pick()" matTooltip="Anexar arquivo ou imagem (também dá para colar ou arrastar)" aria-label="Anexar"><mat-icon>attach_file</mat-icon></button>
         <input #picker type="file" multiple hidden (change)="onPick($event)">
         <textarea #box class="ck__box" rows="1" [(ngModel)]="draft" (keydown)="onKey($event)" (input)="onInput()"
                   (click)="onCaret()" (keyup)="onCaret($event)" (blur)="composer.hide()"
-                  [placeholder]="working() ? 'Escreva — ele lê quando terminar' : 'Pergunte ao especialista… (/ comandos, # item)'" aria-label="Mensagem para o especialista"></textarea>
-        <button mat-icon-button class="ck__send" [class.ck__send--go]="launching()" (click)="send()" [disabled]="!draft.trim() && !pending().length" matTooltip="Enviar (Enter)" aria-label="Enviar">
-          <mat-icon>send</mat-icon>
-        </button>
+                  [placeholder]="placeholder()" aria-label="Mensagem para o especialista"></textarea>
+        @if (canRecord && !draft.trim() && !pending().length) {
+          <button mat-icon-button (click)="startVoice()" matTooltip="Mensagem de voz" aria-label="Gravar mensagem de voz"><mat-icon>mic</mat-icon></button>
+        } @else {
+          <button mat-icon-button class="ck__send" [class.ck__send--go]="launching()" (click)="send()" [disabled]="!draft.trim() && !pending().length" matTooltip="Enviar (Enter)" aria-label="Enviar">
+            <mat-icon>send</mat-icon>
+          </button>
+        }
       </div>
+      }
     </div>
   </section>
 }

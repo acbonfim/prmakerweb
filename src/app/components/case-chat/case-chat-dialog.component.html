@@ -229,6 +229,12 @@
                       <button type="button" (click)="discard(m)" matTooltip="Desistir (o texto volta para o campo)"><mat-icon>close</mat-icon>Descartar</button>
                     </div>
                   }
+                  @if (!m.outgoing && silent().has(m.id)) {
+                    <div class="msg__silent">
+                      <mat-icon>notifications_off</mat-icon><span matTooltip="Com 2 ou mais pessoas na conversa, o especialista só entra quando a mensagem tem ? ou @especialista">não chamou o especialista</span>
+                      <button type="button" (click)="callSpecialist()" [disabled]="calling()">{{ calling() ? 'Chamando…' : 'Chamar' }}</button>
+                    </div>
+                  }
                   @if (!m.outgoing) {
                   <div class="msg__tools">
                     <button type="button" (click)="reply(m)" matTooltip="Responder citando esta mensagem"><mat-icon>reply</mat-icon></button>
@@ -339,7 +345,7 @@
               }
               <textarea #box [(ngModel)]="draft" (keydown)="onKey($event)" (input)="onInput()" (click)="onCaret()" (keyup)="onCaret($event)"
                         (blur)="composer.hide()" rows="1"
-                        [placeholder]="compact ? 'Mensagem — / comandos, # item, @ menciona' : 'Mensagem para o especialista e para quem está no caso — / comandos e ferramentas, # item de trabalho, @ menciona, cole ou arraste arquivos'"
+                        [placeholder]="people().length > 1 ? hint() : (compact ? 'Mensagem — / comandos, # item, @ menciona' : 'Mensagem para o especialista e para quem está no caso — / comandos e ferramentas, # item de trabalho, @ menciona, cole ou arraste arquivos')"
                         aria-label="Mensagem"></textarea>
             </div>
             @if (canRecord) {

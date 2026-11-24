@@ -41,6 +41,7 @@ import {
   isRunActive
 } from './case-chat.model';
 import { VoiceRecorder, VoiceResult } from './voice-recorder';
+import { composerHint, silentTail } from './specialist-call';
 import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-proposal-dialog.component';
 import { CaseComposer, CaseComposerService } from './case-composer.service';
 import { ComposerAction, ComposerSuggestion } from './composer-suggest';
@@ -169,6 +170,10 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   readonly points = computed(() => (this.chat()?.points ?? []).filter((p) => p.status !== 'dropped'));
   readonly agreedPoints = computed(() => this.points().filter((p) => p.status === 'agreed').length);
   readonly people = computed(() => this.chat()?.participants ?? []);
+  /** Com 2+ pessoas o especialista só entra com "?" ou @especialista — a caixa lembra e a mensagem que não chamou ganha "Chamar". */
+  readonly hint = computed(() => composerHint(this.people().length, this.working(), this.compact));
+  readonly silent = computed(() => this.working() ? new Set<string>() : silentTail(this.messages(), this.people().length));
+  readonly calling = signal(false);
   readonly convFiles = computed(() => (this.chat()?.files ?? []).slice().reverse());
   readonly pendingProposal = computed(() => (this.chat()?.proposals ?? []).filter((p) => p.status === 'pending').at(-1) ?? null);
   readonly typingNames = computed(() => {
@@ -726,6 +731,19 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
 
   pointIcon(p: CasePoint): string {
     return p.status === 'agreed' ? 'check_circle' : 'pending';
+  }
+
+  /** "Chamar": o especialista lê as mensagens que ainda não respondeu (sem repetir a mensagem). */
+  callSpecialist(): void {
+    if (this.calling()) return;
+    this.calling.set(true);
+    this.api.ask(this.data.card).subscribe({
+      next: () => this.calling.set(false),
+      error: (err) => {
+        this.calling.set(false);
+        this.snack.open(planApiError(err, 'Não foi possível chamar o especialista.'), 'Fechar', { duration: 8000 });
+      }
+    });
   }
 
   seconds(s: number): string {
