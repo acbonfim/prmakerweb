@@ -280,6 +280,16 @@ export class ExecutionPlanComponent implements OnDestroy {
    * fica na lateral/aba da própria Bancada. Padrão: com o botão (tela de PR).
    */
   readonly showSpecialist = input(true);
+  /**
+   * 0100: botão de tela cheia do próprio plano. Na Bancada a seção Execução inteira (seletor do item + plano) vai para a
+   * tela cheia por um botão dela — o do plano some (um botão só). Padrão: com o botão (tela de PR).
+   */
+  readonly showExpand = input(true);
+  /**
+   * 0100: layout da tela cheia (etapas à esquerda, detalhes à direita; no celular, lista → etapa) sem o plano ser o
+   * modal — a Bancada liga quando a seção Execução está em tela cheia.
+   */
+  readonly wide = input(false);
 
   readonly fullscreen = new FullscreenPanel({
     host: () => this.hostRef.nativeElement,
@@ -288,6 +298,8 @@ export class ExecutionPlanComponent implements OnDestroy {
     maxWidth: 1320
   });
   readonly expanded = this.fullscreen.expanded;
+  /** Layout dividido (etapas | detalhes): na tela cheia do plano ou com `[wide]` (seção da Bancada em tela cheia). */
+  readonly split = computed(() => this.expanded() || this.wide());
 
   // ── 0043: celular ─────────────────────────────────────────────────────────────────────────────
 
@@ -1015,7 +1027,7 @@ export class ExecutionPlanComponent implements OnDestroy {
     this.narrowMedia.addEventListener('change', this.onNarrowChange);
     // Saiu da tela cheia (Esc, fundo, Voltar): a próxima abertura começa pela lista.
     effect(() => {
-      if (!this.expanded()) this.closeMobileDetail();
+      if (!this.split()) this.closeMobileDetail();
     });
     // 0050: texto do chamado pronto para copiar na etapa (arquivos pequenos; carrega uma vez por versão).
     effect(() => this.loadTicketTexts(this.planArtifacts()));
@@ -1305,7 +1317,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   // ── Interação com as etapas ─────────────────────────────────────────────────────────────────────
 
   toggleStep(step: StepView): void {
-    if (this.expanded()) {
+    if (this.split()) {
       if (this.narrow()) this.openMobileDetail(step.key);
       else this.selectedKey.set(step.key);
       return;
@@ -1425,7 +1437,7 @@ export class ExecutionPlanComponent implements OnDestroy {
   /** Abre a etapa e rola até ela (do aviso do topo). */
   goToStep(key: string | null | undefined): void {
     if (!key) return;
-    if (this.expanded() && this.narrow()) {
+    if (this.split() && this.narrow()) {
       this.openMobileDetail(key);
       return;
     }
