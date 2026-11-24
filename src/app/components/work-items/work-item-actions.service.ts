@@ -303,9 +303,14 @@ export class WorkItemActionsService {
       confirmIcon: 'send'
     });
     if (typeof text !== 'string' || !text.trim()) return false;
-    const body = `@especialista Pedido de item de trabalho (${cardType === 'user-story' ? 'User Story' : 'Bug'}): ${text.trim()}\n\n`
-      + 'Crie o item de trabalho no PRMake (prmake_work_item_create) seguindo as regras do PRMake para este card — sem duplicar item existente. '
-      + 'Use o tipo de item certo (task, pull-request, review, adjustment, closing…), não Bug/User Story.';
+    // 0099: no épico (Mesa de gestão) o pedido é de tarefa de gestão — sem termos de bug/US.
+    const body = cardType === 'epic'
+      ? `@especialista Pedido de tarefa de gestão do épico: ${text.trim()}\n\n`
+        + 'Crie o item de trabalho no PRMake (prmake_work_item_create) neste épico, pelas regras de gestão do PRMake — sem duplicar item existente. '
+        + 'Use o tipo de item de gestão certo (report, duplicates, understanding, rca, devops, planning, task…).'
+      : `@especialista Pedido de item de trabalho (${cardType === 'user-story' ? 'User Story' : 'Bug'}): ${text.trim()}\n\n`
+        + 'Crie o item de trabalho no PRMake (prmake_work_item_create) seguindo as regras do PRMake para este card — sem duplicar item existente. '
+        + 'Use o tipo de item certo (task, pull-request, review, adjustment, closing…), não Bug/User Story.';
     try {
       await firstValueFrom(this.chat.post(card, { text: body }));
       this.ok('Pedido enviado — o especialista responde na conversa do caso.');

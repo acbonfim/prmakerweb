@@ -49,11 +49,12 @@ import { StickyScroll, flyToChat } from './chat-motion';
 import { TokenUsageComponent } from '../token-usage/token-usage.component';
 import { TokenUsage } from '../../services/token-pricing.service';
 import { formatTokens, formatUsd } from '../../services/ai-usage.service';
+import { CaseCardType } from '../../helpers/work-item-type-icons';
 
 export interface CaseChatDialogData {
   card: string;
   /** Tipo do card — as ferramentas do especialista mudam com ele (padrão: bug). */
-  cardType?: 'bug' | 'user-story';
+  cardType?: CaseCardType;
   /** 0090: abre já no formulário desta ferramenta (o `/ferramenta` da conversa compacta). */
   tool?: string;
 }

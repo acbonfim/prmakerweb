@@ -26,6 +26,7 @@ import {
   parseCommand,
   slashSuggestions
 } from './composer-suggest';
+import { CaseCardType } from '../../helpers/work-item-type-icons';
 
 /** Itens do card ficam guardados por pouco tempo (o `#` abre várias vezes enquanto a pessoa digita). */
 const ITEMS_TTL_MS = 20_000;
@@ -76,12 +77,12 @@ export class CaseComposerService {
   private searchTimer?: ReturnType<typeof setTimeout>;
 
   /** Ferramentas que se aplicam ao card (null = carregando ou ainda não pedidas — chame {@link ensureTools} antes). */
-  toolsOf(card: string, cardType: 'bug' | 'user-story'): ComposerTool[] | null {
+  toolsOf(card: string, cardType: CaseCardType): ComposerTool[] | null {
     return this.toolsByCard.get(`${card}|${cardType}`)?.() ?? null;
   }
 
   /** Carrega (uma vez) as ferramentas que se aplicam ao card. Fora de `computed`: o catálogo em cache emite na hora. */
-  ensureTools(card: string, cardType: 'bug' | 'user-story'): void {
+  ensureTools(card: string, cardType: CaseCardType): void {
     const key = `${card}|${cardType}`;
     let s = this.toolsByCard.get(key);
     if (!s) {
@@ -299,7 +300,7 @@ export class CaseComposer {
     return t?.kind === 'slash' && !!card && this.svc.toolsOf(card, this.cardType()) === null;
   });
 
-  constructor(private svc: CaseComposerService, private card: () => string | null, private cardType: () => 'bug' | 'user-story') {}
+  constructor(private svc: CaseComposerService, private card: () => string | null, private cardType: () => CaseCardType) {}
 
   /** Texto/cursor mudaram: recalcula o gatilho (e busca o item pelo número, se não for do card). */
   update(text: string, caret: number): void {

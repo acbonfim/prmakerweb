@@ -8,6 +8,7 @@ import { ExecutionPlanService, planApiError } from '../../services/execution-pla
 import { openCaseChat } from '../case-chat/open-case-chat';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { TaskPendency } from './task-pendency';
+import { CaseCardType } from '../../helpers/work-item-type-icons';
 
 /**
  * A pendência da sub-tarefa parada (card 78655), resolvida ali mesmo: `full` (modal da sub-tarefa) mostra a divergência
@@ -98,7 +99,7 @@ export class TaskPendencyComponent {
   readonly pendency = input.required<TaskPendency>();
   readonly planId = input<string | null | undefined>(null);
   readonly card = input<string | null | undefined>(null);
-  readonly cardType = input<'bug' | 'user-story'>('bug');
+  readonly cardType = input<CaseCardType>('bug');
   readonly variant = input<'full' | 'compact'>('full');
   readonly readOnly = input(false);
   /** Divergência confirmada (o Claude retoma): quem usa recarrega o item/plano. */
