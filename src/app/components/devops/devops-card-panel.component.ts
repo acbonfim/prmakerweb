@@ -10,6 +10,7 @@ import { Router } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { DevOpsService } from '../../services/devops.service';
+import { RoleService } from '../../services/role.service';
 import { PmComboComponent, PmComboOption } from '../pm-combo/pm-combo.component';
 import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
 import { canAccept, laneKey, boardLanes } from './board.logic';
@@ -71,9 +72,11 @@ const STATE_CATEGORY_COLORS: Record<string, string> = {
           <textarea class="dvp__title" rows="1" [ngModel]="title()" (ngModelChange)="title.set($event)" aria-label="Título"
                     [class.dvp__title--changed]="title().trim() !== d.title" (keydown.enter)="$event.preventDefault()"></textarea>
           <div class="dvp__actions">
-            <button mat-stroked-button type="button" (click)="openWorkbench()" matTooltip="Trabalhar o card na Bancada (análise, itens, especialista)">
-              <mat-icon>handyman</mat-icon>Abrir na Bancada
-            </button>
+            @if (canOpenWorkbench) {
+              <button mat-stroked-button type="button" (click)="openWorkbench()" matTooltip="Trabalhar o card na Bancada (análise, itens, especialista)">
+                <mat-icon>handyman</mat-icon>Abrir na Bancada
+              </button>
+            }
             @if (epic(); as ep) {
               @if (inEpic()) {
                 <span class="dvp__chip" matTooltip="O card já está no épico"><mat-icon>check</mat-icon>No épico #{{ ep }}</span>
@@ -261,6 +264,8 @@ export class DevOpsCardPanelComponent {
   private pickers = inject(WorkItemPickerSource);
   private router = inject(Router);
   private snack = inject(MatSnackBar);
+  /** 0099 (ajustes 2): "Abrir na Bancada" só para admin ou desenvolvedor. */
+  readonly canOpenWorkbench = inject(RoleService).canOpenWorkbenchFromDesk;
 
   /** Card do DevOps a mostrar. */
   readonly cardId = input<number | string | null>(null);
@@ -595,6 +600,7 @@ export class DevOpsCardPanelComponent {
   }
 
   openWorkbench(): void {
+    if (!this.canOpenWorkbench) return;
     const id = this.current();
     if (id) void this.router.navigate(['/auth/workbench'], { queryParams: { card: id } });
   }

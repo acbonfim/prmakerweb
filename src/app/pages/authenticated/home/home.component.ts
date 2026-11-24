@@ -3,6 +3,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 import { StorageService } from '../../../services/storage.service';
+import { RoleService } from '../../../services/role.service';
 import { HomeCardsComponent } from '../../../components/home-cards/home-cards.component';
 
 /**
@@ -18,6 +19,8 @@ import { HomeCardsComponent } from '../../../components/home-cards/home-cards.co
 })
 export class HomeComponent implements OnInit {
   private storageService = inject(StorageService);
+  /** 0099 (ajustes 2): links para a Bancada só para quem a acessa. */
+  readonly canUseWorkbench = inject(RoleService).canUseWorkbench;
 
   currentUser: any = null;
   greeting = '';

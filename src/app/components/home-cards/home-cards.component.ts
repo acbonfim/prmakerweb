@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { StorageService } from '../../services/storage.service';
+import { RoleService } from '../../services/role.service';
 import { AuthService } from '../../services/auth.service';
 import { WsService } from '../../services/ws.service';
 import { UserPendingService } from '../../services/user-pending.service';
@@ -75,6 +76,7 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private tabs = inject(TabsService);
   private storage = inject(StorageService);
+  private roles = inject(RoleService);
   private auth = inject(AuthService);
   private api = inject(HomeCardsService);
   private ws = inject(WsService);
@@ -209,8 +211,12 @@ export class HomeCardsComponent implements OnInit, OnDestroy {
    */
   open(card: HomeCard, focus?: PanelFocus, event?: Event, item?: number) {
     event?.stopPropagation();
-    const path = '/auth/workbench';
-    const queryParams = { card: card.cardNumber, focus: focus ? WORKBENCH_FOCUS[focus] : undefined, item: item ?? undefined };
+    // 0099 (ajustes 2): quem não acessa a Bancada (management sem papel de dev) abre o card no painel da Mesa.
+    const workbench = this.roles.canUseWorkbench;
+    const path = workbench ? '/auth/workbench' : '/auth/desk';
+    const queryParams = workbench
+      ? { card: card.cardNumber, focus: focus ? WORKBENCH_FOCUS[focus] : undefined, item: item ?? undefined }
+      : { card: card.cardNumber };
     // Ctrl/Cmd+clique ou botão do meio: o card abre numa aba nova (0065); o clique normal usa a aba atual.
     if (event instanceof MouseEvent && (event.ctrlKey || event.metaKey || event.button === 1)) {
       event.preventDefault();

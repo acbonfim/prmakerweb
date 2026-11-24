@@ -20,7 +20,8 @@ import {
   taskStatusLook
 } from './work-item.model';
 import { itemTypeLook } from './work-item-types';
-import { EpicSummary, epicColor, epicStatusLook } from '../epics/epic.logic';
+import { EpicSummary, epicColor, epicStatusLook, parseEpicKey } from '../epics/epic.logic';
+import { RoleService } from '../../services/role.service';
 
 /** 0099: `GET WorkItems/{n}` com número de épico responde `{kind:"epic", epic}` (a numeração é a mesma). */
 type WorkItemOrEpic = WorkItem & { kind?: string | null; epic?: EpicSummary | null };
@@ -124,7 +125,13 @@ const MAX_TASKS = 8;
             <footer class="wip__foot">
               <span>{{ it.createdByName || 'PRMake' }} · {{ it.createdAt | date: 'dd/MM HH:mm' }}@if (it.completedAt) { · terminou {{ it.completedAt | date: 'dd/MM HH:mm' }} }</span>
               <span class="wip__spacer"></span>
-              <button mat-stroked-button type="button" (click)="openWorkbench(it)"><mat-icon>handyman</mat-icon>Abrir na Bancada</button>
+              @if (epicOf(it); as en) {
+                @if (canUseDesk) {
+                  <button mat-stroked-button type="button" (click)="openEpicItem(en, it)"><mat-icon>space_dashboard</mat-icon>Abrir na Mesa</button>
+                }
+              } @else if (canUseWorkbench) {
+                <button mat-stroked-button type="button" (click)="openWorkbench(it)"><mat-icon>handyman</mat-icon>Abrir na Bancada</button>
+              }
             </footer>
           }
         }
@@ -195,6 +202,10 @@ export class WorkItemPopoverComponent {
 
   private api = inject(WorkItemsService);
   private router = inject(Router);
+  /** 0099 (ajustes 2): "Abrir na Bancada" só para quem acessa a Bancada; item de épico abre na Mesa (admin/management). */
+  private roles = inject(RoleService);
+  readonly canUseWorkbench = this.roles.canUseWorkbench;
+  readonly canUseDesk = this.roles.canUseDesk;
   private host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly item = signal<WorkItem | null>(null);
@@ -290,6 +301,16 @@ export class WorkItemPopoverComponent {
   openDesk(ep: EpicSummary): void {
     this.closed.emit();
     void this.router.navigate(['/auth/desk'], { queryParams: { epic: ep.number } });
+  }
+
+  /** Número do épico quando o item é de um épico (`E<n>`). */
+  epicOf(it: WorkItem): number | null {
+    return parseEpicKey(`${it.cardNumber ?? ''}`);
+  }
+
+  openEpicItem(epic: number, it: WorkItem): void {
+    this.closed.emit();
+    void this.router.navigate(['/auth/desk'], { queryParams: { epic, tab: 'items', item: it.number } });
   }
 
   openWorkbench(it: WorkItem): void {

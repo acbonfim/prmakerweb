@@ -20,9 +20,11 @@
       <span>Agora todo o tratamento do card é feito pela <b>Bancada</b> — itens de trabalho, execução do Claude ao vivo, arquivos,
         PRs, Especialista do caso e linha do tempo, numa tela só. Links antigos da tela de PR já abrem o card na Bancada.</span>
     </div>
-    <a mat-flat-button color="primary" routerLink="/auth/workbench" class="pr-retired__go">
-      <mat-icon>handyman</mat-icon>Abrir a Bancada
-    </a>
+    @if (canUseWorkbench) {
+      <a mat-flat-button color="primary" routerLink="/auth/workbench" class="pr-retired__go">
+        <mat-icon>handyman</mat-icon>Abrir a Bancada
+      </a>
+    }
   </div>
 
   <!-- 0088: Meus cards na Bancada — em destaque, pela última atualização no card; abrem na Bancada -->
@@ -44,7 +46,11 @@
   @if (!workbenchVisible() && !mineVisible() && !participatedVisible()) {
     <div class="home-empty">
       <mat-icon>inbox</mat-icon>
-      <span>Nenhum card por aqui ainda. Abra um card na <a routerLink="/auth/workbench">Bancada</a> para começar.</span>
+      @if (canUseWorkbench) {
+        <span>Nenhum card por aqui ainda. Abra um card na <a routerLink="/auth/workbench">Bancada</a> para começar.</span>
+      } @else {
+        <span>Nenhum card por aqui ainda.</span>
+      }
     </div>
   }
 

@@ -24,6 +24,8 @@ import {WsService} from '../../services/ws.service';
 import {UsageTrackerService} from '../../services/usage/usage-tracker.service';
 import {Router, RouterModule} from '@angular/router';
 import {UserPendingService} from '../../services/user-pending.service';
+import {RoleService} from '../../services/role.service';
+import {parseEpicKey} from '../epics/epic.logic';
 import {ExecutionUserAction, ExecutionUserPending} from '../execution-plan/execution-plan.model';
 import {UserIntegrationService} from '../../services/user-integration.service';
 import {MyIntegrationsDialogComponent} from '../my-integrations-dialog/my-integrations-dialog.component';
@@ -140,8 +142,19 @@ export class TopMenuComponent implements OnInit {
   readonly pending = inject(UserPendingService);
   private router = inject(Router);
 
+  private roles = inject(RoleService);
+
   openPending(item: ExecutionUserPending) {
-    this.router.navigate(['/auth/workbench'], { queryParams: { card: item.cardNumber } });
+    // 0099 (ajustes 2): pendência de épico (E<n>) abre na Mesa; management sem papel de dev não acessa a Bancada —
+    // o card abre no painel da Mesa.
+    const epic = parseEpicKey(`${item.cardNumber ?? ''}`);
+    if (epic && this.roles.canUseDesk) {
+      this.router.navigate(['/auth/desk'], { queryParams: { epic, tab: 'items' } });
+    } else if (this.roles.canUseWorkbench) {
+      this.router.navigate(['/auth/workbench'], { queryParams: { card: item.cardNumber } });
+    } else {
+      this.router.navigate(['/auth/desk'], { queryParams: { card: item.cardNumber } });
+    }
   }
 
   pendingIcon(action: ExecutionUserAction): string {
