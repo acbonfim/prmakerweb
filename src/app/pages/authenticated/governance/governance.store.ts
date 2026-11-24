@@ -1,8 +1,10 @@
 import { Injectable, computed, inject, isDevMode, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { MatDialog } from '@angular/material/dialog';
 import { GovRange, GovernanceApi, GovernanceApiService } from '../../../services/governance/governance-api.service';
 import { GovernanceDemoApi } from '../../../services/governance/governance.demo';
-import { GovernanceSettings, GovernanceUserRow } from '../../../services/governance/governance.model';
+import { GovernanceEvent, GovernanceRule, GovernanceSettings, GovernanceUserRow } from '../../../services/governance/governance.model';
+import { GovEventDialogComponent, GovEventDialogResult } from './tabs/gov-event-dialog.component';
 import { GovPeriod, dayKey, periodRange } from '../../../services/governance/governance.logic';
 
 export type GovTab = 'visao-geral' | 'usuarios' | 'cards' | 'tarefas' | 'auditoria' | 'regras' | 'hooks' | 'configuracoes';
@@ -34,6 +36,7 @@ export interface AuditPreset {
 export class GovernanceStore {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly dialog = inject(MatDialog);
 
   readonly demo = isDevMode() && this.route.snapshot.queryParamMap.get('exemplo') === '1';
   readonly api: GovernanceApi = this.demo ? new GovernanceDemoApi() : inject(GovernanceApiService);
@@ -117,6 +120,33 @@ export class GovernanceStore {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
+  }
+
+  /** Regras (para mostrar o nome das que dispararam); a aba de regras atualiza ao gravar. */
+  readonly rules = signal<GovernanceRule[] | null>(null);
+
+  ensureRules(): void {
+    if (this.rules()) return;
+    this.api.rules().subscribe({ next: (r) => this.rules.set(r), error: () => this.rules.set([]) });
+  }
+
+  ruleName(key: string): string {
+    return this.rules()?.find((r) => r.key === key)?.name ?? key;
+  }
+
+  /** Detalhe do evento; "Ver card"/"Ver pessoa" navegam para a aba certa. */
+  showEvent(event: GovernanceEvent): void {
+    this.ensureRules();
+    this.dialog
+      .open<GovEventDialogComponent, unknown, GovEventDialogResult>(GovEventDialogComponent, {
+        width: '720px', maxWidth: '96vw', maxHeight: '92vh', autoFocus: false,
+        data: { event, rules: this.rules() ?? [] },
+      })
+      .afterClosed()
+      .subscribe((r) => {
+        if (r?.go === 'card') this.openCard(r.card);
+        if (r?.go === 'user') this.openUser(r.userId);
+      });
   }
 
   userName(id: string | null | undefined): string {

@@ -47,6 +47,10 @@
 
 <div class="gov-body">
   @switch (store.tab()) {
+    @case ('visao-geral') { <app-gov-overview></app-gov-overview> }
+    @case ('usuarios') { <app-gov-users></app-gov-users> }
+    @case ('cards') { <app-gov-cards></app-gov-cards> }
+    @case ('tarefas') { <app-gov-tasks></app-gov-tasks> }
     @default {
       <section class="panel"><p class="muted">Em construção.</p></section>
     }

@@ -1,0 +1,134 @@
+@if (error()) {
+  <div class="notice">{{ error() }}</div>
+}
+
+<div class="split" [class.split--open]="!!store.selectedUser()">
+  <section class="panel">
+    <div class="panel__head">
+      <h2>Por pessoa</h2>
+      <span class="muted">clique para ver cards e eventos · durações são medianas</span>
+      <input class="f-search ms-auto" type="search" placeholder="Buscar pessoa" [ngModel]="search()" (ngModelChange)="search.set($event)"
+             data-usage-ignore>
+      @if (loading()) { <mat-spinner diameter="18"></mat-spinner> }
+    </div>
+    <div class="table-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th><button class="th-sort" (click)="sortBy('userName')">Pessoa {{ mark('userName') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('events')">Eventos {{ mark('events') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('cards')">Cards {{ mark('cards') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('plansStarted')">Planos {{ mark('plansStarted') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('analysesDone')">Análises {{ mark('analysesDone') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('medianAnalysisMs')" matTooltip="Duração mediana do plano de análise">Análise ~ {{ mark('medianAnalysisMs') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('workItems')">Itens {{ mark('workItems') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('tasksDone')">Sub-tarefas {{ mark('tasksDone') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('medianTaskMs')" matTooltip="Duração mediana das sub-tarefas">Sub-tarefa ~ {{ mark('medianTaskMs') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('blocked')">Barradas {{ mark('blocked') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('warned')">Avisos {{ mark('warned') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('errors')">Erros {{ mark('errors') }}</button></th>
+            <th class="num"><button class="th-sort" (click)="sortBy('aiCostUsd')">IA {{ mark('aiCostUsd') }}</button></th>
+            <th><button class="th-sort" (click)="sortBy('lastActivityAt')">Última atividade {{ mark('lastActivityAt') }}</button></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (u of sorted(); track u.userId) {
+            <tr class="clickable" [class.selected]="store.selectedUser() === u.userId" (click)="open(u)">
+              <td><span class="who"><app-user-avatar [name]="u.userName" [size]="22"></app-user-avatar>{{ u.userName }}</span></td>
+              <td class="num">{{ num(u.events) }}</td>
+              <td class="num">{{ num(u.cards) }}</td>
+              <td class="num">{{ num(u.plansStarted) }}</td>
+              <td class="num">{{ num(u.analysesDone) }}</td>
+              <td class="num">{{ dur(u.medianAnalysisMs) }}</td>
+              <td class="num">{{ num(u.workItems) }}</td>
+              <td class="num">{{ num(u.tasksDone) }}</td>
+              <td class="num">{{ dur(u.medianTaskMs) }}</td>
+              <td class="num" [class.bad]="u.blocked > 0">{{ num(u.blocked) }}</td>
+              <td class="num" [class.warn]="u.warned > 0">{{ num(u.warned) }}</td>
+              <td class="num" [class.bad]="u.errors > 0">{{ num(u.errors) }}</td>
+              <td class="num">{{ usd(u.aiCostUsd) }}</td>
+              <td [title]="dt(u.lastActivityAt)">{{ ago(u.lastActivityAt) }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="14" class="muted">{{ loading() ? 'Carregando…' : 'Sem atividade no período.' }}</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  @if (store.selectedUser()) {
+    <section class="panel detail" aria-label="Detalhe da pessoa">
+      <div class="detail__head">
+        @if (detail(); as d) {
+          <app-user-avatar [name]="d.summary.userName" [size]="32"></app-user-avatar>
+          <div>
+            <p class="detail__title">{{ d.summary.userName }}</p>
+            <span class="muted">última atividade {{ ago(d.summary.lastActivityAt) }}</span>
+          </div>
+        } @else {
+          <p class="detail__title">{{ store.userName(store.selectedUser()) }}</p>
+        }
+        <span class="ms-auto"></span>
+        @if (detailLoading()) { <mat-spinner diameter="18"></mat-spinner> }
+        <button mat-icon-button type="button" matTooltip="Ver eventos na auditoria"
+                (click)="store.openAudit({ user: store.selectedUser() })"><mat-icon>manage_search</mat-icon></button>
+        <button mat-icon-button type="button" (click)="close()" aria-label="Fechar detalhe"><mat-icon>close</mat-icon></button>
+      </div>
+
+      @if (detailError()) { <div class="notice">{{ detailError() }}</div> }
+
+      @if (detail(); as d) {
+        <div class="tiles tiles--sm">
+          <div class="tile"><span class="tile__label">Eventos</span><span class="tile__value">{{ num(d.summary.events) }}</span></div>
+          <div class="tile"><span class="tile__label">Cards</span><span class="tile__value">{{ num(d.summary.cards) }}</span></div>
+          <div class="tile"><span class="tile__label">Análises</span><span class="tile__value">{{ num(d.summary.analysesDone) }}</span>
+            <span class="tile__sub">mediana {{ dur(d.summary.medianAnalysisMs) }}</span></div>
+          <div class="tile"><span class="tile__label">Sub-tarefas</span><span class="tile__value">{{ num(d.summary.tasksDone) }}</span>
+            <span class="tile__sub">mediana {{ dur(d.summary.medianTaskMs) }}</span></div>
+          <div class="tile" [class.tile--bad]="d.summary.blocked > 0"><span class="tile__label">Barradas</span><span class="tile__value">{{ num(d.summary.blocked) }}</span>
+            <span class="tile__sub">{{ num(d.summary.warned) }} avisos · {{ num(d.summary.errors) }} erros</span></div>
+          <div class="tile"><span class="tile__label">Custo de IA</span><span class="tile__value">{{ usd(d.summary.aiCostUsd) }}</span></div>
+        </div>
+
+        <div class="panel__head sub"><h3>Cards</h3><span class="muted">{{ d.cards.length }}</span></div>
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead><tr><th>Card</th><th>Título</th><th>Iniciou</th><th class="num">Análise</th><th class="num">Lead time</th><th>Situação</th></tr></thead>
+            <tbody>
+              @for (c of d.cards; track c.cardNumber) {
+                <tr class="clickable" (click)="store.openCard(c.cardNumber)" title="Abrir a linha do tempo do card">
+                  <td class="mono">{{ c.cardNumber }}</td>
+                  <td class="ellipsis" [title]="c.title">{{ c.title }}</td>
+                  <td>{{ dt(c.firstActivityAt) }}</td>
+                  <td class="num">{{ dur(c.analysisMs) }}</td>
+                  <td class="num">{{ dur(c.leadTimeMs) }}</td>
+                  <td>{{ c.status || '—' }}</td>
+                </tr>
+              } @empty { <tr><td colspan="6" class="muted">Nenhum card no período.</td></tr> }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel__head sub"><h3>Eventos recentes</h3><span class="muted">últimos {{ d.recent.length }}</span></div>
+        <div class="table-wrap">
+          <table class="tbl">
+            <thead><tr><th>Quando</th><th>Origem</th><th>Ação</th><th>Card</th><th class="num">Duração</th><th>Resultado</th></tr></thead>
+            <tbody>
+              @for (e of d.recent; track e.id) {
+                <tr class="clickable" (click)="store.showEvent(e)">
+                  <td>{{ dt(e.startedAt) }}</td>
+                  <td>{{ source(e.source) }}</td>
+                  <td class="ellipsis mono" [title]="e.action">{{ e.action }}</td>
+                  <td class="mono">{{ e.cardNumber ?? '' }}</td>
+                  <td class="num">{{ dur(e.durationMs) }}</td>
+                  <td><span class="badge badge--{{ e.outcome }}">{{ outcome(e.outcome) }}</span></td>
+                </tr>
+              } @empty { <tr><td colspan="6" class="muted">Nenhum evento no período.</td></tr> }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>

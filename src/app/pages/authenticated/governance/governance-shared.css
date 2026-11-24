@@ -89,6 +89,8 @@
 .tile__label { font-size: 12px; color: var(--cc-text-3); }
 .tile__value { font-size: 22px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tile__sub { font-size: 12px; color: var(--cc-text-3); }
+.tile--btn { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.tile--btn:hover { border-color: var(--cc-surface-border-strong); }
 .tile--bad .tile__value { color: #f85149; }
 .tile--warn .tile__value { color: #d29922; }
 
@@ -117,6 +119,16 @@
 .ellipsis { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
 .wrap { white-space: normal !important; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.who { display: inline-flex; align-items: center; gap: 8px; }
+.tbl td.bad { color: #f85149; }
+.tbl td.warn { color: #d29922; }
+.tiles--sm { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.tiles--sm .tile { padding: 8px 10px; }
+.tiles--sm .tile__value { font-size: 18px; }
+.panel__head.sub { margin: 14px 0 6px; }
+.dots { display: inline-flex; align-items: center; gap: 2px; }
+.dots i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--mat-sys-primary); }
+.dots small { margin-left: 4px; color: var(--cc-text-3); }
 .pager { display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; }
 
 /* ── Selos ── */

@@ -7,6 +7,10 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { GOV_TABS, GovTab, GovernanceStore } from './governance.store';
 import { MODE_HINT, MODE_LABEL } from '../../../services/governance/governance.model';
 import { GovPeriod, PERIODS } from '../../../services/governance/governance.logic';
+import { GovOverviewComponent } from './tabs/gov-overview.component';
+import { GovUsersComponent } from './tabs/gov-users.component';
+import { GovCardsComponent } from './tabs/gov-cards.component';
+import { GovTasksComponent } from './tabs/gov-tasks.component';
 
 /**
  * Governança do PRMake (0098, admin): casca com as abas internas (aba na query `?aba=`), o filtro de período
@@ -15,7 +19,7 @@ import { GovPeriod, PERIODS } from '../../../services/governance/governance.logi
 @Component({
   selector: 'app-governance-page',
   standalone: true,
-  imports: [FormsModule, MatButtonModule, MatIconModule, MatTooltipModule],
+  imports: [FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, GovOverviewComponent, GovUsersComponent, GovCardsComponent, GovTasksComponent],
   providers: [GovernanceStore],
   templateUrl: './governance-page.component.html',
   styleUrls: ['./governance-shared.css', './governance-page.component.css'],

@@ -596,19 +596,31 @@ export function parseBlockedBody(body: unknown): BlockedNotice | null {
   return { message, rules };
 }
 
-/** Cabeçalho `X-Governance-Warning` (pode vir codificado em URL, já que cabeçalho HTTP é ASCII). */
+/** Cabeçalho `X-Governance-Warning`: vem em URL-encoding (cabeçalho HTTP é ASCII); texto inválido volta como veio. */
 export function decodeWarningHeader(value: string | null | undefined): string | null {
   if (!value || !value.trim()) return null;
   const v = value.trim();
-  if (/%[0-9a-f]{2}/i.test(v)) {
-    try {
-      return decodeURIComponent(v.replace(/\+/g, ' '));
-    } catch {
-      return v;
-    }
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
   }
-  return v;
 }
+
+/** Mensagem de erro da API (`{ message }` em 400/409) ou o texto padrão. */
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  const e = err as { error?: unknown; status?: number } | null;
+  const body = e?.error;
+  if (body && typeof body === 'object' && typeof (body as Record<string, unknown>)['message'] === 'string') {
+    const m = `${(body as Record<string, unknown>)['message']}`.trim();
+    if (m) return m;
+  }
+  if (typeof body === 'string' && body.trim() && body.length < 300 && !body.trim().startsWith('<')) return body.trim();
+  return fallback;
+}
+
+/** Valor de segredo que a API devolve mascarado; mandado de volta igual, mantém o valor guardado. */
+export const MASKED_SECRET = '***';
 
 /** Texto curto de uma lista ("a, b e c"). */
 export function joinPt(items: string[]): string {

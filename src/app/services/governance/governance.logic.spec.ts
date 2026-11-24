@@ -1,5 +1,5 @@
 import {
-  buildCardTimeline, decodeWarningHeader, dayKeys, evaluateLocally, fmtMs, globMatch, groupRulesByCategory, joinPt, median,
+  apiErrorMessage, buildCardTimeline, decodeWarningHeader, dayKeys, evaluateLocally, fmtMs, globMatch, groupRulesByCategory, joinPt, median,
   moveItem, newHook, newRule, normalizeRule, normalizeUserDetail, parseBlockedBody, percentile, perDayStack, periodRange, renumber, ruleMatches,
   slugify, sortRows, toggleSort, validateGlob, validateHook, validateKey, validateMilestones, validateRegex, validateRule,
 } from './governance.logic';
@@ -291,8 +291,11 @@ describe('governance.logic (0098)', () => {
 
     it('cabeçalho de aviso: texto puro ou codificado', () => {
       expect(decodeWarningHeader('Cuidado')).toBe('Cuidado');
-      expect(decodeWarningHeader('Voc%C3%AA+passou+do+teto')).toBe('Você passou do teto');
+      expect(decodeWarningHeader('Voc%C3%AA%20passou%20do%20teto%20(regra%20ai-cost-daily)')).toBe('Você passou do teto (regra ai-cost-daily)');
+      expect(decodeWarningHeader('100%')).toBe('100%');
       expect(decodeWarningHeader('  ')).toBeNull();
+      expect(apiErrorMessage({ status: 409, error: { message: 'Regra embutida não pode ser apagada.' } }, 'x')).toBe('Regra embutida não pode ser apagada.');
+      expect(apiErrorMessage({ status: 500, error: '<html>' }, 'Falhou.')).toBe('Falhou.');
       expect(joinPt(['a', 'b', 'c'])).toBe('a, b e c');
     });
   });
