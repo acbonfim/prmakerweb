@@ -4,6 +4,12 @@ import { DomSanitizer } from '@angular/platform-browser';
 /** Tipo do card / item de trabalho na Bancada (feature 0085). */
 export type WorkItemCardType = 'bug' | 'user-story';
 
+/**
+ * 0099: dono dos itens de trabalho e da conversa do especialista — card do DevOps (Bug/User Story) ou épico da Mesa de
+ * gestão (chave `E{n}`). Com `epic` as telas usam os rótulos de gestão (sem termos de bug/US).
+ */
+export type CaseCardType = WorkItemCardType | 'epic';
+
 /** Nome do ícone SVG do Bug (joaninha vermelha, como no Azure DevOps). */
 export const WI_BUG_ICON = 'wi-bug';
 /** Nome do ícone SVG da User Story (livrinho azul, como no Azure DevOps). */

@@ -30,6 +30,7 @@ import {
   specialistToolMessage,
   toolContext
 } from './specialist-tools.logic';
+import { CaseCardType } from '../../helpers/work-item-type-icons';
 
 /**
  * 0085 rodada 4: **Ferramentas do especialista** — atalhos para criar itens de trabalho do dia a dia (abrir PR para uma
@@ -279,7 +280,7 @@ app-specialist-tools { display: block; min-height: 0; }
 })
 export class SpecialistToolsComponent {
   readonly card = input<string | null>(null);
-  readonly cardType = input<'bug' | 'user-story'>('bug');
+  readonly cardType = input<CaseCardType>('bug');
   /** Painel visível (foca a busca ao abrir). */
   readonly open = input<boolean>(true);
   readonly created = output<number>();

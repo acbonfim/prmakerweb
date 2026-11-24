@@ -1,15 +1,16 @@
 @if (card(); as c) {
-  <section class="ck" aria-label="Especialista do caso" data-tour="case-compact"
+  <section class="ck" [attr.aria-label]="epic() ? 'Especialista de gestão' : 'Especialista do caso'" data-tour="case-compact"
            (paste)="onPaste($event)" (dragover)="onDragOver($event)" (dragleave)="dropping.set(false)" (drop)="onDrop($event)">
     @if (dropping()) { <div class="ck__drop"><mat-icon>upload_file</mat-icon>Solte para anexar</div> }
 
     <header class="ck__head">
       <span class="sp-av" aria-hidden="true"><mat-icon>psychology</mat-icon></span>
       <div class="ck__titles">
-        <b>Especialista do caso</b>
+        <b>{{ epic() ? 'Especialista de gestão' : 'Especialista do caso' }}</b>
         <small>
           @if (runLabel(); as label) { <span class="ck__live"><span class="ck__dot"></span>{{ label }}</span> }
           @else if (people().length) { {{ people().length }} {{ people().length === 1 ? 'pessoa' : 'pessoas' }} na conversa · não altera o plano sem você }
+          @else if (epic()) { conhece o épico, os cards e o board · cria, edita e move cards por você }
           @else { conhece o caso inteiro · não altera o plano sem você }
         </small>
       </div>
@@ -73,6 +74,17 @@
         <div class="ck__state"><span class="ck__spin"></span>Abrindo a conversa…</div>
       } @else if (loadError()) {
         <div class="ck__state"><mat-icon>error_outline</mat-icon>Não foi possível abrir a conversa.<button mat-button (click)="expand()">Abrir</button></div>
+      } @else if (!messages().length && epic()) {
+        <div class="ck__empty">
+          <span class="sp-av sp-av--xl"><mat-icon>psychology</mat-icon></span>
+          <b>O que vamos organizar neste épico?</b>
+          <span>O especialista de gestão conhece o épico, os cards dele e o board do time. Ele consulta o DevOps, cria e move cards, gera relatórios, acha duplicados e escreve RCAs.</span>
+          <div class="ck__suggest">
+            <button type="button" (click)="send('Resuma a situação dos cards deste épico: o que está parado, o que avançou e o que precisa de atenção.')">Resumo do épico</button>
+            <button type="button" (click)="send('Procure cards duplicados entre os bugs abertos do board deste épico.')">Achar duplicados</button>
+            <button type="button" (click)="send('Monte um relatório dos bugs abertos (por estado, área e responsável) e gere o PDF.')">Relatório de bugs</button>
+          </div>
+        </div>
       } @else if (!messages().length) {
         <div class="ck__empty">
           <span class="sp-av sp-av--xl"><mat-icon>psychology</mat-icon></span>

@@ -59,6 +59,8 @@
   flex: 0 1 auto;
 }
 .wb-card--loading { color: var(--wb-muted); font-size: 13px; }
+// 0099: chips dos épicos do card (encolhem antes do título)
+.wb-epics { flex: 0 3 auto; min-width: 0; }
 .wb-card__type { flex: none; width: 18px; height: 18px; }
 .wb-card__num { flex: none; font-weight: 600; font-size: 15px; color: var(--wb-muted); font-variant-numeric: tabular-nums; }
 .wb-card__title {

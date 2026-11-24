@@ -20,6 +20,7 @@ import { openCaseChat } from './open-case-chat';
 import { CaseComposer, CaseComposerService } from './case-composer.service';
 import { ComposerAction, ComposerSuggestion } from './composer-suggest';
 import { ComposerSuggestComponent } from './composer-suggest.component';
+import { CaseCardType } from '../../helpers/work-item-type-icons';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_FILES = 20;
@@ -43,7 +44,9 @@ const TYPING_EVERY_MS = 4000;
 export class CaseCompactComponent implements OnDestroy {
   readonly card = input<string | null>(null);
   /** Tipo do card (as ferramentas da conversa grande mudam com ele). */
-  readonly cardType = input<'bug' | 'user-story'>('bug');
+  readonly cardType = input<CaseCardType>('bug');
+  /** 0099: conversa de um épico da Mesa de gestão (chave `E{n}`) — rótulos e sugestões de gestão. */
+  readonly epic = computed(() => this.cardType() === 'epic');
   /** Item de trabalho criado/aberto por uma ferramenta da conversa grande (o hospedeiro mostra o item). */
   readonly itemOpened = output<number>();
   /** Bancada: mostra a seta que recolhe o painel para a direita (o hospedeiro esconde e mostra a seta de volta). */

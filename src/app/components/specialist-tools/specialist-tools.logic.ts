@@ -144,7 +144,7 @@ export function toolIcon(t: Pick<SpecialistTool, 'key' | 'icon'>, group: ToolGro
   return KNOWN_ICONS[fold(t.key)] ?? TOOL_GROUPS.find((g) => g.key === group)?.icon ?? 'handyman';
 }
 
-const TYPE_LABEL: Record<string, string> = { bug: 'Bug', 'user-story': 'User Story' };
+const TYPE_LABEL: Record<string, string> = { bug: 'Bug', 'user-story': 'User Story', epic: 'Épico' };
 
 /**
  * Se a ferramenta vale para o card: `applicable` do servidor manda; sem ele, a reserva confere só o tipo do card

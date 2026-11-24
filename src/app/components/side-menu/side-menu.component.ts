@@ -36,6 +36,12 @@ export class SideMenuComponent implements OnInit {
       icon: 'handyman',
       link: 'auth/workbench'
     },
+    {
+      // 0099: Mesa de gestão — épicos, tarefas administrativas e os cards do DevOps (par da Bancada).
+      label: 'Gestão',
+      icon: 'space_dashboard',
+      link: 'auth/desk'
+    },
     // Tela de Pull Request desativada (o card é tratado na Bancada) — reativar junto com a rota em authenticated.routes.
     // {
     //   label: 'Pull Requests',

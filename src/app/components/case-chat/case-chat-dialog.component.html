@@ -7,8 +7,13 @@
   <header class="cc__head">
     <span class="sp-av sp-av--lg" aria-hidden="true"><mat-icon>psychology</mat-icon></span>
     <div class="cc__titles">
-      <span class="cc__title">Especialista do caso · #{{ data.card }}</span>
-      <span class="cc__sub">Conhece o card, os planos, as decisões e o que já aconteceu · conversa com quem está no caso · não mexe no plano sem você pedir</span>
+      @if (data.cardType === 'epic') {
+        <span class="cc__title">Especialista de gestão · {{ data.card }}</span>
+        <span class="cc__sub">Conhece o épico, os cards, os itens e o board do time · cria, edita e move cards com a sua integração · confirma antes de mexer em lote</span>
+      } @else {
+        <span class="cc__title">Especialista do caso · #{{ data.card }}</span>
+        <span class="cc__sub">Conhece o card, os planos, as decisões e o que já aconteceu · conversa com quem está no caso · não mexe no plano sem você pedir</span>
+      }
     </div>
     <span class="cc__spacer"></span>
     @if (runLabel(); as label) {
@@ -63,7 +68,19 @@
             }
           }
 
-          @if (!messages().length) {
+          @if (!messages().length && data.cardType === 'epic') {
+            <div class="cc__empty">
+              <span class="sp-av sp-av--xl"><mat-icon>psychology</mat-icon></span>
+              <b>Converse com o Especialista de gestão</b>
+              <span>Ele conhece o épico, os cards dele e o board do time. Peça relatórios, duplicados, entendimento de um card, RCA em PDF,
+                criar ou mover cards. Pergunte, mande um print ou um áudio.</span>
+              <div class="cc__suggest">
+                <button type="button" (click)="send('Resuma a situação dos cards deste épico: o que está parado, o que avançou e o que precisa de atenção.')">Resumo do épico</button>
+                <button type="button" (click)="send('Procure cards duplicados entre os bugs abertos do board deste épico.')">Achar duplicados</button>
+                <button type="button" (click)="send('Monte um relatório dos bugs abertos (por estado, área e responsável) e gere o PDF.')">Relatório de bugs</button>
+              </div>
+            </div>
+          } @else if (!messages().length) {
             <div class="cc__empty">
               <span class="sp-av sp-av--xl"><mat-icon>psychology</mat-icon></span>
               <b>Converse com o Especialista do caso</b>

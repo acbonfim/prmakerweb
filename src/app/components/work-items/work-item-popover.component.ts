@@ -20,6 +20,10 @@ import {
   taskStatusLook
 } from './work-item.model';
 import { itemTypeLook } from './work-item-types';
+import { EpicSummary, epicColor, epicStatusLook } from '../epics/epic.logic';
+
+/** 0099: `GET WorkItems/{n}` com número de épico responde `{kind:"epic", epic}` (a numeração é a mesma). */
+type WorkItemOrEpic = WorkItem & { kind?: string | null; epic?: EpicSummary | null };
 
 export type WorkItemPopoverMode = 'popover' | 'sheet';
 
@@ -30,6 +34,8 @@ const MAX_TASKS = 8;
  * com a sub-tarefa em destaque) — tipo, estado, título, card,
  * progresso, sub-tarefas, PRs/links e o motivo do cancelamento, com "Abrir na Bancada". Mesmo overlay/folha inferior
  * dos outros popovers da `appCodeRefHost`. Estados: carregando, erro e não encontrado.
+ * 0099: o número pode ser de um épico da Mesa de gestão — o popover mostra o épico (cor, status, tags, contagens) com
+ * "Abrir na Mesa de gestão".
  */
 @Component({
   selector: 'app-work-item-popover',
@@ -42,20 +48,26 @@ const MAX_TASKS = 8;
     '[class.wip--sheet]': "mode() === 'sheet'",
     role: 'dialog',
     tabindex: '-1',
-    '[attr.aria-label]': "'Item de trabalho ' + label()",
+    '[attr.aria-label]': "(epic() ? 'Épico ' : 'Item de trabalho ') + label()",
   },
   template: `
     <header class="wip__head">
       <div class="wip__titles">
         <div class="wip__line">
           <span class="wip__num">{{ label() }}</span>
+          @if (epic(); as ep) {
+            <span class="wip__chip" [style.--wip-c]="epicColor(ep)"><mat-icon>space_dashboard</mat-icon>Épico</span>
+            <span class="wip__chip" [style.--wip-c]="epicStatus(ep).color"><mat-icon>{{ epicStatus(ep).icon }}</mat-icon>{{ epicStatus(ep).label }}</span>
+          }
           @if (item(); as it) {
             <span class="wip__chip" [style.--wip-c]="type().color || '#8b9bb4'"><mat-icon>{{ type().icon }}</mat-icon>{{ type().label }}</span>
             <span class="wip__chip" [style.--wip-c]="status().color"><mat-icon [class.wip__spin]="status().spin" [class.cime-bob]="status().bob">{{ status().icon }}</mat-icon>{{ status().label }}</span>
             @if (otherCard()) { <span class="wip__card" matTooltip="Item de outro card">card {{ it.cardNumber }}</span> }
           }
         </div>
-        @if (matchedTask(); as mt) {
+        @if (epic(); as ep) {
+          <span class="wip__title">{{ ep.title }}</span>
+        } @else if (matchedTask(); as mt) {
           <span class="wip__title">{{ mt.title }}</span>
           <span class="wip__parent"><mat-icon>subdirectory_arrow_right</mat-icon>sub-tarefa do item <b>{{ itemLabel() }}</b> · {{ item()?.title }}</span>
         } @else if (item()?.title; as t) { <span class="wip__title">{{ t }}</span> }
@@ -72,6 +84,19 @@ const MAX_TASKS = 8;
             <button mat-stroked-button type="button" (click)="load()">Tentar de novo</button></div>
         }
         @default {
+          @if (epic(); as ep) {
+            @if (ep.tags.length) {
+              <div class="wip__links">@for (t of ep.tags; track t) { <span class="wip__link wip__tag">{{ t }}</span> }</div>
+            }
+            <p class="wip__activity"><mat-icon>insights</mat-icon>{{ ep.counts.cards }} {{ ep.counts.cards === 1 ? 'card' : 'cards' }} ·
+              {{ ep.counts.items }} {{ ep.counts.items === 1 ? 'tarefa' : 'tarefas' }} de gestão ({{ ep.counts.openItems }} em aberto)
+              @if (ep.devOpsTeam) { · {{ ep.devOpsTeam }}@if (ep.devOpsBoard) { / {{ ep.devOpsBoard }} } }</p>
+            <footer class="wip__foot">
+              <span>{{ ep.createdByName || 'PRMake' }} · {{ ep.createdAt | date: 'dd/MM HH:mm' }}</span>
+              <span class="wip__spacer"></span>
+              <button mat-stroked-button type="button" (click)="openDesk(ep)"><mat-icon>space_dashboard</mat-icon>Abrir na Mesa de gestão</button>
+            </footer>
+          }
           @if (item(); as it) {
             @if ((matchedTask() ? matchedTask()?.description : it.description) || it.description; as d) { <p class="wip__desc">{{ d }}</p> }
             @if (it.activity) { <p class="wip__activity"><mat-icon class="wip__spin">autorenew</mat-icon>{{ it.activity }}</p> }
@@ -155,6 +180,7 @@ const MAX_TASKS = 8;
     .wip__link .mat-icon { font-size: 14px; width: 14px; height: 14px; }
     .wip__foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid #30363d; font-size: 11.5px; color: #8b949e; }
     .wip__spacer { flex: 1; }
+    .wip__tag { color: var(--mat-sys-on-surface, #e6edf3); }
     .wip__spin { animation: wip-spin 1.1s linear infinite; }
     @keyframes wip-spin { to { transform: rotate(360deg); } }
   `]
@@ -172,6 +198,8 @@ export class WorkItemPopoverComponent {
   private host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly item = signal<WorkItem | null>(null);
+  /** 0099: o número era de um épico. */
+  readonly epic = signal<EpicSummary | null>(null);
   readonly state = signal<'loading' | 'ready' | 'missing' | 'error'>('loading');
   readonly error = signal('');
   readonly label = computed(() => formatWorkNumber(this.number()));
@@ -229,9 +257,11 @@ export class WorkItemPopoverComponent {
     const seq = ++this.seq;
     this.state.set('loading');
     try {
-      const it = await firstValueFrom(this.api.get(n));
+      const it = await firstValueFrom(this.api.get(n)) as WorkItemOrEpic;
       if (seq !== this.seq) return;
-      this.item.set(it);
+      const isEpic = it?.kind === 'epic' && !!it.epic;
+      this.epic.set(isEpic ? it.epic! : null);
+      this.item.set(isEpic ? null : it);
       this.state.set('ready');
     } catch (e) {
       if (seq !== this.seq) return;
@@ -246,6 +276,20 @@ export class WorkItemPopoverComponent {
 
   taskLook(status: string) {
     return taskStatusLook(status);
+  }
+
+  epicColor(ep: EpicSummary): string {
+    return epicColor(ep.color);
+  }
+
+  epicStatus(ep: EpicSummary) {
+    return epicStatusLook(ep.status);
+  }
+
+  /** 0099: o épico na Mesa de gestão. */
+  openDesk(ep: EpicSummary): void {
+    this.closed.emit();
+    void this.router.navigate(['/auth/desk'], { queryParams: { epic: ep.number } });
   }
 
   openWorkbench(it: WorkItem): void {
