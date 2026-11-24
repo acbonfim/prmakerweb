@@ -306,6 +306,11 @@
                     <span class="dk-cardrow__title">{{ c.title || 'Card ' + c.card }}</span>
                   </span>
                   <span class="dk-cardrow__meta">
+                    @if (cardLive()[c.card]; as live) {
+                      @if (live.state) { <span class="dk-cardrow__state" matTooltip="Estado no DevOps">{{ live.state }}</span> }
+                      @if (live.boardColumn && live.boardColumn !== live.state) { <span matTooltip="Coluna do board"><mat-icon>view_week</mat-icon>{{ live.boardColumn }}</span> }
+                      @if (live.assignedTo) { <span matTooltip="Responsável"><mat-icon>person</mat-icon>{{ live.assignedTo }}</span> }
+                    }
                     <span class="dk-role" [matTooltip]="rl.hint"><mat-icon>{{ rl.icon }}</mat-icon>{{ rl.label }}</span>
                     <span>{{ c.addedByName || 'PRMake' }} · {{ c.addedAt | date: 'dd/MM HH:mm' }}</span>
                   </span>

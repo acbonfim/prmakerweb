@@ -32,7 +32,7 @@ import { WorkItemListComponent } from '../../../components/work-items/work-item-
 import { WorkItem } from '../../../components/work-items/work-item.model';
 import { listenWorkItems } from '../../../components/work-items/work-items-live';
 import { CaseChatStore } from '../../../services/case-chat-store.service';
-import { EpicsService, epicApiError } from '../../../services/epics.service';
+import { EpicCardLive, EpicsService, epicApiError } from '../../../services/epics.service';
 import { TabsService } from '../../../services/tabs.service';
 import { WorkItemsService } from '../../../services/work-items.service';
 import { WsService } from '../../../services/ws.service';
@@ -388,6 +388,21 @@ export class DeskComponent implements OnInit, OnDestroy {
       }
     });
   }
+
+  /** Aba Cards: estado/coluna/responsável do DevOps por card (enfeite — sem DevOps a lista segue sem eles). */
+  readonly cardLive = signal<Record<string, EpicCardLive>>({});
+  private cardLiveKey = '';
+  private readonly cardLiveSync = effect(() => {
+    const cards = (this.epic()?.cards ?? []).map((c) => c.card).filter((c) => /^\d+$/.test(c));
+    const key = cards.join(',');
+    if (key === this.cardLiveKey) return;
+    this.cardLiveKey = key;
+    if (!cards.length) { this.cardLive.set({}); return; }
+    untracked(() => this.api.cardsSummary(cards).subscribe({
+      next: (rows) => this.cardLive.set(Object.fromEntries(rows.map((r) => [`${r.id}`, r]))),
+      error: () => undefined
+    }));
+  });
 
   reloadEpic(): void {
     const n = this.epicNumber();

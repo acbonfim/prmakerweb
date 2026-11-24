@@ -49,6 +49,11 @@ export class EpicsService {
     return this.http.get<Epic>(`${this.apiUrl}/${number}`);
   }
 
+  /** Estado/coluna/responsável dos cards (aba Cards) — resumo do DevOps; vazio quando o DevOps não responde. */
+  cardsSummary(cards: string[]): Observable<EpicCardLive[]> {
+    return this.http.post<EpicCardLive[]>(`${environment.apiUrl}Azure/cards/summary`, cards);
+  }
+
   create(body: SaveEpicRequest): Observable<Epic> {
     return this.http.post<Epic>(this.apiUrl, body);
   }
@@ -110,4 +115,12 @@ export function epicApiError(err: any, fallback: string): string {
   const body = err?.error;
   if (typeof body === 'string' && body.trim()) return body;
   return body?.message || body?.error || body?.title || fallback;
+}
+
+/** Resumo vivo do card no DevOps (POST Azure/cards/summary). */
+export interface EpicCardLive {
+  id: number;
+  state?: string | null;
+  boardColumn?: string | null;
+  assignedTo?: string | null;
 }

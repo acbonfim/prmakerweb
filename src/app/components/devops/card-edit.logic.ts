@@ -9,10 +9,14 @@ import { diffTags } from './tags.logic';
 export type FieldInputKind =
   | 'picklist' | 'area' | 'iteration' | 'identity' | 'number' | 'date' | 'boolean' | 'html' | 'multiline' | 'text';
 
+const IDENTITY_FIELDS = new Set(['System.AssignedTo', 'System.CreatedBy', 'System.ChangedBy', 'Microsoft.VSTS.Common.ActivatedBy',
+  'Microsoft.VSTS.Common.ResolvedBy', 'Microsoft.VSTS.Common.ClosedBy']);
+
 /** Controle do campo conforme o tipo do DevOps (picklist quando há `allowedValues`). */
 export function inputKind(f: Pick<DevOpsFieldDef, 'type' | 'referenceName' | 'allowedValues'>): FieldInputKind {
   const t = `${f.type ?? ''}`;
-  if (t === 'identity') return 'identity';
+  // Campos de pessoa conhecidos valem como identidade mesmo quando o DevOps devolve o tipo "string".
+  if (t === 'identity' || IDENTITY_FIELDS.has(f.referenceName)) return 'identity';
   if (t === 'treePath') return f.referenceName === F.iteration ? 'iteration' : 'area';
   if (t === 'boolean') return 'boolean';
   if (f.allowedValues?.length) return 'picklist';
