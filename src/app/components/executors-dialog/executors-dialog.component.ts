@@ -11,6 +11,7 @@ import { forkJoin } from 'rxjs';
 import { ExecutionQueueService } from '../../services/execution-queue.service';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { StorageService } from '../../services/storage.service';
+import { RoleService } from '../../services/role.service';
 import { WsService } from '../../services/ws.service';
 import { planApiError } from '../../services/execution-plan.service';
 import { TokenUsageComponent } from '../token-usage/token-usage.component';
@@ -393,7 +394,7 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
   readonly usage = signal<ExecutionUsageReport | null>(null);
   readonly usageDays = signal(30);
   readonly usageAll = signal(false);
-  readonly isAdmin = this.readIsAdmin();
+  readonly isAdmin = inject(RoleService).isAdmin;
 
   budget: number | null = null;
   autoEnabled = false;
@@ -518,16 +519,6 @@ export class ExecutorsDialogComponent implements OnInit, OnDestroy {
     return d.toLocaleString('pt-BR', sameDay ? { hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   }
 
-  private readIsAdmin(): boolean {
-    try {
-      const token = inject(StorageService).getItem('apiKey');
-      const payload = JSON.parse(atob(`${token}`.split('.')[1]));
-      const raw = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? payload['role'];
-      return (Array.isArray(raw) ? raw : [raw]).includes('admin');
-    } catch {
-      return false;
-    }
-  }
 
   private onChanged = (payload: { userId?: string }) => {
     if (payload?.userId && this.userId && payload.userId !== this.userId) return;
