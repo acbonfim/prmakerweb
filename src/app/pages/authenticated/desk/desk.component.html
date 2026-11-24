@@ -256,30 +256,14 @@
         </button>
       </div>
 
-      <!-- Board -->
+      <!-- Board: o app-devops-board traz a barra própria (time/board, Cards do épico | Board do time, filtros, Novo card).
+           Sem time/board no épico ele usa o último escolhido; a primeira escolha fica gravada no épico. -->
       <div class="dk-pane dk-pane--board" [class.dk-hidden]="main !== 'board'" data-tour="dk-board">
-        @if (hasBoard()) {
-          <div class="dk-board-bar">
-            <div class="dk-seg dk-seg--sm" role="radiogroup" aria-label="Quais cards">
-              <button type="button" role="radio" class="dk-seg__btn" [class.dk-seg__btn--on]="boardScope() === 'epic'" [attr.aria-checked]="boardScope() === 'epic'"
-                      (click)="setBoardScope('epic')">Cards do épico</button>
-              <button type="button" role="radio" class="dk-seg__btn" [class.dk-seg__btn--on]="boardScope() === 'board'" [attr.aria-checked]="boardScope() === 'board'"
-                      (click)="setBoardScope('board')">Board do time</button>
-            </div>
-            <span class="dk-spacer"></span>
-            <button mat-stroked-button type="button" class="dk-act" (click)="newCard()"><mat-icon>add</mat-icon>Novo card</button>
-          </div>
-          @if (main === 'board') {
-            <app-devops-board class="dk-board" [team]="e!.devOpsTeam!" [board]="e!.devOpsBoard!" [epic]="e!.number" [scope]="boardScope()"
-                              (cardOpened)="openCard($event)"></app-devops-board>
-          }
-        } @else {
-          <div class="dk-empty dk-empty--inline">
-            <mat-icon class="dk-empty__icon">view_kanban</mat-icon>
-            <h2>Escolha o time e o board do épico</h2>
-            <p>O board mostra as colunas e raias do DevOps como lá — arraste os cards para mover. Defina o time/board no épico.</p>
-            <button mat-stroked-button type="button" (click)="editEpic()"><mat-icon>edit</mat-icon>Escolher time e board</button>
-          </div>
+        @if (main === 'board') {
+          <app-devops-board class="dk-board" [team]="e!.devOpsTeam ?? null" [board]="e!.devOpsBoard ?? null" [epic]="e!.number"
+                            [scope]="boardScope()" (scopeChange)="setBoardScope($event)"
+                            (teamChange)="onBoardPicked($event, null)" (boardChange)="onBoardPicked(null, $event)"
+                            (cardOpened)="openCard($event)"></app-devops-board>
         }
       </div>
 
@@ -354,7 +338,8 @@
     <!-- Painel do card do DevOps (busca do topo, cartão do board, aba Cards) — por cima do centro -->
     @if (panelCard(); as pc) {
       <aside class="dk-panel" role="dialog" [attr.aria-label]="'Card ' + pc">
-        <app-devops-card-panel [cardId]="pc" [epic]="found ? e!.number : null" (closed)="closeCard()"></app-devops-card-panel>
+        <app-devops-card-panel [cardId]="pc" [epic]="found ? e!.number : null" [team]="found ? (e!.devOpsTeam ?? null) : null"
+                                [board]="found ? (e!.devOpsBoard ?? null) : null" (saved)="reloadEpic()" (closed)="closeCard()"></app-devops-card-panel>
       </aside>
     }
   </section>

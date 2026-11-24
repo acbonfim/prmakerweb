@@ -2,7 +2,7 @@ import { Component, DestroyRef, ElementRef, OnDestroy, OnInit, computed, effect,
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -451,6 +451,23 @@ export class DeskComponent implements OnInit, OnDestroy {
     writeText(BOARD_SCOPE_KEY, scope === 'board' ? 'board' : null);
   }
 
+  /** Primeira escolha de time/board no board fica gravada no épico (o que já estiver definido não muda). */
+  private pickedBoard: { team: string | null; board: string | null } = { team: null, board: null };
+  onBoardPicked(team: string | null, board: string | null): void {
+    const e = this.epic();
+    if (team) this.pickedBoard = { team, board: null };
+    if (board) this.pickedBoard = { ...this.pickedBoard, board };
+    if (!e) return;
+    const nextTeam = e.devOpsTeam || this.pickedBoard.team;
+    const nextBoard = e.devOpsBoard || this.pickedBoard.board;
+    if (nextTeam === e.devOpsTeam && nextBoard === e.devOpsBoard) return;
+    if (!nextTeam || !nextBoard) return;
+    this.api.update(e.number, {
+      title: e.title, description: e.description, color: e.color, tags: e.tags,
+      devOpsTeam: nextTeam, devOpsBoard: nextBoard, devOpsCardId: e.devOpsCardId ?? null
+    }).subscribe({ next: () => this.reloadEpic(), error: () => undefined });
+  }
+
   // ── Itens ───────────────────────────────────────────────────────────────────────────────────
 
   private watchItems(key: string | null): void {
@@ -551,9 +568,9 @@ export class DeskComponent implements OnInit, OnDestroy {
   /** "Novo card" (aba Cards / Board): diálogo do DevOps no time/board do épico; o card entra no épico como `created`. */
   async newCard(): Promise<void> {
     const e = this.epic();
-    const created = await openDevOpsCardCreate(this.dialog, {
+    const created = await firstValueFrom(openDevOpsCardCreate(this.dialog, {
       epic: e?.number ?? null, team: e?.devOpsTeam ?? null, board: e?.devOpsBoard ?? null
-    });
+    }), { defaultValue: undefined });
     if (!created) return;
     this.reloadEpic();
     if (created.id) this.openCard(`${created.id}`);
