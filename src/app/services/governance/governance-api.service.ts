@@ -6,7 +6,10 @@ import { normalizeUserDetail } from './governance.logic';
 import {
   EvaluateRequest, EvaluateResponse, GovPage, GovernanceCardDetail, GovernanceCardRow, GovernanceEvent, GovernanceHook,
   GovernanceOverview, GovernanceRule, GovernanceSettings, GovernanceTaskRow, GovernanceUserDetail, GovernanceUserRow,
+  Standard, StandardCheckRequest, StandardCheckResponse, StandardDraft, StandardFilter, StandardImportResult, StandardModuleOption,
 } from './governance.model';
+import { normalizeStandard } from './standards.logic';
+import { ReverseEngineeringService } from '../reverse-engineering.service';
 
 export interface GovRange {
   from: string;
@@ -59,12 +62,24 @@ export interface GovernanceApi {
   settings(): Observable<GovernanceSettings>;
   saveSettings(s: GovernanceSettings): Observable<GovernanceSettings>;
   changes(take?: number): Observable<GovernanceEvent[]>;
+  // 0101: padrões de banco e de aplicação
+  standards(f?: StandardFilter): Observable<Standard[]>;
+  createStandard(s: Standard): Observable<Standard>;
+  updateStandard(s: Standard): Observable<Standard>;
+  deleteStandard(id: string): Observable<unknown>;
+  checkStandards(req: StandardCheckRequest): Observable<StandardCheckResponse>;
+  importStandardsWiki(url: string): Observable<StandardDraft>;
+  importStandardsReverse(modules: string[] | null): Observable<StandardDraft>;
+  applyStandardsImport(draftId: string, accept: string[]): Observable<StandardImportResult | null>;
+  /** Módulos da engenharia reversa (para importar a estrutura de aplicação). */
+  standardModules(): Observable<StandardModuleOption[]>;
 }
 
 /** Governança do PRMake (0098, admin): leituras sob demanda e CRUD de regras, hooks e configurações. */
 @Injectable({ providedIn: 'root' })
 export class GovernanceApiService implements GovernanceApi {
   private readonly http = inject(HttpClient);
+  private readonly reverse = inject(ReverseEngineeringService);
   private readonly base = `${environment.apiUrl}Governance`;
 
   overview(r: GovRange): Observable<GovernanceOverview> {
@@ -142,6 +157,46 @@ export class GovernanceApiService implements GovernanceApi {
 
   changes(take = 100): Observable<GovernanceEvent[]> {
     return this.http.get<GovernanceEvent[]>(`${this.base}/changes`, { params: params({ take }) });
+  }
+
+  // ---- 0101: padrões ----
+
+  standards(f: StandardFilter = {}): Observable<Standard[]> {
+    return this.http.get<Standard[]>(`${this.base}/standards`, { params: params(f) }).pipe(map((l) => (l ?? []).map(normalizeStandard)));
+  }
+
+  createStandard(s: Standard): Observable<Standard> {
+    return this.http.post<Standard>(`${this.base}/standards`, s).pipe(map(normalizeStandard));
+  }
+
+  updateStandard(s: Standard): Observable<Standard> {
+    return this.http.put<Standard>(`${this.base}/standards/${encodeURIComponent(s.id)}`, s).pipe(map(normalizeStandard));
+  }
+
+  deleteStandard(id: string): Observable<unknown> {
+    return this.http.delete(`${this.base}/standards/${encodeURIComponent(id)}`);
+  }
+
+  checkStandards(req: StandardCheckRequest): Observable<StandardCheckResponse> {
+    return this.http.post<StandardCheckResponse>(`${this.base}/standards/check`, req);
+  }
+
+  importStandardsWiki(url: string): Observable<StandardDraft> {
+    return this.http.post<StandardDraft>(`${this.base}/standards/import/wiki`, { url });
+  }
+
+  importStandardsReverse(modules: string[] | null): Observable<StandardDraft> {
+    return this.http.post<StandardDraft>(`${this.base}/standards/import/reverse-engineering`, modules?.length ? { modules } : {});
+  }
+
+  applyStandardsImport(draftId: string, accept: string[]): Observable<StandardImportResult | null> {
+    return this.http.post<StandardImportResult | null>(`${this.base}/standards/import/${encodeURIComponent(draftId)}/apply`, { accept });
+  }
+
+  standardModules(): Observable<StandardModuleOption[]> {
+    return this.reverse.modules().pipe(map((list) => (list ?? []).map((m) => ({
+      key: m.key, name: m.displayName || m.name || m.key, published: (m.publishedRequired ?? 0) > 0 || !!m.complete,
+    }))));
   }
 }
 

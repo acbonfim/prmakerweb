@@ -1,0 +1,392 @@
+@if (error()) {
+  <div class="notice">{{ error() }}</div>
+}
+
+<div class="notice notice--info">
+  Tudo começa em <b>Monitorar</b>: os achados vão para a trilha (Auditoria, categoria "Padrão") e nada barra. Suba o efeito item a item
+  olhando a <button type="button" class="linklike" (click)="adherence()">aderência</button>. Padrões <b>propostos</b> (itens (NEW) da wiki, que o DBA ainda valida)
+  e <b>descontinuados</b> só monitoram, qualquer que seja o efeito.
+  @if (store.mode() === 'off') { <b>A governança está desligada:</b> nada é conferido nem registrado. }
+</div>
+
+<div class="filters" role="group" aria-label="Filtros dos padrões">
+  <label class="f-field"><span>Área</span>
+    <select [ngModel]="area()" (ngModelChange)="setArea($event)">
+      <option value="">Todas</option>
+      @for (a of areas; track a) { <option [value]="a">{{ areaLabel[a] }}</option> }
+    </select>
+  </label>
+  <label class="f-field"><span>Assunto</span>
+    <select [ngModel]="topic()" (ngModelChange)="topic.set($event)">
+      <option value="">Todos</option>
+      @for (t of topicOptions(); track t) { <option [value]="t">{{ topicName(t) }}</option> }
+    </select>
+  </label>
+  <label class="f-field"><span>Estado</span>
+    <select [ngModel]="status()" (ngModelChange)="status.set($event)">
+      <option value="">Todos</option>
+      @for (s of statuses; track s) { <option [value]="s">{{ statusLabel[s] }}</option> }
+    </select>
+  </label>
+  <label class="f-field"><span>Efeito</span>
+    <select [ngModel]="effect()" (ngModelChange)="effect.set($event)">
+      <option value="">Todos</option>
+      @for (e of effects; track e) { <option [value]="e">{{ effectLabel[e] }}</option> }
+    </select>
+  </label>
+  <label class="f-field"><span>Origem</span>
+    <select [ngModel]="source()" (ngModelChange)="source.set($event)">
+      <option value="">Todas</option>
+      @for (s of sources; track s) { <option [value]="s">{{ sourceLabel[s] }}</option> }
+    </select>
+  </label>
+  <label class="f-field"><span>Repositório</span>
+    <input type="text" list="std-repos" placeholder="vale para…" [ngModel]="repository()" (ngModelChange)="repository.set($event)" data-usage-ignore>
+    <datalist id="std-repos">@for (r of facets().repositories; track r) { <option [value]="r"></option> }</datalist>
+  </label>
+  <label class="f-field"><span>Módulo</span>
+    <input type="text" list="std-modules" placeholder="vale para…" [ngModel]="module()" (ngModelChange)="module.set($event)" data-usage-ignore>
+    <datalist id="std-modules">@for (m of facets().modules; track m) { <option [value]="m"></option> }</datalist>
+  </label>
+  <label class="f-field f-field--grow"><span>Busca</span>
+    <input type="search" placeholder="ID, título ou texto (ex.: FK7, cascade)" [ngModel]="search()" (ngModelChange)="search.set($event)" data-usage-ignore>
+  </label>
+  @if (hasFilters()) {
+    <button mat-button type="button" (click)="clearFilters()"><mat-icon>filter_alt_off</mat-icon> Limpar</button>
+  }
+</div>
+
+@if (selectedCount()) {
+  <div class="bulk" role="group" aria-label="Mudar em lote">
+    <b>{{ selectedCount() }} selecionado(s)</b>
+    <label class="f-field f-field--inline"><span>Efeito</span>
+      <select [ngModel]="bulkEffect()" (ngModelChange)="bulkEffect.set($event)">
+        <option value="">— manter —</option>
+        @for (e of effects; track e) { <option [value]="e">{{ effectLabel[e] }}</option> }
+      </select>
+    </label>
+    <label class="f-field f-field--inline"><span>Estado</span>
+      <select [ngModel]="bulkStatus()" (ngModelChange)="bulkStatus.set($event)">
+        <option value="">— manter —</option>
+        @for (s of statuses; track s) { <option [value]="s">{{ statusLabel[s] }}</option> }
+      </select>
+    </label>
+    <button mat-flat-button type="button" (click)="applyBulk()" [disabled]="bulkRunning() || (!bulkEffect() && !bulkStatus())">
+      @if (bulkRunning()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>done_all</mat-icon> } Aplicar
+    </button>
+    <button mat-button type="button" (click)="clearSelection()">Limpar seleção</button>
+  </div>
+}
+
+<div class="split" [class.split--open]="panelOpen()">
+  <section class="panel">
+    <div class="panel__head">
+      <h2>Padrões</h2>
+      <span class="muted">{{ filtered().length }} de {{ facets().counts.total }} · {{ facets().counts.active }} vigentes · {{ facets().counts.proposed }} propostos ·
+        {{ facets().counts.withCheck }} com conferência</span>
+      <span class="ms-auto"></span>
+      @if (loading()) { <mat-spinner diameter="18"></mat-spinner> }
+      @if (filtered().length) {
+        <label class="chk" matTooltip="Selecionar/deselecionar os que aparecem com estes filtros">
+          <input type="checkbox" [checked]="allVisibleSelected()" (change)="toggleVisible()"> visíveis
+        </label>
+      }
+      <button mat-stroked-button type="button" (click)="store.openStandards('importar')"><mat-icon>cloud_download</mat-icon> Importar</button>
+      <button mat-flat-button type="button" (click)="create()"><mat-icon>add</mat-icon> Novo padrão</button>
+    </div>
+
+    @for (g of groups(); track g.area) {
+      <div class="area">
+        <h3 class="area__title">{{ g.label }} <span class="muted">{{ g.count }}</span></h3>
+        @for (t of g.topics; track t.topic) {
+          <div class="group">
+            <h4 class="group__title">
+              <input type="checkbox" [checked]="groupChecked(t.items)" (change)="toggleGroup(t.items)" [attr.aria-label]="'Selecionar ' + t.label">
+              {{ t.label }} <span class="muted">{{ t.items.length }}</span>
+            </h4>
+            @for (s of t.items; track s.id) {
+              <div class="std" [class.std--on]="current()?.id === s.id || draft()?.id === s.id" [class.std--off]="s.status === 'deprecated'">
+                <input type="checkbox" [checked]="selected().has(s.id)" (change)="toggle(s)" [attr.aria-label]="'Selecionar ' + s.code">
+                <button type="button" class="std__main" (click)="open(s)">
+                  <span class="std__name">
+                    <span class="code">{{ s.code }}</span>
+                    <span class="std__title">{{ s.title }}</span>
+                  </span>
+                  <span class="std__meta">
+                    <span class="badge badge--st-{{ s.status }}" [matTooltip]="statusHint[s.status]">{{ statusBadge(s) }}</span>
+                    @if (s.check.kind !== 'none') { <span class="badge badge--check" [matTooltip]="checkKindLabel[s.check.kind]"><mat-icon>fact_check</mat-icon>{{ checkText(s.check) }}</span> }
+                    @if (appliesText(s)) { <span class="muted ellipsis">{{ appliesText(s) }}</span> }
+                  </span>
+                </button>
+                <select class="rule__effect badge--{{ s.effect }}" [ngModel]="s.effect" (ngModelChange)="quickEffect(s, $event)"
+                        [attr.aria-label]="'Efeito de ' + s.code" [matTooltip]="s.status === 'active' ? effectHint[s.effect] : 'Não vigente: só monitora até virar vigente.'"
+                        [class.effect--dormant]="s.status !== 'active' && s.effect !== 'monitor'">
+                  @for (e of effects; track e) { <option [value]="e">{{ effectLabel[e] }}</option> }
+                </select>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    } @empty {
+      <p class="muted">
+        @if (loading()) { Carregando… }
+        @else if (facets().counts.total) { Nenhum padrão com estes filtros. }
+        @else { Nenhum padrão ainda. Comece pela <button type="button" class="linklike" (click)="store.openStandards('importar')">importação da wiki</button>. }
+      </p>
+    }
+  </section>
+
+  @if (draft(); as d) {
+    <!-- ───────── editor ───────── -->
+    <section class="panel detail editor" aria-label="Editor de padrão">
+      <div class="detail__head">
+        <div>
+          <p class="detail__title">{{ isNew() ? 'Novo padrão' : d.code + ' · ' + d.title }}</p>
+          @if (d.updatedAt) { <span class="muted">alterado {{ dt(d.updatedAt) }}{{ d.updatedBy ? ' por ' + d.updatedBy : '' }}</span> }
+        </div>
+        <span class="ms-auto"></span>
+        <button mat-icon-button type="button" (click)="cancelEdit()" aria-label="Fechar editor"><mat-icon>close</mat-icon></button>
+      </div>
+      @if (d.source.kind !== 'manual') {
+        <div class="notice notice--info">Veio da {{ sourceLabel[d.source.kind].toLowerCase() }}: se mudar o texto aqui, a próxima importação mostra a diferença
+          e você escolhe se volta ao texto da origem.</div>
+      }
+
+      <div class="form-grid">
+        <label class="f-field" [class.f-field--invalid]="err('code')"><span>Código</span>
+          <input type="text" class="mono" [ngModel]="d.code" (ngModelChange)="patch({ code: $event.trim() })" [disabled]="!!d.id && d.source.kind !== 'manual'" data-usage-ignore>
+          @if (err('code')) { <span class="f-error">{{ err('code') }}</span> }
+        </label>
+        <label class="f-field" [class.f-field--invalid]="err('key')"><span>Chave</span>
+          <input type="text" class="mono" [ngModel]="d.key" (ngModelChange)="setKey($event)" [disabled]="!!d.id" data-usage-ignore>
+          @if (err('key')) { <span class="f-error">{{ err('key') }}</span> }
+          @else if (d.id) { <span class="f-hint">Não muda depois de criada (aparece na trilha).</span> }
+        </label>
+        <label class="f-field"><span>Área</span>
+          <select [ngModel]="d.area" (ngModelChange)="patch({ area: $event })" [disabled]="!!d.id && d.source.kind !== 'manual'">
+            @for (a of areas; track a) { <option [value]="a">{{ areaLabel[a] }}</option> }
+          </select>
+        </label>
+        <label class="f-field"><span>Assunto</span>
+          <select [ngModel]="d.topic" (ngModelChange)="patch({ topic: $event })">
+            @for (t of allTopics; track t) { <option [value]="t">{{ topicLabel[t] }}</option> }
+            @if (!allTopics.includes(d.topic)) { <option [value]="d.topic">{{ d.topic }}</option> }
+          </select>
+        </label>
+        <label class="f-field"><span>Estado</span>
+          <select [ngModel]="d.status" (ngModelChange)="patch({ status: $event })">
+            @for (s of statuses; track s) { <option [value]="s">{{ statusLabel[s] }}</option> }
+          </select>
+          <span class="f-hint">{{ statusHint[d.status] }}</span>
+        </label>
+        <label class="f-field"><span>Efeito</span>
+          <select [ngModel]="d.effect" (ngModelChange)="patch({ effect: effectOf($event) })">
+            @for (e of effects; track e) { <option [value]="e">{{ effectLabel[e] }}</option> }
+          </select>
+          <span class="f-hint">{{ effectHint[d.effect] }}@if (d.status !== 'active' && d.effect !== 'monitor') { Só vale quando estiver vigente. }</span>
+        </label>
+        <label class="f-field span-all" [class.f-field--invalid]="err('title')"><span>Título</span>
+          <input type="text" [ngModel]="d.title" (ngModelChange)="patch({ title: $event })" data-usage-ignore>
+          @if (err('title')) { <span class="f-error">{{ err('title') }}</span> }
+        </label>
+        <label class="f-field span-all" [class.f-field--invalid]="err('textPt')"><span>Texto (português)</span>
+          <textarea rows="3" class="plain" [ngModel]="d.textPt" (ngModelChange)="patch({ textPt: $event })" data-usage-ignore></textarea>
+          @if (err('textPt')) { <span class="f-error">{{ err('textPt') }}</span> } @else { <span class="f-hint">Aceita `código` e **negrito**.</span> }
+        </label>
+        <label class="f-field span-all"><span>Texto (inglês)</span>
+          <textarea rows="3" class="plain" [ngModel]="d.textEn ?? ''" (ngModelChange)="patch({ textEn: $event || null })" data-usage-ignore></textarea>
+        </label>
+        <label class="f-field"><span>Exemplos certos</span>
+          <textarea rows="4" [ngModel]="goodText()" (ngModelChange)="goodText.set($event)" placeholder="Um por bloco; linha em branco separa" data-usage-ignore></textarea>
+        </label>
+        <label class="f-field"><span>Exemplos errados</span>
+          <textarea rows="4" [ngModel]="badText()" (ngModelChange)="badText.set($event)" placeholder="Um por bloco; linha em branco separa" data-usage-ignore></textarea>
+        </label>
+      </div>
+
+      <h3 class="section">Aplica-se a <span class="muted">listas vazias = vale para todos</span></h3>
+      <div class="form-grid">
+        <div class="f-field"><span>Plataformas</span>
+          <app-gov-list-input [items]="d.appliesTo.platforms" (itemsChange)="setApplies('platforms', $event)" label="plataformas" placeholder="sqlserver, dotnet…"
+                              [suggestions]="platformSuggestions"></app-gov-list-input>
+        </div>
+        <div class="f-field"><span>Repositórios</span>
+          <app-gov-list-input [items]="d.appliesTo.repositories" (itemsChange)="setApplies('repositories', $event)" kind="glob" label="repositórios"
+                              placeholder="edv-solvace-api ou solvace-revamp-*" [suggestions]="repoSuggestions()"></app-gov-list-input>
+        </div>
+        <div class="f-field"><span>Módulos</span>
+          <app-gov-list-input [items]="d.appliesTo.modules" (itemsChange)="setApplies('modules', $event)" label="módulos" placeholder="actionplan"
+                              [suggestions]="moduleSuggestions()"></app-gov-list-input>
+        </div>
+        <div class="f-field"><span>Objetos</span>
+          <div class="checks">
+            @for (o of objects; track o) {
+              <label><input type="checkbox" [checked]="d.appliesTo.objects.includes(o)" (change)="toggleObject(o)"> {{ objectLabel[o] }}</label>
+            }
+          </div>
+          <span class="f-hint">A wiki vale para objetos novos e módulos em migração; o legado no dbo fica como está.</span>
+        </div>
+      </div>
+
+      <h3 class="section">Conferência automática <span class="muted">opcional</span></h3>
+      <div class="form-grid">
+        <label class="f-field"><span>Tipo</span>
+          <select [ngModel]="d.check.kind" (ngModelChange)="setCheckKind($event)">
+            @for (k of checkKinds; track k) { <option [value]="k">{{ checkKindLabel[k] }}</option> }
+          </select>
+          <span class="f-hint">{{ checkKindHint[d.check.kind] }}</span>
+        </label>
+        @if (d.check.kind === 'regex' || d.check.kind === 'builtin') {
+          <label class="f-field" [class.f-field--invalid]="err('check.target')"><span>Conferir em</span>
+            <select [ngModel]="d.check.target" (ngModelChange)="setCheck({ target: $event })">
+              @for (t of checkTargets; track t) { @if (t !== 'path') { <option [value]="t">{{ checkTargetLabel[t] }}</option> } }
+            </select>
+            @if (err('check.target')) { <span class="f-error">{{ err('check.target') }}</span> }
+          </label>
+        }
+        @if (d.check.kind === 'regex' || d.check.kind === 'path' || d.check.kind === 'builtin') {
+          <label class="f-field span-all" [class.f-field--invalid]="err('check.pattern')">
+            <span>{{ d.check.kind === 'regex' ? 'Expressão regular (sem diferenciar maiúsculas, linha a linha)' : d.check.kind === 'path' ? 'Glob do caminho (a|b = alternativas)' : 'Nome da conferência embutida' }}</span>
+            <input type="text" class="mono" [ngModel]="d.check.pattern ?? ''" (ngModelChange)="setCheck({ pattern: $event || null })"
+                   [placeholder]="d.check.kind === 'regex' ? '\\bON\\s+DELETE\\s+CASCADE\\b' : d.check.kind === 'path' ? '**/Migrations/*.cs' : 'fk-name'" data-usage-ignore>
+            @if (err('check.pattern')) { <span class="f-error">{{ err('check.pattern') }}</span> }
+          </label>
+          @if (d.check.kind !== 'builtin') {
+            <div class="f-field span-all"><span>Como conta</span>
+              <span class="checks"><label><input type="checkbox" [checked]="d.check.mustMatch" (change)="setCheck({ mustMatch: !d.check.mustMatch })">
+                {{ d.check.kind === 'path' ? 'O arquivo precisa casar' : 'O texto precisa conter' }}</label></span>
+              <span class="f-hint">{{ mustMatchText(d.check) }}</span>
+            </div>
+          }
+        }
+        @if (d.check.kind === 'sql') {
+          <label class="f-field span-all" [class.f-field--invalid]="err('check.sql')"><span>Consulta de validação (somente leitura; cada linha devolvida é um achado)</span>
+            <textarea rows="8" [ngModel]="d.check.sql ?? ''" (ngModelChange)="setCheck({ sql: $event || null })" placeholder="SELECT … FROM sys.foreign_keys …" data-usage-ignore></textarea>
+            @if (err('check.sql')) { <span class="f-error">{{ err('check.sql') }}</span> }
+          </label>
+        }
+        @if (d.check.kind !== 'none') {
+          <label class="f-field span-all"><span>Dica no achado</span>
+            <input type="text" [ngModel]="d.check.hint ?? ''" (ngModelChange)="setCheck({ hint: $event || null })" placeholder="Ex.: Crie o índice de suporte IX_[schema]_[Tabela]_NN." data-usage-ignore>
+          </label>
+        }
+      </div>
+
+      @if (saveError()) { <div class="notice">{{ saveError() }}</div> }
+      <div class="actions-row sticky-actions">
+        @if (d.id && d.source.kind === 'manual') {
+          <button mat-button type="button" color="warn" (click)="remove()"><mat-icon>delete</mat-icon> Apagar</button>
+        }
+        <button mat-button type="button" (click)="testWith(draftOut()!)" matTooltip="Prévia no navegador com este rascunho (regex/caminho) e o teste real abaixo">
+          <mat-icon>science</mat-icon> Testar</button>
+        <span class="ms-auto muted">{{ errorCount() ? errorCount() + ' problema(s) para corrigir' : (dirty() ? 'alterações não salvas' : 'sem alterações') }}</span>
+        <button mat-button type="button" (click)="cancelEdit()">Fechar</button>
+        <button mat-flat-button type="button" (click)="save()" [disabled]="!dirty() || !!errorCount() || saving()">
+          @if (saving()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>save</mat-icon> } Salvar
+        </button>
+      </div>
+    </section>
+  } @else if (current(); as s) {
+    <!-- ───────── detalhe ───────── -->
+    <section class="panel detail" aria-label="Detalhe do padrão">
+      <div class="detail__head">
+        <div class="detail__headline">
+          <span class="code code--lg">{{ s.code }}</span>
+          <div>
+            <p class="detail__title">{{ s.title }}</p>
+            <span class="muted mono">{{ s.key }}</span>
+          </div>
+        </div>
+        <span class="ms-auto"></span>
+        <button mat-icon-button type="button" (click)="close()" aria-label="Fechar detalhe"><mat-icon>close</mat-icon></button>
+      </div>
+      <div class="badges">
+        <span class="badge">{{ areaLabel[s.area] }} · {{ topicName(s.topic) }}</span>
+        <span class="badge badge--st-{{ s.status }}" [matTooltip]="statusHint[s.status]">{{ statusBadge(s) }}</span>
+        <span class="badge badge--{{ s.effect }}" [matTooltip]="effectHint[s.effect]">{{ effectLabel[s.effect] }}</span>
+        @if (effective(s) !== s.effect) { <span class="muted">vale como Monitorar enquanto não estiver vigente</span> }
+      </div>
+
+      <h3 class="section">Português</h3>
+      <p class="text" [innerHTML]="md(s.textPt)"></p>
+      @if (s.textEn) {
+        <h3 class="section">English</h3>
+        <p class="text text--en" [innerHTML]="md(s.textEn)"></p>
+      }
+
+      @if (s.examples.good.length || s.examples.bad.length) {
+        <h3 class="section">Exemplos</h3>
+        <div class="examples">
+          @for (x of s.examples.good; track $index) {
+            <div class="ex ex--good"><span class="ex__tag"><mat-icon>check</mat-icon>certo</span><pre>{{ x }}</pre></div>
+          }
+          @for (x of s.examples.bad; track $index) {
+            <div class="ex ex--bad"><span class="ex__tag"><mat-icon>close</mat-icon>errado</span><pre>{{ x }}</pre></div>
+          }
+        </div>
+      }
+
+      <h3 class="section">Aplica-se a</h3>
+      <dl class="kv">
+        <dt>Plataformas</dt><dd>{{ s.appliesTo.platforms.join(', ') || 'todas' }}</dd>
+        <dt>Repositórios</dt><dd class="mono">{{ s.appliesTo.repositories.join(', ') || 'todos' }}</dd>
+        <dt>Módulos</dt><dd>{{ s.appliesTo.modules.join(', ') || 'todos' }}</dd>
+        <dt>Objetos</dt><dd>{{ objectsText(s) }}</dd>
+      </dl>
+
+      <h3 class="section">Origem</h3>
+      <dl class="kv">
+        <dt>De onde</dt><dd>{{ sourceLabel[s.source.kind] }}{{ s.source.version ? ' · versão ' + s.source.version : '' }}</dd>
+        @if (s.source.kind === 'wiki') {
+          <dt>Item</dt><dd><span class="mono">{{ s.source.ref || s.code }}</span>
+            @if (s.source.url) { · <a [href]="s.source.url" target="_blank" rel="noopener">abrir na wiki <mat-icon class="inline">open_in_new</mat-icon></a> }</dd>
+        } @else if (s.source.kind === 'reverse-engineering') {
+          <dt>Itens da ER</dt>
+          <dd>
+            @for (r of erRefs(s.source.ref); track $index) {
+              <a [routerLink]="['/reverse-engineering']" [queryParams]="{ m: r.module, i: r.item }" class="mono er-ref">{{ r.module }}{{ r.item ? '#' + r.item : '' }}</a>
+            } @empty { <span class="muted">—</span> }
+          </dd>
+        } @else {
+          <dt>Item</dt><dd>cadastrado manualmente</dd>
+        }
+        @if (s.updatedAt) { <dt>Alterado</dt><dd>{{ dt(s.updatedAt) }}{{ s.updatedBy ? ' por ' + s.updatedBy : '' }}</dd> }
+      </dl>
+
+      <h3 class="section">Conferência automática</h3>
+      @switch (s.check.kind) {
+        @case ('none') { <p class="muted">Sem conferência: só orienta a análise e a correção (vai no contexto das skills para os cards a que se aplica).</p> }
+        @case ('sql') {
+          <p class="muted">{{ checkKindHint.sql }}</p>
+          <div class="pre-wrap">
+            <button mat-icon-button type="button" class="copy" (click)="copy(s.check.sql)" matTooltip="Copiar a consulta" aria-label="Copiar a consulta"><mat-icon>content_copy</mat-icon></button>
+            <pre class="pre">{{ s.check.sql }}</pre>
+          </div>
+        }
+        @default {
+          <dl class="kv">
+            <dt>Tipo</dt><dd>{{ checkKindLabel[s.check.kind] }}</dd>
+            @if (s.check.target) { <dt>Conferir em</dt><dd>{{ checkTargetLabel[s.check.target] }}</dd> }
+            <dt>{{ s.check.kind === 'builtin' ? 'Nome' : 'Padrão' }}</dt><dd class="mono">{{ s.check.pattern }}</dd>
+            @if (s.check.kind !== 'builtin') { <dt>Como conta</dt><dd>{{ mustMatchText(s.check) }}</dd> }
+          </dl>
+        }
+      }
+      @if (s.check.hint) { <p class="hint"><mat-icon class="inline">lightbulb</mat-icon> {{ s.check.hint }}</p> }
+
+      <div class="actions-row">
+        <button mat-flat-button type="button" (click)="edit(s)"><mat-icon>edit</mat-icon> Editar</button>
+        <button mat-stroked-button type="button" (click)="testWith(s)"><mat-icon>science</mat-icon> Testar conferência</button>
+        <button mat-button type="button" (click)="audit(s)"><mat-icon>manage_search</mat-icon> Achados na auditoria</button>
+        @if (s.source.kind === 'manual') {
+          <button mat-button type="button" color="warn" (click)="remove()"><mat-icon>delete</mat-icon> Apagar</button>
+        }
+      </div>
+    </section>
+  }
+</div>
+
+<section class="panel" #testerBox>
+  <app-gov-standard-tester [draft]="draftOut()" [repositories]="facets().repositories" (openStandard)="openKey($event)"></app-gov-standard-tester>
+</section>

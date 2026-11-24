@@ -3,11 +3,20 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { GovRange, GovernanceApi, GovernanceApiService } from '../../../services/governance/governance-api.service';
 import { GovernanceDemoApi } from '../../../services/governance/governance.demo';
-import { GovernanceEvent, GovernanceRule, GovernanceSettings, GovernanceUserRow } from '../../../services/governance/governance.model';
+import { GovernanceEvent, GovernanceRule, GovernanceSettings, GovernanceUserRow, Standard } from '../../../services/governance/governance.model';
+import { standardLookup } from '../../../services/governance/standards.logic';
 import { GovEventDialogComponent, GovEventDialogResult } from './tabs/gov-event-dialog.component';
 import { GovPeriod, dayKey, periodRange } from '../../../services/governance/governance.logic';
 
-export type GovTab = 'visao-geral' | 'usuarios' | 'cards' | 'tarefas' | 'auditoria' | 'regras' | 'hooks' | 'configuracoes';
+export type GovTab = 'visao-geral' | 'usuarios' | 'cards' | 'tarefas' | 'auditoria' | 'regras' | 'padroes' | 'hooks' | 'configuracoes';
+
+/** 0101: vistas da aba Padrões (na query `?vista=`). */
+export type StandardsView = 'catalogo' | 'importar' | 'aderencia';
+export const STANDARDS_VIEWS: { key: StandardsView; label: string; icon: string }[] = [
+  { key: 'catalogo', label: 'Catálogo', icon: 'menu_book' },
+  { key: 'importar', label: 'Importar', icon: 'cloud_download' },
+  { key: 'aderencia', label: 'Aderência', icon: 'fact_check' },
+];
 
 export const GOV_TABS: { key: GovTab; label: string; icon: string; usesPeriod: boolean }[] = [
   { key: 'visao-geral', label: 'Visão geral', icon: 'dashboard', usesPeriod: true },
@@ -16,6 +25,7 @@ export const GOV_TABS: { key: GovTab; label: string; icon: string; usesPeriod: b
   { key: 'tarefas', label: 'Tarefas', icon: 'checklist', usesPeriod: true },
   { key: 'auditoria', label: 'Auditoria', icon: 'manage_search', usesPeriod: true },
   { key: 'regras', label: 'Regras e guardrails', icon: 'gavel', usesPeriod: false },
+  { key: 'padroes', label: 'Padrões', icon: 'rule', usesPeriod: false },
   { key: 'hooks', label: 'Hooks', icon: 'webhook', usesPeriod: false },
   { key: 'configuracoes', label: 'Configurações', icon: 'settings', usesPeriod: false },
 ];
@@ -26,6 +36,10 @@ export interface AuditPreset {
   card?: number | null;
   outcome?: string | null;
   action?: string | null;
+  /** 0101: ex.: 'standard' (achados de padrões). */
+  category?: string | null;
+  /** 0101: texto livre (ex.: a chave do padrão). */
+  search?: string | null;
 }
 
 /**
@@ -65,6 +79,9 @@ export class GovernanceStore {
   readonly selectedCard = signal<number | null>(null);
   readonly selectedUser = signal<string | null>(null);
   readonly auditPreset = signal<AuditPreset | null>(null);
+  /** 0101: vista da aba Padrões e o padrão aberto (`?vista=` e `?padrao=`). */
+  readonly standardsView = signal<StandardsView>('catalogo');
+  readonly selectedStandard = signal<string | null>(null);
 
   loadSettings(): void {
     this.api.settings().subscribe({
@@ -93,7 +110,7 @@ export class GovernanceStore {
   go(tab: GovTab, extra: Record<string, string | number | null> = {}): void {
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { aba: tab, card: null, usuario: null, ...extra },
+      queryParams: { aba: tab, card: null, usuario: null, vista: null, padrao: null, ...extra },
       queryParamsHandling: 'merge',
       replaceUrl: false,
     });
@@ -112,8 +129,13 @@ export class GovernanceStore {
     this.go('auditoria');
   }
 
+  /** 0101: aba Padrões numa vista (catálogo/importar/aderência), opcionalmente com um padrão aberto. */
+  openStandards(view: StandardsView = 'catalogo', standardKey: string | null = null): void {
+    this.go('padroes', { vista: view === 'catalogo' ? null : view, padrao: standardKey });
+  }
+
   /** Seleção dentro da aba atual (sem empilhar histórico). */
-  select(param: 'card' | 'usuario', value: string | number | null): void {
+  select(param: 'card' | 'usuario' | 'vista' | 'padrao', value: string | number | null): void {
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { [param]: value },
@@ -131,21 +153,39 @@ export class GovernanceStore {
   }
 
   ruleName(key: string): string {
-    return this.rules()?.find((r) => r.key === key)?.name ?? key;
+    const rule = this.rules()?.find((r) => r.key === key);
+    if (rule) return rule.name;
+    const std = this.standardFinder()(key);
+    return std ? `${std.code} · ${std.title}` : key;
+  }
+
+  /** 0101: padrões (catálogo) — a aba Padrões atualiza ao gravar/importar; as outras só leem para mostrar nomes. */
+  readonly standards = signal<Standard[] | null>(null);
+  private readonly standardFinder = computed(() => standardLookup(this.standards() ?? []));
+
+  ensureStandards(): void {
+    if (this.standards()) return;
+    this.api.standards().subscribe({ next: (s) => this.standards.set(s ?? []), error: () => this.standards.set([]) });
+  }
+
+  findStandard(ref: string): Standard | null {
+    return this.standardFinder()(ref);
   }
 
   /** Detalhe do evento; "Ver card"/"Ver pessoa" navegam para a aba certa. */
   showEvent(event: GovernanceEvent): void {
     this.ensureRules();
+    this.ensureStandards();
     this.dialog
       .open<GovEventDialogComponent, unknown, GovEventDialogResult>(GovEventDialogComponent, {
         width: '720px', maxWidth: '96vw', maxHeight: '92vh', autoFocus: false,
-        data: { event, rules: this.rules() ?? [] },
+        data: { event, rules: this.rules() ?? [], standards: this.standards() ?? [] },
       })
       .afterClosed()
       .subscribe((r) => {
         if (r?.go === 'card') this.openCard(r.card);
         if (r?.go === 'user') this.openUser(r.userId);
+        if (r?.go === 'standard') this.openStandards('catalogo', r.key);
       });
   }
 
