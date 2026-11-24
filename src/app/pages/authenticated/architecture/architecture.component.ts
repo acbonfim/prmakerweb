@@ -15,7 +15,7 @@ import { MyIntegrationsDialogComponent } from '../../../components/my-integratio
 import { TabsService } from '../../../services/tabs.service';
 import { PlanMarkdownPipe } from '../../../components/execution-plan/plan-markdown.pipe';
 import { renderMermaidIn } from '../../../helpers/mermaid-loader';
-import { StorageService } from '../../../services/storage.service';
+import { RoleService } from '../../../services/role.service';
 import { KbAdminMode, KbAdminPanelComponent } from './kb-admin-panel.component';
 import { EcosystemMapComponent } from './ecosystem-map.component';
 import { KbFriendlyOverviewComponent } from './kb-friendly-overview.component';
@@ -112,7 +112,6 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
-  private storage = inject(StorageService);
   private reverse = inject(ReverseEngineeringService);
   /** 0056: armadilhas da engenharia reversa do projeto (aba "Armadilhas" no Técnico, só leitura). */
   readonly traps = signal<ReverseTrap[]>([]);
@@ -142,7 +141,7 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
   readonly guideOpen = signal(false);
 
   // ── Admin (0033 F2) ──
-  readonly isAdmin = signal(this.readIsAdmin());
+  readonly isAdmin = signal(inject(RoleService).isAdmin);
   readonly adminMode = signal<KbAdminMode | null>(null);
   readonly suggestions = signal<ArchitectureSuggestion[]>([]);
   readonly showSuggestions = signal(false);
@@ -468,17 +467,6 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
     this.suggestions.update(list => list.filter(x => x.id !== sg.id));
   }
 
-  private readIsAdmin(): boolean {
-    try {
-      const token = this.storage.getItem('apiKey');
-      if (!token) return false;
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const raw = payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] ?? payload['role'];
-      return (Array.isArray(raw) ? raw : raw ? [raw] : []).includes('admin');
-    } catch {
-      return false;
-    }
-  }
 
   load(): void {
     this.loading.set(true);

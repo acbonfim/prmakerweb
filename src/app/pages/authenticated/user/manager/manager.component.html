@@ -96,7 +96,7 @@
 
         <div class="roles">
           @for (item of user.userRoles; track item) {
-            <span class="role-chip">{{ item.role?.name }}</span>
+            <span class="role-chip">{{ roleLabel(item.role?.name) }}</span>
           }
           @if (!user.userRoles || user.userRoles.length === 0) {
             <span class="no-roles">Sem cargos</span>

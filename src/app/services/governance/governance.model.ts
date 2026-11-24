@@ -420,8 +420,8 @@ export const MILESTONE_AT_LABEL: Record<MilestoneAt, string> = {
 export const MILESTONE_ATS = Object.keys(MILESTONE_AT_LABEL) as MilestoneAt[];
 
 /** Papéis do PRMake (Cime.Auth). */
-export const ROLES = ['admin', 'support', 'user', 'gestor'];
-export const ROLE_LABEL: Record<string, string> = { admin: 'Admin', support: 'Suporte', user: 'Usuário', gestor: 'Gestor' };
+export const ROLES = ['admin', 'support', 'user', 'gestor', 'management'];
+export const ROLE_LABEL: Record<string, string> = { admin: 'Admin', support: 'Suporte', user: 'Usuário', gestor: 'Gestor', management: 'Gestão' };
 export const CARD_TYPES = ['Bug', 'User Story', 'Task', 'Feature'];
 
 export function labelOf(map: Record<string, string>, key: string | null | undefined): string {

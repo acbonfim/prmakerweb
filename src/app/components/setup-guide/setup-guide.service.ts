@@ -3,11 +3,13 @@ import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { ExecutionQueueService } from '../../services/execution-queue.service';
+import { RoleService } from '../../services/role.service';
 import { StorageService } from '../../services/storage.service';
 import { UserIntegration, UserIntegrationService } from '../../services/user-integration.service';
 import { ExecutionDoctorCheck, ExecutionWorker } from '../execution-plan/execution-queue.model';
 import { GuidedTourService } from '../guided-tour/guided-tour.service';
 import { TourDefinition } from '../guided-tour/tour.model';
+import { SetupProfile, agentOutdated, effectiveProfile, integrationsForProfile, profileErrors } from './setup-profile.logic';
 
 /** Suba quando o guia mudar de um jeito que quem já viu deva ver de novo (abre sozinho outra vez se não estiver pronto). */
 export const SETUP_GUIDE_VERSION = 1;
@@ -70,6 +72,7 @@ export class SetupGuideService {
   private readonly dialog = inject(MatDialog);
   private readonly tours = inject(GuidedTourService);
   private readonly router = inject(Router);
+  private readonly roles = inject(RoleService);
   private readonly userId = (inject(StorageService).getAccess()?.user?.externalId ?? 'anon').toLowerCase();
 
   readonly integrations = signal<UserIntegration[]>([]);
@@ -89,11 +92,20 @@ export class SetupGuideService {
     return [...list].sort((a, b) => score(b) - score(a) || (b.doctorAt ?? b.lastSeenAt ?? '').localeCompare(a.doctorAt ?? a.lastSeenAt ?? ''))[0] ?? null;
   });
 
+  /**
+   * 0099 (ajustes 2): perfil dos primeiros passos — `management` (sem papel de dev) não precisa de bancos, repositórios,
+   * git, AWS nem GitHub. O servidor pode dizer o perfil da máquina (`profile`); senão, pelos papéis de quem está logado.
+   */
+  readonly profile = computed<SetupProfile>(() => effectiveProfile(this.worker(), this.roles.setupProfile));
+  readonly isManagement = computed(() => this.profile() === 'management');
+  /** Integrações que o perfil precisa ver (management: Azure DevOps obrigatório e provedor de IA opcional). */
+  readonly visibleIntegrations = computed(() => integrationsForProfile(this.integrations(), this.profile()));
+
   readonly steps = computed<SetupStepStatus[]>(() => [
     this.integrationsStep(),
     this.machineStep('claude', [CHECK.claude, CHECK.login], 'Claude Code instalado e logado'),
     this.machineStep('skills', [CHECK.skills, CHECK.apiKey], 'Skills instaladas e api-key válida'),
-    this.databasesStep(),
+    ...(this.isManagement() ? [] : [this.databasesStep()]),
     this.executorStep()
   ]);
 
@@ -102,7 +114,8 @@ export class SetupGuideService {
   readonly complete = computed(() => this.loaded() && this.requiredDone() === this.requiredTotal());
 
   step(id: SetupStepId): SetupStepStatus {
-    return this.steps().find((s) => s.id === id)!;
+    return this.steps().find((s) => s.id === id)
+      ?? { id, state: 'done', required: false, verified: false, detail: 'Não necessário para o seu perfil' };
   }
 
   /** Lê integrações e máquinas. Falha em uma não impede a outra. */
@@ -165,7 +178,8 @@ export class SetupGuideService {
     this.ref.afterClosed().subscribe((result) => {
       this.ref = undefined;
       if (result === 'card') {
-        void this.router.navigate(['/auth/workbench']);
+        // Management sem papel de dev não acessa a Bancada: o primeiro passo é a Mesa de gestão.
+        void this.router.navigate([this.roles.canUseWorkbench ? '/auth/workbench' : '/auth/desk']);
         return;
       }
       this.showMenuOnce();
@@ -186,7 +200,7 @@ export class SetupGuideService {
   // ── Etapas ────────────────────────────────────────────────────────────────────────────────────
 
   private integrationsStep(): SetupStepStatus {
-    const list = this.integrations();
+    const list = this.visibleIntegrations();
     const required = list.filter((i) => !i.optional);
     const missing = required.filter((i) => !i.configured);
     if (!this.loaded()) {
@@ -235,10 +249,15 @@ export class SetupGuideService {
     if (!w) return { id: 'executor', state: 'pending', required: true, verified: true, detail: 'Nenhuma máquina registrada' };
     if (w.status === 'paused') return { id: 'executor', state: 'pending', required: true, verified: true, detail: `${w.name} está pausada` };
     if (!w.online) return { id: 'executor', state: 'pending', required: true, verified: true, detail: `${w.name} está offline — a máquina está ligada?` };
-    const errors = (w.doctor ?? []).filter((c) => !c.ok && c.severity !== 'warning');
+    // Só conta o que o perfil precisa (management: sem repositórios, bancos, git, AWS, NuGet).
+    const errors = profileErrors(w.doctor, this.profile(), w.doctorRequiredFor);
     if (errors.length) {
       return { id: 'executor', state: 'pending', required: true, verified: true,
         detail: `${w.name} online, ${errors.length} problema${errors.length === 1 ? '' : 's'} no diagnóstico` };
+    }
+    if (this.isManagement() && agentOutdated(w)) {
+      return { id: 'executor', state: 'pending', required: true, verified: true,
+        detail: `${w.name} online com o executor ${w.agentVersion} — a versão ${w.latestAgentVersion} já saiu (ele se atualiza sozinho; se não, reinicie o executor)` };
     }
     return { id: 'executor', state: 'done', required: true, verified: true, detail: `${w.name} online${w.agentVersion ? ` · executor ${w.agentVersion}` : ''}` };
   }

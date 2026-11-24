@@ -15,6 +15,7 @@ import { MatNativeDateModule, NativeDateAdapter, DateAdapter, MAT_DATE_LOCALE, M
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { VacationService } from '../../../services/vacation.service';
 import { StorageService } from '../../../services/storage.service';
+import { RoleService } from '../../../services/role.service';
 import { LoadingBarService, LoadingBarModule } from '@ngx-loading-bar/core';
 import {
   VacationRequest,
@@ -95,6 +96,7 @@ export class VacationsComponent implements OnInit {
   readonly dialog = inject(MatDialog);
   private vacationService = inject(VacationService);
   private storageService = inject(StorageService);
+  private roleService = inject(RoleService);
   private snackBar = inject(MatSnackBar);
   private loadingBar = inject(LoadingBarService);
   private cdr = inject(ChangeDetectorRef);
@@ -176,17 +178,10 @@ export class VacationsComponent implements OnInit {
   }
 
   checkUserRole() {
-    const token = this.storageService.getItem('apiKey');
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const roles = Array.isArray(payload.role) ? payload.role : [payload.role];
-        this.isManager = roles.includes('gestor') || roles.includes('admin');
-      } catch (error) {
-        console.error('Erro ao decodificar token:', error);
-      }
-    }
+    // 0099 (ajustes 2): papéis pelo RoleService (antes lia só `payload.role` e perdia a claim longa do .NET).
+    this.isManager = this.roleService.has('gestor', 'admin');
   }
+
 
   loadCalendar() {
     if (!this.selectedDepartment) return;

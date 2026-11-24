@@ -3,6 +3,7 @@ import {PageContainerComponent} from '../../components/page-container/page-conta
 import {Component} from '@angular/core';
 import {AuthGuard} from '../../auth/auth.guard';
 import {AdminGuard} from '../../auth/admin.guard';
+import {roleGuard} from '../../auth/role.guard';
 import {pluginSettingsLeaveGuard} from './plugin-settings/plugin-settings.guard';
 
 export const AUTHENTICATED_ROUTES: Routes = [
@@ -12,23 +13,29 @@ export const AUTHENTICATED_ROUTES: Routes = [
     children: [
       {
         path: 'dashboard',
-        data: { tab: { title: 'Início', icon: 'home' } },
-        canActivate: [AuthGuard],
+        // 0099 (ajustes 2): management sem papel de dev começa na Mesa.
+        data: { tab: { title: 'Início', icon: 'home' }, access: 'not-management-only', redirect: '/auth/desk' },
+        canActivate: [AuthGuard, roleGuard],
         loadComponent: () => import('./home/home.component').then(m => m.HomeComponent)
       },
       {
         // 0085: Bancada do card — itens de trabalho, plano, especialista e timeline do card (a tela de PR não muda).
+        // 0099 (ajustes 2): management sem papel de dev não acessa a Bancada → Mesa (com o card, se vier).
         path: 'workbench',
-        data: { tab: { title: 'Bancada', icon: 'handyman', card: true } },
-        canActivate: [AuthGuard],
+        data: { tab: { title: 'Bancada', icon: 'handyman', card: true }, access: 'workbench', redirect: '/auth/desk' },
+        canActivate: [AuthGuard, roleGuard],
         loadComponent: () => import('./workbench/workbench.component').then(m => m.WorkbenchComponent)
       },
       {
         // 0099: Mesa de gestão — épicos (temas de trabalho), itens de gestão, cards e board do DevOps.
         // URL: ?epic=<n>&card=<id>&item=<n>&tab=board|items|cards|files|reported
+        // 0099 (ajustes 2): só admin ou management; os demais voltam ao Início.
         path: 'desk',
-        data: { tab: { title: 'Gestão', icon: 'space_dashboard', card: false } },
-        canActivate: [AuthGuard],
+        data: {
+          tab: { title: 'Gestão', icon: 'space_dashboard', card: false },
+          access: 'desk', redirect: '/auth/dashboard', message: 'A Mesa de gestão é só para admin ou o papel Gestão (management).'
+        },
+        canActivate: [AuthGuard, roleGuard],
         loadComponent: () => import('./desk/desk.component').then(m => m.DeskComponent)
       },
       // ── Tela de Pull Request (DESATIVADA): o tratamento do card é feito pela Bancada; o componente continua no código.

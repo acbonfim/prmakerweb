@@ -12,6 +12,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { switchMap } from 'rxjs';
 import { AuthService } from '../../../../services/auth.service';
 import { GlobalService } from '../../../../services/global.service';
+import { roleLabel } from '../../../../services/role.logic';
 
 interface UserFormData {
   mode: 'create' | 'edit';
@@ -67,7 +68,7 @@ interface UserFormData {
         <mat-form-field appearance="outline" *ngIf="!isEdit">
           <mat-label>Cargo</mat-label>
           <mat-select [ngModel]="role()" (ngModelChange)="role.set($event)" name="role" required>
-            <mat-option *ngFor="let r of data.roles" [value]="r">{{ r }}</mat-option>
+            <mat-option *ngFor="let r of data.roles" [value]="r">{{ roleLabel(r) }}</mat-option>
           </mat-select>
         </mat-form-field>
 
@@ -77,7 +78,7 @@ interface UserFormData {
             <mat-checkbox *ngFor="let r of data.roles"
                           [checked]="isRoleSelected(r)"
                           (change)="toggleRole(r, $event.checked)">
-              {{ r }}
+              {{ roleLabel(r) }}
             </mat-checkbox>
           </div>
         </div>
@@ -125,6 +126,7 @@ export class UserFormDialogComponent implements OnInit {
   userName = signal('');
   email = signal('');
   departamento = signal('');
+  readonly roleLabel = roleLabel;
   role = signal('');
   selectedRoles = signal<string[]>([]);
 

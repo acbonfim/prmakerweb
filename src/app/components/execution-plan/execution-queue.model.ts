@@ -69,6 +69,8 @@ export interface ExecutionDoctorCheck {
   ok: boolean;
   message?: string | null;
   severity?: 'error' | 'warning' | null;
+  /** 0099 (ajustes 2): perfis que precisam deste check (`management`, `dev`, `all`); ausente = `doctorRequiredFor` da máquina ou a regra da tela. */
+  requiredFor?: string[] | string | null;
 }
 
 export interface ExecutionWorker {
@@ -97,6 +99,12 @@ export interface ExecutionWorker {
   doctorProblems: number;
   running: number;
   latestAgentVersion?: string | null;
+  /** 0099 (ajustes 2): perfil do dono da máquina (o servidor sabe os papéis) — `management` não precisa de repos/bancos/git. */
+  profile?: 'management' | 'dev' | string | null;
+  /** 0099 (ajustes 2): por nome do check do doctor, os perfis que precisam dele (`["dev","management"]` ou `["dev"]`). */
+  doctorRequiredFor?: Record<string, string[]> | null;
+  /** 0099 (ajustes 2): checks com falha que contam para o `profile`. */
+  profileDoctorProblems?: number | null;
 }
 
 /** Repositório do mapa da máquina (0048): nome pelo remote → pasta local. */

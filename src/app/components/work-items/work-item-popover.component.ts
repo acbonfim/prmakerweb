@@ -20,10 +20,15 @@ import {
   taskStatusLook
 } from './work-item.model';
 import { itemTypeLook } from './work-item-types';
-import { EpicSummary, epicColor, epicStatusLook } from '../epics/epic.logic';
+import { EpicSummary, epicColor, epicStatusLook, parseEpicKey } from '../epics/epic.logic';
+import { EpicStory, StoryStatusLook, StoryTypeLook, storyCardId, storyStatusLook, storyTypeLook } from '../epics/epic-stories.logic';
+import { RoleService } from '../../services/role.service';
 
-/** 0099: `GET WorkItems/{n}` com número de épico responde `{kind:"epic", epic}` (a numeração é a mesma). */
-type WorkItemOrEpic = WorkItem & { kind?: string | null; epic?: EpicSummary | null };
+/**
+ * 0099: `GET WorkItems/{n}` com número de épico responde `{kind:"epic", epic}` (a numeração é a mesma); ajustes 2: com
+ * número de história/bug do épico, `{kind:"story", story}`.
+ */
+type WorkItemOrEpic = WorkItem & { kind?: string | null; epic?: EpicSummary | null; story?: EpicStory | null };
 
 export type WorkItemPopoverMode = 'popover' | 'sheet';
 
@@ -35,7 +40,8 @@ const MAX_TASKS = 8;
  * progresso, sub-tarefas, PRs/links e o motivo do cancelamento, com "Abrir na Bancada". Mesmo overlay/folha inferior
  * dos outros popovers da `appCodeRefHost`. Estados: carregando, erro e não encontrado.
  * 0099: o número pode ser de um épico da Mesa de gestão — o popover mostra o épico (cor, status, tags, contagens) com
- * "Abrir na Mesa de gestão".
+ * "Abrir na Mesa de gestão". Ajustes 2: história/bug do épico (`{kind:"story"}`) — tipo, situação, título, o card
+ * convertido e "Abrir na Mesa" (aba Histórias do épico).
  */
 @Component({
   selector: 'app-work-item-popover',
@@ -48,7 +54,7 @@ const MAX_TASKS = 8;
     '[class.wip--sheet]': "mode() === 'sheet'",
     role: 'dialog',
     tabindex: '-1',
-    '[attr.aria-label]': "(epic() ? 'Épico ' : 'Item de trabalho ') + label()",
+    '[attr.aria-label]': "(epic() ? 'Épico ' : story() ? 'História ' : 'Item de trabalho ') + label()",
   },
   template: `
     <header class="wip__head">
@@ -59,6 +65,11 @@ const MAX_TASKS = 8;
             <span class="wip__chip" [style.--wip-c]="epicColor(ep)"><mat-icon>space_dashboard</mat-icon>Épico</span>
             <span class="wip__chip" [style.--wip-c]="epicStatus(ep).color"><mat-icon>{{ epicStatus(ep).icon }}</mat-icon>{{ epicStatus(ep).label }}</span>
           }
+          @if (story(); as sy) {
+            <span class="wip__chip" [style.--wip-c]="storyType().color"><mat-icon>{{ storyType().icon }}</mat-icon>{{ storyType().label }}</span>
+            <span class="wip__chip" [style.--wip-c]="storyStatus().color"><mat-icon>{{ storyStatus().icon }}</mat-icon>{{ storyStatus().label }}</span>
+            @if (sy.epicNumber) { <span class="wip__card" matTooltip="Épico da história">épico #{{ sy.epicNumber }}</span> }
+          }
           @if (item(); as it) {
             <span class="wip__chip" [style.--wip-c]="type().color || '#8b9bb4'"><mat-icon>{{ type().icon }}</mat-icon>{{ type().label }}</span>
             <span class="wip__chip" [style.--wip-c]="status().color"><mat-icon [class.wip__spin]="status().spin" [class.cime-bob]="status().bob">{{ status().icon }}</mat-icon>{{ status().label }}</span>
@@ -67,6 +78,8 @@ const MAX_TASKS = 8;
         </div>
         @if (epic(); as ep) {
           <span class="wip__title">{{ ep.title }}</span>
+        } @else if (story(); as sy) {
+          <span class="wip__title">{{ sy.title }}</span>
         } @else if (matchedTask(); as mt) {
           <span class="wip__title">{{ mt.title }}</span>
           <span class="wip__parent"><mat-icon>subdirectory_arrow_right</mat-icon>sub-tarefa do item <b>{{ itemLabel() }}</b> · {{ item()?.title }}</span>
@@ -97,6 +110,22 @@ const MAX_TASKS = 8;
               <button mat-stroked-button type="button" (click)="openDesk(ep)"><mat-icon>space_dashboard</mat-icon>Abrir na Mesa de gestão</button>
             </footer>
           }
+          @if (story(); as sy) {
+            @if (sy.description) { <p class="wip__desc">{{ sy.description }}</p> }
+            @if (storyCard(); as cid) {
+              <p class="wip__activity"><mat-icon>move_up</mat-icon>Virou o card #{{ cid }} no DevOps@if (sy.convertedByName) { ({{ sy.convertedByName }}) }</p>
+            } @else {
+              <p class="wip__activity"><mat-icon>edit_note</mat-icon>Escrita no PRMake — ainda não virou card no DevOps</p>
+            }
+            <footer class="wip__foot">
+              <span>{{ sy.createdByName || 'PRMake' }} · {{ sy.createdAt | date: 'dd/MM HH:mm' }}</span>
+              <span class="wip__spacer"></span>
+              @if (storyCard(); as cid) {
+                <button mat-button type="button" (click)="openStoryCard(sy, cid)"><mat-icon>north_east</mat-icon>Card #{{ cid }}</button>
+              }
+              <button mat-stroked-button type="button" (click)="openStory(sy)"><mat-icon>space_dashboard</mat-icon>Abrir na Mesa</button>
+            </footer>
+          }
           @if (item(); as it) {
             @if ((matchedTask() ? matchedTask()?.description : it.description) || it.description; as d) { <p class="wip__desc">{{ d }}</p> }
             @if (it.activity) { <p class="wip__activity"><mat-icon class="wip__spin">autorenew</mat-icon>{{ it.activity }}</p> }
@@ -124,7 +153,13 @@ const MAX_TASKS = 8;
             <footer class="wip__foot">
               <span>{{ it.createdByName || 'PRMake' }} · {{ it.createdAt | date: 'dd/MM HH:mm' }}@if (it.completedAt) { · terminou {{ it.completedAt | date: 'dd/MM HH:mm' }} }</span>
               <span class="wip__spacer"></span>
-              <button mat-stroked-button type="button" (click)="openWorkbench(it)"><mat-icon>handyman</mat-icon>Abrir na Bancada</button>
+              @if (epicOf(it); as en) {
+                @if (canUseDesk) {
+                  <button mat-stroked-button type="button" (click)="openEpicItem(en, it)"><mat-icon>space_dashboard</mat-icon>Abrir na Mesa</button>
+                }
+              } @else if (canUseWorkbench) {
+                <button mat-stroked-button type="button" (click)="openWorkbench(it)"><mat-icon>handyman</mat-icon>Abrir na Bancada</button>
+              }
             </footer>
           }
         }
@@ -195,11 +230,20 @@ export class WorkItemPopoverComponent {
 
   private api = inject(WorkItemsService);
   private router = inject(Router);
+  /** 0099 (ajustes 2): "Abrir na Bancada" só para quem acessa a Bancada; item de épico abre na Mesa (admin/management). */
+  private roles = inject(RoleService);
+  readonly canUseWorkbench = this.roles.canUseWorkbench;
+  readonly canUseDesk = this.roles.canUseDesk;
   private host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly item = signal<WorkItem | null>(null);
   /** 0099: o número era de um épico. */
   readonly epic = signal<EpicSummary | null>(null);
+  /** Ajustes 2: o número era de uma história/bug do épico. */
+  readonly story = signal<EpicStory | null>(null);
+  readonly storyType = computed<StoryTypeLook>(() => storyTypeLook(this.story()?.type));
+  readonly storyStatus = computed<StoryStatusLook>(() => storyStatusLook(this.story()?.status));
+  readonly storyCard = computed(() => storyCardId(this.story()));
   readonly state = signal<'loading' | 'ready' | 'missing' | 'error'>('loading');
   readonly error = signal('');
   readonly label = computed(() => formatWorkNumber(this.number()));
@@ -260,8 +304,10 @@ export class WorkItemPopoverComponent {
       const it = await firstValueFrom(this.api.get(n)) as WorkItemOrEpic;
       if (seq !== this.seq) return;
       const isEpic = it?.kind === 'epic' && !!it.epic;
+      const isStory = it?.kind === 'story' && !!it.story;
       this.epic.set(isEpic ? it.epic! : null);
-      this.item.set(isEpic ? null : it);
+      this.story.set(isStory ? it.story! : null);
+      this.item.set(isEpic || isStory ? null : it);
       this.state.set('ready');
     } catch (e) {
       if (seq !== this.seq) return;
@@ -290,6 +336,30 @@ export class WorkItemPopoverComponent {
   openDesk(ep: EpicSummary): void {
     this.closed.emit();
     void this.router.navigate(['/auth/desk'], { queryParams: { epic: ep.number } });
+  }
+
+  /** Ajustes 2: a história na aba Histórias do épico. */
+  openStory(sy: EpicStory): void {
+    this.closed.emit();
+    const queryParams = sy.epicNumber ? { epic: sy.epicNumber, tab: 'stories' } : {};
+    void this.router.navigate(['/auth/desk'], { queryParams });
+  }
+
+  /** Ajustes 2: o card convertido no painel da Mesa (com o épico da história aberto). */
+  openStoryCard(sy: EpicStory, card: string): void {
+    this.closed.emit();
+    const queryParams = sy.epicNumber ? { epic: sy.epicNumber, tab: 'stories', card } : { card };
+    void this.router.navigate(['/auth/desk'], { queryParams });
+  }
+
+  /** Número do épico quando o item é de um épico (`E<n>`). */
+  epicOf(it: WorkItem): number | null {
+    return parseEpicKey(`${it.cardNumber ?? ''}`);
+  }
+
+  openEpicItem(epic: number, it: WorkItem): void {
+    this.closed.emit();
+    void this.router.navigate(['/auth/desk'], { queryParams: { epic, tab: 'items', item: it.number } });
   }
 
   openWorkbench(it: WorkItem): void {

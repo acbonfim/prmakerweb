@@ -1,6 +1,7 @@
 import {
-  EMPTY_FILTER, UNASSIGNED, applyMove, canAccept, columnCounts, columnOf, filterItems, filterOptions, groupBoard,
-  isRealMove, laneOf, neighborsAt, orderBetween, stateFor, toggleValue, typeOnBoard
+  DEFAULT_LANE_NAME, EMPTY_FILTER, UNASSIGNED, applyMove, canAccept, columnCounts, columnOf, filterCount, filterItems, filterOptions,
+  groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, limitBoard, neighborsAt, normalizeBoardFilter, orderBetween,
+  sameFilter, stateFor, toggleValue, typeOnBoard, visibleColumns
 } from './board.logic';
 import { BoardConfig, BoardItem } from './devops.model';
 
@@ -162,5 +163,59 @@ describe('board.logic (0099)', () => {
   it('liga/desliga valor de filtro ignorando caixa', () => {
     expect(toggleValue(['Bug'], 'bug')).toEqual([]);
     expect(toggleValue(['Bug'], 'Task')).toEqual(['Bug', 'Task']);
+  });
+
+  // ── Ajustes 1: lanes no filtro e filtros salvos no épico ──
+
+  it('nome da lane no filtro: a padrão sem nome vira "Padrão"; casa por nome ou apelido da padrão', () => {
+    const [def, exp] = config().lanes;
+    expect(laneFilterName(def)).toBe(DEFAULT_LANE_NAME);
+    expect(laneFilterName(exp)).toBe('Expedite');
+    expect(laneMatches('padrao', def)).toBeTrue();
+    expect(laneMatches('Default', def)).toBeTrue();
+    expect(laneMatches('expedite', exp)).toBeTrue();
+    expect(laneMatches('Padrão', exp)).toBeFalse();
+  });
+
+  it('filtra por lane com as lanes do board (sem elas o filtro de lane não se aplica)', () => {
+    const cfg = config();
+    const items = [item(1), item(2, { lane: 'Expedite' }), item(3, { lane: 'Sumiu' })];
+    const f = { ...EMPTY_FILTER, lanes: ['Expedite'] };
+    expect(filterItems(items, f, cfg.lanes).map((i) => i.id)).toEqual([2]);
+    expect(filterItems(items, { ...EMPTY_FILTER, lanes: ['Padrão'] }, cfg.lanes).map((i) => i.id)).toEqual([1, 3]);
+    expect(filterItems(items, f).map((i) => i.id)).toEqual([1, 2, 3]);
+    expect(isFilterActive(f)).toBeTrue();
+    expect(filterCount({ ...f, text: 'x', types: ['Bug'] })).toBe(3);
+  });
+
+  it('normaliza o filtro salvo (listas vazias por padrão, ignora lixo) e compara sem caixa/ordem', () => {
+    expect(normalizeBoardFilter(null)).toEqual(EMPTY_FILTER);
+    expect(normalizeBoardFilter({ lanes: ['Expedite', 3, ' '], text: 7, tags: 'x' })).toEqual({ ...EMPTY_FILTER, lanes: ['Expedite'] });
+    expect(sameFilter({ ...EMPTY_FILTER, types: ['Bug', 'Task'] }, { ...EMPTY_FILTER, types: ['task', 'bug'] })).toBeTrue();
+    expect(sameFilter({ ...EMPTY_FILTER, text: ' a ' }, { ...EMPTY_FILTER, text: 'a' })).toBeTrue();
+    expect(sameFilter({ ...EMPTY_FILTER, lanes: ['A'] }, EMPTY_FILTER)).toBeFalse();
+  });
+
+  it('colunas ocultas: some do board, ocultar todas mostra todas, coluna nova aparece sozinha', () => {
+    const cfg = config();
+    expect(visibleColumns(cfg, ['qa', 'Closed']).map((c) => c.name)).toEqual(['New', 'Active']);
+    expect(visibleColumns(cfg, cfg.columns.map((c) => c.name)).length).toBe(4);
+    expect(visibleColumns(cfg, ['Sumiu']).length).toBe(4);
+    expect(normalizeBoardFilter({ hiddenColumns: ['QA'] }).hiddenColumns).toEqual(['QA']);
+    expect(isFilterActive({ ...EMPTY_FILTER, hiddenColumns: ['QA'] })).toBeFalse();
+    expect(sameFilter({ ...EMPTY_FILTER, hiddenColumns: ['QA'] }, EMPTY_FILTER)).toBeFalse();
+  });
+
+  it('limitBoard: só as colunas visíveis e só as lanes escolhidas, recontando a faixa', () => {
+    const cfg = config();
+    const items = [item(1), item(2, { column: 'QA', type: 'User Story' }), item(3, { lane: 'Expedite' })];
+    const views = groupBoard(cfg, items);
+    const cut = limitBoard(views, cfg, { lanes: [], hiddenColumns: ['QA'] });
+    expect(cut.length).toBe(2);
+    expect(cut[0].columns.map((c) => c.column.name)).toEqual(['New', 'Active', 'Closed']);
+    expect(cut[0].count).toBe(1);
+    const onlyExpedite = limitBoard(views, cfg, { lanes: ['expedite'], hiddenColumns: [] });
+    expect(onlyExpedite.map((v) => v.key)).toEqual(['Expedite']);
+    expect(limitBoard(views, cfg, { lanes: ['Sumiu'], hiddenColumns: [] }).length).toBe(2);
   });
 });

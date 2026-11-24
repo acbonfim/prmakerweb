@@ -381,6 +381,8 @@
 
 // Aba Cards
 .dk-cards__bar { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+// Ajustes 2: alternância Lista | Acompanhamento na barra da aba Cards.
+.dk-cards__bar > .dk-seg { align-self: center; }
 .dk-add {
   flex: 0 1 240px;
   min-width: 160px;

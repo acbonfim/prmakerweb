@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { AuthService } from '../../../../services/auth.service';
 import { GlobalService } from '../../../../services/global.service';
+import { roleLabel } from '../../../../services/role.logic';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { FormsModule } from '@angular/forms';
@@ -73,7 +74,9 @@ export class ManagerComponent implements OnInit, OnDestroy {
   readonly skeletons = Array.from({ length: 6 });
   private actualPage = 0;
   private search$ = new Subject<string>();
-  private readonly fallbackRoles = ['admin', 'support', 'user', 'gestor'];
+  // 0099 (ajustes 2): management = Gestão (Mesa de gestão; sem Bancada quando não tem papel de dev).
+  private readonly fallbackRoles = ['admin', 'support', 'user', 'gestor', 'management'];
+  readonly roleLabel = roleLabel;
 
   constructor(
     private _authService: AuthService,
