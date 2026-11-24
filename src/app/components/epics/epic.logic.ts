@@ -86,7 +86,7 @@ export const EPICS_EVENT = 'epicsUpdated';
 export const EPICS_GROUP = 'epics';
 export interface EpicsUpdatedPayload {
   number: number;
-  action: 'created' | 'updated' | 'status' | 'cards' | 'filters' | string;
+  action: 'created' | 'updated' | 'status' | 'cards' | 'filters' | 'stories' | string;
 }
 
 // ── Chave do dono ────────────────────────────────────────────────────────────────────────────
@@ -268,8 +268,9 @@ export function countByStatusFilter(epics: readonly EpicSummary[], query?: strin
 
 // ── Abas da Mesa ─────────────────────────────────────────────────────────────────────────────
 
-export type DeskTab = 'board' | 'items' | 'cards' | 'files' | 'reported';
-export const DESK_TABS: readonly DeskTab[] = ['board', 'items', 'cards', 'files', 'reported'];
+/** Ajustes 2: `stories` = aba Histórias (histórias/bugs escritos no PRMake antes de virarem card), entre Board e Itens. */
+export type DeskTab = 'board' | 'stories' | 'items' | 'cards' | 'files' | 'reported';
+export const DESK_TABS: readonly DeskTab[] = ['board', 'stories', 'items', 'cards', 'files', 'reported'];
 
 export function parseDeskTab(value: string | null | undefined): DeskTab | null {
   return (DESK_TABS as readonly string[]).includes(`${value ?? ''}`) ? (value as DeskTab) : null;

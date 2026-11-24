@@ -17,6 +17,7 @@ import { DevOpsBoardComponent } from '../../../components/devops/devops-board.co
 import { DevOpsCardPanelComponent } from '../../../components/devops/devops-card-panel.component';
 import { openDevOpsCardCreate } from '../../../components/devops/devops-card-create';
 import { openEpicDialog } from '../../../components/epics/epic-dialog.component';
+import { EpicStoriesComponent } from '../../../components/epics/epic-stories.component';
 import {
   DeskTab, EPIC_STATUSES, EPIC_STATUS_FILTERS, Epic, EpicCard, EpicStatus, EpicStatusFilter, EpicSummary,
   countByStatusFilter, devOpsTypeColor, epicCardRoleLook, epicColor, epicKey, epicStatusLook, filterEpics, parseCardId,
@@ -67,19 +68,20 @@ const writeFlag = (key: string, on: boolean) => writeText(key, on ? '1' : null);
  * do DevOps do épico, o board do time, os arquivos, os relatados e o Especialista de gestão.
  *
  * Layout (desktop): trilho de épicos à esquerda (busca, meus/todos, status, "+ Novo épico", recolhível), cabeçalho do
- * épico, abas `Board | Itens | Cards | Arquivos | Relatado` e a lateral do Especialista (`app-case-compact` com a chave
+ * épico, abas `Board | Histórias | Itens | Cards | Arquivos | Relatado` e a lateral do Especialista (`app-case-compact` com a chave
  * `E{n}` e `cardType='epic'`, recolhível como na Bancada). A busca de card no topo abre o painel do card do DevOps (com
- * ou sem épico). Celular (< 1024): abas Épicos | Board | Itens | Cards | Arquivos | Relatado | Especialista.
+ * ou sem épico). Celular (< 1024): abas Épicos | Board | Histórias | Itens | Cards | Arquivos | Relatado | Especialista.
  *
  * A chave `E{n}` é o "card" dos componentes da Bancada (itens, conversa, arquivos, relatados, tempo real) — eles
- * funcionam sem mudança. URL: `?epic=<n>&card=<id>&item=<n>&tab=board|items|cards|files|reported`.
+ * funcionam sem mudança. URL: `?epic=<n>&card=<id>&item=<n>&tab=board|stories|items|cards|files|reported`.
  */
 @Component({
   selector: 'app-desk',
   standalone: true,
   imports: [
     DatePipe, FormsModule, MatButtonModule, MatIconModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
-    PlanMarkdownPipe, CaseCompactComponent, WorkItemListComponent, CardFilesComponent, DevOpsBoardComponent, DevOpsCardPanelComponent
+    PlanMarkdownPipe, CaseCompactComponent, WorkItemListComponent, CardFilesComponent, DevOpsBoardComponent, DevOpsCardPanelComponent,
+    EpicStoriesComponent
   ],
   templateUrl: './desk.component.html',
   styleUrl: './desk.component.scss'
@@ -154,6 +156,8 @@ export class DeskComponent implements OnInit, OnDestroy {
   // ── Itens (contagem e filtro dos arquivos) ──────────────────────────────────────────────────
   readonly items = signal<WorkItem[]>([]);
   readonly itemCount = signal<number | null>(null);
+  /** Ajustes 2: histórias/bugs a converter (rascunhos + prontas) — contagem da aba Histórias. */
+  readonly storyCount = signal<number | null>(null);
   readonly openItem = signal<number | null>(null);
   private stopItems?: () => void;
   private itemsSub?: Subscription;
@@ -352,6 +356,7 @@ export class DeskComponent implements OnInit, OnDestroy {
       this.pickedTab.set(null);
       this.pickedMobileTab.set(null);
       this.itemCount.set(null);
+      this.storyCount.set(null);
       this.items.set([]);
       this.openItem.set(null);
       this.descOpen.set(false);

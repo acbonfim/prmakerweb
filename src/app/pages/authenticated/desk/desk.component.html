@@ -1,4 +1,4 @@
-<!-- 0099: Mesa de gestão — trilho de épicos | épico (cabeçalho + abas Board | Itens | Cards | Arquivos | Relatado) | Especialista -->
+<!-- 0099: Mesa de gestão — trilho de épicos | épico (cabeçalho + abas Board | Histórias | Itens | Cards | Arquivos | Relatado) | Especialista -->
 @let e = epic();
 @let look = epicLook();
 @let found = epicState() === 'found' && !!e;
@@ -33,6 +33,10 @@
   @if (found) {
     <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'board'" [attr.aria-selected]="mtab === 'board'" (click)="selectMobile('board')">
       <mat-icon>view_kanban</mat-icon><span>Board</span>
+    </button>
+    <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'stories'" [attr.aria-selected]="mtab === 'stories'" (click)="selectMobile('stories')">
+      <mat-icon>edit_note</mat-icon><span>Histórias</span>
+      @if (storyCount()) { <span class="dk-count">{{ storyCount() }}</span> }
     </button>
     <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'items'" [attr.aria-selected]="mtab === 'items'" (click)="selectMobile('items')">
       <mat-icon>checklist</mat-icon><span>Itens</span>
@@ -232,9 +236,14 @@
 
       <!-- Abas (desktop) -->
       @let main = visibleMain();
-      <div class="dk-seg" role="tablist" aria-label="Board, itens, cards, arquivos ou relatado">
+      <div class="dk-seg" role="tablist" aria-label="Board, histórias, itens, cards, arquivos ou relatado">
         <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="main === 'board'" [attr.aria-selected]="main === 'board'" (click)="selectMain('board')">
           <mat-icon>view_kanban</mat-icon><span class="dk-seg__label">Board</span>
+        </button>
+        <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="main === 'stories'" [attr.aria-selected]="main === 'stories'" (click)="selectMain('stories')"
+                matTooltip="Histórias e bugs escritos no PRMake antes de virarem card no DevOps" matTooltipShowDelay="600">
+          <mat-icon>edit_note</mat-icon><span class="dk-seg__label">Histórias</span>
+          @if (storyCount()) { <span class="dk-count">{{ storyCount() }}</span> }
         </button>
         <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="main === 'items'" [attr.aria-selected]="main === 'items'" (click)="selectMain('items')"
                 matTooltip="Tarefas de gestão do épico (relatório, duplicados, entendimento, RCA, cards…)" matTooltipShowDelay="600">
@@ -265,6 +274,12 @@
                             (teamChange)="onBoardPicked($event, null)" (boardChange)="onBoardPicked(null, $event)"
                             (cardOpened)="openCard($event)"></app-devops-board>
         }
+      </div>
+
+      <!-- Histórias: histórias/bugs do épico escritos no PRMake (montada para a contagem ficar viva); "Card #n ↗" abre o painel -->
+      <div class="dk-pane" [class.dk-hidden]="main !== 'stories'" data-tour="dk-stories">
+        <app-epic-stories [epic]="e!.number" [team]="e!.devOpsTeam ?? null" [board]="e!.devOpsBoard ?? null"
+                          (countChange)="storyCount.set($event)" (cardOpened)="openCard($event)"></app-epic-stories>
       </div>
 
       <!-- Itens: tarefas de gestão (a chave E{n} é o "card" dos itens; modelos de gestão vêm do catálogo do backend) -->
