@@ -1,0 +1,339 @@
+<!-- 0100: aba AWS da Bancada — somente leitura; o retrato vem da máquina de quem coletou (CLI da AWS) -->
+@let snap = snapshot();
+@let req = refreshInfo();
+<div class="aws">
+  <header class="aws__head">
+    <span class="aws__head-icon" aria-hidden="true"><mat-icon>cloud</mat-icon></span>
+    <div class="aws__who">
+      @if (snap) {
+        <span class="aws__when">
+          Coletado em <b [matTooltip]="fullDate(collectedAt())">{{ date(collectedAt()) }}</b>
+          @if (collectedBy()) { por <b>{{ collectedBy() }}</b> }
+          <span class="aws__ago">({{ ago(collectedAt()) }})</span>
+        </span>
+        <span class="aws__acct">
+          @if (snap.account) { conta {{ snap.account }} }
+          @if (snap.region) { · {{ snap.region }} }
+          @if (snap.machine) { · máquina {{ snap.machine }} }
+          @if (snap.durationMs) { · coleta em {{ duration(snap.durationMs / 1000) }} }
+          @if (snap.index?.total) {
+            · <span [matTooltip]="'Índice de pipelines da conta (compartilhado): ' + (snap.index?.upserted ?? 0) + ' novas/alteradas e ' + (snap.index?.removed ?? 0) + ' removidas nesta coleta'">
+              {{ snap.index?.total }} pipelines na conta</span>
+          }
+        </span>
+      } @else {
+        <span class="aws__when"><b>AWS do card</b></span>
+        <span class="aws__acct">Esteiras de deploy por ambiente — somente leitura</span>
+      }
+    </div>
+    <span class="aws__spacer"></span>
+    @if (req) {
+      <span class="aws__req aws-tone--{{ req.tone }}" role="status" aria-live="polite">
+        @if (req.busy) { <mat-spinner diameter="14"></mat-spinner> } @else { <mat-icon>{{ req.tone === 'bad' ? 'error_outline' : 'schedule' }}</mat-icon> }
+        <span>{{ req.text }}</span>
+      </span>
+    }
+    <button mat-stroked-button type="button" class="aws__refresh" [disabled]="busy()" (click)="refresh()"
+            matTooltip="Pede a coleta ao seu executor do PRMake: a sua máquina lê a AWS (CLI, somente leitura) e grava o retrato aqui"
+            matTooltipShowDelay="500">
+      @if (asking()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>refresh</mat-icon> }
+      Atualizar
+    </button>
+  </header>
+
+  @if (showManual()) {
+    <div class="aws__manual" role="note">
+      <mat-icon>terminal</mat-icon>
+      <div class="aws__manual-text">
+        <b>Seu executor do PRMake não está ligado</b> — ligue o executor para o "Atualizar" funcionar, ou rode a coleta no terminal
+        da sua máquina (com a CLI da AWS):
+        <span class="aws__cmd">
+          <code>{{ command() }}</code>
+          <button type="button" (click)="copyCommand()" matTooltip="Copiar" aria-label="Copiar o comando"><mat-icon>content_copy</mat-icon></button>
+        </span>
+      </div>
+    </div>
+  }
+
+  @if (loading() && !state()) {
+    <div class="aws__state"><mat-spinner diameter="26"></mat-spinner></div>
+  } @else if (error() && !state()) {
+    <div class="aws__state aws__state--error">
+      <mat-icon>cloud_off</mat-icon><span>{{ error() }}</span>
+      <button mat-button type="button" (click)="load(false)"><mat-icon>refresh</mat-icon>Tentar de novo</button>
+    </div>
+  } @else if (!snap) {
+    <!-- Estado vazio: o que a aba mostra e como coletar -->
+    <section class="aws__empty">
+      <mat-icon class="aws__empty-icon">cloud_queue</mat-icon>
+      <h3>Ainda não há retrato da AWS deste card</h3>
+      <p>
+        Esta aba mostra, para cada ambiente (DEV, QA, Sandboxefeso, SandboxRT, Produção), as <b>esteiras de deploy</b> do
+        repositório do card e diz claramente se <b>o nosso código já está lá</b> — com o status de cada pipeline, a última execução,
+        o commit implantado, os erros recentes nos logs e outros recursos ligados ao caso.
+      </p>
+      <p>
+        A coleta roda <b>na sua máquina</b>, com a CLI da AWS e <b>somente leitura</b> (a API do PRMake não acessa a AWS). Há três
+        jeitos de coletar:
+      </p>
+      <ul>
+        <li><b>Atualizar</b> (acima): pede ao seu executor do PRMake;</li>
+        <li>automaticamente, na sub-tarefa <code>aws-deploy-map</code> dos itens de trabalho que alteram código;</li>
+        <li>no terminal: <span class="aws__cmd aws__cmd--inline"><code>{{ command() }}</code>
+          <button type="button" (click)="copyCommand()" matTooltip="Copiar" aria-label="Copiar o comando"><mat-icon>content_copy</mat-icon></button></span></li>
+      </ul>
+    </section>
+  } @else {
+    <!-- Resumo: um selo por ambiente (leva ao cartão) -->
+    @if (environments().length > 1) {
+      <nav class="aws__summary" aria-label="Resumo por ambiente">
+        @for (env of environments(); track env.key) {
+          @let v = verdictOf(env);
+          <a class="aws__pill aws-tone--{{ v.tone }}" [href]="'#aws-env-' + env.key" (click)="$event.preventDefault(); scrollToEnv(env.key)"
+             [matTooltip]="v.message">
+            <mat-icon [class.aws-spin]="v.spin">{{ v.icon }}</mat-icon>{{ env.label || env.key }}
+          </a>
+        }
+      </nav>
+    }
+
+    <div class="aws__envs">
+      @for (env of environments(); track env.key) {
+        @let v = verdictOf(env);
+        @let pipes = pipelines(env);
+        <section class="env aws-tone--{{ v.tone }}" [class.env--compact]="v.verdict === 'not-applicable'"
+                 [attr.id]="'aws-env-' + env.key" [attr.aria-label]="v.message">
+          <div class="env__verdict">
+            <mat-icon class="env__icon" [class.aws-spin]="v.spin" aria-hidden="true">{{ v.icon }}</mat-icon>
+            <div class="env__text">
+              <div class="env__msg">{{ v.message }}</div>
+              <div class="env__sub">
+                <b>{{ env.label || env.key }}</b>
+                @if (env.host) { · {{ env.host }} }
+                @if (env.tier) { · tier <code>{{ env.tier }}</code> }
+                @if (pipes.length) { · {{ pipes.length }} {{ pipes.length === 1 ? 'esteira' : 'esteiras' }} }
+                @if (envErrors(env); as n) { · <span class="env__errs">{{ n }} {{ n === 1 ? 'erro' : 'erros' }} nos logs</span> }
+              </div>
+              @if (v.verdict === 'unknown') {
+                <div class="env__warn"><mat-icon>warning_amber</mat-icon>A máquina não conseguiu ler este ambiente (sem permissão ou erro na coleta) — veja os avisos abaixo.</div>
+              }
+            </div>
+          </div>
+
+          @if (pipes.length && v.verdict !== 'not-applicable') {
+            @let g = groups(env);
+            <details class="env__pipes" [open]="pipesOpen(env)">
+              <summary>Esteiras de deploy <span class="aws__n">{{ g.total }}</span>
+                @if (g.total > 1) {
+                  <span class="env__pipes-count">{{ g.primaryDeployed }} de {{ g.primaryTotal }} {{ g.secondary ? (g.primaryTotal === 1 ? 'principal' : 'principais') + ' ' : '' }}com o nosso código@if (g.secondary) { · {{ g.secondary }} {{ g.secondary === 1 ? 'secundária' : 'secundárias' }} }</span>
+                }
+              </summary>
+              <ul class="pipes">
+                @for (p of g.shown; track p.name) {
+                  <li class="pipe" [class.pipe--secondary]="secondary(p)"><ng-container *ngTemplateOutlet="pipeTpl; context: { $implicit: p }"></ng-container></li>
+                }
+              </ul>
+              @if (g.folded.length) {
+                <details class="env__folded">
+                  <summary>Mais {{ g.folded.length }} {{ g.folded.length === 1 ? 'esteira' : 'esteiras' }}{{ g.shown.length && g.folded[0].deployed ? ' já com o nosso código' : '' }}</summary>
+                  <ul class="pipes">
+                    @for (p of g.folded; track p.name) {
+                      <li class="pipe" [class.pipe--secondary]="secondary(p)"><ng-container *ngTemplateOutlet="pipeTpl; context: { $implicit: p }"></ng-container></li>
+                    }
+                  </ul>
+                </details>
+              }
+            </details>
+          }
+        </section>
+      }
+    </div>
+
+    <!-- Nosso código: de onde os vereditos saíram -->
+    @if (repositories().length) {
+      <details class="aws__block" open>
+        <summary><mat-icon>commit</mat-icon>Nosso código <span class="aws__n">{{ repositories().length }}</span>
+          <span class="aws__hint">commits do card usados para os vereditos</span></summary>
+        @for (r of repositories(); track r.repository) {
+          <div class="repo">
+            <div class="repo__head">
+              <b [matTooltip]="r.repository">{{ repoName(r.repository) }}</b>
+              @if (r.files) { <span class="pipe__muted">· {{ r.files }} {{ r.files === 1 ? 'arquivo alterado' : 'arquivos alterados' }}</span> }
+              @if (r.localPath === false) { <span class="aws-chip aws-tone--warn" matTooltip="O repositório não está nesta máquina: o veredito usou só os commits conhecidos pelo PRMake"><mat-icon>warning_amber</mat-icon>sem clone local</span> }
+              @if (r.fetchedAt) { <span class="pipe__muted">· fetch {{ ago(r.fetchedAt) }}</span> }
+            </div>
+            @if (r.branches?.length) {
+              <div class="repo__branches">
+                @for (b of r.branches!; track b) { <span class="aws-chip aws-tone--muted"><mat-icon>call_split</mat-icon>{{ b }}</span> }
+              </div>
+            }
+            @if (r.commits?.length) {
+              <ul class="repo__commits">
+                @for (c of r.commits!; track c.sha) {
+                  <li [matTooltip]="c.title ?? ''" matTooltipShowDelay="600"><code>{{ short(c.sha) }}</code><span>{{ line1(c.title) }}</span>
+                    @if (c.date) { <span class="pipe__muted">{{ date(c.date) }}</span> }</li>
+                }
+              </ul>
+            } @else {
+              <div class="pipe__muted">Nenhum commit do card encontrado neste repositório.</div>
+            }
+          </div>
+        }
+      </details>
+    }
+
+    <!-- Logs e erros recentes (CloudWatch), por ambiente -->
+    @if (logEnvironments().length) {
+      <details class="aws__block" [open]="logEnvironments().length <= 2">
+        <summary><mat-icon>article</mat-icon>Logs e erros recentes <span class="aws__hint">CloudWatch, últimas 24 h</span></summary>
+        @for (env of logEnvironments(); track env.key) {
+          <div class="logenv">
+            <div class="logenv__title">{{ env.label || env.key }}</div>
+            @for (l of env.logs!; track l.group) {
+              <div class="log">
+                <div class="log__head">
+                  @if (l.url) {
+                    <a [href]="l.url" target="_blank" rel="noopener" class="log__group">{{ l.group }}<mat-icon>open_in_new</mat-icon></a>
+                  } @else {
+                    <code class="log__group">{{ l.group }}</code>
+                  }
+                  @if (l.lastEventAt) { <span class="pipe__muted" [matTooltip]="fullDate(l.lastEventAt)">último evento {{ ago(l.lastEventAt) }}</span> }
+                  @if (l.errors?.length) { <span class="aws-chip aws-tone--bad"><mat-icon>error_outline</mat-icon>{{ l.errors!.length }} {{ l.errors!.length === 1 ? 'erro' : 'erros' }}</span> }
+                  @else { <span class="aws-chip aws-tone--ok"><mat-icon>check</mat-icon>sem erros</span> }
+                </div>
+                @if (l.errors?.length) {
+                  <details class="log__errors">
+                    <summary>Ver os erros</summary>
+                    <ul>
+                      @for (e of l.errors!; track $index) {
+                        <li>@if (e.at) { <span class="pipe__muted">{{ date(e.at) }}</span> }<pre>{{ e.message }}</pre></li>
+                      }
+                    </ul>
+                  </details>
+                }
+              </div>
+            }
+          </div>
+        }
+      </details>
+    }
+
+    <!-- Outros recursos do caso -->
+    @if (hasOther()) {
+      <details class="aws__block">
+        <summary><mat-icon>widgets</mat-icon>Outros recursos
+          <span class="aws__hint">
+            @if (alarms().length) { <span class="aws-tone--bad aws__alarm-count">{{ alarms().length }} {{ alarms().length === 1 ? 'alarme' : 'alarmes' }} em ALARM</span> · }
+            lambdas, alarmes, CloudFront
+          </span>
+        </summary>
+        @if (alarms().length) {
+          <div class="res">
+            <div class="res__title">Alarmes em ALARM</div>
+            @for (a of alarms(); track a.name) {
+              <div class="res__row aws-tone--bad">
+                <mat-icon>notifications_active</mat-icon><b>{{ a.name }}</b>
+                @if (a.since) { <span class="pipe__muted">desde {{ date(a.since) }}</span> }
+                @if (a.reason) { <div class="res__reason">{{ a.reason }}</div> }
+              </div>
+            }
+          </div>
+        }
+        @if (lambdas().length) {
+          <div class="res">
+            <div class="res__title">Lambdas do módulo <span class="aws__n">{{ lambdas().length }}</span></div>
+            @for (f of lambdas(); track f.name) {
+              <div class="res__row"><mat-icon>functions</mat-icon><b>{{ f.name }}</b>
+                @if (f.runtime) { <span class="pipe__muted">{{ f.runtime }}</span> }
+                @if (f.lastModified) { <span class="pipe__muted">· alterada {{ date(f.lastModified) }}</span> }</div>
+            }
+          </div>
+        }
+        @if (distributions().length) {
+          <div class="res">
+            <div class="res__title">Hosts dos ambientes</div>
+            @for (d of distributions(); track d.env.key) {
+              <div class="res__row"><mat-icon>public</mat-icon><b>{{ d.env.label || d.env.key }}</b>
+                @if (d.cf?.id) { <span class="pipe__muted">CloudFront <code>{{ d.cf?.id }}</code></span> }
+                @if (d.cf?.aliases?.length) { <span class="pipe__muted">· {{ d.cf?.aliases?.join(', ') }}</span> }
+                @if (d.eb.length) { <span class="pipe__muted">· Elastic Beanstalk {{ d.eb.join(', ') }}</span> }</div>
+            }
+          </div>
+        }
+      </details>
+    }
+
+    @if (denied().length) {
+      <p class="aws__note"><mat-icon>lock</mat-icon>Sem permissão nesta máquina: {{ denied().join(', ') }}</p>
+    }
+    @if (warnings().length) {
+      <details class="aws__note aws__note--warn">
+        <summary><mat-icon>warning_amber</mat-icon>{{ warnings().length }} {{ warnings().length === 1 ? 'aviso' : 'avisos' }} da coleta</summary>
+        <ul>@for (w of warnings(); track $index) { <li>{{ w }}</li> }</ul>
+      </details>
+    }
+  }
+</div>
+
+<!-- Uma esteira (pipeline) do ambiente -->
+<ng-template #pipeTpl let-p>
+  @let st = statusLook(p);
+  <div class="pipe__row">
+    @if (p.consoleUrl) {
+      <a class="pipe__name" [href]="p.consoleUrl" target="_blank" rel="noopener" [matTooltip]="'Abrir no console da AWS — ' + p.name">{{ p.name }}<mat-icon>open_in_new</mat-icon></a>
+    } @else {
+      <span class="pipe__name">{{ p.name }}</span>
+    }
+    @if (secondary(p)) {
+      <span class="aws-chip aws-tone--muted" matTooltip="Não decide o veredito do ambiente: a esteira principal é a que publica no servidor do ambiente">secundária</span>
+    }
+    <span class="aws-chip aws-tone--{{ st.tone }}" [matTooltip]="p.stage ? 'Estágio: ' + p.stage : ''">
+      <mat-icon [class.aws-spin]="st.spin">{{ st.icon }}</mat-icon>{{ st.label }}
+    </span>
+    @if (p.deployed === true) {
+      <span class="aws-chip aws-tone--ok" matTooltip="O commit implantado contém o nosso código"><mat-icon>check</mat-icon>contém nosso código</span>
+    } @else if (p.deployed === false) {
+      <span class="aws-chip aws-tone--muted" [matTooltip]="p.inBranch ? 'O nosso código já está na branch ' + (p.branch ?? '') + ', mas ainda não foi implantado' : 'O commit implantado não contém o nosso código'">
+        <mat-icon>close</mat-icon>{{ p.inBranch ? 'na branch, não implantado' : 'sem nosso código' }}
+      </span>
+    }
+  </div>
+  <div class="pipe__facts">
+    @if (p.lastRunAt) {
+      <span [matTooltip]="fullDate(p.lastRunAt)"><mat-icon>schedule</mat-icon>{{ date(p.lastRunAt) }} <span class="pipe__muted">({{ ago(p.lastRunAt) }})</span></span>
+    }
+    @if (duration(p.durationSec)) { <span><mat-icon>timer</mat-icon>{{ duration(p.durationSec) }}</span> }
+    @if (p.branch) { <span [matTooltip]="p.repository ?? ''"><mat-icon>call_split</mat-icon>{{ p.branch }}</span> }
+    @if (p.trigger) { <span class="pipe__muted">gatilho {{ p.trigger }}</span> }
+  </div>
+  @if (p.deployedSha) {
+    <div class="pipe__commit" [matTooltip]="p.deployedMessage ?? ''">
+      <span class="pipe__muted">implantado:</span>
+      <code>{{ short(p.deployedSha) }}</code>
+      <span class="pipe__msg">{{ line1(p.deployedMessage) }}</span>
+      @if (p.deployedAt) { <span class="pipe__muted">· {{ date(p.deployedAt) }}</span> }
+    </div>
+  }
+  @if (latestDiffers(p)) {
+    @let lt = latestLook(p.latest?.status);
+    <div class="pipe__latest aws-tone--{{ lt.tone }}">
+      <mat-icon [class.aws-spin]="lt.spin">{{ lt.icon }}</mat-icon>
+      Execução mais nova: <code>{{ short(p.latest?.sha) }}</code> · {{ lt.label }}
+      @if (p.latest?.startedAt) { <span class="pipe__muted">desde {{ date(p.latest?.startedAt) }}</span> }
+    </div>
+  }
+  @if (p.action || p.buildUrl) {
+    <div class="pipe__links">
+      @if (p.action) { <span class="pipe__muted" matTooltip="Ação de deploy desta pipeline neste ambiente">{{ p.action }}</span> }
+      @if (p.buildUrl) {
+        <a [href]="p.buildUrl" target="_blank" rel="noopener"><mat-icon>build</mat-icon>Build<mat-icon class="pipe__ext">open_in_new</mat-icon></a>
+      }
+    </div>
+  }
+  @if (p.failedLogTail?.length) {
+    <details class="pipe__log">
+      <summary><mat-icon>receipt_long</mat-icon>Fim do log do build que falhou ({{ p.failedLogTail!.length }} {{ p.failedLogTail!.length === 1 ? 'linha' : 'linhas' }})</summary>
+      <pre>{{ p.failedLogTail!.join('\n') }}</pre>
+    </details>
+  }
+</ng-template>

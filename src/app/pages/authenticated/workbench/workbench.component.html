@@ -268,6 +268,11 @@
             (click)="selectMobile('reported')">
       <mat-icon>hub</mat-icon><span>Relatado</span>
     </button>
+    <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'aws'" [attr.aria-selected]="mtab === 'aws'"
+            (click)="selectMobile('aws')">
+      <mat-icon>cloud</mat-icon><span>AWS</span>
+      @if (awsAlert(); as a) { <span class="wb-dot wb-dot--{{ a }}" aria-hidden="true"></span> }
+    </button>
     <button type="button" role="tab" class="wb-mtab" [class.wb-mtab--on]="mtab === 'chat'" [attr.aria-selected]="mtab === 'chat'"
             (click)="selectMobile('chat')">
       <mat-icon>psychology</mat-icon><span>Especialista</span>
@@ -309,6 +314,13 @@
                   matTooltip="Itens de trabalho de outros cards relacionados a este (menção na conversa do especialista ou adicionados à mão) — somente leitura"
                   matTooltipShowDelay="600">
             <mat-icon>hub</mat-icon><span class="wb-seg__label">Relatado</span>
+          </button>
+          <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'aws'" data-tour="wb-aws-tab"
+                  [attr.aria-selected]="main === 'aws'" (click)="selectMain('aws')"
+                  [matTooltip]="awsAlert() === 'failed' ? 'AWS — um deploy falhou' : awsAlert() === 'deploying' ? 'AWS — deploy em andamento' : 'Esteiras de deploy por ambiente e se o nosso código já está em cada um (somente leitura)'"
+                  matTooltipShowDelay="600">
+            <mat-icon>cloud</mat-icon><span class="wb-seg__label">AWS</span>
+            @if (awsAlert(); as a) { <span class="wb-dot wb-dot--{{ a }}" aria-hidden="true"></span> }
           </button>
           <button type="button" role="tab" class="wb-seg__btn" [class.wb-seg__btn--on]="main === 'card'" data-tour="wb-card-tab"
                   [attr.aria-selected]="main === 'card'" (click)="selectMain('card')">
@@ -467,6 +479,13 @@
       <div class="wb-pane wb-pane--files" [class.wb-hidden]="main !== 'files'" data-tour="wb-files">
         <app-card-files [store]="cardFiles" [card]="card()" [cardType]="cardType()" [items]="planItems()" [(selected)]="filesItem"></app-card-files>
       </div>
+
+      <!-- 0100: AWS — esteiras de deploy por ambiente e se o nosso código já está em cada um (somente leitura; só quando aberta) -->
+      @if (main === 'aws') {
+        <div class="wb-pane wb-pane--aws" data-tour="wb-aws">
+          <app-aws-deploy-panel [cardNumber]="card()!"></app-aws-deploy-panel>
+        </div>
+      }
 
       <!-- Aba Card (desktop e celular): horas + lançar horas, dados principais, anexos/links e o texto do card -->
       @if (main === 'card') {

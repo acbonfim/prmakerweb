@@ -1,0 +1,364 @@
+/**
+ * 0100: aba AWS da Bancada — o retrato que a máquina (CLI da AWS, somente leitura) grava no PRMake: por ambiente, as
+ * esteiras de deploy do(s) repositório(s) do card e se o nosso código já está lá. Contrato: `AwsDeployController`
+ * (`GET AwsDeploy/card/{card}`, `POST .../refresh`, `GET AwsDeploy/config`) — ver features/0100/plan.md.
+ */
+
+/** Veredito por ambiente (o pior das pipelines do card naquele ambiente). */
+export type AwsVerdict = 'deployed' | 'deploying' | 'waiting' | 'failed' | 'absent' | 'not-applicable' | 'unknown';
+
+export interface AwsEnvironmentConfig {
+  key: string;
+  label: string;
+  host?: string | null;
+  tier?: string | null;
+  order?: number | null;
+}
+
+/** `GET AwsDeploy/config`. */
+export interface AwsDeployConfig {
+  environments: AwsEnvironmentConfig[];
+  refreshFollowMinutes?: number | null;
+  refreshFollowMax?: number | null;
+}
+
+export interface AwsPipelineLatest {
+  status?: string | null;
+  sha?: string | null;
+  startedAt?: string | null;
+}
+
+export interface AwsEnvPipeline {
+  name: string;
+  repository?: string | null;
+  branch?: string | null;
+  /** Status da última execução: Succeeded | Failed | InProgress | Stopped | Stopping | Superseded | Cancelled… */
+  status?: string | null;
+  stage?: string | null;
+  lastRunAt?: string | null;
+  lastRunEndedAt?: string | null;
+  durationSec?: number | null;
+  trigger?: string | null;
+  /** Commit implantado (último Succeeded da pipeline/ação). */
+  deployedSha?: string | null;
+  deployedMessage?: string | null;
+  deployedAt?: string | null;
+  /** Algum commit do card está na branch da pipeline. */
+  inBranch?: boolean | null;
+  /** O commit implantado contém o nosso código. */
+  deployed?: boolean | null;
+  verdict?: AwsVerdict | string | null;
+  consoleUrl?: string | null;
+  buildUrl?: string | null;
+  action?: string | null;
+  latest?: AwsPipelineLatest | null;
+  failedLogTail?: string[] | null;
+  /**
+   * Esteira principal do ambiente (decide o veredito). `false` = secundária (ex.: rdc/lambdas do mesmo repositório quando
+   * existe a esteira que publica no servidor do ambiente) — mostrada depois, esmaecida. Ausente = principal.
+   */
+  primary?: boolean | null;
+}
+
+export interface AwsLogError {
+  at?: string | null;
+  message: string;
+}
+
+export interface AwsLogGroup {
+  group: string;
+  url?: string | null;
+  storedBytes?: number | null;
+  lastEventAt?: string | null;
+  errors?: AwsLogError[] | null;
+}
+
+export interface AwsEnvironment {
+  key: string;
+  label: string;
+  host?: string | null;
+  tier?: string | null;
+  verdict: AwsVerdict | string;
+  message?: string | null;
+  pipelines?: AwsEnvPipeline[] | null;
+  logs?: AwsLogGroup[] | null;
+  resources?: {
+    cloudfront?: { id?: string | null; aliases?: string[] | null } | null;
+    elasticBeanstalk?: string[] | null;
+  } | null;
+}
+
+export interface AwsCommit {
+  sha: string;
+  title?: string | null;
+  date?: string | null;
+}
+
+export interface AwsRepository {
+  repository: string;
+  localPath?: boolean | string | null;
+  fetchedAt?: string | null;
+  commits?: AwsCommit[] | null;
+  files?: number | null;
+  branches?: string[] | null;
+}
+
+export interface AwsLambda {
+  name: string;
+  runtime?: string | null;
+  lastModified?: string | null;
+}
+
+export interface AwsAlarm {
+  name: string;
+  state?: string | null;
+  since?: string | null;
+  reason?: string | null;
+}
+
+/** `AwsCardSnapshot` (jsonb gravado pelo script `aws.sh collect <card>`). */
+export interface AwsCardSnapshot {
+  version?: number;
+  card?: number | string;
+  requestId?: string | null;
+  collectedAt?: string | null;
+  collectedBy?: string | null;
+  machine?: string | null;
+  durationMs?: number | null;
+  account?: string | null;
+  region?: string | null;
+  index?: { total?: number | null; upserted?: number | null; removed?: number | null; updatedAt?: string | null } | null;
+  repositories?: AwsRepository[] | null;
+  environments?: AwsEnvironment[] | null;
+  resources?: { lambdas?: AwsLambda[] | null; alarms?: AwsAlarm[] | null } | null;
+  denied?: string[] | null;
+  warnings?: string[] | null;
+}
+
+/** Pedido de coleta (`AwsRefresh`): roda no executor de quem pediu. */
+export interface AwsRefresh {
+  id: string;
+  /** queued | running (ou claimed) | done | failed | expired */
+  status: string;
+  requestedBy?: string | null;
+  requestedAt?: string | null;
+  error?: string | null;
+}
+
+/** `GET AwsDeploy/card/{card}`. */
+export interface AwsCardState {
+  snapshot: AwsCardSnapshot | null;
+  collectedAt?: string | null;
+  collectedBy?: string | null;
+  refresh?: AwsRefresh | null;
+  executorOnline?: boolean | null;
+}
+
+/** Comando manual da coleta (sem executor ligado). */
+export function awsCollectCommand(card: string | number): string {
+  return `bash ~/.claude/skills/aws-deploy/scripts/aws.sh collect ${card}`;
+}
+
+// ── Aparência ────────────────────────────────────────────────────────────────────────────────
+
+export type AwsTone = 'ok' | 'info' | 'warn' | 'bad' | 'muted';
+
+export interface AwsLook {
+  icon: string;
+  tone: AwsTone;
+  /** Ícone girando (deploy/execução em andamento). */
+  spin?: boolean;
+  label: string;
+}
+
+const KNOWN_VERDICTS: ReadonlySet<string> = new Set(['deployed', 'deploying', 'waiting', 'failed', 'absent', 'not-applicable', 'unknown']);
+
+export function normalizeVerdict(v: string | null | undefined): AwsVerdict {
+  const k = `${v ?? ''}`.trim().toLowerCase();
+  return (KNOWN_VERDICTS.has(k) ? k : 'unknown') as AwsVerdict;
+}
+
+/** Cor/ícone/rótulo curto de cada veredito. */
+export function verdictLook(v: string | null | undefined): AwsLook {
+  switch (normalizeVerdict(v)) {
+    case 'deployed': return { icon: 'check_circle', tone: 'ok', label: 'Implantado' };
+    case 'deploying': return { icon: 'sync', tone: 'info', spin: true, label: 'Deploy em andamento' };
+    case 'waiting': return { icon: 'hourglass_top', tone: 'warn', label: 'Aguardando deploy' };
+    case 'failed': return { icon: 'error', tone: 'bad', label: 'Deploy falhou' };
+    case 'absent': return { icon: 'remove_circle_outline', tone: 'muted', label: 'Ainda não está' };
+    case 'not-applicable': return { icon: 'do_not_disturb_on', tone: 'muted', label: 'Não se aplica' };
+    default: return { icon: 'help_outline', tone: 'warn', label: 'Sem resposta' };
+  }
+}
+
+/** Frase do veredito quando o retrato não trouxe `message` (mesmos textos do script). */
+export function verdictMessage(v: string | null | undefined, label: string): string {
+  const env = label?.trim() || 'este ambiente';
+  switch (normalizeVerdict(v)) {
+    case 'deployed': return `Nosso código está em ${env}`;
+    case 'deploying': return `Deploy em andamento em ${env}`;
+    case 'waiting': return `Na branch de ${env}, aguardando o deploy`;
+    case 'failed': return `Deploy falhou em ${env}`;
+    case 'absent': return `Ainda não está em ${env}`;
+    case 'not-applicable': return `Não se aplica — este repositório não vai para ${env}`;
+    default: return `Não deu para saber se o nosso código está em ${env}`;
+  }
+}
+
+export function environmentMessage(env: Pick<AwsEnvironment, 'verdict' | 'message' | 'label' | 'key'>): string {
+  return env.message?.trim() || verdictMessage(env.verdict, env.label || env.key);
+}
+
+/** Chip do status da execução da pipeline (CodePipeline). */
+export function pipelineStatusLook(status: string | null | undefined): AwsLook {
+  const s = `${status ?? ''}`.trim();
+  switch (s.toLowerCase()) {
+    case 'succeeded': return { icon: 'check', tone: 'ok', label: 'Sucesso' };
+    case 'failed': return { icon: 'close', tone: 'bad', label: 'Falhou' };
+    case 'inprogress': return { icon: 'sync', tone: 'info', spin: true, label: 'Rodando' };
+    case 'stopping': return { icon: 'pause', tone: 'warn', label: 'Parando' };
+    case 'stopped': return { icon: 'stop', tone: 'muted', label: 'Parada' };
+    case 'superseded': return { icon: 'fast_forward', tone: 'muted', label: 'Substituída' };
+    case 'cancelled': return { icon: 'block', tone: 'muted', label: 'Cancelada' };
+    case '': return { icon: 'remove', tone: 'muted', label: 'Nunca rodou' };
+    default: return { icon: 'help_outline', tone: 'muted', label: s };
+  }
+}
+
+/** Ambiente com algo pedindo atenção (ponto na aba): deploy falhou ou em andamento. */
+export function snapshotAlert(snapshot: AwsCardSnapshot | null | undefined): 'failed' | 'deploying' | null {
+  const verdicts = (snapshot?.environments ?? []).map((e) => normalizeVerdict(e.verdict));
+  if (verdicts.includes('failed')) return 'failed';
+  if (verdicts.includes('deploying')) return 'deploying';
+  return null;
+}
+
+/**
+ * Ambientes na ordem da configuração (os do retrato que a config não conhece vão no fim, na ordem do retrato). Sem
+ * config, a ordem do retrato.
+ */
+export function orderEnvironments(envs: readonly AwsEnvironment[], config: readonly AwsEnvironmentConfig[] | null | undefined): AwsEnvironment[] {
+  if (!config?.length) return [...envs];
+  const rank = new Map<string, number>();
+  [...config]
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .forEach((c, i) => rank.set(c.key.toLowerCase(), i));
+  return envs
+    .map((e, i) => ({ e, i, r: rank.get(`${e.key}`.toLowerCase()) ?? config.length + i }))
+    .sort((a, b) => a.r - b.r)
+    .map((x) => x.e);
+}
+
+// ── Formatação ───────────────────────────────────────────────────────────────────────────────
+
+export function shortSha(sha: string | null | undefined): string {
+  return (sha ?? '').trim().slice(0, 7);
+}
+
+export function firstLine(text: string | null | undefined): string {
+  return `${text ?? ''}`.split(/\r?\n/).map((l) => l.trim()).find((l) => !!l) ?? '';
+}
+
+/** 354 → "5 min 54 s"; 42 → "42 s"; 3720 → "1 h 2 min". */
+export function formatDuration(sec: number | null | undefined): string {
+  if (sec == null || !Number.isFinite(sec) || sec < 0) return '';
+  const s = Math.round(sec);
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return s % 60 ? `${m} min ${s % 60} s` : `${m} min`;
+  const h = Math.floor(m / 60);
+  return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
+}
+
+function toDate(at: string | null | undefined): Date | null {
+  if (!at) return null;
+  const t = Date.parse(at);
+  return Number.isFinite(t) ? new Date(t) : null;
+}
+
+const pad = (n: number) => `${n}`.padStart(2, '0');
+
+/** "24/11 16:30" (no horário local). */
+export function formatShortDate(at: string | null | undefined): string {
+  const d = toDate(at);
+  return d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}` : '';
+}
+
+/** "24/11/2026 16:30:05" (tooltip). */
+export function formatFullDate(at: string | null | undefined): string {
+  const d = toDate(at);
+  return d ? d.toLocaleString('pt-BR') : '';
+}
+
+/** "agora", "há 5 min", "há 3 h", "há 2 dias". */
+export function relativeAgo(at: string | null | undefined, now: number = Date.now()): string {
+  const d = toDate(at);
+  if (!d) return '';
+  const min = Math.floor((now - d.getTime()) / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const days = Math.floor(h / 24);
+  return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
+}
+
+/** Texto do pedido de coleta em andamento (ou null quando não há nada a mostrar). */
+export function refreshStatusText(refresh: AwsRefresh | null | undefined): { text: string; busy: boolean; tone: AwsTone } | null {
+  if (!refresh) return null;
+  switch (`${refresh.status ?? ''}`.toLowerCase()) {
+    case 'queued': return { text: 'Pedido na fila — aguardando o seu executor', busy: true, tone: 'info' };
+    case 'claimed':
+    case 'running': return { text: 'Coletando na sua máquina…', busy: true, tone: 'info' };
+    case 'failed': return { text: `A coleta falhou${refresh.error ? ': ' + refresh.error : ''}`, busy: false, tone: 'bad' };
+    case 'expired': return { text: 'O pedido expirou sem o executor pegar — confira se ele está ligado', busy: false, tone: 'warn' };
+    default: return null;
+  }
+}
+
+/** Esteira secundária (não decide o veredito do ambiente). */
+export function isSecondary(p: Pick<AwsEnvPipeline, 'primary'>): boolean {
+  return p.primary === false;
+}
+
+export interface PipelineGroups {
+  /** Mostradas direto: todas (lista curta) ou as que ainda não têm o nosso código implantado (lista longa). */
+  shown: AwsEnvPipeline[];
+  /** Lista longa: as que já têm o nosso código, recolhidas. */
+  folded: AwsEnvPipeline[];
+  deployed: number;
+  total: number;
+  /** Principais (decidem o veredito): quantas e quantas já com o nosso código implantado. */
+  primaryTotal: number;
+  primaryDeployed: number;
+  /** Secundárias (não decidem o veredito). */
+  secondary: number;
+}
+
+/** Até quantas esteiras a lista do ambiente aparece inteira. */
+export const PIPES_INLINE_MAX = 6;
+
+/**
+ * Ordem das esteiras do ambiente: principais antes das secundárias e, em cada grupo, as que ainda não têm o nosso código
+ * implantado primeiro (ordem estável). Lista longa (> `max`, ex.: lib compartilhada do edv-solvace-apps com 25 esteiras):
+ * as já implantadas ficam recolhidas.
+ */
+export function groupPipelines(pipes: readonly AwsEnvPipeline[], max = PIPES_INLINE_MAX): PipelineGroups {
+  const rank = (p: AwsEnvPipeline) => (isSecondary(p) ? 2 : 0) + (p.deployed === true ? 1 : 0);
+  const sorted = pipes.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map((x) => x.p);
+  const isDone = (p: AwsEnvPipeline) => p.deployed === true;
+  const primaries = pipes.filter((p) => !isSecondary(p));
+  const counts = {
+    deployed: pipes.filter(isDone).length,
+    total: pipes.length,
+    primaryTotal: primaries.length,
+    primaryDeployed: primaries.filter(isDone).length,
+    secondary: pipes.length - primaries.length
+  };
+  if (pipes.length <= max) return { shown: sorted, folded: [], ...counts };
+  const shown = sorted.filter((p) => !isDone(p));
+  const folded = sorted.filter(isDone);
+  // Nada a destacar (todas implantadas): mostra as primeiras e recolhe o resto.
+  if (!shown.length) return { shown: folded.slice(0, max), folded: folded.slice(max), ...counts };
+  return { shown, folded, ...counts };
+}

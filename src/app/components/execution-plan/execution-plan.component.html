@@ -2,7 +2,7 @@
      [attr.role]="expanded() ? 'dialog' : null" [attr.aria-modal]="expanded() ? 'true' : null"
      [attr.aria-label]="expanded() ? 'Plano de execução em tela cheia' : null"
      [class.plan--dropping]="panelDropping()"
-     [class.plan--split]="split()"
+     [class.plan--split]="split() && !!plan()"
      [class.plan--detail-open]="split() && narrow() && mobileDetail()"
      (pointerdown)="markInteraction()" (wheel)="markInteraction()" (touchmove)="markInteraction()"
      (dragover)="onPanelDragOver($event)" (dragleave)="onPanelDragLeave($event)" (drop)="onPanelDrop($event)"

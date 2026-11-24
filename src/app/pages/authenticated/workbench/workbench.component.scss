@@ -248,7 +248,7 @@
   .wb-seg .wb-seg__long { display: none; }
   .wb-seg .wb-seg__short { display: inline; }
 }
-@container wb-segrow (max-width: 580px) {
+@container wb-segrow (max-width: 620px) {
   .wb-seg__btn:not(.wb-seg__btn--on) { flex: 0 1 auto; padding: 0 10px; }
   .wb-seg__btn:not(.wb-seg__btn--on) .wb-seg__label { display: none; }
   .wb-seg__btn--on { flex: 1 1 auto; }
@@ -311,6 +311,19 @@
   color: var(--mat-sys-on-surface);
 }
 .wb-count--you { background: #d29922; color: #1f1f1f; }
+// 0100: ponto na aba AWS — deploy falhou (vermelho) ou em andamento (azul, pulsando)
+.wb-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot, #58a6ff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dot, #58a6ff) 25%, transparent);
+}
+.wb-dot--failed { --dot: #f85149; }
+.wb-dot--deploying { --dot: #58a6ff; animation: wb-dot-pulse 1.6s ease-in-out infinite; }
+@keyframes wb-dot-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .wb-dot--deploying { animation: none; } }
 
 .wb-pane {
   flex: 1 1 auto;
@@ -656,9 +669,10 @@
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
 
-    span:not(.wb-count) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    span:not(.wb-count):not(.wb-dot) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .mat-icon { font-size: 19px; width: 19px; height: 19px; flex: none; }
   }
+  .wb-mtab .wb-dot { margin-left: -2px; }
   .wb-mtab--on {
     color: var(--mat-sys-primary);
     background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
@@ -745,6 +759,15 @@
 .wb-exec__files mat-icon { margin-right: 4px; }
 @keyframes wb-about-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .wb-exec__about { animation: none; } }
+
+/* 0100: celular estreito com 7 abas — as não ativas ficam só com o ícone (e o contador), a ativa mostra o nome */
+@media (max-width: 600px) {
+  .wb-mtab:not(.wb-mtab--on) > span:not(.wb-count):not(.wb-dot) { display: none; }
+  .wb-mtab--on { flex-grow: 2.4; }
+}
+
+/* 0100: aba AWS — o painel rola por dentro no desktop */
+.wb-pane--aws { padding-right: 2px; }
 
 /* 0087: Arquivos do card no formato do modal "Textos do card" (lista + visualização) ocupam a altura toda */
 .wb-pane--files { overflow: hidden; }

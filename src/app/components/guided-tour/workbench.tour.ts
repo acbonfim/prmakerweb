@@ -44,7 +44,7 @@ export const WORKBENCH_TOUR: TourDefinition = {
       title: 'Comece pelo número do card',
       body: 'Digite o número e aperte <b>Enter</b>. O endereço da página guarda o card — dá para mandar o link.',
       detail: 'Digite o número do card e aperte Enter (ou a lupa). O link da página leva o card (<code>?card=</code>) e pode levar ' +
-        'um item (<code>&item=</code>) ou a parte da tela (<code>&focus=plan|items|timeline|chat</code>).'
+        'um item (<code>&item=</code>) ou a parte da tela (<code>&focus=plan|items|files|aws|timeline|chat</code>).'
     },
     {
       id: 'card', anchor: 'wb-card', group: 'O card', since: 2, phase: 'card', side: 'bottom', align: 'start',
@@ -203,6 +203,16 @@ export const WORKBENCH_TOUR: TourDefinition = {
       body: 'O ↶ no cabeçalho do plano para o item em execução (o plano e os itens dele) — e, se você marcar, <b>desfaz</b> o que já foi feito (fecha PRs, apaga branches criadas…).',
       detail: 'O desfazer vira um pedido na fila e roda em ordem reversa. Para só mudar o rumo do plano, prefira conversar com ' +
         'o Especialista do caso.'
+    },
+    {
+      id: 'aws', anchor: 'wb-aws-tab', group: 'AWS', since: 11, phase: 'card', side: 'bottom', align: 'start',
+      title: 'AWS: o nosso código já está lá?',
+      body: 'Para cada ambiente (DEV, QA, Sandboxefeso…), as <b>esteiras de deploy</b> do repositório do card e um veredito claro: ' +
+        '<b>"Nosso código está em QA"</b>, <b>"Ainda não está em Sandboxefeso"</b>, deploy em andamento ou com falha.',
+      detail: 'Os dados vêm da <b>sua máquina</b>: o executor do PRMake roda a CLI da AWS (somente leitura) quando você clica em ' +
+        '<b>Atualizar</b> — ou a sub-tarefa <code>aws-deploy-map</code> dos itens que alteram código faz isso sozinha. Cada pipeline ' +
+        'mostra status, última execução, o commit implantado e se ele contém o nosso código; abaixo ficam os logs com erros recentes ' +
+        'e outros recursos do caso (lambdas, alarmes, CloudFront). Nada é alterado na AWS.'
     },
     {
       id: 'chat', anchor: 'wb-chat', group: 'Conversa e histórico', since: 2, phase: 'card', side: 'left', align: 'start', prepare: 'tab:chat',
