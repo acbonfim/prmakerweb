@@ -495,9 +495,9 @@ export function wordDiff(a: string | null | undefined, b: string | null | undefi
   return merge(out);
 }
 
-/** Palavras com o espaço que as segue (o texto remontado fica igual ao original). */
+/** Palavras e espaços como tokens separados (o texto remontado fica igual ao original; "x." e "x. " casam). */
 function tokenize(s: string): string[] {
-  return s.match(/\S+\s*|\s+/g) ?? [];
+  return s.match(/\s+|\S+/g) ?? [];
 }
 
 function merge(segs: DiffSegment[]): DiffSegment[] {

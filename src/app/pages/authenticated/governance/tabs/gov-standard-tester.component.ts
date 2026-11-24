@@ -67,11 +67,12 @@ CREATE NONCLUSTERED INDEX IX_language_StandardLanguage_01 ON language.StandardLa
   imports: [FormsModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTooltipModule],
   template: `
     <div class="panel__head"><h3>Testar conferência</h3><span class="muted">cola um texto e vê o que os padrões acham — a API registra os achados na trilha</span></div>
-    <div class="examples">
+    <div class="presets">
       @for (x of examples; track x.label) {
-        <button type="button" class="pill ex" (click)="use(x)">{{ x.label }}</button>
+        <button type="button" class="pill preset" (click)="use(x)">{{ x.label }}</button>
       }
     </div>
+    @if (focusNote(); as n) { <div class="notice notice--info">{{ n }}</div> }
     <div class="form-grid">
       <label class="f-field"><span>Conferir como</span>
         <select [ngModel]="target()" (ngModelChange)="target.set($event)">
@@ -152,9 +153,10 @@ CREATE NONCLUSTERED INDEX IX_language_StandardLanguage_01 ON language.StandardLa
   styleUrls: ['../governance-shared.css', './gov-standards.css'],
   styles: [`
     :host { display: block; }
-    .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-    .ex { border: 1px solid var(--cc-surface-border); cursor: pointer; color: var(--cc-text-2); font: inherit; font-size: 12px; }
-    .ex:hover { color: var(--cc-text-1); }
+    .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .preset { border: 1px solid var(--cc-surface-border); cursor: pointer; color: var(--cc-text-2); font: inherit; font-size: 12px; }
+    .preset:hover { color: var(--cc-text-1); }
+    .notice { margin-bottom: 10px; }
     .result { margin-top: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--cc-surface-border); display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
     .result--block { border-color: color-mix(in srgb, #d03b3b 70%, transparent); background: color-mix(in srgb, #d03b3b 8%, transparent); }
     .result--warn { border-color: color-mix(in srgb, #d29922 60%, transparent); }
@@ -195,6 +197,16 @@ export class GovStandardTesterComponent {
   readonly targetLabel = STANDARD_CHECK_TARGET_LABEL;
   readonly decisionLabel = DECISION_LABEL;
   readonly modeLabel = MODE_LABEL;
+
+  /** Padrão que pediu o teste sem conferência no texto (consulta no banco ou nenhuma): explica por que não acha. */
+  readonly focusNote = computed(() => {
+    const k = this.focus();
+    const s = k ? this.store.findStandard(k) : null;
+    if (!s) return null;
+    if (s.check.kind === 'sql') return `${s.code} é conferido pela consulta de validação no banco de um ambiente (sob demanda, pela skill), não no texto: aqui só aparecem os achados dos outros padrões.`;
+    if (s.check.kind === 'none') return `${s.code} não tem conferência automática: só orienta a análise e a correção. Os achados abaixo são dos outros padrões.`;
+    return null;
+  });
 
   readonly canRun = computed(() => (this.target() === 'path' ? !!this.path().trim() : !!this.text().trim()));
 

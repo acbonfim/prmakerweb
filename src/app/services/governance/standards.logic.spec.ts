@@ -238,6 +238,9 @@ describe('standards.logic (0101)', () => {
       expect(d.filter((x) => x.op !== 'del').map((x) => x.text).join('')).toBe(b);
       expect(d.find((x) => x.op === 'del')?.text.trim()).toBe('deve');
       expect(d.some((x) => x.op === 'ins' && x.text.includes('SiteId'))).toBeTrue();
+      expect(wordDiff('mantém bloqueios.', 'mantém bloqueios. Em tabelas multi-site.')).toEqual([
+        { op: 'eq', text: 'mantém bloqueios.' }, { op: 'ins', text: ' Em tabelas multi-site.' },
+      ]);
       expect(wordDiff('', '')).toEqual([]);
       expect(wordDiff(null, 'novo')).toEqual([{ op: 'ins', text: 'novo' }]);
     });
