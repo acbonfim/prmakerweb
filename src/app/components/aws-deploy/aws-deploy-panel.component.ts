@@ -10,7 +10,7 @@ import { AwsDeployError, AwsDeployService } from '../../services/aws-deploy.serv
 import { WsService } from '../../services/ws.service';
 import { listenAws } from '../work-items/work-items-live';
 import {
-  AwsCardSnapshot, AwsCardState, AwsDeployConfig, AwsEnvPipeline, AwsEnvironment, AwsLook, appName, awsCollectCommand, codeLook,
+  AwsCardSnapshot, AwsCardState, AwsDeployConfig, AwsEnvPipeline, AwsEnvironment, AwsLook, AwsRepository, appName, awsCollectCommand, codeLook,
   environmentLook, firstLine, formatDuration, formatFullDate, formatShortDate, isSecondary, lastDeployAt, orderEnvironments,
   pipelineStatusLook, refreshStatusText, relativeAgo, shortSha, sortPipelines
 } from './aws-deploy.model';
@@ -213,6 +213,12 @@ export class AwsDeployPanelComponent {
   /** Monorepo (várias esteiras com app): a coluna mostra o app em destaque. */
   hasApps(env: AwsEnvironment): boolean {
     return (env.pipelines ?? []).some((p) => !!p.app && p.app !== p.name) && (env.pipelines ?? []).length > 1;
+  }
+
+  /** Repositórios das esteiras deste ambiente, com o tipo (front Angular, legado…) para dizer o que é cada esteira. */
+  envRepos(env: AwsEnvironment): AwsRepository[] {
+    const names = new Set((env.pipelines ?? []).map((p) => `${p.repository ?? ''}`.toLowerCase()));
+    return this.repositories().filter((r) => names.has(r.repository.toLowerCase()) && !!r.kindLabel);
   }
 
   lastDeploy(env: AwsEnvironment): string | null {
