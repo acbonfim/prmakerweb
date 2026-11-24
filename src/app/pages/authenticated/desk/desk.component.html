@@ -1,0 +1,378 @@
+<!-- 0099: Mesa de gestão — trilho de épicos | épico (cabeçalho + abas Board | Itens | Cards | Arquivos | Relatado) | Especialista -->
+@let e = epic();
+@let look = epicLook();
+@let found = epicState() === 'found' && !!e;
+<header class="dk-head">
+  <div class="dk-head__row">
+    <mat-icon class="dk-head__icon" aria-hidden="true">space_dashboard</mat-icon>
+    <span class="dk-head__title">Mesa de gestão</span>
+    <span class="dk-spacer"></span>
+
+    <!-- Trabalhar direto num card do DevOps (com ou sem épico): abre o painel do card. E12 abre o épico 12. -->
+    <label class="dk-search" data-tour="dk-search" matTooltip="Abrir um card do DevOps pelo número (ou E + número para abrir um épico)" matTooltipShowDelay="600">
+      <mat-icon class="dk-search__ico">search</mat-icon>
+      <input type="text" inputmode="numeric" autocomplete="off" placeholder="Nº do card" aria-label="Número do card do DevOps"
+             [(ngModel)]="cardQuery" (keyup.enter)="searchCard()" />
+      <button type="button" class="dk-search__go" [disabled]="!cardQuery" (click)="searchCard()" aria-label="Abrir card">
+        <mat-icon>arrow_forward</mat-icon>
+      </button>
+    </label>
+    <button mat-icon-button type="button" class="dk-icon-btn dk-icon-btn--help" data-tour="dk-help"
+            matTooltip="Como usar esta tela (tour guiado e guia completo)" aria-label="Como usar esta tela" (click)="openHelp()">
+      <mat-icon>help_outline</mat-icon>
+    </button>
+  </div>
+</header>
+
+<!-- Celular (< 1024): uma seção por vez -->
+@let mtab = mobileTab();
+<nav class="dk-mtabs" role="tablist" aria-label="Seções da Mesa de gestão">
+  <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'rail'" [attr.aria-selected]="mtab === 'rail'" (click)="selectMobile('rail')">
+    <mat-icon>view_list</mat-icon><span>Épicos</span>
+  </button>
+  @if (found) {
+    <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'board'" [attr.aria-selected]="mtab === 'board'" (click)="selectMobile('board')">
+      <mat-icon>view_kanban</mat-icon><span>Board</span>
+    </button>
+    <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'items'" [attr.aria-selected]="mtab === 'items'" (click)="selectMobile('items')">
+      <mat-icon>checklist</mat-icon><span>Itens</span>
+      @if (itemCount()) { <span class="dk-count">{{ itemCount() }}</span> }
+    </button>
+    <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'cards'" [attr.aria-selected]="mtab === 'cards'" (click)="selectMobile('cards')">
+      <mat-icon>style</mat-icon><span>Cards</span>
+      @if (e!.cards.length) { <span class="dk-count">{{ e!.cards.length }}</span> }
+    </button>
+    <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'files'" [attr.aria-selected]="mtab === 'files'" (click)="selectMobile('files')">
+      <mat-icon>folder_open</mat-icon><span>Arquivos</span>
+    </button>
+    <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'reported'" [attr.aria-selected]="mtab === 'reported'" (click)="selectMobile('reported')">
+      <mat-icon>hub</mat-icon><span>Relatado</span>
+    </button>
+    <button type="button" role="tab" class="dk-mtab" [class.dk-mtab--on]="mtab === 'chat'" [attr.aria-selected]="mtab === 'chat'" (click)="selectMobile('chat')">
+      <mat-icon>psychology</mat-icon><span>Especialista</span>
+      @if (caseUnread(); as u) { <span class="dk-count">{{ u }}</span> }
+    </button>
+  }
+</nav>
+
+<div class="dk-body" [class.dk-body--rail-off]="railCollapsed() && !narrow()" [class.dk-body--chat-off]="chatHidden()" [class.dk-body--no-chat]="!found"
+     [class.dk-body--chat-sliding]="chatSliding()">
+  <!-- ── Trilho de épicos ─────────────────────────────────────────────────────────────────── -->
+  <aside class="dk-rail" [class.dk-hidden]="!showRail()" data-tour="dk-rail" aria-label="Épicos">
+    @if (railCollapsed() && !narrow()) {
+      <button type="button" class="dk-rail-strip" (click)="setRailCollapsed(false)" matTooltip="Mostrar os épicos" matTooltipPosition="right"
+              aria-label="Mostrar os épicos">
+        <mat-icon>chevron_right</mat-icon>
+        @for (x of visibleEpics().slice(0, 12); track x.number) {
+          <span class="dk-rail-strip__dot" [style.background]="color(x)" [class.dk-rail-strip__dot--on]="x.number === epicNumber()"
+                [matTooltip]="'#' + x.number + ' ' + x.title" matTooltipPosition="right"></span>
+        }
+      </button>
+    } @else {
+      <div class="dk-rail__head">
+        <b>Épicos</b>
+        <span class="dk-spacer"></span>
+        <button mat-flat-button type="button" class="dk-rail__new" data-tour="dk-new" (click)="newEpic()">
+          <mat-icon>add</mat-icon>Novo épico
+        </button>
+        @if (!narrow()) {
+          <button mat-icon-button type="button" class="dk-icon-btn" (click)="setRailCollapsed(true)" matTooltip="Recolher a lista de épicos"
+                  aria-label="Recolher a lista de épicos"><mat-icon>chevron_left</mat-icon></button>
+        }
+      </div>
+      <label class="dk-rail__search">
+        <mat-icon>search</mat-icon>
+        <input type="text" inputmode="search" autocomplete="off" placeholder="Título, tag ou #número" aria-label="Buscar épico"
+               [value]="railQuery()" (input)="railQuery.set($any($event.target).value)" (keydown.escape)="railQuery.set('')" />
+        @if (railQuery()) {
+          <button type="button" (click)="railQuery.set('')" aria-label="Limpar a busca"><mat-icon>close</mat-icon></button>
+        }
+      </label>
+      <div class="dk-rail__filters">
+        <div class="dk-seg dk-seg--sm" role="radiogroup" aria-label="De quem">
+          <button type="button" role="radio" class="dk-seg__btn" [class.dk-seg__btn--on]="!railMine()" [attr.aria-checked]="!railMine()" (click)="setRailMine(false)">Todos</button>
+          <button type="button" role="radio" class="dk-seg__btn" [class.dk-seg__btn--on]="railMine()" [attr.aria-checked]="railMine()" (click)="setRailMine(true)"
+                  matTooltip="Só os épicos que você criou">Meus</button>
+        </div>
+        <button mat-button type="button" class="dk-rail__status" [matMenuTriggerFor]="statusFilterMenu" aria-label="Filtrar por status">
+          <mat-icon>filter_list</mat-icon>
+          @for (f of statusFilters; track f.key) { @if (f.key === railStatus()) { {{ f.label }} } }
+          <small>{{ statusCounts()[railStatus()] }}</small>
+        </button>
+        <mat-menu #statusFilterMenu="matMenu" class="app-menu">
+          @for (f of statusFilters; track f.key) {
+            <button mat-menu-item type="button" (click)="setRailStatus(f.key)" [class.dk-menu--on]="f.key === railStatus()">
+              <span>{{ f.label }} <small class="dk-faint">{{ statusCounts()[f.key] }}</small></span>
+            </button>
+          }
+        </mat-menu>
+      </div>
+
+      <div class="dk-rail__list" role="listbox" aria-label="Lista de épicos">
+        @if (railLoading() && !epics().length) {
+          <div class="dk-rail__msg"><mat-spinner diameter="18"></mat-spinner>Carregando épicos…</div>
+        } @else if (railError() && !epics().length) {
+          <div class="dk-rail__msg dk-rail__msg--bad">{{ railError() }}
+            <button mat-button type="button" (click)="loadEpics()">Tentar de novo</button></div>
+        } @else if (!visibleEpics().length) {
+          <div class="dk-rail__msg">
+            @if (railQuery()) { Nenhum épico com "{{ railQuery() }}". }
+            @else if (epics().length) { Nenhum épico neste filtro. <button mat-button type="button" (click)="setRailStatus('all')">Ver todos</button> }
+            @else if (railMine()) { Você ainda não criou épicos. <button mat-button type="button" (click)="setRailMine(false)">Ver de todos</button> }
+            @else { Nenhum épico ainda. }
+          </div>
+        }
+        @for (x of visibleEpics(); track x.number) {
+          @let st = statusLook(x.status);
+          <button type="button" role="option" class="dk-ep" [class.dk-ep--on]="x.number === epicNumber()" [attr.aria-selected]="x.number === epicNumber()"
+                  [style.--ep]="color(x)" (click)="pickEpic(x)">
+            <span class="dk-ep__bar" aria-hidden="true"></span>
+            <span class="dk-ep__main">
+              <span class="dk-ep__line">
+                <span class="dk-ep__num">#{{ x.number }}</span>
+                <span class="dk-ep__title">{{ x.title }}</span>
+              </span>
+              <span class="dk-ep__meta">
+                <mat-icon [style.color]="st.color" [matTooltip]="st.label">{{ st.icon }}</mat-icon>
+                <span matTooltip="Cards do épico"><mat-icon>style</mat-icon>{{ x.counts.cards }}</span>
+                <span [matTooltip]="x.counts.openItems + ' em aberto de ' + x.counts.items + ' tarefas'"><mat-icon>checklist</mat-icon>{{ x.counts.openItems }}/{{ x.counts.items }}</span>
+                @for (t of x.tags.slice(0, 2); track t) { <span class="dk-tag dk-tag--xs">{{ t }}</span> }
+              </span>
+            </span>
+          </button>
+        }
+      </div>
+    }
+  </aside>
+
+  <!-- ── Centro: épico aberto ─────────────────────────────────────────────────────────────── -->
+  <section class="dk-center" [class.dk-hidden]="narrow() && (mtab === 'rail' || mtab === 'chat') && !panelCard()">
+    @switch (epicState()) {
+      @case ('idle') {
+        <div class="dk-empty">
+          <mat-icon class="dk-empty__icon">space_dashboard</mat-icon>
+          @if (railLoaded() && !epics().length && !railMine() && !railError()) {
+            <h2>Comece pelo primeiro épico</h2>
+            <p>Um <b>épico</b> é um tema de gestão — o relatório de bugs do mês, a limpeza de duplicados, o planejamento de uma entrega.
+              Ele junta as tarefas de gestão (que o Claude executa), os cards do DevOps, o board do time, os arquivos gerados e a conversa com o Especialista de gestão.</p>
+            <button mat-flat-button color="primary" type="button" (click)="newEpic()"><mat-icon>add</mat-icon>Criar primeiro épico</button>
+          } @else {
+            <h2>Escolha um épico</h2>
+            <p>Abra um épico da lista ao lado ou crie um novo. Para trabalhar direto num card do DevOps, digite o número dele no topo.</p>
+            <button mat-stroked-button type="button" (click)="newEpic()"><mat-icon>add</mat-icon>Novo épico</button>
+          }
+        </div>
+      }
+      @case ('loading') {
+        <div class="dk-empty dk-empty--loading"><mat-spinner diameter="32"></mat-spinner></div>
+      }
+      @case ('missing') {
+        <div class="dk-empty">
+          <mat-icon class="dk-empty__icon">search_off</mat-icon>
+          <h2>Épico #{{ epicNumber() }} não encontrado</h2>
+          <p>Confira o número ou escolha outro épico na lista.</p>
+        </div>
+      }
+      @case ('error') {
+        <div class="dk-empty">
+          <mat-icon class="dk-empty__icon">cloud_off</mat-icon>
+          <h2>Não foi possível abrir o épico #{{ epicNumber() }}</h2>
+          <button mat-stroked-button type="button" (click)="reloadEpic()"><mat-icon>refresh</mat-icon>Tentar de novo</button>
+        </div>
+      }
+    }
+
+    @if (found && look) {
+      <!-- Cabeçalho do épico -->
+      <div class="dk-epic" data-tour="dk-epic" [style.--ep]="look.color">
+        <div class="dk-epic__row">
+          <span class="dk-epic__num">#{{ e!.number }}</span>
+          <h1 class="dk-epic__title" [matTooltip]="e!.title" matTooltipShowDelay="800">{{ e!.title }}</h1>
+          <button type="button" class="dk-status" [style.--st]="look.status.color" [matMenuTriggerFor]="statusMenu" [disabled]="statusBusy()"
+                  matTooltip="Mudar o status do épico" [attr.aria-label]="'Status: ' + look.status.label + ' — mudar'">
+            <mat-icon>{{ look.status.icon }}</mat-icon>{{ look.status.label }}<mat-icon class="dk-status__caret">expand_more</mat-icon>
+          </button>
+          <mat-menu #statusMenu="matMenu" class="app-menu">
+            @for (s of statuses; track s.key) {
+              <button mat-menu-item type="button" (click)="setStatus(s.key)" [class.dk-menu--on]="s.key === e!.status">
+                <mat-icon [style.color]="s.color">{{ s.icon }}</mat-icon><span>{{ s.label }}</span>
+              </button>
+            }
+          </mat-menu>
+          <span class="dk-spacer"></span>
+          <span class="dk-epic__counts">
+            <span matTooltip="Cards do DevOps no épico"><mat-icon>style</mat-icon>{{ e!.counts.cards }}</span>
+            <span [matTooltip]="e!.counts.openItems + ' em aberto de ' + e!.counts.items + ' tarefas de gestão'"><mat-icon>checklist</mat-icon>{{ e!.counts.openItems }}/{{ e!.counts.items }}</span>
+          </span>
+          @if (e!.description) {
+            <button mat-icon-button type="button" class="dk-icon-btn" [class.dk-icon-btn--on]="descOpen()" (click)="descOpen.set(!descOpen())"
+                    [matTooltip]="descOpen() ? 'Esconder a descrição' : 'Ver a descrição'" aria-label="Descrição do épico"><mat-icon>notes</mat-icon></button>
+          }
+          @if (e!.devOpsCardId; as dc) {
+            <button mat-icon-button type="button" class="dk-icon-btn" (click)="openCard(dc)"
+                    [matTooltip]="'Card do DevOps que representa o épico (#' + dc + ')'" aria-label="Card do DevOps do épico"><mat-icon>open_in_new</mat-icon></button>
+          }
+          <button mat-icon-button type="button" class="dk-icon-btn" (click)="editEpic()" matTooltip="Editar o épico" aria-label="Editar o épico">
+            <mat-icon>edit</mat-icon>
+          </button>
+        </div>
+        @if (e!.tags.length || e!.devOpsTeam) {
+          <div class="dk-epic__sub">
+            @for (t of e!.tags; track t) { <span class="dk-tag">{{ t }}</span> }
+            @if (e!.devOpsTeam) {
+              <span class="dk-epic__team" matTooltip="Time e board do DevOps do épico"><mat-icon>groups</mat-icon>{{ e!.devOpsTeam }}@if (e!.devOpsBoard) { · {{ e!.devOpsBoard }} }</span>
+            }
+            <span class="dk-epic__by">{{ e!.createdByName || 'PRMake' }} · {{ e!.createdAt | date: 'dd/MM/yyyy' }}</span>
+          </div>
+        }
+        @if (descOpen() && e!.description) {
+          <div class="dk-epic__desc plan-md" [innerHTML]="e!.description | planMarkdown:'case'"></div>
+        }
+      </div>
+
+      <!-- Abas (desktop) -->
+      @let main = visibleMain();
+      <div class="dk-seg" role="tablist" aria-label="Board, itens, cards, arquivos ou relatado">
+        <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="main === 'board'" [attr.aria-selected]="main === 'board'" (click)="selectMain('board')">
+          <mat-icon>view_kanban</mat-icon><span class="dk-seg__label">Board</span>
+        </button>
+        <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="main === 'items'" [attr.aria-selected]="main === 'items'" (click)="selectMain('items')"
+                matTooltip="Tarefas de gestão do épico (relatório, duplicados, entendimento, RCA, cards…)" matTooltipShowDelay="600">
+          <mat-icon>checklist</mat-icon><span class="dk-seg__label">Itens</span>
+          @if (itemCount()) { <span class="dk-count">{{ itemCount() }}</span> }
+        </button>
+        <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="main === 'cards'" [attr.aria-selected]="main === 'cards'" (click)="selectMain('cards')">
+          <mat-icon>style</mat-icon><span class="dk-seg__label">Cards</span>
+          @if (e!.cards.length) { <span class="dk-count">{{ e!.cards.length }}</span> }
+        </button>
+        <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="main === 'files'" [attr.aria-selected]="main === 'files'" (click)="selectMain('files')"
+                data-tour="dk-files-tab" matTooltip="Relatórios, PDFs e anexos das tarefas do épico" matTooltipShowDelay="600">
+          <mat-icon>folder_open</mat-icon><span class="dk-seg__label">Arquivos</span>
+          @if (files.count()) { <span class="dk-count">{{ files.count() }}</span> }
+        </button>
+        <button type="button" role="tab" class="dk-seg__btn" [class.dk-seg__btn--on]="main === 'reported'" [attr.aria-selected]="main === 'reported'" (click)="selectMain('reported')"
+                matTooltip="Itens de outros cards/épicos relacionados a este por menção (#n) — somente leitura" matTooltipShowDelay="600">
+          <mat-icon>hub</mat-icon><span class="dk-seg__label">Relatado</span>
+        </button>
+      </div>
+
+      <!-- Board -->
+      <div class="dk-pane dk-pane--board" [class.dk-hidden]="main !== 'board'" data-tour="dk-board">
+        @if (hasBoard()) {
+          <div class="dk-board-bar">
+            <div class="dk-seg dk-seg--sm" role="radiogroup" aria-label="Quais cards">
+              <button type="button" role="radio" class="dk-seg__btn" [class.dk-seg__btn--on]="boardScope() === 'epic'" [attr.aria-checked]="boardScope() === 'epic'"
+                      (click)="setBoardScope('epic')">Cards do épico</button>
+              <button type="button" role="radio" class="dk-seg__btn" [class.dk-seg__btn--on]="boardScope() === 'board'" [attr.aria-checked]="boardScope() === 'board'"
+                      (click)="setBoardScope('board')">Board do time</button>
+            </div>
+            <span class="dk-spacer"></span>
+            <button mat-stroked-button type="button" class="dk-act" (click)="newCard()"><mat-icon>add</mat-icon>Novo card</button>
+          </div>
+          @if (main === 'board') {
+            <app-devops-board class="dk-board" [team]="e!.devOpsTeam!" [board]="e!.devOpsBoard!" [epic]="e!.number" [scope]="boardScope()"
+                              (cardOpened)="openCard($event)"></app-devops-board>
+          }
+        } @else {
+          <div class="dk-empty dk-empty--inline">
+            <mat-icon class="dk-empty__icon">view_kanban</mat-icon>
+            <h2>Escolha o time e o board do épico</h2>
+            <p>O board mostra as colunas e raias do DevOps como lá — arraste os cards para mover. Defina o time/board no épico.</p>
+            <button mat-stroked-button type="button" (click)="editEpic()"><mat-icon>edit</mat-icon>Escolher time e board</button>
+          </div>
+        }
+      </div>
+
+      <!-- Itens: tarefas de gestão (a chave E{n} é o "card" dos itens; modelos de gestão vêm do catálogo do backend) -->
+      <div class="dk-pane" [class.dk-hidden]="main !== 'items'" data-tour="dk-items">
+        <app-work-item-list [card]="key()" [cardType]="'epic'" [openItem]="openItem()"
+                            (countChange)="onItemCount($event)"></app-work-item-list>
+      </div>
+
+      <!-- Cards do épico -->
+      <div class="dk-pane" [class.dk-hidden]="main !== 'cards'" data-tour="dk-cards">
+        <div class="dk-cards__bar">
+          <label class="dk-add">
+            <mat-icon>add_link</mat-icon>
+            <input type="text" inputmode="numeric" autocomplete="off" placeholder="Nº do card para adicionar" aria-label="Número do card para adicionar ao épico"
+                   [(ngModel)]="addCardQuery" (keyup.enter)="addCard()" />
+          </label>
+          <button mat-stroked-button type="button" class="dk-act" [disabled]="!addCardQuery || addingCard()" (click)="addCard()">
+            @if (addingCard()) { <mat-spinner diameter="14"></mat-spinner> } @else { <mat-icon>add</mat-icon> }Adicionar card
+          </button>
+          <span class="dk-spacer"></span>
+          <button mat-flat-button color="primary" type="button" class="dk-act" (click)="newCard()"><mat-icon>add_card</mat-icon>Novo card no DevOps</button>
+        </div>
+        @if (!cards().length) {
+          <div class="dk-empty dk-empty--inline">
+            <mat-icon class="dk-empty__icon">style</mat-icon>
+            <h2>Nenhum card neste épico</h2>
+            <p>Adicione um card pelo número, crie um card novo no DevOps ou mencione <code>#{{ e!.number }}</code> numa conversa, Timeline ou nota de um card.</p>
+          </div>
+        } @else {
+          <ul class="dk-cards">
+            @for (c of cards(); track c.card) {
+              @let rl = roleLook(c);
+              <li class="dk-cardrow" [style.--ct]="cardColor(c)">
+                <span class="dk-cardrow__bar" aria-hidden="true"></span>
+                <button type="button" class="dk-cardrow__main" (click)="openCard(c.card)" [attr.aria-label]="'Abrir o card ' + c.card">
+                  <span class="dk-cardrow__line">
+                    @if (c.workItemType) { <span class="dk-cardrow__type">{{ c.workItemType }}</span> }
+                    <span class="dk-cardrow__id">#{{ c.card }}</span>
+                    <span class="dk-cardrow__title">{{ c.title || 'Card ' + c.card }}</span>
+                  </span>
+                  <span class="dk-cardrow__meta">
+                    <span class="dk-role" [matTooltip]="rl.hint"><mat-icon>{{ rl.icon }}</mat-icon>{{ rl.label }}</span>
+                    <span>{{ c.addedByName || 'PRMake' }} · {{ c.addedAt | date: 'dd/MM HH:mm' }}</span>
+                  </span>
+                </button>
+                <span class="dk-cardrow__actions">
+                  <button mat-icon-button type="button" class="dk-icon-btn" (click)="openInWorkbench(c.card)" matTooltip="Abrir na Bancada"
+                          aria-label="Abrir na Bancada"><mat-icon>handyman</mat-icon></button>
+                  <button mat-icon-button type="button" class="dk-icon-btn dk-icon-btn--danger" (click)="removeCard(c)" [disabled]="removing() === c.card"
+                          matTooltip="Tirar do épico (o card continua no DevOps)" aria-label="Tirar o card do épico"><mat-icon>link_off</mat-icon></button>
+                </span>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <!-- Arquivos (montada para a contagem ficar viva) -->
+      <div class="dk-pane dk-pane--files" [class.dk-hidden]="main !== 'files'">
+        <app-card-files [store]="files" [card]="key()" [cardType]="'epic'" [items]="items()" [(selected)]="filesItem"></app-card-files>
+      </div>
+
+      <!-- Relatado: itens de outros cards/épicos relacionados a este (menção/manual), somente leitura -->
+      <div class="dk-pane" [class.dk-hidden]="main !== 'reported'">
+        @if (main === 'reported') {
+          <app-work-item-list [card]="key()" [cardType]="'epic'" [readOnly]="true" [source]="'related'"></app-work-item-list>
+        }
+      </div>
+    }
+
+    <!-- Painel do card do DevOps (busca do topo, cartão do board, aba Cards) — por cima do centro -->
+    @if (panelCard(); as pc) {
+      <aside class="dk-panel" role="dialog" [attr.aria-label]="'Card ' + pc">
+        <app-devops-card-panel [cardId]="pc" [epic]="found ? e!.number : null" (closed)="closeCard()"></app-devops-card-panel>
+      </aside>
+    }
+  </section>
+
+  <!-- ── Especialista de gestão ───────────────────────────────────────────────────────────── -->
+  @if (found) {
+    <aside class="dk-side" [class.dk-hidden]="!showChat()">
+      <div class="dk-chat" [class.dk-flash]="chatFlash()" data-tour="dk-chat" [attr.aria-hidden]="chatHidden() || null">
+        <app-case-compact class="dk-chat__box" [card]="key()" [cardType]="'epic'" [collapsible]="!narrow()"
+                          (collapse)="setChatCollapsed(true)" (itemOpened)="onItemOpened($event)"></app-case-compact>
+      </div>
+      @if (chatHidden()) {
+        <button type="button" class="dk-chat-rail" (click)="setChatCollapsed(false)"
+                matTooltip="Mostrar o Especialista de gestão" matTooltipPosition="left" matTooltipShowDelay="400" aria-label="Mostrar o Especialista de gestão">
+          <mat-icon>chevron_left</mat-icon>
+          @if (caseUnread(); as u) { <span class="dk-count">{{ u }}</span> }
+        </button>
+      }
+    </aside>
+  }
+</div>
