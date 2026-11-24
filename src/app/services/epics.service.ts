@@ -1,12 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
 import {
   EPICS_EVENT, EPICS_GROUP, Epic, EpicBoardFilters, EpicCard, EpicCardRole, EpicStatus, EpicSummary, EpicsUpdatedPayload,
   SaveEpicRequest
 } from '../components/epics/epic.logic';
 import { WsService } from './ws.service';
+import { EpicMonitorCard, EpicMonitorResponse, normalizeMonitor } from '../components/epics/epic-monitor.logic';
 
 export type {
   Epic, EpicBoardFilters, EpicCard, EpicCardRole, EpicStatus, EpicSummary, EpicsUpdatedPayload, SaveEpicRequest
@@ -53,6 +54,14 @@ export class EpicsService {
   /** Estado/coluna/responsável dos cards (aba Cards) — resumo do DevOps; vazio quando o DevOps não responde. */
   cardsSummary(cards: string[]): Observable<EpicCardLive[]> {
     return this.http.post<EpicCardLive[]>(`${environment.apiUrl}Azure/cards/summary`, cards);
+  }
+
+  /**
+   * Ajustes 2: acompanhamento do épico — por card, PRs (registro do PRMake) e ambientes (retrato da AWS; sem retrato →
+   * `environments: null`). Uma chamada para o épico inteiro.
+   */
+  monitor(number: number): Observable<EpicMonitorCard[]> {
+    return this.http.get<EpicMonitorResponse>(`${this.apiUrl}/${number}/monitor`).pipe(map(normalizeMonitor));
   }
 
   create(body: SaveEpicRequest): Observable<Epic> {
