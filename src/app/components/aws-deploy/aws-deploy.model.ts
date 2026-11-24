@@ -5,7 +5,7 @@
  */
 
 /** Veredito por ambiente (o pior das pipelines do card naquele ambiente). */
-export type AwsVerdict = 'deployed' | 'deploying' | 'waiting' | 'failed' | 'absent' | 'not-applicable' | 'unknown';
+export type AwsVerdict = 'deployed' | 'deploying' | 'waiting' | 'failed' | 'absent' | 'broken' | 'not-applicable' | 'unknown';
 
 export interface AwsEnvironmentConfig {
   key: string;
@@ -58,6 +58,13 @@ export interface AwsEnvPipeline {
    * existe a esteira que publica no servidor do ambiente) — mostrada depois, esmaecida. Ausente = principal.
    */
   primary?: boolean | null;
+  /** Nome curto do app (edv-solvace-centerline-dev → centerline). */
+  app?: string | null;
+  /** direct = o card mexeu no projeto do app; shared = só no código compartilhado (lib) que entra no build dele. */
+  impact?: 'direct' | 'shared' | null;
+  /** Esteira quebrada: desde quando falha e se já falhava antes do nosso código (verdict `broken` = não é do card). */
+  brokenSince?: string | null;
+  brokenBeforeUs?: boolean | null;
 }
 
 export interface AwsLogError {
@@ -79,7 +86,13 @@ export interface AwsEnvironment {
   host?: string | null;
   tier?: string | null;
   verdict: AwsVerdict | string;
+  /** Título curto: "Nosso código está em QA", "Parcial em SandboxRT: 2 de 24 apps", "Ainda não está em Produção". */
   message?: string | null;
+  /** Onde falta e por quê, numa linha (apps sem o código, esteira quebrada antes do card, PR que falta). */
+  detail?: string | null;
+  summary?: { apps?: number; withCode?: number; broken?: string[]; failed?: string[]; deploying?: string[]; waiting?: string[]; absent?: string[] } | null;
+  /** PR do card para a branch deste ambiente. */
+  pr?: { number?: number | null; base?: string | null; status?: string | null; url?: string | null } | null;
   pipelines?: AwsEnvPipeline[] | null;
   logs?: AwsLogGroup[] | null;
   resources?: {
@@ -133,6 +146,8 @@ export interface AwsCardSnapshot {
   resources?: { lambdas?: AwsLambda[] | null; alarms?: AwsAlarm[] | null } | null;
   denied?: string[] | null;
   warnings?: string[] | null;
+  /** Explicações para quem lê (ex.: monorepo com lib compartilhada). */
+  notes?: string[] | null;
 }
 
 /** Pedido de coleta (`AwsRefresh`): roda no executor de quem pediu. */
@@ -171,7 +186,7 @@ export interface AwsLook {
   label: string;
 }
 
-const KNOWN_VERDICTS: ReadonlySet<string> = new Set(['deployed', 'deploying', 'waiting', 'failed', 'absent', 'not-applicable', 'unknown']);
+const KNOWN_VERDICTS: ReadonlySet<string> = new Set(['deployed', 'deploying', 'waiting', 'failed', 'absent', 'broken', 'not-applicable', 'unknown']);
 
 export function normalizeVerdict(v: string | null | undefined): AwsVerdict {
   const k = `${v ?? ''}`.trim().toLowerCase();
@@ -186,6 +201,7 @@ export function verdictLook(v: string | null | undefined): AwsLook {
     case 'waiting': return { icon: 'hourglass_top', tone: 'warn', label: 'Aguardando deploy' };
     case 'failed': return { icon: 'error', tone: 'bad', label: 'Deploy falhou' };
     case 'absent': return { icon: 'remove_circle_outline', tone: 'muted', label: 'Ainda não está' };
+    case 'broken': return { icon: 'construction', tone: 'muted', label: 'Esteira quebrada antes do card' };
     case 'not-applicable': return { icon: 'do_not_disturb_on', tone: 'muted', label: 'Não se aplica' };
     default: return { icon: 'help_outline', tone: 'warn', label: 'Sem resposta' };
   }
@@ -200,6 +216,7 @@ export function verdictMessage(v: string | null | undefined, label: string): str
     case 'waiting': return `Na branch de ${env}, aguardando o deploy`;
     case 'failed': return `Deploy falhou em ${env}`;
     case 'absent': return `Ainda não está em ${env}`;
+    case 'broken': return `Ainda não está em ${env} (esteira quebrada antes do nosso código)`;
     case 'not-applicable': return `Não se aplica — este repositório não vai para ${env}`;
     default: return `Não deu para saber se o nosso código está em ${env}`;
   }
@@ -361,4 +378,51 @@ export function groupPipelines(pipes: readonly AwsEnvPipeline[], max = PIPES_INL
   // Nada a destacar (todas implantadas): mostra as primeiras e recolhe o resto.
   if (!shown.length) return { shown: folded.slice(0, max), folded: folded.slice(max), ...counts };
   return { shown, folded, ...counts };
+}
+
+// ── Tabela por ambiente (0100, card 78560: "não consigo saber se o meu código está lá") ─────────
+
+/** Veredito do ambiente para a linha da tabela: parcial (parte dos apps com o código) vira âmbar, não vermelho. */
+export function environmentLook(env: AwsEnvironment): AwsLook & { verdict: AwsVerdict; message: string; partial: boolean } {
+  const verdict = normalizeVerdict(env.verdict);
+  const sm = env.summary;
+  const partial = verdict !== 'deployed' && !!sm?.withCode && (sm.apps ?? 0) > sm.withCode;
+  const base = verdictLook(verdict);
+  const look = partial && verdict !== 'deploying' ? { ...base, icon: 'timelapse', tone: 'warn' as AwsTone } : base;
+  return { ...look, verdict, partial, message: environmentMessage(env) };
+}
+
+/** Coluna "Nosso código" de uma esteira — responde se o código do card está no que foi implantado. */
+export function codeLook(p: AwsEnvPipeline): AwsLook & { hint: string } {
+  if (p.deployed) return { icon: 'check_circle', tone: 'ok', label: 'Implantado', hint: 'O commit implantado contém o nosso código' };
+  switch (normalizeVerdict(p.verdict)) {
+    case 'broken': return { icon: 'construction', tone: 'muted', label: 'Esteira quebrada', hint: `Esta esteira já falhava antes do nosso código chegar${p.brokenSince ? ' (desde ' + formatShortDate(p.brokenSince) + ')' : ''} — não é do card; o nosso código não chegou a este app porque nenhum build passou` };
+    case 'deploying': return { icon: 'sync', tone: 'info', spin: true, label: 'Deploy em andamento', hint: 'A execução que está rodando já leva o nosso código' };
+    case 'failed': return { icon: 'error', tone: 'bad', label: 'Deploy falhou', hint: 'A execução com o nosso código falhou (e a esteira passava antes dela) — veja o log do build' };
+    case 'waiting': return { icon: 'hourglass_top', tone: 'warn', label: 'Na branch, falta deploy', hint: `O nosso código já está na branch ${p.branch ?? ''}, mas esta esteira ainda não rodou com ele` };
+    default: return { icon: 'remove_circle_outline', tone: 'muted', label: 'Não está', hint: `O nosso código ainda não chegou na branch ${p.branch ?? ''}` };
+  }
+}
+
+const CODE_ORDER = ['failed', 'deploying', 'waiting', 'absent', 'broken', 'deployed'];
+
+/** Esteiras do ambiente para a tabela: principais antes; em cada grupo, o que pede atenção primeiro. */
+export function sortPipelines(pipes: readonly AwsEnvPipeline[]): AwsEnvPipeline[] {
+  const rank = (p: AwsEnvPipeline) => {
+    const v = p.deployed ? 'deployed' : normalizeVerdict(p.verdict);
+    const i = CODE_ORDER.indexOf(v);
+    return (isSecondary(p) ? 10 : 0) + (i < 0 ? 3 : i);
+  };
+  return pipes.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i).map((x) => x.p);
+}
+
+/** Último deploy do ambiente (o mais recente entre as esteiras principais). */
+export function lastDeployAt(env: AwsEnvironment): string | null {
+  const pipes = (env.pipelines ?? []).filter((p) => !isSecondary(p));
+  return pipes.map((p) => p.deployedAt ?? null).filter((d): d is string => !!d).sort().pop() ?? null;
+}
+
+/** Nome do app (ou da esteira, quando não há app). */
+export function appName(p: AwsEnvPipeline): string {
+  return p.app?.trim() || p.name;
 }
