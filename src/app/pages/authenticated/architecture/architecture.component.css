@@ -332,3 +332,9 @@
 .ask__seen { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; margin-bottom: 12px; border-radius: 10px; font-size: 13px;
   background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent); border: 1px dashed color-mix(in srgb, var(--mat-sys-primary) 40%, transparent); }
 .ask__seen mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--mat-sys-primary); flex: none; margin-top: 1px; }
+
+/* 0102: Pergunte pelo executor */
+.ask__cancel { margin-left: auto; flex: none; }
+.ask__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.ask__deep-exec { align-self: flex-start; margin: 4px 0 8px; }
+.ask__deep-exec mat-icon { margin-right: 6px; }

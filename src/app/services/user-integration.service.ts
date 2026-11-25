@@ -25,6 +25,13 @@ export interface UserIntegrationField {
   suggestions?: string[];
   /** Ajuda do campo definida pelo administrador (0032). */
   help?: string | null;
+  /** 0102: valores fechados do catálogo (ex.: Perguntas da Base Solvace) — lista de escolha com rótulos. */
+  options?: UserIntegrationFieldOption[];
+}
+
+export interface UserIntegrationFieldOption {
+  value: string;
+  label: string;
 }
 
 export interface UserIntegration {
