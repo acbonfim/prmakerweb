@@ -389,6 +389,14 @@ export function taskStatusLook(status: string | null | undefined): StatusLook {
   return TASK_STATUS[status as WorkTaskStatus] ?? { ...UNKNOWN, label: status || '—' };
 }
 
+/**
+ * Aparência da sub-tarefa. Card 78794 (#1079): a da pessoa em andamento (o plano a iniciou ao passar a vez — abrir o
+ * chamado, validar...) é a vez dela: "Aguardando você", sem girar como se o Claude estivesse trabalhando.
+ */
+export function workTaskLook(task: Pick<WorkTask, 'executor' | 'status'>): StatusLook {
+  return task.executor === 'user' && task.status === 'running' ? WAITS_FOR_YOU : taskStatusLook(task.status);
+}
+
 export const ORIGIN_LABELS: Record<WorkItemOrigin, string> = {
   user: 'Manual',
   specialist: 'Especialista',

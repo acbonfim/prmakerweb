@@ -10,7 +10,7 @@ import { saveBlob } from '../../services/execution-plan.service';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { renderMarkdown } from '../../helpers/markdown-ext';
 import { FILE_VIEWER_DIALOG, FileViewerDialogComponent, FileViewerDialogData } from '../file-viewer/file-viewer-dialog.component';
-import { WorkItem, WorkTask, taskStatusLook } from './work-item.model';
+import { WorkItem, WorkTask, taskStatusLook, workTaskLook } from './work-item.model';
 import { WorkItemFile, normalizeFileKind } from './work-item-files';
 import {
   ItemBrief,
@@ -293,7 +293,7 @@ export class WorkItemOverviewComponent {
     const docs = this.docs();
     const imgs = this.images();
     return (this.item().tasks ?? []).slice().sort((a, b) => a.order - b.order).map((t) => {
-      const look = taskStatusLook(t.status);
+      const look = workTaskLook(t);
       return {
         task: t,
         title: stepTitle(t.title, this.code()),

@@ -1,4 +1,4 @@
-import { WorkItem, WorkTask, itemLook, personTurnTask, waitsForPerson } from './work-item.model';
+import { WorkItem, WorkTask, itemLook, personTurnTask, waitsForPerson, workTaskLook } from './work-item.model';
 
 /** Card 78720 (#1020): só sobrou "Validar em QA" (da pessoa) — o item aparece "Aguardando você", não "Em andamento". */
 function task(p: Partial<WorkTask>): WorkTask {
@@ -62,6 +62,16 @@ describe('vez da pessoa no item (card 78720)', () => {
     expect(personTurnTask(it)?.number).toBe(1079);
     expect(waitsForPerson(it)).toBeTrue();
     expect(itemLook(it).label).toBe('Aguardando você');
+  });
+
+  it('sub-tarefa da pessoa em andamento não gira: aguardando você; a do Claude segue em andamento', () => {
+    const person = workTaskLook(task({ number: 1079, kind: 'ticket', executor: 'user', status: 'running' }));
+    expect(person.label).toBe('Aguardando você');
+    expect(person.icon).toBe('front_hand');
+    expect(person.spin).toBeFalsy();
+    const claude = workTaskLook(task({ number: 1080, executor: 'claude', status: 'running' }));
+    expect(claude.label).toBe('Em andamento');
+    expect(claude.spin).toBeTrue();
   });
 
   it('sem dependências informadas vale a ordem', () => {
