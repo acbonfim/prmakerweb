@@ -18,8 +18,10 @@ import {
   TASK_ACTION_LABELS,
   TICKET_STATUS_DONE,
   TicketStatus,
+  formatSchedule,
   formatWorkNumber
 } from './work-item.model';
+import { WorkScheduleDialogComponent, WorkScheduleDialogData, WorkScheduleDialogResult } from './work-schedule-dialog.component';
 import { workDialogConfig } from './work-dialog-config';
 import { CancelWorkDialogComponent, CancelWorkDialogData, CancelWorkDialogResult } from './cancel-work-dialog.component';
 import { WorkItemEditorDialogComponent, WorkItemEditorDialogData, WorkItemEditorDialogResult } from './work-item-editor-dialog.component';
@@ -70,9 +72,10 @@ export class WorkItemActionsService {
     try { return await firstValueFrom(this.catalog(card)); } catch { return null; }
   }
 
+  /** Executa (o play da tela é sempre "agora": item agendado/em espera tira o agendamento). */
   async execute(item: WorkItem): Promise<boolean> {
     try {
-      const r = await firstValueFrom(this.api.execute(item.number));
+      const r = await firstValueFrom(this.api.execute(item.number, true));
       this.ok(`${formatWorkNumber(item.number)} ${r?.status === 'running' ? 'em execução' : 'na fila do executor'}.`);
       return true;
     } catch (e) {
@@ -193,12 +196,71 @@ export class WorkItemActionsService {
         case 'pause': this.ok(`${n} pausada — o Claude não a faz (nem as que dependem dela) até você continuar.`); break;
         case 'resume': this.ok(`${n} continua.${restarted}`); break;
         case 'cancel': this.ok(`${n} cancelada — o item segue com as outras.`); break;
+        case 'schedule': this.ok(`${n} agendada para ${formatSchedule(req.at)} — continua sozinha no horário.`); break;
       }
       return it;
     } catch (e) {
       this.fail(e);
       return undefined;
     }
+  }
+
+  /**
+   * 0103: agenda o item (ou deixa em espera sem data, tira o agendamento, executa agora) — devolve o item atualizado (ou
+   * undefined se desistiu/falhou).
+   */
+  async scheduleItem(item: WorkItem): Promise<WorkItem | undefined> {
+    const res = await this.openSchedule({
+      title: `${formatWorkNumber(item.number)} ${item.title}`, subject: 'item', current: item.scheduledAt ?? null, parked: !!item.parked
+    });
+    if (!res) return undefined;
+    const n = formatWorkNumber(item.number);
+    try {
+      if (res.action === 'run-now') {
+        const r = await firstValueFrom(this.api.execute(item.number, true));
+        this.ok(`${n} executando agora — agendamento removido.`);
+        return r.item ?? undefined;
+      }
+      const it = await firstValueFrom(this.api.schedule(item.number, res.action === 'set' ? { action: 'set', at: res.at } : { action: res.action }));
+      this.ok(res.action === 'set' ? `${n} agendado para ${formatSchedule(it.scheduledAt ?? res.at)} — começa sozinho no seu executor.`
+        : res.action === 'park' ? `${n} em espera, sem data — roda quando você executar.` : `${n}: agendamento removido.`);
+      return it;
+    } catch (e) {
+      this.fail(e);
+      return undefined;
+    }
+  }
+
+  /** 0103: agenda a sub-tarefa (pausada até o horário), muda o horário, tira (continua) ou executa agora. */
+  async scheduleTask(item: Pick<WorkItem, 'tasks'>, task: WorkTask): Promise<WorkItem | undefined> {
+    const res = await this.openSchedule({
+      title: `${formatWorkNumber(task.number)} ${task.title}`, subject: 'task', current: task.scheduledAt ?? null,
+      dependents: task.controls?.dependents ?? []
+    });
+    if (!res) return undefined;
+    switch (res.action) {
+      case 'set': return this.controlTask(task, { action: 'schedule', at: res.at });
+      case 'run-now': return this.runTaskNow(task);
+      case 'clear': return task.held ? this.controlTask(task, { action: 'resume' }) : undefined;
+      default: return undefined;
+    }
+  }
+
+  /** 0103: "Executar agora" da sub-tarefa agendada — tira o agendamento e retoma o item. */
+  async runTaskNow(task: Pick<WorkTask, 'number'>): Promise<WorkItem | undefined> {
+    try {
+      const it = await firstValueFrom(this.api.controlTask(task.number, { action: 'resume', execute: true, reason: 'executar agora' }));
+      this.ok(`${formatWorkNumber(task.number)}: agendamento removido — ${it.status === 'queued' || it.status === 'running' ? 'executando agora' : 'segue no fluxo do item'}.`);
+      return it;
+    } catch (e) {
+      this.fail(e);
+      return undefined;
+    }
+  }
+
+  private openSchedule(data: WorkScheduleDialogData): Promise<WorkScheduleDialogResult> {
+    return firstValueFrom(this.dialog.open<WorkScheduleDialogComponent, WorkScheduleDialogData, WorkScheduleDialogResult>(
+      WorkScheduleDialogComponent, workDialogConfig(data, '520px')).afterClosed());
   }
 
   /** Card 78680: cancela só a sub-tarefa (pergunta o motivo e, se outras dependem dela, se cancelam junto). */

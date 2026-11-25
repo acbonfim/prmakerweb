@@ -108,6 +108,8 @@ export interface WorkTask {
   /** Card 78680: pausada pela pessoa — o Claude não a faz (nem as que dependem dela) até alguém continuar. */
   held?: boolean | null;
   heldBy?: string | null;
+  /** 0103: agendada — pausada até este horário (ISO, UTC); no horário continua sozinha. */
+  scheduledAt?: string | null;
   /** Card 78680: dependências e o que dá para fazer agora (null = pode; texto = por que não). */
   controls?: WorkTaskControls | null;
 }
@@ -130,13 +132,19 @@ export interface WorkTaskControls {
   pause?: string | null;
   canResume?: boolean;
   cancel?: string | null;
+  /** 0103: agendar (ou mudar o horário) — null = pode; texto = por que não. */
+  schedule?: string | null;
+  /** 0103: agendada para (ISO). */
+  scheduledAt?: string | null;
 }
 
 export type WorkTaskMove = 'first' | 'up' | 'down' | 'last';
 
 /** Card 78680: `POST WorkItems/tasks/{n}/control`. */
 export interface WorkTaskControlRequest {
-  action: 'move' | 'pause' | 'resume' | 'cancel';
+  action: 'move' | 'pause' | 'resume' | 'cancel' | 'schedule';
+  /** 0103, schedule: horário (ISO-8601 com fuso). */
+  at?: string | null;
   position?: WorkTaskMove | 'before' | null;
   before?: number | null;
   reason?: string | null;
@@ -204,6 +212,16 @@ export interface WorkItem {
   deliverables?: WorkDeliverable[] | null;
   /** O `#n` pedido era de uma sub-tarefa deste item (GET por número — a numeração é a mesma). */
   matchedTaskNumber?: number | null;
+  /** 0103: item agendado — executa sozinho neste horário (ISO, UTC). */
+  scheduledAt?: string | null;
+  /** 0103: quem agendou (ou deixou em espera). */
+  scheduledBy?: string | null;
+  /** 0103: em espera, sem data — opcional, só roda quando alguém executar (ou agendar). */
+  parked?: boolean | null;
+  /** 0103: próximo horário das sub-tarefas agendadas ainda não feitas. */
+  nextScheduledAt?: string | null;
+  /** 0103: por que o item não pode ser agendado agora (null = pode). */
+  scheduleBlock?: string | null;
 }
 
 /** 0094: origem de um relatado (selo da aba "Relatado"). */
@@ -303,6 +321,8 @@ export interface WorkTaskInput {
   kind: TaskKind;
   executor?: WorkTaskExecutor | null;
   params?: Record<string, string> | null;
+  /** 0103: já nasce agendada (ISO-8601 com fuso). */
+  scheduledAt?: string | null;
 }
 
 export interface CreateWorkItemRequest {
@@ -313,6 +333,16 @@ export interface CreateWorkItemRequest {
   tasks: WorkTaskInput[];
   allowDuplicate?: boolean;
   duplicateReason?: string | null;
+  /** 0103: item agendado (ISO-8601 com fuso) — executa sozinho no horário. */
+  scheduledAt?: string | null;
+  /** 0103: em espera, sem data. */
+  parked?: boolean;
+}
+
+/** 0103: `POST WorkItems/{n}/schedule`. */
+export interface WorkItemScheduleRequest {
+  action: 'set' | 'park' | 'clear';
+  at?: string | null;
 }
 
 export interface UpdateWorkItemRequest {
@@ -336,7 +366,7 @@ export interface DuplicateConflict {
 export class WorkItemError extends Error {
   constructor(
     message: string,
-    readonly code: 'duplicate' | 'notEditable' | 'notFound' | 'conflict' | 'error',
+    readonly code: 'duplicate' | 'notEditable' | 'notFound' | 'conflict' | 'scheduled' | 'error',
     readonly existing?: DuplicateConflict['existing'] | null,
     readonly status?: number
   ) {
@@ -393,8 +423,71 @@ export function taskStatusLook(status: string | null | undefined): StatusLook {
  * Aparência da sub-tarefa. Card 78794 (#1079): a da pessoa em andamento (o plano a iniciou ao passar a vez — abrir o
  * chamado, validar...) é a vez dela: "Aguardando você", sem girar como se o Claude estivesse trabalhando.
  */
-export function workTaskLook(task: Pick<WorkTask, 'executor' | 'status'>): StatusLook {
+export function workTaskLook(task: Pick<WorkTask, 'executor' | 'status'> & Partial<Pick<WorkTask, 'held' | 'scheduledAt'>>): StatusLook {
+  if (task.held && task.scheduledAt && task.status === 'pending') return scheduledLook('Agendada', task.scheduledAt);
   return task.executor === 'user' && task.status === 'running' ? WAITS_FOR_YOU : taskStatusLook(task.status);
+}
+
+// ── 0103: agendamento ──────────────────────────────────────────────────────────────────────────
+
+/** Lilás do agendamento (relógio de item/sub-tarefa agendado). */
+export const SCHEDULE_COLOR = '#b392f0';
+export const SCHEDULE_ICON = 'alarm';
+
+/** "hoje 04:30", "amanhã 04:30", "26/11 04:30" (ou com o ano) — no fuso do navegador. */
+export function formatSchedule(iso: string | null | undefined, now: Date = new Date()): string {
+  if (!iso) return '';
+  const at = new Date(iso);
+  if (isNaN(at.getTime())) return '';
+  const hm = at.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((day(at) - day(now)) / 86_400_000);
+  if (diff === 0) return `hoje ${hm}`;
+  if (diff === 1) return `amanhã ${hm}`;
+  const date = at.toLocaleDateString('pt-BR', at.getFullYear() === now.getFullYear()
+    ? { day: '2-digit', month: '2-digit' } : { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return `${date} ${hm}`;
+}
+
+function scheduledLook(prefix: string, iso: string): StatusLook {
+  return { label: `${prefix} · ${formatSchedule(iso)}`, icon: SCHEDULE_ICON, color: SCHEDULE_COLOR };
+}
+
+const PARKED: StatusLook = { label: 'Em espera · sem data', icon: SCHEDULE_ICON, color: SCHEDULE_COLOR };
+
+/** Item agendado ou em espera sem data (o Executar vira "Executar agora"). */
+export function awaitsSchedule(item: Partial<Pick<WorkItem, 'scheduledAt' | 'parked'>> | null | undefined): boolean {
+  return !!item?.scheduledAt || !!item?.parked;
+}
+
+/** Item parado esperando um horário: o dele ou o da próxima sub-tarefa agendada (só sobrou ela). */
+export function itemScheduleLook(item: Partial<Pick<WorkItem, 'status' | 'scheduledAt' | 'parked' | 'nextScheduledAt'>> | null | undefined): StatusLook | null {
+  if (!item || !(item.status === 'pending' || item.status === 'failed')) return null;
+  if (item.scheduledAt) return scheduledLook('Agendado', item.scheduledAt);
+  if (item.parked) return PARKED;
+  if (item.status === 'pending' && item.nextScheduledAt) return scheduledLook('Agendado', item.nextScheduledAt);
+  return null;
+}
+
+/** Sub-tarefa agendada (pausada até um horário). */
+export function isTaskScheduled(task: Partial<Pick<WorkTask, 'held' | 'scheduledAt' | 'status'>>): boolean {
+  return !!task.held && !!task.scheduledAt && task.status === 'pending';
+}
+
+/** `datetime-local` (horário do navegador) → ISO com fuso; vazio/inválido = null. */
+export function localInputToIso(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** ISO → valor do `datetime-local` (horário do navegador, sem segundos). */
+export function isoToLocalInput(iso: string | Date | null | undefined): string {
+  if (!iso) return '';
+  const d = iso instanceof Date ? iso : new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export const ORIGIN_LABELS: Record<WorkItemOrigin, string> = {
@@ -916,9 +1009,13 @@ export function waitsForPerson(item: Pick<WorkItem, 'status' | 'tasks'> | null |
 
 const WAITS_FOR_YOU: StatusLook = { label: 'Aguardando você', icon: 'front_hand', color: '#d29922' };
 
-/** Aparência do status do item — "Aguardando" vira "Aguardando você" quando a vez é da pessoa. */
-export function itemLook(item: Pick<WorkItem, 'status' | 'tasks'> | null | undefined): StatusLook {
-  return waitsForPerson(item) ? WAITS_FOR_YOU : itemStatusLook(item?.status);
+/**
+ * Aparência do status do item — "Aguardando" vira "Aguardando você" quando a vez é da pessoa; 0103: parado esperando um
+ * horário (dele ou da sub-tarefa agendada) vira o relógio lilás.
+ */
+export function itemLook(item: (Pick<WorkItem, 'status' | 'tasks'> & Partial<Pick<WorkItem, 'scheduledAt' | 'parked' | 'nextScheduledAt'>>) | null | undefined): StatusLook {
+  if (waitsForPerson(item)) return WAITS_FOR_YOU;
+  return itemScheduleLook(item) ?? itemStatusLook(item?.status);
 }
 /** Item fechado/cancelado/desfeito (ou desfazendo): a Bancada só mostra. */
 const READONLY_ITEM: ReadonlySet<string> = new Set(['completed', 'cancelled', 'reverting', 'reverted']);

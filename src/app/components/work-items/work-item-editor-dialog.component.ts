@@ -16,6 +16,10 @@ import {
   WorkItemType,
   WorkTaskExecutor,
   WorkTaskInput,
+  SCHEDULE_COLOR,
+  formatSchedule,
+  isoToLocalInput,
+  localInputToIso,
   formatWorkNumber,
   itemStatusLook,
   kindInfo,
@@ -54,6 +58,8 @@ interface TaskDraft {
   params: Record<string, string>;
   /** Descrição aberta. */
   open: boolean;
+  /** 0103: agendar ao criar (valor do `datetime-local`); null = sem agendamento. */
+  scheduleAt: string | null;
 }
 
 let uidSeq = 0;
@@ -72,7 +78,8 @@ export function toTaskDraft(t: {
     kind: t.kind,
     executor: t.executor === 'user' ? 'user' : 'claude',
     params: { ...(t.params ?? {}) },
-    open: !!t.description
+    open: !!t.description,
+    scheduleAt: null
   };
 }
 
@@ -83,7 +90,8 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
   return {
     ...(d.number ? { number: d.number } : {}),
     ...(d.stepKey ? { stepKey: d.stepKey } : {}),
-    title: d.title.trim(), description: d.description.trim() || null, kind: d.kind, executor: d.executor, params
+    title: d.title.trim(), description: d.description.trim() || null, kind: d.kind, executor: d.executor, params,
+    ...(!d.number && localInputToIso(d.scheduleAt) ? { scheduledAt: localInputToIso(d.scheduleAt) } : {})
   };
 }
 
@@ -145,6 +153,24 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
           <textarea class="wi-textarea" rows="3" [(ngModel)]="description" placeholder="O que este item entrega e por quê"></textarea>
         </label>
 
+        @if (!editing) {
+          <div class="wi-field">
+            <span>Iniciar</span>
+            <div class="wie__start">
+              <select class="wi-select" [(ngModel)]="start" aria-label="Quando iniciar">
+                <option ngValue="manual">Quando eu executar</option>
+                <option ngValue="schedule">Agendar para…</option>
+                <option ngValue="parked">Em espera, sem data (opcional)</option>
+              </select>
+              @if (start === 'schedule') {
+                <input class="wi-input" type="datetime-local" [min]="minLocal" [(ngModel)]="startAt" aria-label="Data e hora do agendamento">
+              }
+            </div>
+            @if (start === 'schedule' && startPreview(); as p) { <small class="wie__sched-note">Começa sozinho {{ p }}, no seu executor.</small> }
+            @if (start === 'parked') { <small class="wie__sched-note">Fica parado até alguém executar ou agendar.</small> }
+          </div>
+        }
+
         <section class="wi-sec">
           <div class="wie__tasks-head">
             <h4 class="wi-sec__title">Sub-tarefas ({{ tasks().length }})</h4>
@@ -183,9 +209,22 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
               }
               @if (t.open) {
                 <textarea class="wi-textarea" rows="2" [(ngModel)]="t.description" placeholder="Descrição (opcional, markdown)"></textarea>
-              } @else {
-                <button type="button" class="wie__more" (click)="t.open = true; touch()">+ descrição</button>
               }
+              @if (t.scheduleAt !== null) {
+                <div class="wie__sched">
+                  <mat-icon>alarm</mat-icon>
+                  <span>Começa em</span>
+                  <input class="wi-input" type="datetime-local" [min]="minLocal" [(ngModel)]="t.scheduleAt" aria-label="Agendar a sub-tarefa">
+                  <button mat-icon-button type="button" (click)="t.scheduleAt = null; touch()" matTooltip="Sem agendamento" aria-label="Tirar o agendamento"><mat-icon>close</mat-icon></button>
+                </div>
+              }
+              <div class="wie__links">
+                @if (!t.open) { <button type="button" class="wie__more" (click)="t.open = true; touch()">+ descrição</button> }
+                @if (t.scheduleAt === null && !t.number) {
+                  <button type="button" class="wie__more wie__more--sched" (click)="t.scheduleAt = defaultLocal(); touch()"
+                          matTooltip="Só começa no horário; as que dependem dela esperam junto">+ agendar</button>
+                }
+              </div>
             </div>
           }
         </section>
@@ -214,6 +253,15 @@ export function toTaskInput(d: TaskDraft): WorkTaskInput {
     </div>
   `,
   styles: [WORK_DIALOG_STYLES, `
+    .wie__start { display: flex; flex-wrap: wrap; gap: 8px; }
+    .wie__start .wi-select { flex: 0 1 260px; }
+    .wie__start .wi-input { flex: 0 1 220px; color-scheme: dark; }
+    .wie__sched-note { font-size: 11.5px; color: ${SCHEDULE_COLOR}; }
+    .wie__sched { display: flex; align-items: center; gap: 6px; font-size: 12px; color: ${SCHEDULE_COLOR}; }
+    .wie__sched mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .wie__sched .wi-input { flex: 0 1 220px; color-scheme: dark; }
+    .wie__links { display: flex; gap: 12px; }
+    .wie__more--sched { color: ${SCHEDULE_COLOR} !important; }
     .wie__row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
     .wie__grow { flex: 1 1 260px; }
     .wie__tasks-head { display: flex; align-items: center; }
@@ -275,6 +323,24 @@ export class WorkItemEditorDialogComponent {
     return { mainBranch: c?.mainBranch ?? null, branchesByTarget: c?.branchesByTarget ?? null, flowTargets: this.flowTargets() };
   });
   readonly githubUrl = this.pickers.githubUrl;
+
+  /** 0103: quando o item novo começa — ao executar, agendado ou em espera sem data. */
+  start: 'manual' | 'schedule' | 'parked' = 'manual';
+  startAt = this.defaultLocal();
+  readonly minLocal = isoToLocalInput(new Date());
+
+  /** Daqui a 2h30 (o tempo típico da esteira), arredondado para 5 min. */
+  defaultLocal(): string {
+    const d = new Date(Date.now() + 150 * 60_000);
+    d.setSeconds(0, 0);
+    d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5);
+    return isoToLocalInput(d);
+  }
+
+  startPreview(): string | null {
+    const iso = localInputToIso(this.startAt);
+    return iso ? formatSchedule(iso) : null;
+  }
 
   title = this.data.item?.title ?? '';
   description = this.data.item?.description ?? '';
@@ -406,12 +472,20 @@ export class WorkItemEditorDialogComponent {
       this.api.update(this.data.item!.number, { title: this.title.trim(), description: this.description.trim() || null, tasks }).subscribe({ next: done, error: fail });
       return;
     }
+    const scheduledAt = this.start === 'schedule' ? localInputToIso(this.startAt) : null;
+    if (this.start === 'schedule' && (!scheduledAt || new Date(scheduledAt).getTime() < Date.now() - 60_000)) {
+      this.saving.set(false);
+      this.error.set('Escolha um horário futuro para o agendamento.');
+      return;
+    }
     const req: CreateWorkItemRequest = {
       title: this.title.trim(),
       description: this.description.trim() || null,
       type: this.type(),
       templateKey: this.templateKey(),
       tasks,
+      ...(scheduledAt ? { scheduledAt } : {}),
+      ...(this.start === 'parked' ? { parked: true } : {}),
       ...(allowDuplicate ? { allowDuplicate: true, duplicateReason: this.duplicateReason.trim() } : {})
     };
     this.api.create(this.data.card, req).subscribe({ next: done, error: fail });

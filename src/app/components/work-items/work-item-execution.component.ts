@@ -69,6 +69,7 @@ import {
   taskPrHint,
   taskStatusLook,
   workTaskLook,
+  isTaskScheduled,
   ticketTaskActions,
   userTaskActions,
   waitCodeLabel,
@@ -994,6 +995,7 @@ export class WorkItemExecutionComponent {
    * etapa de PR pendente com PR aberto/mesclado mostra o PR no lugar de "Pendente".
    */
   taskLabel(t: WorkTask): string {
+    if (isTaskScheduled(t)) return workTaskLook(t).label;
     if (t.status === 'waiting' && this.openTicket(t)) return 'Aguardando o chamado';
     if (t.executor === 'user' && (t.status === 'waiting' || t.status === 'running' || (t.status === 'pending' && t.number === this.currentTask()))) return 'Aguardando você';
     if (canResolveWait(t)) return 'Aguardando você';
@@ -1006,6 +1008,7 @@ export class WorkItemExecutionComponent {
   }
 
   taskIcon(t: WorkTask): string {
+    if (isTaskScheduled(t)) return workTaskLook(t).icon;
     if ((t.executor === 'user' && (t.status === 'waiting' || t.status === 'running')) || canResolveWait(t)) return 'front_hand';
     return taskStatusLook(t.status).icon;
   }

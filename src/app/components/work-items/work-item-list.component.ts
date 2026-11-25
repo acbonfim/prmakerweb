@@ -22,8 +22,11 @@ import {
   WorkItemRelated,
   WorkTask,
   WorkTaskAction,
+  SCHEDULE_COLOR,
+  awaitsSchedule,
   canCancel,
   canExecute,
+  formatSchedule,
   canResolveWait,
   canUndo,
   executingNumbers,
@@ -274,7 +277,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                         </button>
                       } @else {
                         <button mat-icon-button class="wil__play" data-tour="wi-run" (click)="execute(it)" [disabled]="!canRun(it) || pending().has(it.number)"
-                                [matTooltip]="canRun(it) ? 'Executar (roda em paralelo aos outros itens)' : 'Executar — só itens pendentes ou que falharam'"
+                                [matTooltip]="runTip(it)"
                                 [attr.aria-label]="'Executar ' + num(it.number)">
                           <mat-icon>play_arrow</mat-icon>
                         </button>
@@ -285,6 +288,9 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                       <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="Mais ações" [disabled]="pending().has(it.number)"><mat-icon>more_horiz</mat-icon></button>
                       <mat-menu #menu="matMenu" xPosition="before">
                         @if (it.startedAt || isLive(it)) { <button mat-menu-item (click)="showSession(it.number)"><mat-icon>smart_toy</mat-icon>Ver sessão de execução</button> }
+                        @if (canScheduleIt(it)) {
+                          <button mat-menu-item (click)="schedule(it)"><mat-icon [style.color]="lilac">alarm</mat-icon>{{ scheduled(it) ? 'Alterar agendamento…' : 'Agendar…' }}</button>
+                        }
                         <button mat-menu-item (click)="duplicate(it)"><mat-icon>content_copy</mat-icon>Criar novo a partir deste</button>
                         @if (canCancelIt(it)) { <button mat-menu-item (click)="cancel(it)"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
                         @if (canUndoIt(it)) { <button mat-menu-item (click)="undo(it)"><mat-icon>undo</mat-icon>Desfazer</button> }
@@ -596,6 +602,19 @@ export class WorkItemListComponent {
   readonly busy = (it: WorkItem) => isItemBusy(it);
   readonly isLive = (it: WorkItem) => isExecutingItem(it);
   readonly canRun = (it: WorkItem) => canExecute(it);
+  /** 0103: agendado/em espera (o play vira "Executar agora"). */
+  readonly scheduled = (it: WorkItem) => awaitsSchedule(it);
+  /** 0103: dá para agendar o item (avulso parado) ou mudar o agendamento dele. */
+  readonly canScheduleIt = (it: WorkItem) => awaitsSchedule(it) || (it.scheduleBlock === null && canExecute(it));
+  readonly lilac = SCHEDULE_COLOR;
+
+  runTip(it: WorkItem): string {
+    if (!canExecute(it)) return 'Executar — só itens pendentes ou que falharam';
+    if (it.scheduledAt) return `Executar agora (agendado para ${formatSchedule(it.scheduledAt)})`;
+    if (it.parked) return 'Executar agora (em espera, sem data)';
+    if (it.nextScheduledAt) return `Executar agora (sub-tarefa agendada para ${formatSchedule(it.nextScheduledAt)})`;
+    return 'Executar (roda em paralelo aos outros itens)';
+  }
   readonly canCancelIt = (it: WorkItem) => canCancel(it);
   readonly canUndoIt = (it: WorkItem) => canUndo(it);
   readonly taskLook = (t: WorkTask) => workTaskLook(t);
@@ -983,7 +1002,7 @@ export class WorkItemListComponent {
   async execute(it: WorkItem): Promise<void> {
     if (await this.withPending(it.number, () => this.actions.execute(it))) {
       // Mostra "na fila" na hora; o tempo real traz o resto.
-      this.items.update((l) => l.map((x) => (x.number === it.number && canExecute(x) ? { ...x, status: 'queued' } : x)));
+      this.items.update((l) => l.map((x) => (x.number === it.number && canExecute(x) ? { ...x, status: 'queued', scheduledAt: null, parked: false } : x)));
       this.expand(it.number);
       this.showSession(it.number);
       this.load(true);
@@ -992,6 +1011,11 @@ export class WorkItemListComponent {
 
   async cancel(it: WorkItem): Promise<void> {
     if (await this.withPending(it.number, () => this.actions.cancel(it))) this.load(true);
+  }
+
+  /** 0103: agendar / alterar / sem data / remover / executar agora o item. */
+  async schedule(it: WorkItem): Promise<void> {
+    if (await this.withPending(it.number, async () => !!(await this.actions.scheduleItem(it)))) this.load(true);
   }
 
   async undo(it: WorkItem): Promise<void> {
