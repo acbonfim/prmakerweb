@@ -367,7 +367,8 @@
 }
 .dk-pane--files { overflow: hidden; }
 .dk-pane--board { overflow: hidden; }
-.dk-board { display: block; flex: 1 1 auto; min-height: 0; }
+// flex (não block): o board fica na altura do painel e cada coluna rola sozinha
+.dk-board { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 
 .dk-act.mat-mdc-outlined-button, .dk-act.mat-mdc-unelevated-button {
   height: 32px;

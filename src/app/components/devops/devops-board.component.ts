@@ -210,7 +210,7 @@ function storageSet(key: string, value: string): void {
               @if (!isCollapsed(lane.key)) {
                 <div class="dvb-row">
                   @for (slot of lane.columns; track slot.column.id) {
-                    <div class="dvb-colcell" [style.width.px]="colWidth(slot.column)" [class.dvb-colcell--blocked]="blocked(slot.column)"
+                    <div class="dvb-colcell" cdkScrollable [style.width.px]="colWidth(slot.column)" [class.dvb-colcell--blocked]="blocked(slot.column)"
                          [class.dvb-colcell--accept]="accepts(slot.column)">
                       <ng-container *ngTemplateOutlet="cellTpl; context: { $implicit: slot.doing }" />
                       @if (slot.done; as d) {
@@ -353,7 +353,7 @@ function storageSet(key: string, value: string): void {
     .dvb-empty mat-icon { font-size: 40px; width: 40px; height: 40px; opacity: .5; }
 
     .dvb-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 8px 8px; }
-    .dvb-grid { display: flex; flex-direction: column; min-height: 100%; }
+    .dvb-grid { display: flex; flex-direction: column; height: 100%; }
     .dvb-heads { display: flex; gap: 8px; position: sticky; top: 0; z-index: 2; background: var(--surface-1, #262b33); padding-top: 4px; }
     .dvb-head { flex: none; box-sizing: border-box; padding: 6px 8px 4px; border-radius: 8px 8px 0 0; background: var(--surface-2, #2e343f);
       border-bottom: 2px solid color-mix(in srgb, var(--mat-sys-primary) 35%, transparent); transition: opacity .15s; }
@@ -378,9 +378,14 @@ function storageSet(key: string, value: string): void {
     .dvb-lane mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .dvb-lane__count { font-size: 11.5px; font-weight: 400; color: var(--cc-text-3); }
     .dvb-row { display: flex; gap: 8px; border-top: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); }
-    .dvb-row:last-child { flex: 1; }
+    /* Cada coluna rola sozinha: as lanes abertas dividem a altura do board (a mais cheia fica com mais espaço) e,
+       só com muitas lanes abertas, o board rola entre elas. */
+    .dvb-row { flex: 1 1 auto; min-height: 120px; }
     .dvb-colcell { flex: none; display: flex; gap: 6px; box-sizing: border-box; background: color-mix(in srgb, var(--surface-2, #2e343f) 45%, transparent);
-      transition: opacity .15s, background .15s; }
+      transition: opacity .15s, background .15s; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--mat-sys-on-surface) 18%, transparent) transparent; }
+    .dvb-colcell::-webkit-scrollbar { width: 8px; }
+    .dvb-colcell::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--mat-sys-on-surface) 18%, transparent); border-radius: 8px; }
     .dvb-cell { flex: 1; min-width: 0; min-height: 72px; display: flex; flex-direction: column; gap: 6px; padding: 6px; box-sizing: border-box; }
     .dvb-cell--done { border-left: 1px dashed var(--cc-surface-border-strong, rgba(255,255,255,.18)); }
 
@@ -512,7 +517,7 @@ export class DevOpsBoardComponent {
     const at = this.lastLoadAt();
     return at ? `Atualizar (atualizado às ${new Date(at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })})` : 'Atualizar';
   });
-  readonly gridWidth = computed(() => this.shownColumns().reduce((w, c) => w + this.colWidth(c) + 8, 0));
+  readonly gridWidth = computed(() =>this.shownColumns().reduce((w, c) => w + this.colWidth(c) + 8, 0));
 
   /** Cor e ícone por tipo: cor do board, senão a dos tipos do projeto. */
   private typeInfo = computed(() => {
