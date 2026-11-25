@@ -438,23 +438,16 @@
 .dk-role { display: inline-flex; align-items: center; gap: 3px; color: var(--dk-muted); .mat-icon { font-size: 14px; width: 14px; height: 14px; } }
 .dk-cardrow__actions { flex: none; display: inline-flex; align-items: center; gap: 2px; }
 
-// Painel do card (por cima do centro)
+// Card do DevOps: modal largo (ajustes 3) — diálogo com o template (painel `dk-card-dialog` em styles.scss)
 .dk-panel {
-  position: absolute;
-  inset: 0 0 0 auto;
-  z-index: 5;
-  width: min(620px, 100%);
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: auto;
-  border-radius: 10px;
-  border: 1px solid var(--cc-surface-border-strong, rgba(255, 255, 255, .18));
-  background: var(--surface-2, #2e343f);
-  box-shadow: -12px 0 32px rgba(0, 0, 0, .4);
-  animation: dk-panel-in .22s cubic-bezier(.2, .7, .2, 1);
+  overflow: hidden;
+  background: var(--surface-1, #262b33);
   > * { flex: 1 1 auto; min-height: 0; }
 }
-@keyframes dk-panel-in { from { opacity: 0; transform: translateX(24px); } }
 
 // ── Especialista ─────────────────────────────────────────────────────────────────────────────
 .dk-side { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
@@ -557,12 +550,4 @@
   .dk-epic__title { flex: 1 1 calc(100% - 80px); white-space: normal; }
   .dk-chat { flex: none; height: calc(100dvh - var(--cime-topbar-total, 70px) - var(--cime-tabs-h, 30px) - var(--dk-tabs-h) - 120px); }
 
-  .dk-panel {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    width: auto;
-    border-radius: 0;
-    border: 0;
-  }
 }

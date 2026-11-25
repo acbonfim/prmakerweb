@@ -227,3 +227,67 @@ export function displayValue(f: Pick<DevOpsFieldDef, 'type' | 'referenceName' | 
     default: return typeof v === 'object' ? JSON.stringify(v) : `${v}`;
   }
 }
+
+/** Uma alteração pendente, para o "antes × depois" (ajustes 3). */
+export interface PendingChange {
+  /** referenceName do campo, `tags` ou `comment`. */
+  ref: string;
+  label: string;
+  before: string;
+  after: string;
+}
+
+/** Texto curto de um valor para o "antes × depois" (HTML vira texto; longo é cortado). */
+function shortValue(f: Pick<DevOpsFieldDef, 'type' | 'referenceName' | 'allowedValues'> | undefined, v: unknown, max = 280): string {
+  const text = f ? displayValue(f, v) : (blank(v) ? '—' : typeof v === 'object' ? identityName(v) || JSON.stringify(v) : `${v}`);
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/**
+ * Lista legível do que mudou (ajustes 3: link "Alterado: n campos" e a confirmação do Salvar): título, cada campo com o
+ * valor gravado e o novo, tags somadas/tiradas. Mesma regra do PATCH (`buildPatch`), na ordem dos campos do tipo.
+ */
+export function describeChanges(
+  original: Pick<CardDetail, 'title' | 'fields' | 'tags'>,
+  defs: DevOpsFieldDef[],
+  values: Record<string, unknown>,
+  title: string,
+  tags: string[],
+): PendingChange[] {
+  const out: PendingChange[] = [];
+  const t = (title ?? '').trim();
+  if (t && t !== (original.title ?? '').trim()) out.push({ ref: F.title, label: 'Título', before: original.title || '—', after: t });
+  const byRef = new Map(defs.map((d) => [d.referenceName, d]));
+  const order = new Map(defs.map((d, i) => [d.referenceName, i]));
+  const refs = Object.keys(values)
+    .filter((ref) => !byRef.get(ref)?.readOnly && !sameValue(byRef.get(ref), original.fields?.[ref], values[ref]))
+    .sort((a, b) => (order.get(a) ?? 999) - (order.get(b) ?? 999));
+  for (const ref of refs) {
+    const def = byRef.get(ref);
+    out.push({
+      ref,
+      label: ref === F.state ? 'Estado' : def?.name ?? ref,
+      before: shortValue(def, original.fields?.[ref]),
+      after: shortValue(def, values[ref]),
+    });
+  }
+  const { addTags, removeTags } = diffTags(original.tags ?? [], tags);
+  if (addTags.length || removeTags.length) {
+    out.push({
+      ref: 'tags',
+      label: 'Tags',
+      before: (original.tags ?? []).join(', ') || '—',
+      after: tags.join(', ') || '—',
+    });
+  }
+  return out;
+}
+
+/** "Alterado: 2 campos, tags" (o mesmo resumo da barra), a partir das alterações. */
+export function changesLabel(changes: PendingChange[]): string {
+  const fields = changes.filter((c) => c.ref !== 'tags' && c.ref !== 'comment').length;
+  const parts: string[] = [];
+  if (fields) parts.push(`${fields} ${fields === 1 ? 'campo' : 'campos'}`);
+  if (changes.some((c) => c.ref === 'tags')) parts.push('tags');
+  return parts.length ? `Alterado: ${parts.join(', ')}` : '';
+}

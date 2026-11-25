@@ -147,6 +147,8 @@ export interface CardRelation {
   rel: string;
   id?: number | null;
   url: string;
+  /** Nome do anexo/link (atributo `name` do DevOps). */
+  name?: string | null;
 }
 
 /** `GET DevOps/workitems/{id}` (e retorno de criar/editar/mover). */
@@ -352,4 +354,61 @@ export function identityImage(v: unknown): string | null {
     return o.imageUrl || o._links?.avatar?.href || null;
   }
   return null;
+}
+
+// ── Ajustes 3 (modal do card): discussion, anexos e menções ──
+
+/** Comentário da discussion (`GET DevOps/workitems/{id}/comments`, mais novos primeiro). */
+export interface DevOpsComment {
+  id: number;
+  /** HTML do DevOps (o Angular sanitiza ao mostrar). */
+  html: string;
+  author: DevOpsPerson | null;
+  createdDate: string | null;
+  modifiedDate: string | null;
+  edited: boolean;
+}
+
+export interface DevOpsCommentsResponse {
+  count: number;
+  comments: DevOpsComment[];
+}
+
+/** Pessoa mencionada com `@Nome` no comentário (o servidor troca pelo link de menção do DevOps). */
+export interface DevOpsMention {
+  displayName: string;
+  uniqueName: string;
+  id?: string | null;
+}
+
+export type DevOpsAttachmentSource = 'anexo' | 'campo' | 'discussion';
+
+/** Anexo do card: arquivo anexado, imagem colada num campo ou na discussion (`GET DevOps/workitems/{id}/attachments`). */
+export interface DevOpsAttachment {
+  /** GUID do anexo no DevOps (minúsculo). */
+  id: string;
+  name: string;
+  url: string;
+  source: DevOpsAttachmentSource | string;
+  sourceDetail?: string | null;
+  at?: string | null;
+  size?: number | null;
+  comment?: string | null;
+  isImage: boolean;
+}
+
+/** GUID do anexo numa URL do DevOps (`…/_apis/wit/attachments/{guid}`), ou null. */
+export function attachmentIdFromUrl(url: string | null | undefined): string | null {
+  const m = /\/_apis\/wit\/attachments\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(url ?? '');
+  return m ? m[1].toLowerCase() : null;
+}
+
+/** Nome do arquivo no `fileName=` da URL do anexo (imagens coladas). */
+export function attachmentNameFromUrl(url: string | null | undefined, fallback = 'image.png'): string {
+  try {
+    const name = new URL(url ?? '', 'https://x').searchParams.get('fileName');
+    return name?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
 }

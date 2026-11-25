@@ -1,10 +1,10 @@
-import { Component, DestroyRef, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, ElementRef, OnDestroy, OnInit, TemplateRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDialog } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -183,6 +183,13 @@ export class DeskComponent implements OnInit, OnDestroy {
   // ── Painel do card (busca do topo, cartão do board, aba Cards) ──────────────────────────────
   cardQuery = '';
   readonly panelCard = signal<string | null>(null);
+  /**
+   * Modal do card (ajustes 3): um diálogo com o template da página — fica acima da barra do topo e os combos/popovers/
+   * visualizador abertos por dentro ficam acima dele. Esc e clique fora fecham (perguntando se há alterações).
+   */
+  readonly cardPanel = viewChild<DevOpsCardPanelComponent>('cardModal');
+  private readonly cardModalTpl = viewChild.required<TemplateRef<unknown>>('cardModalTpl');
+  private cardDialog: MatDialogRef<unknown> | null = null;
 
   // ── Especialista ────────────────────────────────────────────────────────────────────────────
   readonly chatCollapsed = signal(readFlag(CHAT_COLLAPSED_KEY));
@@ -205,6 +212,13 @@ export class DeskComponent implements OnInit, OnDestroy {
 
   constructor() {
     this.narrowMedia?.addEventListener('change', this.onNarrowChange);
+
+    // Modal do card: abre/fecha com o card do painel (URL ?card=, busca, board, aba Cards).
+    effect(() => {
+      const open = !!this.panelCard();
+      untracked(() => (open ? this.openCardOverlay() : this.disposeCardOverlay()));
+    });
+    inject(DestroyRef).onDestroy(() => this.disposeCardOverlay());
 
     // Tempo real dos épicos: a lista relê; o épico aberto relê quando é ele (ou na volta da conexão).
     const stopEpics = this.api.listen((payload) => {
@@ -641,6 +655,38 @@ export class DeskComponent implements OnInit, OnDestroy {
   closeCard(): void {
     this.panelCard.set(null);
     this.syncUrl();
+  }
+
+  private openCardOverlay(): void {
+    if (this.cardDialog) return;
+    const ref = this.dialog.open(this.cardModalTpl(), {
+      width: 'min(1560px, 96vw)',
+      maxWidth: '96vw',
+      height: 'min(1000px, 94vh)',
+      panelClass: 'dk-card-dialog',
+      autoFocus: false,
+      restoreFocus: true,
+      disableClose: true,
+    });
+    ref.backdropClick().subscribe(() => this.cardPanel()?.close());
+    ref.keydownEvents().subscribe((e) => { if (e.key === 'Escape') this.onEscape(e); });
+    ref.afterClosed().subscribe(() => { if (this.cardDialog === ref) this.cardDialog = null; });
+    this.cardDialog = ref;
+  }
+
+  private disposeCardOverlay(): void {
+    const ref = this.cardDialog;
+    this.cardDialog = null;
+    ref?.close();
+  }
+
+  /** Esc fecha o modal do card — menos quando um combo/menu já tratou a tecla ou o foco está num campo (aí só sai do campo). */
+  onEscape(event: KeyboardEvent): void {
+    const panel = this.cardPanel();
+    if (!panel || event.defaultPrevented) return;
+    const t = event.target as HTMLElement | null;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) { t.blur(); return; }
+    panel.close();
   }
 
   // ── Especialista ────────────────────────────────────────────────────────────────────────────

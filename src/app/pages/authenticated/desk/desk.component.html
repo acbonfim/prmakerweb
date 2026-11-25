@@ -367,13 +367,15 @@
       </div>
     }
 
-    <!-- Painel do card do DevOps (busca do topo, cartão do board, aba Cards) — por cima do centro -->
-    @if (panelCard(); as pc) {
-      <aside class="dk-panel" role="dialog" [attr.aria-label]="'Card ' + pc">
-        <app-devops-card-panel [cardId]="pc" [epic]="found ? e!.number : null" [team]="found ? (e!.devOpsTeam ?? null) : null"
-                                [board]="found ? (e!.devOpsBoard ?? null) : null" (saved)="reloadEpic()" (closed)="closeCard()"></app-devops-card-panel>
-      </aside>
-    }
+    <!-- Card do DevOps (busca do topo, cartão do board, aba Cards) — modal largo, como o formulário do DevOps (ajustes 3) -->
+    <ng-template #cardModalTpl>
+      @if (panelCard(); as pc) {
+        <div class="dk-panel" role="dialog" aria-modal="true" [attr.aria-label]="'Card ' + pc">
+          <app-devops-card-panel #cardModal [cardId]="pc" [epic]="found ? e!.number : null" [team]="found ? (e!.devOpsTeam ?? null) : null"
+                                  [board]="found ? (e!.devOpsBoard ?? null) : null" (saved)="reloadEpic()" (closed)="closeCard()"></app-devops-card-panel>
+        </div>
+      }
+    </ng-template>
   </section>
 
   <!-- ── Especialista de gestão ───────────────────────────────────────────────────────────── -->
