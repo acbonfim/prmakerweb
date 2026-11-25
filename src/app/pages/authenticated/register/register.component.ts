@@ -46,7 +46,7 @@ import { TourHelpDialogComponent, TourHelpData, TourHelpResult } from '../../../
 import {ExecutionPlanComponent, PlanHeadline} from '../../../components/execution-plan/execution-plan.component';
 import {InfoFact} from '../../../components/pr-info-card/pr-info-card.component';
 import {CardAlertBarComponent} from '../../../components/card-alert-bar/card-alert-bar.component';
-import {CardDetailsDialogComponent} from '../../../components/card-details-dialog/card-details-dialog.component';
+import { openDevOpsCardDialog } from '../../../components/devops/devops-card-dialog.component';
 import {HandoverDialogComponent} from '../../../components/handover-dialog/handover-dialog.component';
 import {CardFull} from '../../../components/card-details-dialog/card-full.model';
 import {marked} from 'marked';
@@ -1253,14 +1253,9 @@ export class RegisterComponent implements OnInit, OnDestroy {
     {
       if (!this.cardFull) return;
 
-      this.dialog.open(CardDetailsDialogComponent, {
-        data: { card: this.cardFull, cardNumber: this.cardNumber },
-        width: '1000px',
-        height: '80vh',
-        maxWidth: '92vw',
-        maxHeight: '90vh',
-        panelClass: 'custom-dialog-container'
-      });
+      // O mesmo modal do card da Mesa/Bancada.
+      const card = this.cardNumber || `${this.cardFull.id}`;
+      openDevOpsCardDialog(this.dialog, { cardId: card, context: 'workbench' });
     }
 
     openHandover() {

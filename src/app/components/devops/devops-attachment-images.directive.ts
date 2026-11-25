@@ -1,4 +1,5 @@
 import { DestroyRef, Directive, ElementRef, inject, input } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { DevOpsService } from '../../services/devops.service';
 import { attachmentIdFromUrl, attachmentNameFromUrl } from './devops.model';
@@ -10,12 +11,14 @@ const CACHE_MAX = 200;
 /**
  * 0099 ajustes 3: as imagens coladas no card (`<img src=".../_apis/wit/attachments/{guid}">`) exigem o token do DevOps — o
  * navegador não abre direto. Esta diretiva observa o HTML de dentro (campos, discussion) e troca cada uma pela cópia
- * baixada pelo PRMake (`GET DevOps/workitems/{card}/attachments/{guid}`); clicar abre a imagem numa aba nova.
+ * baixada pelo PRMake (`GET DevOps/workitems/{card}/attachments/{guid}`). Clicar abre o visualizador com as outras imagens da
+ * mesma aba ao lado (← →).
  */
 @Directive({ selector: '[dvAttachmentImages]', standalone: true })
 export class DevOpsAttachmentImagesDirective {
   private api = inject(DevOpsService);
   private host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private dialog = inject(MatDialog);
 
   /** Card dono dos anexos. */
   readonly card = input<string | number | null>(null, { alias: 'dvAttachmentImages' });
@@ -36,19 +39,33 @@ export class DevOpsAttachmentImagesDirective {
       const id = attachmentIdFromUrl(src);
       if (!id) continue;
       img.dataset['dvSrc'] = src;
+      img.dataset['dvOrig'] = src;
       img.classList.add('dv-img--loading');
       img.style.cursor = 'zoom-in';
       void this.url(card, id, attachmentNameFromUrl(src)).then((url) => {
         img.classList.remove('dv-img--loading');
         img.src = url;
         img.dataset['dvSrc'] = url;
-        img.onclick = () => window.open(url, '_blank', 'noopener');
+        img.onclick = (e) => { e.preventDefault(); void this.open(img); };
       }).catch(() => {
         img.classList.remove('dv-img--loading');
         img.classList.add('dv-img--error');
         img.alt = img.alt || 'Imagem do DevOps indisponível';
       });
     }
+  }
+
+  /** Visualizador com as imagens já carregadas da mesma aba (ou do bloco todo), na ordem em que aparecem. */
+  private async open(img: HTMLImageElement): Promise<void> {
+    const scope = img.closest<HTMLElement>('[role=tabpanel]') ?? this.host.nativeElement;
+    const shown = Array.from(scope.querySelectorAll('img')).filter((i) => i.src.startsWith('blob:'));
+    const items = shown.map((i) => ({ url: i.src, name: attachmentNameFromUrl(i.getAttribute('data-dv-orig')), alt: i.alt || null }));
+    const index = Math.max(0, shown.indexOf(img));
+    const { MdImageViewerComponent } = await import('../code-ref/md-image-viewer.component');
+    this.dialog.open(MdImageViewerComponent, {
+      data: { ...(items[index] ?? { url: img.src, name: 'imagem' }), items, index },
+      width: '96vw', maxWidth: '96vw', height: '92vh', panelClass: 'md-image-dialog', autoFocus: false,
+    });
   }
 
   private url(card: string | number, id: string, name: string): Promise<string> {

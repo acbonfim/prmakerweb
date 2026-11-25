@@ -10,6 +10,8 @@ describe('visualizador de arquivo — tipo de prévia', () => {
     expect(fileViewKind('arquivo.zip', 'application/zip', 100)).toBe('none');
     expect(fileViewKind('chamado', null, 100, 'ticket')).toBe('markdown');
     expect(fileViewKind('grande.sql', null, 3 * 1024 * 1024)).toBe('none');
+    expect(fileViewKind('relatorio.pdf', 'application/octet-stream', 9 * 1024 * 1024)).toBe('pdf');
+    expect(fileViewKind('sem-extensao', 'application/pdf', 100)).toBe('pdf');
   });
 
   it('destaca palavras-chave, strings, números e comentários do SQL', () => {

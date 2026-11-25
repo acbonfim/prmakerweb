@@ -231,7 +231,7 @@ export function fileMeta(f: WorkItemFile, formatNumber: (n: number) => string = 
   return parts.join(' · ');
 }
 
-export type FilePreviewKind = 'markdown' | 'code' | 'json' | 'text' | 'image' | 'none';
+export type FilePreviewKind = 'markdown' | 'code' | 'json' | 'text' | 'image' | 'pdf' | 'none';
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
 const CODE_EXT = /\.(sql|sh|bash|py|ps1|cs|js|ts|xml|ya?ml|html?|css)$/i;
@@ -242,6 +242,7 @@ export function filePreviewKind(f: Pick<WorkItemFile, 'kind' | 'name' | 'content
   const type = `${f.contentType ?? ''}`.toLowerCase();
   const name = f.name ?? '';
   if (type.startsWith('image/') || IMAGE_EXT.test(name)) return 'image';
+  if (type.includes('application/pdf') || /\.pdf$/i.test(name)) return 'pdf';
   if (/\.(md|markdown)$/i.test(name) || type.includes('markdown')) return 'markdown';
   if (/\.json$/i.test(name) || type.includes('json')) return 'json';
   if (CODE_EXT.test(name)) return 'code';
@@ -254,7 +255,7 @@ export function filePreviewKind(f: Pick<WorkItemFile, 'kind' | 'name' | 'content
 /** Dá para copiar como texto (abrir no visualizador também). */
 export function isTextFile(f: Pick<WorkItemFile, 'kind' | 'name' | 'contentType'>): boolean {
   const k = filePreviewKind(f);
-  return k !== 'image' && k !== 'none';
+  return k !== 'image' && k !== 'pdf' && k !== 'none';
 }
 
 /** Linguagem do bloco de código (cerca do markdown) pelo nome do arquivo. */

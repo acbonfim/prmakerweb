@@ -233,6 +233,7 @@ export class DevOpsActionsMenuComponent {
         details: [
           `• Área → ${tip?.area || '—'}`,
           `• Estado → ${tip?.state || '—'}`,
+          ...(tip?.column ? [`• Coluna do board → ${tip.column}`] : []),
           tip?.comment ? `• Comentário na discussion: “${tip.comment}”` : '• Sem comentário',
           `Exige: card sem pendências${tip?.requiredArea ? ` e na área ${tip.requiredArea}` : ''}.`,
         ].join('\n'),

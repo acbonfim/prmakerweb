@@ -15,6 +15,7 @@ import { CardFilesComponent } from '../../../components/card-files/card-files.co
 import { CaseCompactComponent } from '../../../components/case-chat/case-compact.component';
 import { DevOpsBoardComponent } from '../../../components/devops/devops-board.component';
 import { DevOpsCardPanelComponent } from '../../../components/devops/devops-card-panel.component';
+import { DEVOPS_CARD_DIALOG, cardDialogEscape } from '../../../components/devops/devops-card-dialog.component';
 import { openDevOpsCardCreate } from '../../../components/devops/devops-card-create';
 import { openEpicDialog } from '../../../components/epics/epic-dialog.component';
 import { EpicStoriesComponent } from '../../../components/epics/epic-stories.component';
@@ -659,15 +660,7 @@ export class DeskComponent implements OnInit, OnDestroy {
 
   private openCardOverlay(): void {
     if (this.cardDialog) return;
-    const ref = this.dialog.open(this.cardModalTpl(), {
-      width: 'min(1560px, 96vw)',
-      maxWidth: '96vw',
-      height: 'min(1000px, 94vh)',
-      panelClass: 'dk-card-dialog',
-      autoFocus: false,
-      restoreFocus: true,
-      disableClose: true,
-    });
+    const ref = this.dialog.open(this.cardModalTpl(), DEVOPS_CARD_DIALOG);
     ref.backdropClick().subscribe(() => this.cardPanel()?.close());
     ref.keydownEvents().subscribe((e) => { if (e.key === 'Escape') this.onEscape(e); });
     ref.afterClosed().subscribe(() => { if (this.cardDialog === ref) this.cardDialog = null; });
@@ -682,11 +675,7 @@ export class DeskComponent implements OnInit, OnDestroy {
 
   /** Esc fecha o modal do card — menos quando um combo/menu já tratou a tecla ou o foco está num campo (aí só sai do campo). */
   onEscape(event: KeyboardEvent): void {
-    const panel = this.cardPanel();
-    if (!panel || event.defaultPrevented) return;
-    const t = event.target as HTMLElement | null;
-    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) { t.blur(); return; }
-    panel.close();
+    cardDialogEscape(event, this.cardPanel());
   }
 
   // ── Especialista ────────────────────────────────────────────────────────────────────────────

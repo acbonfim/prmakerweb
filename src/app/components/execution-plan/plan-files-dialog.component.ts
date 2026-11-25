@@ -99,7 +99,7 @@ interface Preview {
             <app-file-viewer [name]="p.artifact.name" [contentType]="p.artifact.contentType" [kind]="p.artifact.kind"
                              [description]="p.artifact.description" [blob]="p.blob" [card]="data.cardNumber" [bar]="true" [actions]="true">
               <ng-container viewerActions>
-                @if (p.kind !== 'none') {
+                @if (p.kind !== 'none' && p.kind !== 'pdf') {
                   <button mat-icon-button (click)="copy()" [matTooltip]="p.kind === 'image' ? 'Copiar imagem' : 'Copiar conteúdo'" aria-label="Copiar">
                     <mat-icon>content_copy</mat-icon>
                   </button>

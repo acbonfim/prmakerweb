@@ -9,7 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { DevOpsService } from '../../services/devops.service';
 import { saveBlob } from '../../services/execution-plan.service';
-import { FILE_VIEWER_DIALOG, FileViewerDialogComponent, FileViewerDialogData } from '../file-viewer/file-viewer-dialog.component';
+import { FileViewerDialogData, openFileViewer } from '../file-viewer/file-viewer-dialog.component';
 import { DevOpsAttachment, devOpsErrorMessage } from './devops.model';
 
 const SNACK = { horizontalPosition: 'right', verticalPosition: 'top' } as const;
@@ -179,17 +179,19 @@ export class DevOpsCardAttachmentsComponent {
     this.thumbs.set({});
   }
 
+  /** Abre no visualizador com os outros anexos ao lado (← →). */
   open(a: DevOpsAttachment): void {
     const card = this.card();
     if (!card) return;
-    const data: FileViewerDialogData = {
-      name: a.name,
-      icon: this.icon(a.name),
-      subtitle: [`Card ${card}`, this.sourceLabel(a), a.sourceDetail].filter(Boolean).join(' · '),
+    const list = this.items();
+    const data = (x: DevOpsAttachment): FileViewerDialogData => ({
+      name: x.name,
+      icon: this.icon(x.name),
+      subtitle: [`Card ${card}`, this.sourceLabel(x), x.sourceDetail].filter(Boolean).join(' · '),
       card,
-      load: () => firstValueFrom(this.api.attachmentBlob(card, a.id, a.name)),
-    };
-    this.dialog.open(FileViewerDialogComponent, { ...FILE_VIEWER_DIALOG, data });
+      load: () => firstValueFrom(this.api.attachmentBlob(card, x.id, x.name)),
+    });
+    openFileViewer(this.dialog, list.map(data), Math.max(0, list.indexOf(a)));
   }
 
   download(a: DevOpsAttachment): void {
