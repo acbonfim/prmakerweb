@@ -25,7 +25,7 @@ import {
 } from './board.logic';
 import { openDevOpsCardCreate } from './devops-card-create';
 import {
-  BoardColumn, BoardConfig, BoardItem, BoardScope, DevOpsBoardRef, DevOpsTeam, DevOpsWorkItemType, MoveCardRequest,
+  BoardColumn, BoardConfig, BoardItem, BoardScope, BoardTagStyle, DevOpsBoardRef, DevOpsTeam, DevOpsWorkItemType, MoveCardRequest,
   devOpsErrorMessage, typeColorCss, typeIcon
 } from './devops.model';
 
@@ -234,11 +234,12 @@ function storageSet(key: string, value: string): void {
           @let ty = typeOf(item.type);
           <div class="dvb-card" cdkDrag [cdkDragData]="item" [cdkDragDisabled]="!draggable(item)"
                (cdkDragStarted)="dragging.set(item)" (cdkDragEnded)="dragEnded()" [style.--dvb-type]="ty.color"
+               [class.dvb-card--styled]="!!item.cardColor" [style.background]="item.cardColor || null"
                [class.dvb-card--moving]="moving().has(item.id)">
             <div class="dvb-card__top">
               <mat-icon class="dvb-card__icon" [style.color]="ty.color" [matTooltip]="item.type">{{ ty.icon }}</mat-icon>
               <span class="dvb-card__id">{{ item.id }}</span>
-              <a class="dvb-card__title" href="" (click)="open(item, $event)" [matTooltip]="'Abrir o card ' + item.id" matTooltipShowDelay="700">{{ item.title }}</a>
+              <a class="dvb-card__title" href="" [style.color]="item.titleColor || null" (click)="open(item, $event)" [matTooltip]="'Abrir o card ' + item.id" matTooltipShowDelay="700">{{ item.title }}</a>
             </div>
             <div class="dvb-card__who">
               @if (item.assignedTo; as a) {
@@ -251,7 +252,10 @@ function storageSet(key: string, value: string): void {
             <div class="dvb-card__state"><span class="dvb-card__label">Estado</span><span class="dvb-dot"></span>{{ item.state }}</div>
             @if (item.tags.length) {
               <div class="dvb-card__tags">
-                @for (t of item.tags; track t) { <span class="dvb-tag">{{ t }}</span> }
+                @for (t of item.tags; track t) {
+                  @let ts = tagStyle(t);
+                  <span class="dvb-tag" [style.background]="ts?.background || null" [style.color]="ts?.color || null">{{ t }}</span>
+                }
               </div>
             }
             @if (!draggable(item)) {
@@ -394,6 +398,10 @@ function storageSet(key: string, value: string): void {
     .dvb-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 4px 0 0 4px; background: var(--dvb-type, #8a8f98); }
     .dvb-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,.45); }
     .dvb-card--moving { opacity: .7; }
+    /* Card pintado por regra de estilo do board (cores claras do DevOps): texto escuro, como lá. */
+    .dvb-card--styled { --cc-text-1: #1b1f24; --cc-text-2: rgba(0,0,0,.72); --cc-text-3: rgba(0,0,0,.55); color: #1b1f24; }
+    .dvb-card--styled .dvb-tag { background: rgba(0,0,0,.09); }
+    .dvb-card--styled .dvb-card__title:hover { color: inherit; }
     .dvb-card__top { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
     .dvb-card__icon { font-size: 15px; width: 15px; height: 15px; flex: none; margin-top: 1px; }
     .dvb-card__id { font-weight: 600; flex: none; }
@@ -529,6 +537,8 @@ export class DevOpsBoardComponent {
     }
     return map;
   });
+
+  private tagStyles = computed(() => new Map((this.config()?.tagStyles ?? []).map(t => [t.name.toLowerCase(), t] as const)));
 
   private loadSeq = 0;
   private refreshQueued = false;
@@ -707,6 +717,11 @@ export class DevOpsBoardComponent {
   }
 
   // ── Visual ──
+
+  /** Cor da tag pelo board do DevOps (nome sem caixa). */
+  tagStyle(tag: string): BoardTagStyle | undefined {
+    return this.tagStyles().get((tag ?? '').toLowerCase());
+  }
 
   typeOf(type: string): { color: string; icon: string } {
     return this.typeInfo().get((type ?? '').toLowerCase()) ?? { color: typeColorCss(null), icon: typeIcon(null, type) };
