@@ -1,5 +1,6 @@
-import { Component, ViewEncapsulation, computed, effect, inject, input, linkedSignal, output, signal, untracked } from '@angular/core';
+import { Component, ViewEncapsulation, computed, effect, inject, input, linkedSignal, output, signal, untracked, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
+import { CdkOverlayOrigin, OverlayModule } from '@angular/cdk/overlay';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -11,10 +12,15 @@ import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { DevOpsService } from '../../services/devops.service';
 import { RoleService } from '../../services/role.service';
+import { CcPopoverComponent } from '../popover/cc-popover.component';
 import { PmComboComponent, PmComboOption } from '../pm-combo/pm-combo.component';
 import { WorkItemPickerSource } from '../work-item-pickers/work-item-picker-source.service';
 import { canAccept, laneKey, boardLanes } from './board.logic';
-import { buildPatch, changedFields, displayValue, groupFields } from './card-edit.logic';
+import { PendingChange, buildPatch, changedFields, changesLabel, describeChanges, displayValue, groupFields } from './card-edit.logic';
+import { DevOpsAttachmentImagesDirective } from './devops-attachment-images.directive';
+import { DevOpsCardAttachmentsComponent } from './devops-card-attachments.component';
+import { DevOpsCardDiscussionComponent } from './devops-card-discussion.component';
+import { DevOpsCardRelatedComponent } from './devops-card-related.component';
 import { DevOpsFieldInputComponent } from './devops-field-input.component';
 import { DevOpsTagsInputComponent } from './devops-tags-input.component';
 import {
@@ -33,21 +39,29 @@ const DEFAULT_LANE = '__default__';
 const STATE_CATEGORY_COLORS: Record<string, string> = {
   proposed: '#8b949e', inprogress: '#58a6ff', resolved: '#d29922', completed: '#3fb950', removed: '#f85149',
 };
+/** Campos que ficam no cabeçalho (como no DevOps): responsável na linha das tags; área e iteração na faixa do estado. */
+const HEADER_FIELDS: string[] = [F.assignedTo, F.area, F.iteration];
+
+/** Abas do modal (ajustes 3). */
+export type CardTab = 'details' | 'fields' | 'discussion' | 'attachments' | 'related';
 
 /**
- * 0099 (Mesa de gestão): painel do card do DevOps — cabeçalho (tipo, id, título editável, link para o DevOps, "Abrir
- * na Bancada", "Adicionar ao épico"), estado e — com time/board — coluna/lane/Done (move na hora, como arrastar no
- * board), campos do tipo agrupados (principais primeiro) com o controle de cada tipo, tags com criar, comentário e
- * "Salvar" que manda só o que mudou. Conflito/erro do DevOps aparece com a mensagem dele.
+ * 0099 (Mesa de gestão): o card do DevOps. Ajustes 3: modal largo com o desenho do formulário do DevOps — cabeçalho com
+ * tipo/id, título, responsável, comentários, tags (tirar/pôr) e "Salvar"; faixa com estado, motivo, área, iteração e
+ * coluna/lane/Done do board; seletor de abas à direita: Detalhes (textos + planejamento), Campos (outros + sistema),
+ * Discussion (comentar com @ e #, "Enviar" separado do "Salvar"), Anexos e Relacionados. "Alterado: n campos" abre o
+ * antes × depois (com desfazer por campo) e o "Salvar" pede confirmação com a mesma lista.
  *
- * Ocupa a altura do contêiner (a página decide se é gaveta lateral ou diálogo).
- *
- * Ajustes 1: estado, coluna e lane no `app-pm-combo` (sem `<select>` nativo).
+ * Ocupa a altura do contêiner (a página decide o tamanho do modal).
  */
 @Component({
   selector: 'app-devops-card-panel',
   standalone: true,
-  imports: [NgTemplateOutlet, FormsModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule, PmComboComponent, DevOpsFieldInputComponent, DevOpsTagsInputComponent],
+  imports: [
+    NgTemplateOutlet, OverlayModule, FormsModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule, PmComboComponent,
+    CcPopoverComponent, DevOpsFieldInputComponent, DevOpsTagsInputComponent, DevOpsCardDiscussionComponent, DevOpsCardAttachmentsComponent,
+    DevOpsCardRelatedComponent, DevOpsAttachmentImagesDirective
+  ],
   encapsulation: ViewEncapsulation.None,
   template: `
     @let d = detail();
@@ -62,18 +76,20 @@ const STATE_CATEGORY_COLORS: Record<string, string> = {
               <a class="dvp__id" [href]="url" target="_blank" rel="noopener" matTooltip="Abrir no DevOps">{{ id }}<mat-icon>open_in_new</mat-icon></a>
             } @else { <span class="dvp__id">{{ id }}</span> }
           }
+          @if (d) {
+            <span class="dvp__links">
+              @if (parentId(); as p) {
+                <button type="button" class="dv-linkbtn" (click)="show(p)" matTooltip="Abrir o card pai aqui">Pai: {{ p }}</button>
+              }
+              @if (childCount()) {
+                <button type="button" class="dv-linkbtn" (click)="tab.set('related')">{{ childCount() }} {{ childCount() === 1 ? 'filho' : 'filhos' }}</button>
+              }
+            </span>
+          }
           <span class="dvp__spacer"></span>
-          <button mat-icon-button type="button" (click)="reload()" [disabled]="loading() || !current()" matTooltip="Recarregar do DevOps" aria-label="Recarregar">
-            <mat-icon>refresh</mat-icon>
-          </button>
-          <button mat-icon-button type="button" (click)="close()" aria-label="Fechar"><mat-icon>close</mat-icon></button>
-        </div>
-        @if (d) {
-          <textarea class="dvp__title" rows="1" [ngModel]="title()" (ngModelChange)="title.set($event)" aria-label="Título"
-                    [class.dvp__title--changed]="title().trim() !== d.title" (keydown.enter)="$event.preventDefault()"></textarea>
-          <div class="dvp__actions">
+          @if (d) {
             @if (canOpenWorkbench) {
-              <button mat-stroked-button type="button" (click)="openWorkbench()" matTooltip="Trabalhar o card na Bancada (análise, itens, especialista)">
+              <button mat-stroked-button type="button" class="dvp__small" (click)="openWorkbench()" matTooltip="Trabalhar o card na Bancada (análise, itens, especialista)">
                 <mat-icon>handyman</mat-icon>Abrir na Bancada
               </button>
             }
@@ -81,133 +97,200 @@ const STATE_CATEGORY_COLORS: Record<string, string> = {
               @if (inEpic()) {
                 <span class="dvp__chip" matTooltip="O card já está no épico"><mat-icon>check</mat-icon>No épico #{{ ep }}</span>
               } @else {
-                <button mat-stroked-button type="button" (click)="addToEpic()" [disabled]="addingToEpic()">
+                <button mat-stroked-button type="button" class="dvp__small" (click)="addToEpic()" [disabled]="addingToEpic()">
                   <mat-icon>playlist_add</mat-icon>Adicionar ao épico #{{ ep }}
                 </button>
               }
             }
-            @if (parentId(); as p) {
-              <button type="button" class="dv-linkbtn" (click)="show(p)" matTooltip="Abrir o card pai aqui">Pai: {{ p }}</button>
+          }
+          <button mat-icon-button type="button" (click)="reload()" [disabled]="loading() || !current()" matTooltip="Recarregar do DevOps" aria-label="Recarregar">
+            <mat-icon>refresh</mat-icon>
+          </button>
+          <button mat-icon-button type="button" (click)="close()" matTooltip="Fechar (Esc)" aria-label="Fechar"><mat-icon>close</mat-icon></button>
+        </div>
+        @if (d) {
+          <div class="dvp__titlerow">
+            <span class="dvp__titleid">{{ d.id }}</span>
+            <textarea class="dvp__title" rows="1" [ngModel]="title()" (ngModelChange)="title.set($event)" aria-label="Título"
+                      [class.dvp__title--changed]="title().trim() !== d.title" (keydown.enter)="$event.preventDefault()"></textarea>
+          </div>
+          <div class="dvp__who">
+            @if (headerDef(assignedRef); as f) {
+              <div class="dvp__assigned" [class.dvp__changed]="changed().has(f.referenceName)">
+                <app-devops-field-input [field]="f" [value]="valueOf(f.referenceName)" (valueChange)="setValue(f.referenceName, $event)" placeholder="Sem responsável" />
+              </div>
             }
-            @if (childCount()) { <span class="dv-hint">{{ childCount() }} {{ childCount() === 1 ? 'filho' : 'filhos' }}</span> }
+            <button type="button" class="dvp__comments" (click)="openDiscussion()" matTooltip="Ver a discussion e comentar">
+              <mat-icon>chat_bubble_outline</mat-icon>{{ commentCount() }} {{ commentCount() === 1 ? 'comentário' : 'comentários' }}
+            </button>
+            <div class="dvp__tags" [class.dvp__changed]="tagsChanged()">
+              <app-devops-tags-input [(tags)]="tags" placeholder="Adicionar tag" />
+            </div>
+            <span class="dvp__spacer"></span>
+            <div class="dvp__save">
+              @if (dirty()) {
+                <button type="button" class="dv-linkbtn dvp__pending" cdkOverlayOrigin #pendingOrigin="cdkOverlayOrigin"
+                        (click)="showChanges(pendingOrigin, false)" matTooltip="Ver o que mudou (antes × depois)">{{ pendingLabel() }}</button>
+                <button mat-button type="button" (click)="discard()" [disabled]="saving()">Descartar</button>
+              }
+              <button mat-flat-button color="primary" type="button" cdkOverlayOrigin #saveOrigin="cdkOverlayOrigin"
+                      (click)="askSave(saveOrigin)" [disabled]="!dirty() || saving()">
+                <mat-icon>save</mat-icon>{{ saving() ? 'Salvando…' : 'Salvar' }}
+              </button>
+            </div>
           </div>
         }
       </header>
+
+      @if (d) {
+        <div class="dvp__strip">
+          <div class="dvp__strip-fields">
+            <div class="dvp__sf">
+              <span class="dvp__sf-label">Estado @if (changed().has(stateRef)) { <i class="dv-changed"></i> }</span>
+              <app-pm-combo [options]="stateCombo()" [value]="stateText()" (valueChange)="$event && setValue(stateRef, $event)"
+                            [clearable]="false" ariaLabel="Estado" placeholder="Estado" emptyText="Nenhum estado com esse nome" />
+            </div>
+            <div class="dvp__sf dvp__sf--ro">
+              <span class="dvp__sf-label">Motivo</span>
+              <span class="dvp__ro-value" [title]="reasonText()">{{ reasonText() || '—' }}</span>
+            </div>
+            @if (headerDef(areaRef); as f) {
+              <div class="dvp__sf dvp__sf--wide">
+                <span class="dvp__sf-label">Área @if (changed().has(f.referenceName)) { <i class="dv-changed"></i> }</span>
+                <app-devops-field-input [field]="f" [value]="valueOf(f.referenceName)" (valueChange)="setValue(f.referenceName, $event)" />
+              </div>
+            }
+            @if (headerDef(iterationRef); as f) {
+              <div class="dvp__sf dvp__sf--wide">
+                <span class="dvp__sf-label">Iteração @if (changed().has(f.referenceName)) { <i class="dv-changed"></i> }</span>
+                <app-devops-field-input [field]="f" [value]="valueOf(f.referenceName)" (valueChange)="setValue(f.referenceName, $event)" />
+              </div>
+            }
+            @if (board(); as cfg) {
+              <div class="dvp__sf">
+                <span class="dvp__sf-label">Coluna do board</span>
+                <app-pm-combo [options]="columnCombo()" [value]="columnPick()" (valueChange)="pickColumn($event)" [disabled]="busy()"
+                              [clearable]="false" icon="view_column" placeholder="—" ariaLabel="Coluna do board"
+                              emptyText="Nenhuma coluna com esse nome" />
+              </div>
+              @if (laneOptions().length > 1) {
+                <div class="dvp__sf">
+                  <span class="dvp__sf-label">Lane</span>
+                  <app-pm-combo [options]="laneCombo()" [value]="lanePick()" (valueChange)="pickLane($event)" [disabled]="busy()"
+                                [clearable]="false" ariaLabel="Lane" emptyText="Nenhuma lane com esse nome" />
+                </div>
+              }
+              @if (columnSplit()) {
+                <div class="dvp__sf dvp__sf--ro">
+                  <span class="dvp__sf-label">Doing / Done</span>
+                  <label class="dv-check"><input #doneChk type="checkbox" [checked]="boardDone()" (change)="moveTo({ done: doneChk.checked }, doneChk)" [disabled]="busy()"> Done</label>
+                </div>
+              }
+            }
+          </div>
+          <nav class="dvp__tabs" role="tablist" aria-label="Seções do card">
+            @for (t of tabs(); track t.id) {
+              <button type="button" role="tab" class="dvp__tab" [class.dvp__tab--on]="tab() === t.id" [attr.aria-selected]="tab() === t.id"
+                      (click)="selectTab(t.id)">
+                <mat-icon>{{ t.icon }}</mat-icon><span>{{ t.label }}</span>
+                @if (t.count != null) { <span class="dvp__tab-n">{{ t.count }}</span> }
+                @if (t.dot) { <i class="dv-changed"></i> }
+              </button>
+            }
+          </nav>
+        </div>
+      }
+
       @if (loading() || busy()) { <mat-progress-bar mode="indeterminate" class="dvp__progress" /> } @else { <div class="dvp__progress"></div> }
 
-      <div class="dvp__body">
+      @if (saveError(); as e) {
+        <div class="dvp__note dvp__note--err dvp__note--bar">
+          <mat-icon>error_outline</mat-icon><span>{{ e }}</span>
+          @if (conflict()) { <button type="button" class="dv-linkbtn" (click)="reload(true)">Recarregar (perde as alterações)</button> }
+        </div>
+      }
+
+      <div class="dvp__body" [dvAttachmentImages]="current()">
         @if (loadError(); as e) {
           <div class="dvp__note dvp__note--err"><mat-icon>error_outline</mat-icon><span>{{ e }}</span>
             <button type="button" class="dv-linkbtn" (click)="reload()">Tentar de novo</button></div>
         }
-        @if (!current()) {
-          <div class="dv-hint">Nenhum card selecionado.</div>
-        }
+        @if (!current()) { <div class="dv-hint">Nenhum card selecionado.</div> }
+        @if (!d && loading()) { <div class="dv-hint">Abrindo o card no DevOps…</div> }
         @if (d) {
-          <section class="dvp__sec">
-            <div class="dvp__grid">
-              <div class="dv-field">
-                <span class="dv-field__label">Estado @if (changed().has(stateRef)) { <i class="dv-changed"></i> }</span>
-                <app-pm-combo [options]="stateCombo()" [value]="stateText()" (valueChange)="$event && setValue(stateRef, $event)"
-                              [clearable]="false" ariaLabel="Estado" placeholder="Estado" emptyText="Nenhum estado com esse nome" />
-              </div>
-              @if (board(); as cfg) {
-                <div class="dv-field">
-                  <span class="dv-field__label">Coluna do board</span>
-                  <app-pm-combo [options]="columnCombo()" [value]="columnPick()" (valueChange)="pickColumn($event)" [disabled]="busy()"
-                                [clearable]="false" icon="view_column" placeholder="—" ariaLabel="Coluna do board"
-                                emptyText="Nenhuma coluna com esse nome" />
-                </div>
-                @if (laneOptions().length > 1) {
-                  <div class="dv-field">
-                    <span class="dv-field__label">Lane</span>
-                    <app-pm-combo [options]="laneCombo()" [value]="lanePick()" (valueChange)="pickLane($event)" [disabled]="busy()"
-                                  [clearable]="false" ariaLabel="Lane" emptyText="Nenhuma lane com esse nome" />
-                  </div>
-                }
-                @if (columnSplit()) {
-                  <div class="dv-field">
-                    <span class="dv-field__label">Doing / Done</span>
-                    <label class="dv-check"><input #doneChk type="checkbox" [checked]="boardDone()" (change)="moveTo({ done: doneChk.checked }, doneChk)" [disabled]="busy()"> Done</label>
-                  </div>
-                }
-              }
-            </div>
-          </section>
-
           @let g = groups();
-          @if (g.main.length) {
-            <section class="dvp__sec">
-              <h4>Principais</h4>
-              <div class="dvp__grid">
-                @for (f of g.main; track f.referenceName) { <ng-container *ngTemplateOutlet="fieldTpl; context: { $implicit: f }" /> }
-              </div>
-            </section>
-          }
-
-          <section class="dvp__sec">
-            <h4>Tags @if (tagsChanged()) { <i class="dv-changed"></i> }</h4>
-            <app-devops-tags-input [(tags)]="tags" />
-          </section>
-
-          @if (g.texts.length) {
-            <section class="dvp__sec">
+          <!-- Detalhes: textos à esquerda (Descrição, Repro Steps…), planejamento à direita — como o formulário do DevOps -->
+          <div class="dvp__pane dvp__cols" [hidden]="tab() !== 'details'" role="tabpanel">
+            <div class="dvp__texts">
               @for (f of g.texts; track f.referenceName) {
-                <div class="dv-field dvp__text">
-                  <span class="dv-field__label">{{ f.name }}@if (f.required) { <b>*</b> }@if (changed().has(f.referenceName)) { <i class="dv-changed"></i> }</span>
-                  <app-devops-field-input [field]="f" [value]="valueOf(f.referenceName)" (valueChange)="setValue(f.referenceName, $event)" />
-                </div>
+                <section class="dvp__sec">
+                  <h3>{{ f.name }}@if (f.required) { <b class="dvp__req">*</b> }@if (changed().has(f.referenceName)) { <i class="dv-changed"></i> }</h3>
+                  <app-devops-field-input class="dvp__textfield" [field]="f" [value]="valueOf(f.referenceName)" (valueChange)="setValue(f.referenceName, $event)" />
+                </section>
+              } @empty { <span class="dv-hint">Este tipo de card não tem campos de texto longo preenchidos.</span> }
+            </div>
+            <aside class="dvp__side">
+              <section class="dvp__sec">
+                <h3>Planejamento</h3>
+                @if (planning().length) {
+                  <div class="dvp__stack">
+                    @for (f of planning(); track f.referenceName) { <ng-container *ngTemplateOutlet="fieldTpl; context: { $implicit: f }" /> }
+                  </div>
+                } @else { <span class="dv-hint">Sem campos de planejamento neste tipo.</span> }
+              </section>
+              @if (dates().length) {
+                <section class="dvp__sec">
+                  <h3>Datas</h3>
+                  <dl class="dvp__ro">
+                    @for (x of dates(); track x.label) { <dt>{{ x.label }}</dt><dd>{{ x.value }}</dd> }
+                  </dl>
+                </section>
               }
+            </aside>
+          </div>
+
+          <!-- Campos: os demais campos editáveis + os do sistema (somente leitura) -->
+          <div class="dvp__pane" [hidden]="tab() !== 'fields'" role="tabpanel">
+            <section class="dvp__sec">
+              <h3>
+                Outros campos
+                <button type="button" class="dv-linkbtn" (click)="showAll.set(!showAll())">{{ showAll() ? 'Só os preenchidos' : 'Mostrar todos' }}</button>
+              </h3>
+              @if (g.others.length) {
+                <div class="dvp__grid">
+                  @for (f of g.others; track f.referenceName) { <ng-container *ngTemplateOutlet="fieldTpl; context: { $implicit: f }" /> }
+                </div>
+              } @else { <span class="dv-hint">Nenhum outro campo preenchido — "Mostrar todos" lista os vazios.</span> }
             </section>
+            @if (g.readOnly.length) {
+              <section class="dvp__sec dvp__sec--ro">
+                <h3>Sistema (somente leitura)</h3>
+                <dl class="dvp__ro dvp__ro--cols">
+                  @for (f of g.readOnly; track f.referenceName) {
+                    <div><dt>{{ f.name }}</dt><dd>{{ shownValue(f) }}</dd></div>
+                  }
+                </dl>
+              </section>
+            }
+          </div>
+
+          @if (visited().has('discussion')) {
+            <div class="dvp__pane" [hidden]="tab() !== 'discussion'" role="tabpanel">
+              <app-devops-card-discussion #discussion [card]="current()" (countChange)="commentsLoaded.set($event)" (posted)="onCommented()" />
+            </div>
           }
-
-          <section class="dvp__sec">
-            <h4>
-              Outros campos
-              <button type="button" class="dv-linkbtn" (click)="showAll.set(!showAll())">{{ showAll() ? 'Só os preenchidos' : 'Mostrar todos' }}</button>
-            </h4>
-            @if (g.others.length) {
-              <div class="dvp__grid">
-                @for (f of g.others; track f.referenceName) { <ng-container *ngTemplateOutlet="fieldTpl; context: { $implicit: f }" /> }
-              </div>
-            } @else { <span class="dv-hint">Nenhum outro campo preenchido.</span> }
-          </section>
-
-          <section class="dvp__sec">
-            <h4>Comentário</h4>
-            <textarea class="dv-textarea" rows="3" [ngModel]="comment()" (ngModelChange)="comment.set($event)"
-                      placeholder="Escreva um comentário (vai para a discussion ao salvar; aceita markdown)" aria-label="Comentário"></textarea>
-          </section>
-
-          @if (g.readOnly.length) {
-            <section class="dvp__sec dvp__sec--ro">
-              <h4>Somente leitura</h4>
-              <dl class="dvp__ro">
-                @for (f of g.readOnly; track f.referenceName) {
-                  <dt>{{ f.name }}</dt><dd>{{ shownValue(f) }}</dd>
-                }
-              </dl>
-            </section>
+          @if (visited().has('attachments')) {
+            <div class="dvp__pane" [hidden]="tab() !== 'attachments'" role="tabpanel">
+              <app-devops-card-attachments [card]="current()" [webUrl]="webUrl()" (countChange)="attachmentsLoaded.set($event)" />
+            </div>
+          }
+          @if (visited().has('related')) {
+            <div class="dvp__pane" [hidden]="tab() !== 'related'" role="tabpanel">
+              <app-devops-card-related [relations]="d.relations" (openCard)="show($event)" />
+            </div>
           }
         }
       </div>
-
-      @if (d) {
-        <footer class="dvp__foot">
-          @if (saveError(); as e) {
-            <div class="dvp__note dvp__note--err dvp__foot-err">
-              <mat-icon>error_outline</mat-icon><span>{{ e }}</span>
-              @if (conflict()) { <button type="button" class="dv-linkbtn" (click)="reload(true)">Recarregar (perde as alterações)</button> }
-            </div>
-          }
-          <span class="dv-hint">{{ dirty() ? pendingLabel() : 'Sem alterações' }}</span>
-          <span class="dvp__spacer"></span>
-          <button mat-button type="button" (click)="discard()" [disabled]="!dirty() || saving()">Descartar</button>
-          <button mat-flat-button color="primary" type="button" (click)="save()" [disabled]="!dirty() || saving()">
-            {{ saving() ? 'Salvando…' : 'Salvar' }}
-          </button>
-        </footer>
-      }
     </div>
 
     <ng-template #fieldTpl let-f>
@@ -217,46 +300,138 @@ const STATE_CATEGORY_COLORS: Record<string, string> = {
         @if (f.helpText) { <span class="dv-field__help">{{ f.helpText }}</span> }
       </div>
     </ng-template>
+
+    <!-- Antes × depois (link "Alterado: …") e confirmação do Salvar -->
+    <cc-popover #changesPop maxWidth="min(620px, calc(100vw - 24px))">
+      <div class="dvp-diff">
+        <div class="dvp-diff__title">{{ confirming() ? 'Salvar estas alterações no DevOps?' : 'Alterações não salvas' }}</div>
+        <table class="dvp-diff__table">
+          <thead><tr><th>Campo</th><th>Antes</th><th>Depois</th><th></th></tr></thead>
+          <tbody>
+            @for (c of changes(); track c.ref) {
+              <tr>
+                <td class="dvp-diff__label">{{ c.label }}</td>
+                <td class="dvp-diff__before">{{ c.before }}</td>
+                <td class="dvp-diff__after">{{ c.after }}</td>
+                <td><button mat-icon-button type="button" class="dvp-diff__undo" (click)="undo(c)" matTooltip="Desfazer esta alteração" aria-label="Desfazer"><mat-icon>undo</mat-icon></button></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        @if (confirming()) {
+          <p class="dvp-diff__note">O card {{ d?.id }} é gravado no DevOps em seu nome — a alteração aparece no histórico do card para todos.</p>
+          <div class="dvp-diff__actions">
+            <button mat-button type="button" (click)="changesPop.close()">Cancelar</button>
+            <button mat-flat-button color="primary" type="button" (click)="confirmSave()" [disabled]="saving() || !dirty()">
+              <mat-icon>save</mat-icon>Confirmar e salvar
+            </button>
+          </div>
+        } @else {
+          <div class="dvp-diff__actions">
+            <button mat-button type="button" (click)="discard(); changesPop.close()">Descartar tudo</button>
+            <button mat-flat-button color="primary" type="button" (click)="confirming.set(true)" [disabled]="!dirty()"><mat-icon>save</mat-icon>Salvar…</button>
+          </div>
+        }
+      </div>
+    </cc-popover>
   `,
   styles: [DV_FORM_STYLES, `
     app-devops-card-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; }
     .dvp { display: flex; flex-direction: column; flex: 1; min-height: 0; background: var(--surface-1, #262b33); border-left: 4px solid var(--dvp-type, #8a8f98); }
-    .dvp__head { padding: 6px 8px 8px 12px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-2, #2e343f); flex: none; }
-    .dvp__row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .dvp__head { padding: 6px 10px 8px 16px; display: flex; flex-direction: column; gap: 4px; background: var(--surface-1, #262b33); flex: none; }
+    .dvp__row { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
     .dvp__icon { font-size: 18px; width: 18px; height: 18px; }
     .dvp__type { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--cc-text-2); }
     .dvp__id { display: inline-flex; align-items: center; gap: 2px; font-weight: 600; font-size: 13px; color: var(--cc-text-1); text-decoration: none; }
     a.dvp__id:hover { color: var(--mat-sys-primary); }
     .dvp__id mat-icon { font-size: 13px; width: 13px; height: 13px; opacity: .7; }
+    .dvp__links { display: inline-flex; gap: 10px; margin-left: 10px; }
     .dvp__spacer { flex: 1; }
-    .dvp__title { width: 100%; box-sizing: border-box; resize: none; field-sizing: content; min-height: 32px; max-height: 120px; font: inherit; font-size: 16px; font-weight: 600;
-      color: inherit; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; }
+    .dvp__small.mat-mdc-outlined-button { height: 30px; font-size: 12.5px; }
+    .dvp__chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #3fb950; }
+    .dvp__chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .dvp__titlerow { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+    .dvp__titleid { font-size: 20px; font-weight: 600; padding: 4px 0; flex: none; }
+    .dvp__title { flex: 1; min-width: 0; box-sizing: border-box; resize: none; field-sizing: content; min-height: 36px; max-height: 120px; font: inherit; font-size: 20px; font-weight: 500;
+      color: inherit; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 3px 6px; }
     .dvp__title:hover { border-color: var(--cc-surface-border-strong, rgba(255,255,255,.18)); }
     .dvp__title:focus { outline: none; border-color: color-mix(in srgb, var(--mat-sys-primary) 70%, transparent); background: var(--surface-input, #1a1f28); }
     .dvp__title--changed { border-left: 3px solid var(--mat-sys-primary); }
-    .dvp__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-    .dvp__actions .mat-mdc-outlined-button { height: 30px; font-size: 12.5px; }
-    .dvp__chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #3fb950; }
-    .dvp__chip mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .dvp__who { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; min-width: 0; }
+    .dvp__assigned { width: 240px; max-width: 100%; }
+    .dvp__tags { flex: 1 1 260px; min-width: 200px; max-width: 520px; }
+    .dvp__changed { box-shadow: inset 3px 0 0 var(--mat-sys-primary); border-radius: 6px; padding-left: 4px; }
+    .dvp__comments { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--mat-sys-primary); font: inherit; font-size: 13px;
+      cursor: pointer; padding: 4px 2px; white-space: nowrap; }
+    .dvp__comments:hover { text-decoration: underline; }
+    .dvp__comments mat-icon { font-size: 17px; width: 17px; height: 17px; }
+    .dvp__save { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .dvp__save mat-icon { margin-right: 4px; }
+    .dvp__pending { font-size: 12.5px; text-decoration: underline dotted; }
+    .dvp__strip { display: flex; align-items: flex-end; gap: 12px; padding: 8px 10px 0 16px; flex: none; flex-wrap: wrap;
+      background: var(--surface-2, #2e343f); border-top: 1px solid var(--cc-surface-border, rgba(255,255,255,.08)); }
+    .dvp__strip-fields { flex: 1 1 520px; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 12px; padding-bottom: 8px; min-width: 0; }
+    .dvp__sf { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .dvp__sf--wide { grid-column: span 2; }
+    .dvp__sf-label { font-size: 11.5px; color: var(--cc-text-2); display: flex; align-items: center; gap: 4px; }
+    .dvp__ro-value { font-size: 13px; color: var(--cc-text-2); padding: 6px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dvp__tabs { display: flex; align-items: flex-end; gap: 2px; flex-wrap: wrap; margin-left: auto; }
+    .dvp__tab { display: inline-flex; align-items: center; gap: 5px; border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: transparent;
+      color: var(--cc-text-2); font: inherit; font-size: 13px; padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+    .dvp__tab mat-icon { font-size: 17px; width: 17px; height: 17px; }
+    .dvp__tab:hover { color: var(--cc-text-1); background: color-mix(in srgb, var(--surface-1, #262b33) 50%, transparent); }
+    .dvp__tab--on { background: var(--surface-1, #262b33); color: var(--cc-text-1); border-color: var(--cc-surface-border, rgba(255,255,255,.08));
+      box-shadow: inset 0 2px 0 var(--mat-sys-primary); font-weight: 600; }
+    .dvp__tab-n { font-size: 11px; min-width: 18px; padding: 0 5px; border-radius: 9px; text-align: center; background: color-mix(in srgb, var(--cc-text-2) 18%, transparent); }
     .dvp__progress { height: 2px; flex: none; }
-    .dvp__body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px 16px; display: flex; flex-direction: column; gap: 14px; }
-    .dvp__sec { display: flex; flex-direction: column; gap: 8px; }
-    .dvp__sec h4 { margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--cc-text-2);
+    .dvp__body { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 20px; }
+    .dvp__pane[hidden] { display: none !important; }
+    .dvp__pane { display: flex; flex-direction: column; gap: 18px; }
+    .dvp__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 24px; align-items: start; }
+    .dvp__texts { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+    .dvp__side { display: flex; flex-direction: column; gap: 18px; min-width: 0; position: sticky; top: 0; }
+    .dvp__stack { display: flex; flex-direction: column; gap: 10px; }
+    .dvp__sec { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .dvp__sec h3 { margin: 0; padding-bottom: 6px; font-size: 14px; font-weight: 600; color: var(--cc-text-1); border-bottom: 1px solid var(--cc-surface-border, rgba(255,255,255,.08));
       display: flex; align-items: center; gap: 8px; }
-    .dvp__sec h4 .dv-linkbtn { text-transform: none; letter-spacing: 0; font-weight: 400; }
-    .dvp__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px 12px; }
+    .dvp__sec h3 .dv-linkbtn { font-weight: 400; }
+    .dvp__req { color: #f85149; }
+    .dvp__textfield .dv-html { max-height: 420px; }
+    .dvp__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; }
     .dvp__wide { grid-column: 1 / -1; }
-    .dvp__text + .dvp__text { margin-top: 4px; }
-    .dvp__ro { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; margin: 0; font-size: 12.5px; }
+    .dvp__ro { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px; }
     .dvp__ro dt { color: var(--cc-text-3); }
     .dvp__ro dd { margin: 0; color: var(--cc-text-2); overflow-wrap: anywhere; }
+    .dvp__ro--cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 16px; }
+    .dvp__ro--cols > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
     .dvp__note { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; font-size: 12.5px; }
     .dvp__note mat-icon { font-size: 17px; width: 17px; height: 17px; flex: none; }
     .dvp__note--err { background: rgba(248,81,73,.08); border: 1px solid rgba(248,81,73,.35); }
-    .dvp__foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--cc-surface-border, rgba(255,255,255,.08));
-      background: var(--surface-2, #2e343f); flex: none; }
-    .dvp__foot-err { flex-basis: 100%; }
+    .dvp__note--bar { margin: 8px 16px 0; flex: none; }
     i.dv-changed { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--mat-sys-primary); }
+    .dv-img--loading { opacity: .4; min-height: 40px; min-width: 60px; background: var(--surface-input, #1a1f28); }
+    .dv-img--error { outline: 1px dashed rgba(248,81,73,.5); }
+    @media (max-width: 900px) {
+      .dvp__cols { grid-template-columns: 1fr; }
+      .dvp__side { position: static; }
+      .dvp__tabs { margin-left: 0; overflow-x: auto; flex-wrap: nowrap; max-width: 100%; }
+      .dvp__sf--wide { grid-column: span 1; }
+      .dvp__titleid, .dvp__title { font-size: 17px; }
+    }
+    /* Popover do antes × depois */
+    .dvp-diff { display: flex; flex-direction: column; gap: 10px; min-width: min(420px, 80vw); }
+    .dvp-diff__title { font-weight: 600; font-size: 14px; }
+    .dvp-diff__table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    .dvp-diff__table th { text-align: left; font-weight: 500; color: var(--cc-text-3); padding: 2px 6px 4px; border-bottom: 1px solid var(--cc-surface-border, rgba(127,127,127,.25)); }
+    .dvp-diff__table td { padding: 5px 6px; vertical-align: top; border-bottom: 1px solid var(--cc-surface-border, rgba(127,127,127,.15)); overflow-wrap: anywhere; }
+    .dvp-diff__label { font-weight: 600; white-space: nowrap; }
+    .dvp-diff__before { color: #f85149; text-decoration: line-through; text-decoration-color: rgba(248,81,73,.5); max-width: 200px; }
+    .dvp-diff__after { color: #3fb950; max-width: 200px; }
+    .dvp-diff__undo { --mdc-icon-button-state-layer-size: 28px; width: 28px; height: 28px; padding: 2px; }
+    .dvp-diff__undo mat-icon { font-size: 17px; width: 17px; height: 17px; }
+    .dvp-diff__note { margin: 0; font-size: 12px; color: var(--cc-text-2); }
+    .dvp-diff__actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .dvp-diff__actions mat-icon { margin-right: 4px; }
   `]
 })
 export class DevOpsCardPanelComponent {
@@ -274,11 +449,19 @@ export class DevOpsCardPanelComponent {
   /** Time/board do DevOps (habilitam coluna/lane/Done do board). */
   readonly team = input<string | null>(null);
   readonly boardName = input<string | null>(null, { alias: 'board' });
+  /** Aba inicial (ex.: "discussion" para abrir já nos comentários). */
+  readonly initialTab = input<CardTab | null>(null);
   readonly closed = output<void>();
-  /** Card gravado (salvar, mover, adicionar ao épico). */
+  /** Card gravado (salvar, mover, adicionar ao épico, comentar). */
   readonly saved = output<CardDetail>();
 
   readonly stateRef = F.state;
+  readonly assignedRef = F.assignedTo;
+  readonly areaRef = F.area;
+  readonly iterationRef = F.iteration;
+
+  private readonly changesPop = viewChild.required<CcPopoverComponent>('changesPop');
+  private readonly discussion = viewChild<DevOpsCardDiscussionComponent>('discussion');
 
   /** Card em tela (o input, ou o pai/filho aberto aqui dentro). */
   readonly current = signal<string | null>(null);
@@ -299,35 +482,40 @@ export class DevOpsCardPanelComponent {
   readonly addingToEpic = signal(false);
   readonly showAll = signal(false);
 
+  // Abas
+  readonly tab = signal<CardTab>('details');
+  /** Abas já abertas (ficam montadas: trocar de aba não recarrega a discussion/anexos). */
+  readonly visited = signal<ReadonlySet<CardTab>>(new Set<CardTab>(['details']));
+  readonly commentsLoaded = signal<number | null>(null);
+  readonly attachmentsLoaded = signal<number | null>(null);
+  /** Popover do antes × depois em modo "confirmar o Salvar". */
+  readonly confirming = signal(false);
+
   // Edição
   readonly values = signal<Record<string, unknown>>({});
   readonly title = signal('');
   readonly tags = signal<string[]>([]);
-  readonly comment = signal('');
 
   private loadSeq = 0;
 
   readonly groups = computed(() => groupFields(this.defs(), this.values(), this.showAll()));
+  /** Planejamento (lado direito dos Detalhes): os principais menos os que estão no cabeçalho. */
+  readonly planning = computed(() => this.groups().main.filter((f) => !HEADER_FIELDS.includes(f.referenceName)));
   readonly patch = computed(() => {
     const d = this.detail();
-    return d ? buildPatch(d, this.defs(), this.values(), this.title(), this.tags(), this.comment()) : null;
+    return d ? buildPatch(d, this.defs(), this.values(), this.title(), this.tags()) : null;
   });
   readonly dirty = computed(() => !!this.patch());
   readonly changed = computed(() => {
     const d = this.detail();
     return d ? changedFields(d, this.defs(), this.values()) : new Set<string>();
   });
-  readonly tagsChanged = computed(() => !!(this.patch()?.addTags?.length || this.patch()?.removeTags?.length));
-  readonly pendingLabel = computed(() => {
-    const p = this.patch();
-    if (!p) return '';
-    const parts: string[] = [];
-    const n = Object.keys(p.fields ?? {}).length;
-    if (n) parts.push(`${n} ${n === 1 ? 'campo' : 'campos'}`);
-    if (p.addTags?.length || p.removeTags?.length) parts.push('tags');
-    if (p.comment) parts.push('comentário');
-    return `Alterado: ${parts.join(', ')}`;
+  readonly changes = computed<PendingChange[]>(() => {
+    const d = this.detail();
+    return d ? describeChanges(d, this.defs(), this.values(), this.title(), this.tags()) : [];
   });
+  readonly tagsChanged = computed(() => !!(this.patch()?.addTags?.length || this.patch()?.removeTags?.length));
+  readonly pendingLabel = computed(() => changesLabel(this.changes()) || 'Alterado');
 
   readonly webUrl = computed(() => {
     const d = this.detail();
@@ -335,6 +523,36 @@ export class DevOpsCardPanelComponent {
   });
   readonly parentId = computed(() => this.detail()?.relations?.find((r) => r.rel === PARENT_REL)?.id ?? null);
   readonly childCount = computed(() => (this.detail()?.relations ?? []).filter((r) => r.rel === CHILD_REL).length);
+  readonly commentCount = computed(() => this.commentsLoaded() ?? Number(this.detail()?.fields?.['System.CommentCount'] ?? 0));
+  readonly attachmentCount = computed(() =>
+    this.attachmentsLoaded() ?? (this.detail()?.relations ?? []).filter((r) => r.rel === 'AttachedFile').length);
+  readonly relatedCount = computed(() => (this.detail()?.relations ?? []).filter((r) => r.rel !== 'AttachedFile').length);
+  readonly reasonText = computed(() => `${this.detail()?.fields?.[F.reason] ?? ''}`);
+
+  readonly tabs = computed(() => {
+    const ch = this.changed();
+    const fieldsDirty = this.groups().others.some((f) => ch.has(f.referenceName));
+    const detailsDirty = [...this.groups().texts, ...this.planning()].some((f) => ch.has(f.referenceName));
+    return [
+      { id: 'details' as CardTab, label: 'Detalhes', icon: 'article', count: null, dot: detailsDirty },
+      { id: 'fields' as CardTab, label: 'Campos', icon: 'tune', count: null, dot: fieldsDirty },
+      { id: 'discussion' as CardTab, label: 'Discussion', icon: 'forum', count: this.commentCount(), dot: false },
+      { id: 'attachments' as CardTab, label: 'Anexos', icon: 'attach_file', count: this.attachmentCount(), dot: false },
+      { id: 'related' as CardTab, label: 'Relacionados', icon: 'link', count: this.relatedCount(), dot: false },
+    ];
+  });
+
+  /** Datas do card (somente leitura, como o bloco "Dates" do DevOps). */
+  readonly dates = computed(() => {
+    const d = this.detail();
+    if (!d) return [];
+    const fmt = (v: unknown) => displayValue({ type: 'dateTime', referenceName: 'x', allowedValues: [] }, v);
+    const who = (v: unknown) => displayValue({ type: 'identity', referenceName: F.createdBy, allowedValues: [] }, v);
+    const out: { label: string; value: string }[] = [];
+    if (d.fields[F.createdDate]) out.push({ label: 'Criado', value: `${fmt(d.fields[F.createdDate])} · ${who(d.fields[F.createdBy])}` });
+    if (d.fields[F.changedDate]) out.push({ label: 'Alterado', value: `${fmt(d.fields[F.changedDate])} · ${who(d.fields[F.changedBy])}` });
+    return out;
+  });
 
   readonly typeStyle = computed(() => {
     const d = this.detail();
@@ -407,6 +625,11 @@ export class DevOpsCardPanelComponent {
     });
 
     effect(() => {
+      const t = this.initialTab();
+      if (t) untracked(() => this.selectTab(t));
+    });
+
+    effect(() => {
       const team = this.team();
       const name = this.boardName();
       untracked(() => {
@@ -434,6 +657,9 @@ export class DevOpsCardPanelComponent {
     this.loadError.set(null);
     this.saveError.set(null);
     this.conflict.set(false);
+    this.commentsLoaded.set(null);
+    this.attachmentsLoaded.set(null);
+    if (this.tab() === 'related') this.tab.set('details');
     if (key) this.load(key);
   }
 
@@ -478,7 +704,6 @@ export class DevOpsCardPanelComponent {
     this.values.set({ ...(d.fields ?? {}), [F.state]: d.fields?.[F.state] ?? d.state });
     this.title.set(d.title ?? '');
     this.tags.set(d.tags?.length ? [...d.tags] : parseTags(d.fields?.[F.tags]));
-    this.comment.set('');
   }
 
   private checkEpic(epic: number | null, id: string | null): void {
@@ -488,6 +713,26 @@ export class DevOpsCardPanelComponent {
       next: (list) => { if (this.current() === id) this.inEpic.set(list.some((e) => e.number === epic)); },
       error: () => {}
     });
+  }
+
+  /** Definição de um campo do cabeçalho (responsável, área, iteração) — só quando o tipo tem e é editável. */
+  headerDef(ref: string): DevOpsFieldDef | null {
+    return this.defs().find((f) => f.referenceName === ref && !f.readOnly) ?? null;
+  }
+
+  selectTab(t: CardTab): void {
+    this.tab.set(t);
+    if (!this.visited().has(t)) this.visited.update((v) => new Set([...v, t]));
+  }
+
+  openDiscussion(): void {
+    this.selectTab('discussion');
+    setTimeout(() => this.discussion()?.focus(), 0);
+  }
+
+  onCommented(): void {
+    const d = this.detail();
+    if (d) this.saved.emit(d);
   }
 
   valueOf(ref: string): unknown {
@@ -507,6 +752,33 @@ export class DevOpsCardPanelComponent {
     if (d) this.applyDetail(d);
     this.saveError.set(null);
     this.conflict.set(false);
+  }
+
+  /** Desfaz uma alteração da lista (volta ao valor gravado). */
+  undo(c: PendingChange): void {
+    const d = this.detail();
+    if (!d) return;
+    if (c.ref === F.title) this.title.set(d.title ?? '');
+    else if (c.ref === 'tags') this.tags.set(d.tags?.length ? [...d.tags] : parseTags(d.fields?.[F.tags]));
+    else this.setValue(c.ref, c.ref === F.state ? (d.fields?.[F.state] ?? d.state) : (d.fields?.[c.ref] ?? null));
+    if (!this.dirty()) this.changesPop().close();
+  }
+
+  /** Link "Alterado: …": mostra o antes × depois. */
+  showChanges(origin: CdkOverlayOrigin, confirm: boolean): void {
+    this.confirming.set(confirm);
+    this.changesPop().open(origin);
+  }
+
+  /** "Salvar": confirma antes, com a lista do que vai para o DevOps. */
+  askSave(origin: CdkOverlayOrigin): void {
+    if (!this.dirty() || this.saving()) return;
+    this.showChanges(origin, true);
+  }
+
+  confirmSave(): void {
+    this.changesPop().close();
+    this.save();
   }
 
   save(): void {

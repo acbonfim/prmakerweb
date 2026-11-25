@@ -5,7 +5,7 @@ import { environment } from '../../environments/environment';
 import {
   BoardConfig, BoardItemsRequest, BoardItemsResponse, CardDetail, CreateCardRequest, DevOpsBoardRef,
   DevOpsClassificationNode, DevOpsFieldDef, DevOpsPerson, DevOpsQueryRequest, DevOpsQueryResponse, DevOpsTeam,
-  DevOpsWorkItemType, EpicRef, MoveCardRequest, UpdateCardRequest
+  DevOpsWorkItemType, EpicRef, MoveCardRequest, UpdateCardRequest, DevOpsAttachment, DevOpsCommentsResponse, DevOpsMention
 } from '../components/devops/devops.model';
 
 /** Metadados do projeto mudam pouco: cinco minutos poupam chamadas a cada painel/diálogo aberto. */
@@ -134,8 +134,31 @@ export class DevOpsService {
     return this.http.post<CardDetail>(`${this.base}workitems/${encodeURIComponent(`${id}`)}/move`, body);
   }
 
-  comment(id: number | string, text: string): Observable<unknown> {
-    return this.http.post(`${this.base}workitems/${encodeURIComponent(`${id}`)}/comment`, { text });
+  /** Comentário na discussion (markdown); `mentions` = pessoas citadas com `@Nome` (viram menção do DevOps). `#123` vira link do card. */
+  comment(id: number | string, text: string, mentions: DevOpsMention[] = []): Observable<{ id: number; commentId: number }> {
+    const body = mentions.length ? { text, mentions } : { text };
+    return this.http.post<{ id: number; commentId: number }>(`${this.base}workitems/${encodeURIComponent(`${id}`)}/comment`, body);
+  }
+
+  /** Ajustes 3: discussion do card (mais novos primeiro). */
+  comments(id: number | string, top = 200): Observable<DevOpsCommentsResponse> {
+    const params = new HttpParams().set('top', `${top}`);
+    return this.http.get<DevOpsCommentsResponse>(`${this.base}workitems/${encodeURIComponent(`${id}`)}/comments`, { params })
+      .pipe(map((r) => ({ count: r?.count ?? r?.comments?.length ?? 0, comments: r?.comments ?? [] })));
+  }
+
+  /** Ajustes 3: anexos do card (arquivos anexados + imagens coladas nos campos e na discussion). */
+  attachments(id: number | string): Observable<DevOpsAttachment[]> {
+    return this.http.get<DevOpsAttachment[]>(`${this.base}workitems/${encodeURIComponent(`${id}`)}/attachments`).pipe(map((a) => a ?? []));
+  }
+
+  /** Conteúdo de um anexo pelo PRMake (o DevOps exige o token — o navegador não abre a URL direto). */
+  attachmentBlob(id: number | string, attachmentId: string, name?: string | null, download = false): Observable<Blob> {
+    let params = new HttpParams();
+    if (name) params = params.set('name', name);
+    if (download) params = params.set('download', 'true');
+    return this.http.get(`${this.base}workitems/${encodeURIComponent(`${id}`)}/attachments/${encodeURIComponent(attachmentId)}`,
+      { params, responseType: 'blob' });
   }
 
   // ── Épicos do card (rotas `api/v1/Epics`, usadas pelo painel para "Adicionar ao épico") ──

@@ -1,6 +1,6 @@
 import {
   buildCreate, buildPatch, changedFields, createFields, displayValue, groupFields, inputKind, missingRequired,
-  outgoingValue, sameValue
+  outgoingValue, sameValue, describeChanges, changesLabel
 } from './card-edit.logic';
 import { DevOpsFieldDef } from './devops.model';
 
@@ -126,5 +126,33 @@ describe('card-edit.logic (0099)', () => {
     expect(displayValue(byRef('Custom.Blocked'), false)).toBe('Não');
     expect(displayValue(byRef('System.Description'), '<p>Oi&nbsp;<b>você</b></p>')).toBe('Oi você');
     expect(displayValue(byRef('Custom.Client'), null)).toBe('—');
+  });
+});
+
+describe('describeChanges (0099 ajustes 3)', () => {
+  const defs = [
+    { referenceName: 'System.State', name: 'State', type: 'string', required: true, readOnly: false, allowedValues: ['New', 'Active'] },
+    { referenceName: 'Microsoft.VSTS.Common.Priority', name: 'Priority', type: 'integer', required: false, readOnly: false, allowedValues: [] },
+    { referenceName: 'System.Description', name: 'Description', type: 'html', required: false, readOnly: false, allowedValues: [] },
+    { referenceName: 'System.CreatedDate', name: 'Created Date', type: 'dateTime', required: false, readOnly: true, allowedValues: [] },
+  ];
+  const original = {
+    title: 'Velho', tags: ['A'],
+    fields: { 'System.State': 'New', 'Microsoft.VSTS.Common.Priority': 2, 'System.Description': '<p>antes</p>', 'System.CreatedDate': '2026-01-01' },
+  };
+
+  it('lista título, campos (antes × depois, HTML como texto) e tags, na ordem dos campos', () => {
+    const values = { ...original.fields, 'System.State': 'Active', 'System.Description': '<p>depois</p>', 'System.CreatedDate': 'x' };
+    const list = describeChanges(original, defs, values, 'Novo', ['A', 'B']);
+    expect(list.map((c) => c.label)).toEqual(['Título', 'Estado', 'Description', 'Tags']);
+    expect(list[1]).toEqual(jasmine.objectContaining({ before: 'New', after: 'Active' }));
+    expect(list[2]).toEqual(jasmine.objectContaining({ before: 'antes', after: 'depois' }));
+    expect(list[3].after).toBe('A, B');
+    expect(changesLabel(list)).toBe('Alterado: 3 campos, tags');
+  });
+
+  it('sem mudança → lista vazia', () => {
+    expect(describeChanges(original, defs, { ...original.fields }, 'Velho', ['A'])).toEqual([]);
+    expect(changesLabel([])).toBe('');
   });
 });
