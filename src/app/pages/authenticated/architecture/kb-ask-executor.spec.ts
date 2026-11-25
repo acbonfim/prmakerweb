@@ -1,7 +1,7 @@
 import { Subject, of } from 'rxjs';
 import { ArchitectureService, BaseQuestion } from '../../../services/architecture.service';
 import { WsService } from '../../../services/ws.service';
-import { baseQuestionError, baseQuestionProgress, watchBaseQuestion } from './kb-ask-executor';
+import { POLL_QUEUED_MS, POLL_RUNNING_MS, baseQuestionError, baseQuestionProgress, pollDelay, watchBaseQuestion } from './kb-ask-executor';
 
 const question = (patch: Partial<BaseQuestion> = {}): BaseQuestion => ({
   id: 'q1', key: 'BQ-0123456789AB', question: 'Como transfiro um usuário?', deep: false, status: 'queued', requestId: 'r1',
@@ -41,6 +41,13 @@ describe('kb-ask-executor (0102)', () => {
     expect(seen.at(-1)!.answer?.answer).toBe('Passo a passo');
     expect(ws.groups.size).toBe(0);
     expect(ws.handlers.size).toBe(0);
+  });
+
+  it('consulta a cada 2 s com o Claude rodando e a cada 5 s na fila', () => {
+    expect(pollDelay(question({ status: 'queued' }))).toBe(POLL_QUEUED_MS);
+    expect(pollDelay(question({ status: 'running' }))).toBe(POLL_RUNNING_MS);
+    expect(pollDelay(question({ status: 'claimed' }))).toBe(POLL_RUNNING_MS);
+    expect(POLL_RUNNING_MS).toBeLessThan(POLL_QUEUED_MS);
   });
 
   it('textos de espera e de erro', () => {

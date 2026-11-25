@@ -3,8 +3,13 @@ import { ArchitectureService, BASE_QUESTION_ACTIVE, BaseQuestion } from '../../.
 import { WsService } from '../../../services/ws.service';
 import { EXECUTION_PLAN_EVENT, executionPlanGroup } from '../../../components/execution-plan/execution-plan.model';
 
-/** 0102: enquanto a pergunta está ativa, o GET também roda de tempos em tempos (o tempo real é best-effort). */
-const POLL_MS = 5_000;
+/**
+ * 0102: enquanto a pergunta está ativa, o GET também roda de tempos em tempos (o tempo real é best-effort — com o relay
+ * falhando, é por aqui que a resposta chega). Com o Claude rodando a resposta pode sair a qualquer momento: 2 s; na fila, 5 s.
+ */
+export const POLL_RUNNING_MS = 2_000;
+export const POLL_QUEUED_MS = 5_000;
+export const pollDelay = (q: BaseQuestion) => (q.status === 'queued' ? POLL_QUEUED_MS : POLL_RUNNING_MS);
 
 export const isBaseQuestionActive = (q: BaseQuestion | null | undefined) => !!q && BASE_QUESTION_ACTIVE.includes(q.status);
 
@@ -22,7 +27,7 @@ export function watchBaseQuestion(ws: WsService, api: ArchitectureService, start
   const stop = () => {
     if (stopped) return;
     stopped = true;
-    clearInterval(timer);
+    clearTimeout(timer);
     inFlight?.unsubscribe();
     ws.off(EXECUTION_PLAN_EVENT, handler);
     ws.removeFromGroup(group);
@@ -57,7 +62,13 @@ export function watchBaseQuestion(ws: WsService, api: ArchitectureService, start
   ws.on(EXECUTION_PLAN_EVENT, handler);
   ws.addToGroup(group);
   const resynced = ws._resynced.subscribe(() => reload());
-  const timer = setInterval(reload, POLL_MS);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const tick = () => {
+    if (stopped) return;
+    reload();
+    timer = setTimeout(tick, pollDelay(current));
+  };
+  timer = setTimeout(tick, pollDelay(start));
   if (!isBaseQuestionActive(start)) stop();
   return stop;
 }
