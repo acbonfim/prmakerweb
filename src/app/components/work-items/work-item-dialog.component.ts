@@ -35,7 +35,11 @@ import {
   originIcon,
   originLabel,
   taskStatusLook,
-  userTaskActions
+  userTaskActions,
+  workTaskLook,
+  SCHEDULE_COLOR,
+  awaitsSchedule,
+  formatSchedule
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
 import { WorkTaskControlsComponent } from './work-task-controls.component';
@@ -217,6 +221,13 @@ export interface WorkItemDialogData {
                     <button class="wi-chip wid__btnchip" (click)="openPlan()" matTooltip="Abrir a aba Plano da Bancada"><mat-icon>account_tree</mat-icon>Plano {{ it.planPhase === 'analysis' ? 'de análise' : 'de correção' }}</button>
                   }
                   @if (it.templateKey) { <span class="wi-chip"><mat-icon>content_copy</mat-icon>Modelo {{ it.templateKey }}</span> }
+                  @if (it.scheduledAt) {
+                    <span class="wi-chip wid__sched" [matTooltip]="'Agendado por ' + (it.scheduledBy || 'uma pessoa') + ' — começa sozinho no horário'"><mat-icon>alarm</mat-icon>Agendado · {{ fmtSchedule(it.scheduledAt) }}</span>
+                  } @else if (it.parked) {
+                    <span class="wi-chip wid__sched" [matTooltip]="'Em espera por ' + (it.scheduledBy || 'uma pessoa') + ' — só roda quando alguém executar'"><mat-icon>alarm</mat-icon>Em espera · sem data</span>
+                  } @else if (it.nextScheduledAt) {
+                    <span class="wi-chip wid__sched"><mat-icon>alarm</mat-icon>Sub-tarefa agendada · {{ fmtSchedule(it.nextScheduledAt) }}</span>
+                  }
                   @if (it.startedAt) { <span class="wi-muted">Início {{ it.startedAt | date:'dd/MM/yy HH:mm' }}</span> }
                   @if (it.completedAt) { <span class="wi-muted">Fim {{ it.completedAt | date:'dd/MM/yy HH:mm' }}</span> }
                 </div>
@@ -295,6 +306,9 @@ export interface WorkItemDialogData {
             @if (canUndoIt()) { <button mat-button (click)="undo()" [disabled]="acting()"><mat-icon>undo</mat-icon>Desfazer</button> }
             @if (canCancelIt()) { <button mat-button (click)="cancel()" [disabled]="acting()"><mat-icon>stop_circle</mat-icon>Cancelar…</button> }
             <span class="wi-dlg__spacer"></span>
+            @if (canSchedule()) {
+              <button mat-stroked-button (click)="schedule()" [disabled]="acting()"><mat-icon class="wid__sched-ico">alarm</mat-icon>{{ scheduled() ? 'Agendamento…' : 'Agendar…' }}</button>
+            }
             @if (it.editable) {
               <button mat-stroked-button (click)="edit()" [disabled]="acting()"><mat-icon>edit</mat-icon>Editar</button>
             } @else {
@@ -303,7 +317,7 @@ export interface WorkItemDialogData {
             @if (busyItem()) {
               <button mat-flat-button disabled><mat-icon class="wi-spin">autorenew</mat-icon>{{ it.status === 'queued' ? 'Na fila' : 'Executando' }}</button>
             } @else {
-              <button mat-flat-button color="primary" (click)="execute()" [disabled]="!canRun() || acting()"><mat-icon>play_arrow</mat-icon>Executar</button>
+              <button mat-flat-button color="primary" (click)="execute()" [disabled]="!canRun() || acting()"><mat-icon>play_arrow</mat-icon>{{ scheduled() || item()?.nextScheduledAt ? 'Executar agora' : 'Executar' }}</button>
             }
           </footer>
         }
@@ -311,6 +325,8 @@ export interface WorkItemDialogData {
     </div>
   `,
   styles: [WORK_DIALOG_STYLES, `
+    .wid__sched { color: ${SCHEDULE_COLOR}; border-color: color-mix(in srgb, ${SCHEDULE_COLOR} 55%, transparent); }
+    .wid__sched-ico { color: ${SCHEDULE_COLOR}; }
     .wid__type { width: 20px; height: 20px; }
     .wid__sev { --c: #8b949e; display: inline-flex; align-items: center; gap: 2px; padding: 0 8px 0 4px; border-radius: 999px; font-size: 11px; font-weight: 700;
       line-height: 18px; color: color-mix(in srgb, var(--c) 85%, var(--mat-sys-on-surface)); background: color-mix(in srgb, var(--c) 16%, transparent);
@@ -451,7 +467,14 @@ export class WorkItemDialogComponent {
   readonly executor = executorLabel;
   readonly linkIco = linkIcon;
   readonly prLabel = prStatusLabel;
-  readonly taskLook = (t: WorkTask) => taskStatusLook(t.status);
+  readonly taskLook = (t: WorkTask) => workTaskLook(t);
+  readonly fmtSchedule = formatSchedule;
+  /** 0103: item agendado/em espera. */
+  readonly scheduled = computed(() => awaitsSchedule(this.item()));
+  readonly canSchedule = computed(() => {
+    const it = this.item();
+    return !!it && (awaitsSchedule(it) || (it.scheduleBlock === null && canExecute(it)));
+  });
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
   readonly quick = (t: WorkTask) => userTaskActions(t).filter((a) => a === 'complete' || a === 'skip' || a === 'start');
   readonly actionLook = (a: WorkTaskAction) => TASK_ACTION_LABELS[a];
@@ -513,6 +536,12 @@ export class WorkItemDialogComponent {
     const it = this.item();
     if (!it) return;
     await this.run(() => this.actions.execute(it));
+  }
+
+  async schedule(): Promise<void> {
+    const it = this.item();
+    if (!it) return;
+    await this.run(async () => !!(await this.actions.scheduleItem(it)));
   }
 
   async edit(): Promise<void> {

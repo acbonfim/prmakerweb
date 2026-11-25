@@ -41,7 +41,11 @@ import {
   taskStatusLook,
   ticketTaskActions,
   userTaskActions,
-  canResolveWait
+  canResolveWait,
+  workTaskLook,
+  isTaskScheduled,
+  formatSchedule,
+  SCHEDULE_COLOR
 } from './work-item.model';
 import { listenWorkItems } from './work-items-live';
 import { WORK_DIALOG_STYLES } from './work-dialog.styles';
@@ -103,6 +107,13 @@ export interface WorkTaskDialogData {
             @if (t.startedAt) { <span class="wi-muted">Início {{ t.startedAt | date:'dd/MM/yy HH:mm' }}</span> }
             @if (t.completedAt) { <span class="wi-muted">Fim {{ t.completedAt | date:'dd/MM/yy HH:mm' }}</span> }
           </div>
+          @if (isScheduled(t)) {
+            <div class="wi-note wtd__sched">
+              <mat-icon>alarm</mat-icon>
+              <span>Agendada para <b>{{ fmtSchedule(t.scheduledAt) }}</b>{{ t.heldBy ? ' por ' + t.heldBy : '' }} — continua sozinha no horário
+                @if (t.controls?.dependents?.length) { (as que dependem dela esperam junto) }. Para mudar, use o menu ⋮ da sub-tarefa.</span>
+            </div>
+          }
 
           @if (t.description) {
             <section class="wi-sec"><h4 class="wi-sec__title">Descrição</h4><div class="wi-md" [innerHTML]="t.description | planMarkdown:'card'"></div></section>
@@ -272,6 +283,8 @@ export interface WorkTaskDialogData {
     </div>
   `,
   styles: [WORK_DIALOG_STYLES, `
+    .wtd__sched { background: color-mix(in srgb, ${SCHEDULE_COLOR} 10%, transparent); border-color: color-mix(in srgb, ${SCHEDULE_COLOR} 35%, transparent); }
+    .wtd__sched mat-icon { color: ${SCHEDULE_COLOR}; }
     .wtd__kind { color: var(--cc-text-2); }
     .wtd__facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; }
     .wtd__small { font-size: 12px; margin: 0; }
@@ -309,7 +322,9 @@ export class WorkTaskDialogComponent {
   readonly taskFiles = computed(() => filesOfTask(this.files.files(), this.data.taskNumber).length);
 
   readonly task = computed(() => this.item()?.tasks?.find((t) => t.number === this.data.taskNumber) ?? null);
-  readonly look = computed(() => taskStatusLook(this.task()?.status));
+  readonly look = computed(() => { const t = this.task(); return t ? workTaskLook(t) : taskStatusLook(undefined); });
+  readonly isScheduled = isTaskScheduled;
+  readonly fmtSchedule = formatSchedule;
   readonly kind = computed(() => kindInfo(this.task()?.kind, this.data.catalog));
   readonly actions = computed(() => { const t = this.task(); return t && !this.data.readOnly ? userTaskActions(t) : []; });
   /** "Já resolvi": sub-tarefa do Claude parada esperando a pessoa. */

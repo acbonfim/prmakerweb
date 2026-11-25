@@ -4,7 +4,10 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { WorkItem, WorkTask, WorkTaskControls, WorkTaskMove, canControlTask, formatWorkNumber, openDependencies } from './work-item.model';
+import {
+  SCHEDULE_COLOR, SCHEDULE_ICON, WorkItem, WorkTask, WorkTaskControls, WorkTaskMove, canControlTask, formatSchedule, formatWorkNumber,
+  isTaskScheduled, openDependencies
+} from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
 
 interface MoveOption {
@@ -33,19 +36,27 @@ const MOVES: MoveOption[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
   template: `
-    @if (task().held) {
+    @if (scheduled()) {
+      <span class="wtc__badge wtc__badge--sched" [matTooltip]="'Agendada por ' + (task().heldBy || 'uma pessoa') + ' — continua sozinha ' + when() + (task().controls?.dependents?.length ? '; as que dependem dela esperam junto' : '')">
+        <mat-icon>{{ clock }}</mat-icon>
+      </span>
+    } @else if (task().held) {
       <span class="wtc__badge wtc__badge--held" [matTooltip]="'Pausada por ' + (task().heldBy || 'uma pessoa') + ' — o Claude não a faz (nem as que dependem dela) até alguém continuar'">
         <mat-icon>pause_circle</mat-icon>Pausada
       </span>
     } @else if (task().controls?.waitsForHeld; as w) {
-      <span class="wtc__badge wtc__badge--held" [matTooltip]="'Depende da ' + num(w) + ', que está pausada'"><mat-icon>hourglass_empty</mat-icon>Espera {{ num(w) }}</span>
+      @if (blockerScheduled(w); as at) {
+        <span class="wtc__badge wtc__badge--sched" [matTooltip]="'Depende da ' + num(w) + ', agendada para ' + at"><mat-icon>{{ clock }}</mat-icon>Espera {{ num(w) }}</span>
+      } @else {
+        <span class="wtc__badge wtc__badge--held" [matTooltip]="'Depende da ' + num(w) + ', que está pausada'"><mat-icon>hourglass_empty</mat-icon>Espera {{ num(w) }}</span>
+      }
     }
     @if (deps(); as d) {
       <span class="wtc__badge" [matTooltip]="d.tip"><mat-icon>account_tree</mat-icon>depende de {{ d.label }}</span>
     }
     @if (show()) {
       <button mat-icon-button class="wtc__btn" [matMenuTriggerFor]="menu" [disabled]="busy()"
-              matTooltip="Mover, pausar ou cancelar esta sub-tarefa" [attr.aria-label]="'Mover, pausar ou cancelar ' + num(task().number)">
+              matTooltip="Mover, pausar, agendar ou cancelar esta sub-tarefa" [attr.aria-label]="'Mover, pausar, agendar ou cancelar ' + num(task().number)">
         <mat-icon>{{ busy() ? 'hourglass_top' : 'more_vert' }}</mat-icon>
       </button>
       <mat-menu #menu="matMenu" class="wtc__menu" xPosition="before">
@@ -56,7 +67,20 @@ const MOVES: MoveOption[] = [
           </button>
         }
         <mat-divider />
-        @if (task().held) {
+        @if (scheduled()) {
+          <button mat-menu-item (click)="schedule()">
+            <mat-icon class="wtc__sched">{{ clock }}</mat-icon>
+            <span class="wtc__opt"><span>Alterar agendamento…</span><small>Agendada para {{ when() }}</small></span>
+          </button>
+          <button mat-menu-item (click)="runNow()">
+            <mat-icon>play_circle</mat-icon>
+            <span class="wtc__opt"><span>Executar agora</span><small>Tira o agendamento e segue o item</small></span>
+          </button>
+          <button mat-menu-item (click)="hold(true)">
+            <mat-icon>alarm_off</mat-icon>
+            <span class="wtc__opt"><span>Deixar sem data</span><small>Fica pausada até alguém continuar</small></span>
+          </button>
+        } @else if (task().held) {
           <button mat-menu-item (click)="hold(false)">
             <mat-icon>play_circle</mat-icon>
             <span class="wtc__opt"><span>Continuar</span><small>{{ resumeHint() }}</small></span>
@@ -65,6 +89,12 @@ const MOVES: MoveOption[] = [
           <button mat-menu-item [disabled]="!!task().controls?.pause" (click)="hold(true)">
             <mat-icon>pause_circle</mat-icon>
             <span class="wtc__opt"><span>Pausar</span><small>{{ task().controls?.pause || pauseHint() }}</small></span>
+          </button>
+        }
+        @if (!scheduled()) {
+          <button mat-menu-item [disabled]="!!task().controls?.schedule" (click)="schedule()">
+            <mat-icon class="wtc__sched">{{ clock }}</mat-icon>
+            <span class="wtc__opt"><span>Agendar…</span><small>{{ task().controls?.schedule || scheduleHint() }}</small></span>
           </button>
         }
         <button mat-menu-item [disabled]="!!task().controls?.cancel" (click)="cancel()">
@@ -80,6 +110,8 @@ const MOVES: MoveOption[] = [
       white-space: nowrap; border: 1px dashed var(--cc-surface-border-strong, rgba(255,255,255,.22)); color: var(--cc-text-2); }
     .wtc__badge mat-icon { font-size: 13px; width: 13px; height: 13px; }
     .wtc__badge--held { border-style: solid; border-color: color-mix(in srgb, #d29922 60%, transparent); color: #d29922; }
+    .wtc__badge--sched { border-style: solid; border-color: color-mix(in srgb, ${SCHEDULE_COLOR} 60%, transparent); color: ${SCHEDULE_COLOR}; }
+    .wtc__sched { color: ${SCHEDULE_COLOR}; }
     .wtc__btn.mat-mdc-icon-button { width: 28px; height: 28px; padding: 2px; }
     .wtc__btn mat-icon { font-size: 18px; width: 18px; height: 18px; }
     .wtc__menu .mat-mdc-menu-item { min-height: 44px; }
@@ -103,7 +135,18 @@ export class WorkTaskControlsComponent {
   readonly moves = MOVES;
   readonly num = formatWorkNumber;
 
+  readonly clock = SCHEDULE_ICON;
+
   readonly show = computed(() => !this.readOnly() && canControlTask(this.item(), this.task()));
+
+  /** 0103: agendada (pausada até o horário). */
+  readonly scheduled = computed(() => isTaskScheduled(this.task()));
+  readonly when = computed(() => formatSchedule(this.task().scheduledAt));
+
+  readonly scheduleHint = computed(() => {
+    const n = this.task().controls?.dependents?.length ?? 0;
+    return n ? `Começa no horário; as ${n} que dependem dela esperam junto` : 'Começa sozinha no horário; as outras seguem';
+  });
 
   /** Dependências ainda não feitas (as feitas não seguram mais nada). */
   readonly deps = computed(() => {
@@ -141,6 +184,20 @@ export class WorkTaskControlsComponent {
 
   async cancel(): Promise<void> {
     await this.run(() => this.actions.cancelTask(this.item(), this.task()));
+  }
+
+  async schedule(): Promise<void> {
+    await this.run(() => this.actions.scheduleTask(this.item(), this.task()));
+  }
+
+  async runNow(): Promise<void> {
+    await this.run(() => this.actions.runTaskNow(this.task()));
+  }
+
+  /** A pausada que segura esta está agendada? Devolve o horário ("hoje 04:30") ou null. */
+  blockerScheduled(number: number): string | null {
+    const t = this.item().tasks.find((x) => x.number === number);
+    return t && isTaskScheduled(t) ? formatSchedule(t.scheduledAt) : null;
   }
 
   private async run(fn: () => Promise<WorkItem | undefined>): Promise<void> {

@@ -15,6 +15,7 @@ import {
   WorkItemCatalog,
   WorkItemError,
   WorkItemLive,
+  WorkItemScheduleRequest,
   WorkTaskAction,
   WorkTaskControlRequest,
   formatWorkNumber,
@@ -224,8 +225,15 @@ export class WorkItemsService {
     return this.http.post<WorkItem>(`${this.apiUrl}/${number}/duplicate`, {}).pipe(this.fail(`Não foi possível criar um item a partir do ${formatWorkNumber(number)}.`));
   }
 
-  execute(number: number): Observable<ExecuteWorkItemResponse> {
-    return this.http.post<ExecuteWorkItemResponse>(`${this.apiUrl}/${number}/execute`, {}).pipe(this.fail(`Não foi possível executar o item ${formatWorkNumber(number)}.`));
+  /** Executa. 0103: `runNow` = executar agora mesmo agendado/em espera (o play da tela sempre é "agora"). */
+  execute(number: number, runNow = true): Observable<ExecuteWorkItemResponse> {
+    return this.http.post<ExecuteWorkItemResponse>(`${this.apiUrl}/${number}/execute`, { runNow }).pipe(this.fail(`Não foi possível executar o item ${formatWorkNumber(number)}.`));
+  }
+
+  /** 0103: agenda o item (set + at), deixa em espera sem data (park) ou tira o agendamento (clear). */
+  schedule(number: number, req: WorkItemScheduleRequest): Observable<WorkItem> {
+    return this.http.post<WorkItem>(`${this.apiUrl}/${number}/schedule`, req)
+      .pipe(this.fail(`Não foi possível agendar o item ${formatWorkNumber(number)}.`));
   }
 
   cancel(number: number, undo: boolean, reason?: string | null): Observable<WorkItem> {
@@ -395,6 +403,7 @@ export function toWorkItemError(err: unknown, fallback: string): WorkItemError {
   if (status === 409 && code === 'notEditable') {
     return new WorkItemError('Este item já foi iniciado e não pode mais ser editado — crie um novo a partir dele.', 'notEditable', null, status);
   }
+  if (status === 409 && code === 'scheduled') return new WorkItemError(serverText || 'O item está agendado.', 'scheduled', null, status);
   if (status === 404) return new WorkItemError(serverText || 'Item não encontrado.', 'notFound', null, status);
   if (status === 409) return new WorkItemError(serverText || fallback, 'conflict', null, status);
   if (status === 0) return new WorkItemError(`${fallback} Sem conexão com o servidor.`, 'error', null, status);
