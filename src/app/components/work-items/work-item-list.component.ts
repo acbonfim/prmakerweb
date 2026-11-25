@@ -44,7 +44,7 @@ import {
   relatedSourceIcon,
   relatedSourceLabel,
   sortByCreation,
-  taskStatusLook,
+  workTaskLook,
   userTaskActions
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
@@ -598,7 +598,7 @@ export class WorkItemListComponent {
   readonly canRun = (it: WorkItem) => canExecute(it);
   readonly canCancelIt = (it: WorkItem) => canCancel(it);
   readonly canUndoIt = (it: WorkItem) => canUndo(it);
-  readonly taskLook = (t: WorkTask) => taskStatusLook(t.status);
+  readonly taskLook = (t: WorkTask) => workTaskLook(t);
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
   /** "Já resolvi": sub-tarefa do Claude parada esperando a pessoa. */
   readonly canResolve = (t: WorkTask) => canResolveWait(t);

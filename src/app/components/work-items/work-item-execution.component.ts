@@ -68,6 +68,7 @@ import {
   taskLinks,
   taskPrHint,
   taskStatusLook,
+  workTaskLook,
   ticketTaskActions,
   userTaskActions,
   waitCodeLabel,
@@ -604,7 +605,7 @@ export class WorkItemExecutionComponent {
   readonly executor = executorLabel;
   readonly requestLabel = requestStatusLabel;
   readonly actIcon = activityIcon;
-  readonly taskLook = (t: WorkTask) => taskStatusLook(t.status);
+  readonly taskLook = (t: WorkTask) => workTaskLook(t);
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
   /** Chamado na Bancada + 0091: PR/branch das entregas da sub-tarefa (senão os links do `output`), sem repetir um link dela. */
   readonly outLinks = (t: WorkTask) => taskExtraOutputLinks(this.item(), t);
@@ -994,7 +995,7 @@ export class WorkItemExecutionComponent {
    */
   taskLabel(t: WorkTask): string {
     if (t.status === 'waiting' && this.openTicket(t)) return 'Aguardando o chamado';
-    if (t.executor === 'user' && (t.status === 'waiting' || (t.status === 'pending' && t.number === this.currentTask()))) return 'Aguardando você';
+    if (t.executor === 'user' && (t.status === 'waiting' || t.status === 'running' || (t.status === 'pending' && t.number === this.currentTask()))) return 'Aguardando você';
     if (canResolveWait(t)) return 'Aguardando você';
     return taskPrHint(t) ?? taskStatusLook(t.status).label;
   }
@@ -1005,7 +1006,7 @@ export class WorkItemExecutionComponent {
   }
 
   taskIcon(t: WorkTask): string {
-    if ((t.executor === 'user' && t.status === 'waiting') || canResolveWait(t)) return 'front_hand';
+    if ((t.executor === 'user' && (t.status === 'waiting' || t.status === 'running')) || canResolveWait(t)) return 'front_hand';
     return taskStatusLook(t.status).icon;
   }
 
