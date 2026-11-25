@@ -50,6 +50,20 @@ describe('vez da pessoa no item (card 78720)', () => {
     expect(itemLook(it).label).toBe('Em andamento');
   });
 
+  it('chamado da pessoa já iniciado pelo plano (78794, #1079): aguardando você, com a sub-tarefa', () => {
+    const it = item({
+      number: 1077, cardNumber: '78794',
+      tasks: [
+        task({ number: 1078, order: 1, kind: 'task' }),
+        task({ number: 1079, order: 2, kind: 'ticket', executor: 'user', status: 'running', title: 'Abrir o chamado', ...deps([1078]) }),
+        task({ number: 1080, order: 3, kind: 'sql-query', status: 'pending', ...deps([1079]) })
+      ]
+    });
+    expect(personTurnTask(it)?.number).toBe(1079);
+    expect(waitsForPerson(it)).toBeTrue();
+    expect(itemLook(it).label).toBe('Aguardando você');
+  });
+
   it('sem dependências informadas vale a ordem', () => {
     const it = item({ tasks: [task({ number: 1, order: 1 }), task({ number: 2, order: 2, executor: 'user', status: 'pending' })] });
     expect(personTurnTask(it)?.number).toBe(2);

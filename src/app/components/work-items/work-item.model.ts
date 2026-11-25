@@ -885,15 +885,16 @@ export function waitingForResolve(item: Pick<WorkItem, 'tasks'> | null | undefin
 const FINISHED_TASK: ReadonlySet<string> = new Set(['completed', 'skipped', 'cancelled', 'reverted']);
 
 /**
- * Card 78720: sub-tarefa da pessoa em que é a vez dela — em espera, ou pendente sem pausa e com as dependências
- * terminadas (sem dependências informadas: as anteriores, pela ordem).
+ * Card 78720: sub-tarefa da pessoa em que é a vez dela — em espera, em andamento (78794: o plano a inicia ao passar a
+ * vez, ex.: abrir o chamado), ou pendente sem pausa e com as dependências terminadas (sem dependências informadas: as
+ * anteriores, pela ordem).
  */
 export function personTurnTask(item: Pick<WorkItem, 'tasks'> | null | undefined): WorkTask | null {
   const tasks = item?.tasks ?? [];
   const byNumber = new Map(tasks.map((t) => [t.number, t]));
   return tasks.slice().sort((a, b) => a.order - b.order).find((t) => {
     if (t.executor !== 'user') return false;
-    if (t.status === 'waiting') return true;
+    if (t.status === 'waiting' || t.status === 'running') return true;
     if (t.status !== 'pending' || t.held || t.controls?.waitsForHeld) return false;
     const deps = t.controls?.dependsOn;
     return deps ? deps.every((n) => FINISHED_TASK.has(byNumber.get(n)?.status ?? 'completed')) : isTaskTurn(item, t);
