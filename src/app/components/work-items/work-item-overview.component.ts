@@ -414,9 +414,12 @@ export class WorkItemOverviewComponent {
   zoom(img: WorkItemFile): void {
     const url = this.thumbs()[img.id];
     if (!url) return;
+    // Galeria: as imagens do documento já carregadas (← → no visualizador).
+    const items = this.docImages().filter((i) => this.thumbs()[i.id]).map((i) => ({ url: this.thumbs()[i.id], name: i.name, alt: i.description ?? null }));
+    const index = Math.max(0, items.findIndex((i) => i.url === url));
     import('../code-ref/md-image-viewer.component').then(({ MdImageViewerComponent }) =>
       this.dialog.open(MdImageViewerComponent, {
-        data: { url, name: img.name, alt: img.description ?? null },
+        data: { url, name: img.name, alt: img.description ?? null, items, index },
         width: '96vw', maxWidth: '96vw', height: '92vh', panelClass: 'md-image-dialog'
       }));
   }

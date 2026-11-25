@@ -20,6 +20,7 @@ import { PendingChange, buildPatch, changedFields, changesLabel, describeChanges
 import { DevOpsAttachmentImagesDirective } from './devops-attachment-images.directive';
 import { DevOpsCardAttachmentsComponent } from './devops-card-attachments.component';
 import { DevOpsCardDiscussionComponent } from './devops-card-discussion.component';
+import { DevOpsCardHistoryComponent } from './devops-card-history.component';
 import { DevOpsCardRelatedComponent } from './devops-card-related.component';
 import { DevOpsFieldInputComponent } from './devops-field-input.component';
 import { DevOpsTagsInputComponent } from './devops-tags-input.component';
@@ -43,7 +44,10 @@ const STATE_CATEGORY_COLORS: Record<string, string> = {
 const HEADER_FIELDS: string[] = [F.assignedTo, F.area, F.iteration];
 
 /** Abas do modal (ajustes 3). */
-export type CardTab = 'details' | 'fields' | 'discussion' | 'attachments' | 'related';
+export type CardTab = 'details' | 'fields' | 'discussion' | 'attachments' | 'related' | 'history';
+
+/** Onde o modal abre: na Mesa (com "Abrir na Bancada"/"Adicionar ao épico") ou na própria Bancada (sem eles). */
+export type CardPanelContext = 'desk' | 'workbench';
 
 /**
  * 0099 (Mesa de gestão): o card do DevOps. Ajustes 3: modal largo com o desenho do formulário do DevOps — cabeçalho com
@@ -51,6 +55,8 @@ export type CardTab = 'details' | 'fields' | 'discussion' | 'attachments' | 'rel
  * coluna/lane/Done do board; seletor de abas à direita: Detalhes (textos + planejamento), Campos (outros + sistema),
  * Discussion (comentar com @ e #, "Enviar" separado do "Salvar"), Anexos e Relacionados. "Alterado: n campos" abre o
  * antes × depois (com desfazer por campo) e o "Salvar" pede confirmação com a mesma lista.
+ * Modal único: é o mesmo card da Bancada ("Ver tudo", `context="workbench"`: sem "Abrir na Bancada"/"Adicionar ao épico", com o
+ * board achado pelo card) e ganhou a aba Histórico.
  *
  * Ocupa a altura do contêiner (a página decide o tamanho do modal).
  */
@@ -60,7 +66,7 @@ export type CardTab = 'details' | 'fields' | 'discussion' | 'attachments' | 'rel
   imports: [
     NgTemplateOutlet, OverlayModule, FormsModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule, PmComboComponent,
     CcPopoverComponent, DevOpsFieldInputComponent, DevOpsTagsInputComponent, DevOpsCardDiscussionComponent, DevOpsCardAttachmentsComponent,
-    DevOpsCardRelatedComponent, DevOpsAttachmentImagesDirective
+    DevOpsCardRelatedComponent, DevOpsCardHistoryComponent, DevOpsAttachmentImagesDirective
   ],
   encapsulation: ViewEncapsulation.None,
   template: `
@@ -88,12 +94,12 @@ export type CardTab = 'details' | 'fields' | 'discussion' | 'attachments' | 'rel
           }
           <span class="dvp__spacer"></span>
           @if (d) {
-            @if (canOpenWorkbench) {
+            @if (showWorkbenchLink()) {
               <button mat-stroked-button type="button" class="dvp__small" (click)="openWorkbench()" matTooltip="Trabalhar o card na Bancada (análise, itens, especialista)">
                 <mat-icon>handyman</mat-icon>Abrir na Bancada
               </button>
             }
-            @if (epic(); as ep) {
+            @if (context() === 'desk' ? epic() : null; as ep) {
               @if (inEpic()) {
                 <span class="dvp__chip" matTooltip="O card já está no épico"><mat-icon>check</mat-icon>No épico #{{ ep }}</span>
               } @else {
@@ -284,6 +290,11 @@ export type CardTab = 'details' | 'fields' | 'discussion' | 'attachments' | 'rel
               <app-devops-card-attachments [card]="current()" [webUrl]="webUrl()" (countChange)="attachmentsLoaded.set($event)" />
             </div>
           }
+          @if (visited().has('history')) {
+            <div class="dvp__pane" [hidden]="tab() !== 'history'" role="tabpanel">
+              <app-devops-card-history [card]="current()" [labels]="fieldLabels()" (countChange)="historyLoaded.set($event)" (openCard)="show($event)" />
+            </div>
+          }
           @if (visited().has('related')) {
             <div class="dvp__pane" [hidden]="tab() !== 'related'" role="tabpanel">
               <app-devops-card-related [relations]="d.relations" (openCard)="show($event)" />
@@ -441,6 +452,7 @@ export class DevOpsCardPanelComponent {
   private snack = inject(MatSnackBar);
   /** 0099 (ajustes 2): "Abrir na Bancada" só para admin ou desenvolvedor. */
   readonly canOpenWorkbench = inject(RoleService).canOpenWorkbenchFromDesk;
+  readonly showWorkbenchLink = computed(() => this.context() === 'desk' && this.canOpenWorkbench);
 
   /** Card do DevOps a mostrar. */
   readonly cardId = input<number | string | null>(null);
@@ -451,6 +463,8 @@ export class DevOpsCardPanelComponent {
   readonly boardName = input<string | null>(null, { alias: 'board' });
   /** Aba inicial (ex.: "discussion" para abrir já nos comentários). */
   readonly initialTab = input<CardTab | null>(null);
+  /** Mesa ou Bancada (na Bancada some "Abrir na Bancada" e "Adicionar ao épico"). */
+  readonly context = input<CardPanelContext>('desk');
   readonly closed = output<void>();
   /** Card gravado (salvar, mover, adicionar ao épico, comentar). */
   readonly saved = output<CardDetail>();
@@ -488,6 +502,12 @@ export class DevOpsCardPanelComponent {
   readonly visited = signal<ReadonlySet<CardTab>>(new Set<CardTab>(['details']));
   readonly commentsLoaded = signal<number | null>(null);
   readonly attachmentsLoaded = signal<number | null>(null);
+  readonly historyLoaded = signal<number | null>(null);
+  /** Board achado pelo card quando a página não diz o time/board (Bancada). */
+  private readonly autoBoard = signal<{ team: string; board: string } | null>(null);
+  /** Time/board em uso: os da página (épico) ou o achado pelo card. */
+  readonly boardTeam = computed(() => this.team() ?? this.autoBoard()?.team ?? null);
+  readonly boardBoard = computed(() => this.boardName() ?? this.autoBoard()?.board ?? null);
   /** Popover do antes × depois em modo "confirmar o Salvar". */
   readonly confirming = signal(false);
 
@@ -539,8 +559,12 @@ export class DevOpsCardPanelComponent {
       { id: 'discussion' as CardTab, label: 'Discussion', icon: 'forum', count: this.commentCount(), dot: false },
       { id: 'attachments' as CardTab, label: 'Anexos', icon: 'attach_file', count: this.attachmentCount(), dot: false },
       { id: 'related' as CardTab, label: 'Relacionados', icon: 'link', count: this.relatedCount(), dot: false },
+      { id: 'history' as CardTab, label: 'Histórico', icon: 'history', count: this.historyLoaded(), dot: false },
     ];
   });
+
+  /** Nome de cada campo do tipo (aba Histórico). */
+  readonly fieldLabels = computed(() => Object.fromEntries(this.defs().map((f) => [f.referenceName, f.referenceName === F.state ? 'Estado' : f.name])));
 
   /** Datas do card (somente leitura, como o bloco "Dates" do DevOps). */
   readonly dates = computed(() => {
@@ -630,8 +654,8 @@ export class DevOpsCardPanelComponent {
     });
 
     effect(() => {
-      const team = this.team();
-      const name = this.boardName();
+      const team = this.boardTeam();
+      const name = this.boardBoard();
       untracked(() => {
         this.board.set(null);
         if (team && name) this.api.board(team, name).subscribe({ next: (cfg) => this.board.set(cfg), error: () => {} });
@@ -639,7 +663,7 @@ export class DevOpsCardPanelComponent {
     });
 
     effect(() => {
-      const ep = this.epic();
+      const ep = this.context() === 'desk' ? this.epic() : null;
       const id = this.current();
       untracked(() => this.checkEpic(ep, id));
     });
@@ -659,8 +683,13 @@ export class DevOpsCardPanelComponent {
     this.conflict.set(false);
     this.commentsLoaded.set(null);
     this.attachmentsLoaded.set(null);
+    this.historyLoaded.set(null);
+    this.autoBoard.set(null);
     if (this.tab() === 'related') this.tab.set('details');
-    if (key) this.load(key);
+    if (key) {
+      this.load(key);
+      this.findBoard(key);
+    }
   }
 
   reload(force = false): void {
@@ -704,6 +733,15 @@ export class DevOpsCardPanelComponent {
     this.values.set({ ...(d.fields ?? {}), [F.state]: d.fields?.[F.state] ?? d.state });
     this.title.set(d.title ?? '');
     this.tags.set(d.tags?.length ? [...d.tags] : parseTags(d.fields?.[F.tags]));
+  }
+
+  /** Sem time/board da página (Bancada): acha o board em que o card aparece, para coluna/lane/Done. */
+  private findBoard(id: string): void {
+    if (this.team() && this.boardName()) return;
+    this.api.cardBoard(id).subscribe({
+      next: (r) => { if (this.current() === id && r.team && r.board) this.autoBoard.set({ team: r.team, board: r.board }); },
+      error: () => {}
+    });
   }
 
   private checkEpic(epic: number | null, id: string | null): void {
@@ -821,8 +859,8 @@ export class DevOpsCardPanelComponent {
   moveTo(change: { column?: string; lane?: string; done?: boolean }, el?: HTMLInputElement): void {
     const d = this.detail();
     const cfg = this.board();
-    const team = this.team();
-    const board = this.boardName();
+    const team = this.boardTeam();
+    const board = this.boardBoard();
     if (!d || !cfg || !team || !board) return;
     const column = change.column ?? this.boardColumn();
     if (!column) return;
@@ -872,7 +910,7 @@ export class DevOpsCardPanelComponent {
   }
 
   openWorkbench(): void {
-    if (!this.canOpenWorkbench) return;
+    if (!this.showWorkbenchLink()) return;
     const id = this.current();
     if (id) void this.router.navigate(['/auth/workbench'], { queryParams: { card: id } });
   }

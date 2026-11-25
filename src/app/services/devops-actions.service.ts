@@ -8,7 +8,7 @@ export interface DevOpsActionsConfig {
   available: boolean;
   bug: {
     summaryPrompt: string | null;
-    testInProduction: { requiredArea: string | null; area: string | null; state: string | null; comment: string | null };
+    testInProduction: { requiredArea: string | null; area: string | null; state: string | null; column?: string | null; comment: string | null };
     readyForQa: { state: string | null };
     initialEstimate: {
       configured: boolean;

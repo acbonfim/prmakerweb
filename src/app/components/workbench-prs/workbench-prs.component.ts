@@ -8,7 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { marked } from 'marked';
 import { environment } from '../../../environments/environment';
-import { CardDetailsDialogComponent } from '../card-details-dialog/card-details-dialog.component';
+import { openDevOpsCardDialog } from '../devops/devops-card-dialog.component';
 import { CardFull } from '../card-details-dialog/card-full.model';
 import { DevOpsActionsMenuComponent } from '../devops-actions-menu/devops-actions-menu.component';
 import { SummaryDialogComponent, SummaryDialogData } from '../summary-dialog/summary-dialog.component';
@@ -142,12 +142,11 @@ export class WorkbenchPrsComponent {
     });
   }
 
+  /** "Ver tudo": o mesmo modal do card da Mesa, sem os botões da Mesa. */
   openCardDetails(): void {
-    const card = this.store.cardFull();
-    if (!card) return;
-    this.dialog.open(CardDetailsDialogComponent, workbenchDialogSize('1000px', {
-      data: { card, cardNumber: this.store.card() }, height: '80vh',
-    }));
+    const card = this.store.card();
+    if (!card || !this.store.cardFull()) return;
+    openDevOpsCardDialog(this.dialog, { cardId: card, context: 'workbench', onSaved: () => void this.store.loadCardFull(true) });
   }
 
   /** "Salvar RC no DevOps": o Root Cause (Markdown) vira HTML — o mesmo da tela de PR. */

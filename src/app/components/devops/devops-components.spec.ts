@@ -69,6 +69,8 @@ class FakeDevOps {
   iterations() { return of([]); }
   card(id: number | string) { return of(card({ id: +id })); }
   epicsOfCard() { return of([]); }
+  cardBoard() { return of({ team: null, board: null }); }
+  history() { return of([]); }
   addToEpic() { return of({}); }
   move(id: number | string, body: MoveCardRequest): Observable<CardDetail> {
     this.moves.push({ id, body });

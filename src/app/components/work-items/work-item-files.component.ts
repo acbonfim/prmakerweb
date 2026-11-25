@@ -9,7 +9,7 @@ import { WorkItemsService } from '../../services/work-items.service';
 import { saveBlob } from '../../services/execution-plan.service';
 import { CliipboardService } from '../../services/cliipboard.service';
 import { renderMarkdown } from '../../helpers/markdown-ext';
-import { FILE_VIEWER_DIALOG, FileViewerDialogComponent, FileViewerDialogData } from '../file-viewer/file-viewer-dialog.component';
+import { FileViewerDialogData, openFileViewer } from '../file-viewer/file-viewer-dialog.component';
 import { formatWorkNumber } from './work-item.model';
 import {
   WorkItemFile,
@@ -217,7 +217,15 @@ export class WorkItemFilesComponent {
   /** Abre no visualizador rico (o mesmo de "Arquivos e textos": SQL com destaque, markdown, imagem com zoom); sem prévia → baixa. */
   open(f: WorkItemFile): void {
     if (filePreviewKind(f) === 'none') { this.download(f); return; }
-    const data: FileViewerDialogData = {
+    // Galeria: os arquivos com prévia desta lista, na ordem da tela (← → no visualizador).
+    const list = this.groups().flatMap((g) => g.files).filter((x) => filePreviewKind(x) !== 'none');
+    const i = list.findIndex((x) => this.key(x) === this.key(f));
+    if (i < 0) list.unshift(f);
+    openFileViewer(this.dialog, list.map((x) => this.viewerData(x)), Math.max(0, i));
+  }
+
+  private viewerData(f: WorkItemFile): FileViewerDialogData {
+    return {
       name: f.name,
       contentType: f.contentType,
       kind: f.kind,
@@ -228,7 +236,6 @@ export class WorkItemFilesComponent {
       note: f.kind === 'ticket' ? 'Chamado completo — copie (texto e formatado) e abra no sistema de chamados.' : null,
       load: () => firstValueFrom(this.api.fileContent(this.numberOf(f), f))
     };
-    this.dialog.open(FileViewerDialogComponent, { ...FILE_VIEWER_DIALOG, data });
   }
 
   async download(f: WorkItemFile): Promise<void> {

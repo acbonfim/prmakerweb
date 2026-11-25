@@ -19,7 +19,7 @@ import { DomSanitizer } from '@angular/platform-browser';
 
 import { environment } from '../../../../environments/environment';
 import { CardAlertBarComponent } from '../../../components/card-alert-bar/card-alert-bar.component';
-import { CardDetailsDialogComponent } from '../../../components/card-details-dialog/card-details-dialog.component';
+import { openDevOpsCardDialog } from '../../../components/devops/devops-card-dialog.component';
 import { CardFull } from '../../../components/card-details-dialog/card-full.model';
 import { CardAssistantLauncherComponent } from '../../../components/card-assistant/card-assistant-launcher.component';
 import { CardHoursComponent } from '../../../components/card-assistant/card-hours.component';
@@ -951,17 +951,11 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
 
   // ── Ações do cabeçalho ──────────────────────────────────────────────────────────────────────
 
+  /** "Ver tudo": o mesmo modal do card da Mesa (abas, edição, discussion, anexos, histórico), sem os botões da Mesa. */
   openDetails(): void {
-    const card = this.cardFull();
-    if (!card) return;
-    this.dialog.open(CardDetailsDialogComponent, {
-      data: { card, cardNumber: this.card() },
-      width: '1000px',
-      height: '80vh',
-      maxWidth: '92vw',
-      maxHeight: '90vh',
-      panelClass: 'custom-dialog-container'
-    });
+    const card = this.card();
+    if (!card || !this.cardFull()) return;
+    openDevOpsCardDialog(this.dialog, { cardId: card, context: 'workbench', onSaved: () => this.reload() });
   }
 
   /**

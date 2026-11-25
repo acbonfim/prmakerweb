@@ -369,6 +369,38 @@ export interface DevOpsComment {
   edited: boolean;
 }
 
+/** Campo alterado numa revisão (`GET DevOps/workitems/{id}/history`); HTML como o DevOps guardou. */
+export interface DevOpsHistoryChange {
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+}
+
+export interface DevOpsHistoryLink {
+  rel: string;
+  id: number | null;
+  url: string;
+  name: string | null;
+}
+
+/** Uma revisão do card: quem, quando, campos antes → depois, links e o comentário feito junto. `created` = revisão 1. */
+export interface DevOpsHistoryEntry {
+  rev: number;
+  by: DevOpsPerson | null;
+  date: string | null;
+  created: boolean;
+  changes: DevOpsHistoryChange[];
+  linksAdded: DevOpsHistoryLink[];
+  linksRemoved: DevOpsHistoryLink[];
+  comment: string | null;
+}
+
+/** Board em que o card aparece (`GET DevOps/workitems/{id}/board`); nulos = fora de board. */
+export interface DevOpsCardBoardRef {
+  team: string | null;
+  board: string | null;
+}
+
 export interface DevOpsCommentsResponse {
   count: number;
   comments: DevOpsComment[];

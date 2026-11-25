@@ -414,9 +414,13 @@ export class CodeRefHostDirective {
 
   private async openImage(img: HTMLImageElement): Promise<void> {
     const { MdImageViewerComponent } = await import('./md-image-viewer.component');
-    const name = attachmentName(img) ?? '';
+    // Galeria: as imagens já carregadas deste texto, na ordem em que aparecem (← → no visualizador).
+    const shown = [...this.host.nativeElement.querySelectorAll<HTMLImageElement>(IMG_SELECTOR)]
+      .filter(i => i.src && i.classList.contains('md-attachment--ok'));
+    const items = shown.map(i => ({ url: i.src, name: attachmentName(i) ?? '', alt: i.alt }));
+    const index = Math.max(0, shown.indexOf(img));
     this.dialog.open(MdImageViewerComponent, {
-      data: { url: img.src, name, alt: img.alt },
+      data: { ...(items[index] ?? { url: img.src, name: attachmentName(img) ?? '', alt: img.alt }), items, index },
       width: '96vw',
       maxWidth: '96vw',
       height: '92vh',

@@ -1,4 +1,5 @@
 import { Component, ElementRef, OnDestroy, ViewChild, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -6,12 +7,13 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 
-export type FileViewKind = 'code' | 'markdown' | 'json' | 'text' | 'image' | 'none';
+export type FileViewKind = 'code' | 'markdown' | 'json' | 'text' | 'image' | 'pdf' | 'none';
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
 const CODE_EXT = /\.(sql|sh|bash|py|ps1|cs|js|ts|xml|ya?ml|html?|css)$/i;
 const TEXT_EXT = /\.(txt|log|csv|tsv)$/i;
 const MAX_TEXT_PREVIEW = 2 * 1024 * 1024;
+const PDF_EXT = /\.pdf$/i;
 
 /** Palavras-chave destacadas nos .sql. */
 const SQL_KEYWORDS = new Set((
@@ -26,6 +28,8 @@ const SQL_KEYWORDS = new Set((
 export function fileViewKind(name: string, contentType: string | null | undefined, size: number, kind?: string | null): FileViewKind {
   const type = `${contentType ?? ''}`.toLowerCase();
   if (kind === 'image' || type.startsWith('image/') || IMAGE_EXT.test(name)) return 'image';
+  // PDF: o leitor do navegador (página, zoom, busca) num iframe.
+  if (type.includes('application/pdf') || PDF_EXT.test(name)) return 'pdf';
   const isText = type.startsWith('text/') || type.includes('json') || type.includes('xml') || type.includes('markdown') ||
     CODE_EXT.test(name) || TEXT_EXT.test(name) || /\.(md|markdown|json)$/i.test(name) ||
     // Sem extensão: chamado/análise/texto gerados são markdown.
@@ -42,6 +46,7 @@ interface Shown {
   kind: FileViewKind;
   text?: string;
   imageUrl?: string;
+  pdfUrl?: SafeResourceUrl;
 }
 
 /**
@@ -94,6 +99,9 @@ interface Shown {
               <div class="fv__md" [appCodeRefHost]="card()" [innerHTML]="p.text | planMarkdown:'card'"></div>
             }
           }
+          @case ('pdf') {
+            <iframe class="fv__pdf" [src]="p.pdfUrl" [title]="name()"></iframe>
+          }
           @case ('code') {
             <pre class="fv__code">@for (line of highlighted(); track $index) {<span class="fv__line" [innerHTML]="line"></span>}</pre>
           }
@@ -143,6 +151,7 @@ interface Shown {
     .fv__image img { display: block; cursor: zoom-in; image-rendering: auto; }
     .fv__image--fit { height: 100%; align-items: center; }
     .fv__image--fit img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .fv__pdf { display: block; width: 100%; height: 100%; border: 0; background: #525659; }
     .fv__state { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px;
       text-align: center; font-size: 13px; color: color-mix(in srgb, var(--mat-sys-on-surface) 55%, transparent); }
   `]
@@ -162,6 +171,7 @@ export class FileViewerComponent implements OnDestroy {
   readonly actions = input(false);
 
   private snackBar = inject(MatSnackBar);
+  private sanitizer = inject(DomSanitizer);
 
   readonly shown = signal<Shown | null>(null);
   readonly showSource = signal(false);
@@ -201,6 +211,13 @@ export class FileViewerComponent implements OnDestroy {
       // SVG vira <img> (não executa scripts).
       this.objectUrl = URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: contentType ?? '' }));
       this.shown.set({ kind: 'image', imageUrl: this.objectUrl });
+      return;
+    }
+    if (view === 'pdf') {
+      this.revoke();
+      // O leitor do navegador só abre o blob com o tipo certo (o servidor às vezes manda octet-stream).
+      this.objectUrl = URL.createObjectURL(blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' }));
+      this.shown.set({ kind: 'pdf', pdfUrl: this.sanitizer.bypassSecurityTrustResourceUrl(this.objectUrl) });
       return;
     }
     if (view === 'none') { this.revoke(); this.shown.set({ kind: 'none' }); return; }

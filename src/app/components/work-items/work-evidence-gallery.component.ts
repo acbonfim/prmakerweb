@@ -4,7 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { firstValueFrom } from 'rxjs';
 import { WorkItemsService } from '../../services/work-items.service';
-import { FILE_VIEWER_DIALOG, FileViewerDialogComponent, FileViewerDialogData } from '../file-viewer/file-viewer-dialog.component';
+import { FileViewerDialogData, openFileViewer } from '../file-viewer/file-viewer-dialog.component';
 import { formatWorkNumber } from './work-item.model';
 import { WorkItemFile, evidenceCaption, evidenceImages } from './work-item-files';
 import { FilesSource } from './card-files.store';
@@ -96,8 +96,14 @@ export class WorkEvidenceGalleryComponent {
     return t.state === 'ok' ? t.url : '';
   }
 
+  /** Abre no visualizador com as outras evidências ao lado (← →). */
   open(f: WorkItemFile): void {
-    const data: FileViewerDialogData = {
+    const list = this.images();
+    openFileViewer(this.dialog, list.map((x) => this.viewerData(x)), Math.max(0, list.indexOf(f)));
+  }
+
+  private viewerData(f: WorkItemFile): FileViewerDialogData {
+    return {
       name: f.name,
       contentType: f.contentType,
       kind: f.kind,
@@ -106,7 +112,6 @@ export class WorkEvidenceGalleryComponent {
       card: this.card(),
       load: () => firstValueFrom(this.api.fileContent(this.numberOf(f), f))
     };
-    this.dialog.open(FileViewerDialogComponent, { ...FILE_VIEWER_DIALOG, data });
   }
 
   private key(f: WorkItemFile): string {

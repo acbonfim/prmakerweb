@@ -20,6 +20,11 @@ const REL_LABEL: Record<string, string> = {
 };
 const REL_ORDER = Object.keys(REL_LABEL);
 
+/** Nome da relação em pt-BR (o tipo cru quando não é conhecido). */
+export function relLabel(rel: string): string {
+  return REL_LABEL[rel] ?? rel.replace(/^.*\./, '');
+}
+
 export interface RelatedGroup {
   rel: string;
   label: string;
@@ -31,7 +36,7 @@ export function relatedGroups(relations: CardRelation[] | null | undefined): Rel
   const groups = new Map<string, RelatedGroup>();
   for (const r of relations ?? []) {
     if (r.rel === 'AttachedFile') continue;
-    const g = groups.get(r.rel) ?? { rel: r.rel, label: REL_LABEL[r.rel] ?? r.rel.replace(/^.*\./, ''), items: [] };
+    const g = groups.get(r.rel) ?? { rel: r.rel, label: relLabel(r.rel), items: [] };
     g.items.push({ id: r.id ?? null, url: r.url, name: r.name ?? null });
     groups.set(r.rel, g);
   }

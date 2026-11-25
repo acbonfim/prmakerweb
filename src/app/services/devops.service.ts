@@ -5,7 +5,8 @@ import { environment } from '../../environments/environment';
 import {
   BoardConfig, BoardItemsRequest, BoardItemsResponse, CardDetail, CreateCardRequest, DevOpsBoardRef,
   DevOpsClassificationNode, DevOpsFieldDef, DevOpsPerson, DevOpsQueryRequest, DevOpsQueryResponse, DevOpsTeam,
-  DevOpsWorkItemType, EpicRef, MoveCardRequest, UpdateCardRequest, DevOpsAttachment, DevOpsCommentsResponse, DevOpsMention
+  DevOpsWorkItemType, EpicRef, MoveCardRequest, UpdateCardRequest, DevOpsAttachment, DevOpsCommentsResponse, DevOpsMention,
+  DevOpsCardBoardRef, DevOpsHistoryEntry
 } from '../components/devops/devops.model';
 
 /** Metadados do projeto mudam pouco: cinco minutos poupam chamadas a cada painel/diálogo aberto. */
@@ -150,6 +151,17 @@ export class DevOpsService {
   /** Ajustes 3: anexos do card (arquivos anexados + imagens coladas nos campos e na discussion). */
   attachments(id: number | string): Observable<DevOpsAttachment[]> {
     return this.http.get<DevOpsAttachment[]>(`${this.base}workitems/${encodeURIComponent(`${id}`)}/attachments`).pipe(map((a) => a ?? []));
+  }
+
+  /** Modal único: histórico do card (revisões mais novas primeiro). */
+  history(id: number | string): Observable<DevOpsHistoryEntry[]> {
+    return this.http.get<DevOpsHistoryEntry[]>(`${this.base}workitems/${encodeURIComponent(`${id}`)}/history`).pipe(map((h) => h ?? []));
+  }
+
+  /** Modal único: time/board em que o card aparece (a Bancada não tem épico para dizer). */
+  cardBoard(id: number | string): Observable<DevOpsCardBoardRef> {
+    return this.http.get<DevOpsCardBoardRef>(`${this.base}workitems/${encodeURIComponent(`${id}`)}/board`)
+      .pipe(map((r) => ({ team: r?.team ?? null, board: r?.board ?? null })));
   }
 
   /** Conteúdo de um anexo pelo PRMake (o DevOps exige o token — o navegador não abre a URL direto). */
