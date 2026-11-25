@@ -29,14 +29,18 @@ import {
   PendingAttachment, dictationSupported, prepareAttachments, releaseAttachment, toRequest
 } from './kb-ask-attach';
 import { KbQuestionsComponent } from './kb-questions.component';
+import { baseQuestionError, baseQuestionProgress, isBaseQuestionActive, watchBaseQuestion } from './kb-ask-executor';
+import { WsService } from '../../../services/ws.service';
 import {
   KbViewMode, TocItem, areaGroups, cleanInline, articleMarkdown, friendlyKind, friendlyName, friendlyTagline, guideSections, headingsOf, projectArea, techSections
 } from './kb-friendly';
 import { ReverseEngineeringService, ReverseTrap, reverseDocOfItem } from '../../../services/reverse-engineering.service';
 import {
   ARCHITECTURE_KINDS,
+  ArchitectureAskAttachment,
   ArchitectureAskResponse,
   ArchitectureAskStatus,
+  BaseQuestion,
   ArchitectureProject,
   ArchitectureSearchHit,
   ArchitectureSection,
@@ -70,6 +74,12 @@ interface AskState {
   error?: string | null;
   /** 0072: anexos desta pergunta (só nome e tipo — o conteúdo já foi enviado e descartado). */
   attached?: { name: string; kind: string }[];
+  /** 0102: pergunta respondida pelo executor (Claude Code na máquina) — andamento e resposta vêm daqui. */
+  job?: BaseQuestion | null;
+  /** 0102: "Analisar a fundo" pelo executor. */
+  deep?: boolean;
+  /** 0102: sem executor pronto (409 NO_EXECUTOR) — a tela oferece a IA do servidor desta vez. */
+  noExecutor?: string | null;
 }
 
 /** Palavras que indicam pergunta ("como saber se…?") — aí vale a busca com IA, não só a palavra exata. */
@@ -173,6 +183,13 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
   private searchTimer?: ReturnType<typeof setTimeout>;
   private searchSeq = 0;
   private askSeq = 0;
+  // 0102: pergunta pelo executor — anexos da última pergunta (refazer pela IA do servidor ou a fundo) e o acompanhamento
+  private lastAskBody: ArchitectureAskAttachment[] = [];
+  private stopJob: () => void = () => {};
+  private readonly ws = inject(WsService);
+  readonly jobProgress = baseQuestionProgress;
+  /** 0102: o Pergunte desta pessoa vai para o executor (Minhas integrações). */
+  readonly byExecutor = computed(() => this.aiStatus()?.runner === 'executor');
 
   /** A busca simples (nomes, palavras-chave, títulos) não achou nada. */
   readonly nothingLocal = computed(() => !!normalize(this.filter()) && !this.groups().length && !this.articleGroups().length);
@@ -540,20 +557,31 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
     );
   }
 
-  private showAsk(question: string): void {
+  /**
+   * 0102: `provider` = pela IA do servidor mesmo com o executor escolhido (sem máquina pronta, "desta vez"); `deep` = analisar a
+   * fundo pelo executor. Os dois refazem a pergunta atual com os mesmos anexos.
+   */
+  private showAsk(question: string, opts: { provider?: boolean; deep?: boolean } = {}): void {
     this.adminMode.set(null);
     this.selection.set({ type: 'ask', question });
     this.askText = question;
     const files = this.askFiles();
     const current = this.ask();
-    if (!files.length && current && current.question === question && (current.loading || current.response)) return;
+    const redo = !!opts.provider || !!opts.deep;
+    if (!redo && !files.length && current && current.question === question && (current.loading || current.response)) return;
     const seq = ++this.askSeq;
+    this.stopJob();
     // os anexos seguem só nesta pergunta: a tela fica com nome e tipo, o conteúdo é solto
-    const attached = files.map(f => ({ name: f.name, kind: f.kind }));
-    const body = files.map(toRequest);
+    const attached = redo && !files.length ? (current?.attached ?? []) : files.map(f => ({ name: f.name, kind: f.kind }));
+    const body = redo && !files.length ? this.lastAskBody : files.map(toRequest);
+    this.lastAskBody = body;
     files.forEach(releaseAttachment);
     this.askFiles.set([]);
     this.askAttachMessages.set([]);
+    if (!opts.provider && this.byExecutor()) {
+      this.askByExecutor(question, body, attached, seq, !!opts.deep);
+      return;
+    }
     this.ask.set({ question, loading: true, response: null, attached });
     this.api.ask(question, body).subscribe({
       next: r => { if (seq === this.askSeq) this.ask.set({ question, loading: false, response: r, attached }); },
@@ -562,6 +590,58 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
           this.ask.set({ question, loading: false, response: null, attached, error: err?.error?.error ?? 'Não foi possível consultar a base agora.' });
       }
     });
+  }
+
+  /** 0102: a pergunta vai para o executor da pessoa; a tela acompanha pelo tempo real (e por GET de reserva). */
+  private askByExecutor(question: string, body: ArchitectureAskAttachment[], attached: { name: string; kind: string }[], seq: number, deep: boolean): void {
+    this.ask.set({ question, loading: true, response: null, attached, deep, job: null });
+    this.api.askExecutor(question, deep, body).subscribe({
+      next: job => {
+        if (seq !== this.askSeq) return;
+        const show = (q: BaseQuestion) => {
+          if (seq !== this.askSeq) return;
+          if (isBaseQuestionActive(q)) this.ask.set({ question, loading: true, response: null, attached, deep, job: q });
+          else if (q.status === 'done' && q.answer)
+            this.ask.set({ question, loading: false, response: { ...q.answer, model: q.answer.model ?? q.model ?? null }, attached, deep, job: q });
+          else this.ask.set({ question, loading: false, response: null, attached, deep, job: q, error: baseQuestionError(q) });
+        };
+        show(job);
+        this.stopJob = watchBaseQuestion(this.ws, this.api, job, show);
+      },
+      error: err => {
+        if (seq !== this.askSeq) return;
+        const noExecutor = err?.status === 409 && err?.error?.code === 'NO_EXECUTOR';
+        this.ask.set({
+          question, loading: false, response: null, attached, deep,
+          noExecutor: noExecutor ? (err.error.error ?? 'Seu executor não está pronto.') : null,
+          error: noExecutor ? null : (err?.error?.error ?? 'Não foi possível mandar a pergunta para o executor.')
+        });
+        if (noExecutor) this.loadAiStatus();
+      }
+    });
+  }
+
+  /** 0102: cancela a pergunta que está com o executor. */
+  cancelJob(): void {
+    const job = this.ask()?.job;
+    if (!job) return;
+    this.api.cancelBaseQuestion(job.id).subscribe({
+      next: q => {
+        const a = this.ask();
+        if (a?.job?.id === q.id) { this.stopJob(); this.ask.set({ ...a, loading: false, job: q, error: baseQuestionError(q) }); }
+      },
+      error: () => this.snackBar.open('Não foi possível cancelar agora', 'Ok', { duration: 3000 })
+    });
+  }
+
+  /** 0102: sem executor (ou ele falhou) — responde pela IA do servidor desta vez. */
+  askWithProvider(question: string): void {
+    this.showAsk(question, { provider: true });
+  }
+
+  /** 0102: "Analisar a fundo" pelo executor (mais esforço; pode confirmar no código da máquina). */
+  askDeepByExecutor(question: string): void {
+    this.showAsk(question, { deep: true });
   }
 
   /** Abre o trecho: a seção do projeto rolando até o cabeçalho, ou o artigo do KC. */
@@ -697,7 +777,9 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
     this.api.askStatus().subscribe({
       next: st => {
         this.aiStatus.set(st);
-        this.attachSupport.set({ supports: !!st.available && !!st.supportsAttachments, limits: st.limits ?? DEFAULT_ATTACH_LIMITS });
+        // 0102: pelo executor o Claude Code lê imagem, PDF e texto (mesmos limites)
+        const supports = st.runner === 'executor' || (!!st.available && !!st.supportsAttachments);
+        this.attachSupport.set({ supports, limits: st.limits ?? DEFAULT_ATTACH_LIMITS });
       },
       error: () => { /* sem status: o selo e o recurso de anexo ficam escondidos */ }
     });
@@ -740,6 +822,7 @@ export class ArchitectureComponent implements OnInit, OnDestroy {
   private readonly tabLeaving = inject(TabsService).leaving$.subscribe(() => this.tours.stop(BASE_SOLVACE_TOUR.id));
 
   ngOnDestroy(): void {
+    this.stopJob();
     this.tabLeaving.unsubscribe();
     this.tours.stop(BASE_SOLVACE_TOUR.id);
   }

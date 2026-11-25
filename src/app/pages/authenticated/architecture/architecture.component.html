@@ -15,12 +15,22 @@
   <span class="header-spacer"></span>
   <!-- 0084: configuração inicial — a IA do Pergunte usa a chave pessoal (Minhas integrações) -->
   @if (aiStatus(); as ai) {
+    @if (ai.runner === 'executor') {
+    <!-- 0102: o Pergunte vai para o Claude Code da máquina da pessoa (Minhas integrações) -->
+    <button type="button" class="ai-setup" [class.ai-setup--warn]="!ai.executorOnline" data-tour="kb-ai-setup" (click)="openIntegrations()"
+            [matTooltip]="ai.executorOnline
+              ? 'O Pergunte é respondido pelo Claude Code da sua máquina (' + ai.executorName + '), sem gastar a chave de API. Clique para trocar em Minhas integrações.'
+              : (ai.executorReason || 'Seu executor não está pronto') + ' Sem ele, o Pergunte oferece a IA do servidor. Clique para trocar em Minhas integrações.'">
+      <mat-icon>{{ ai.executorOnline ? 'computer' : 'desktop_access_disabled' }}</mat-icon>{{ ai.executorOnline ? 'Executor · ' + ai.executorName : 'Executor offline' }}
+    </button>
+    } @else {
     <button type="button" class="ai-setup" [class.ai-setup--warn]="!ai.available" data-tour="kb-ai-setup" (click)="openIntegrations()"
             [matTooltip]="ai.available
               ? 'O Pergunte e o Aprender com um card usam a sua chave de IA (' + (ai.provider || 'IA') + '). Clique para ver ou trocar em Minhas integrações.'
               : 'Sem IA o Pergunte só busca pela palavra' + (ai.reason ? ' (' + ai.reason + ')' : '') + '. Clique para configurar em Minhas integrações.'">
       <mat-icon>{{ ai.available ? 'check_circle' : 'key' }}</mat-icon>{{ ai.available ? 'IA pronta' + (ai.provider ? ' · ' + ai.provider : '') : 'Configurar a IA' }}
     </button>
+    }
   }
   <div class="mode" role="group" aria-label="Modo de leitura" data-tour="kb-mode">
     <button type="button" class="mode__btn" [class.mode__btn--on]="simple()" (click)="setMode('simples')"
@@ -255,7 +265,29 @@
           <div class="ask__sent"><mat-icon>attach_file</mat-icon>Enviado com: @for (f of ask()!.attached!; track $index) { <span class="kb__tag">{{ f.name }}</span> }</div>
         }
         @if (ask(); as a) {
-          @if (a.loading) {
+          @if (a.loading && a.job !== undefined) {
+            <!-- 0102: respondendo pelo executor -->
+            <div class="ask__thinking">
+              <span class="ask__dots"><i></i><i></i><i></i></span>
+              <div>
+                <strong>{{ a.deep ? 'Analisando a fundo no seu Claude Code…' : 'Seu Claude Code está respondendo…' }}</strong>
+                <span>{{ a.job ? jobProgress(a.job) : 'Mandando a pergunta para o seu executor…' }}</span>
+              </div>
+              @if (a.job) {
+                <button mat-stroked-button type="button" class="ask__cancel" (click)="cancelJob()">Cancelar</button>
+              }
+            </div>
+            @for (i of [1, 2, 3]; track i) { <div class="ask__skeleton"></div> }
+          } @else if (a.noExecutor) {
+            <div class="kb__empty kb__empty--error"><mat-icon>desktop_access_disabled</mat-icon>{{ a.noExecutor }}
+              <span class="ask__actions">
+                @if (aiStatus()?.available) {
+                  <button mat-flat-button color="primary" type="button" (click)="askWithProvider(a.question)">Responder pela IA do servidor desta vez</button>
+                }
+                <button mat-stroked-button type="button" (click)="openIntegrations()">Minhas integrações</button>
+              </span>
+            </div>
+          } @else if (a.loading) {
             <div class="ask__thinking">
               <span class="ask__dots"><i></i><i></i><i></i></span>
               <div>
@@ -266,7 +298,10 @@
             @for (i of [1, 2, 3]; track i) { <div class="ask__skeleton"></div> }
           } @else if (a.error) {
             <div class="kb__empty kb__empty--error"><mat-icon>error_outline</mat-icon>{{ a.error }}
-              <button mat-stroked-button (click)="ask.set(null); askAi(a.question)">Tentar de novo</button></div>
+              <button mat-stroked-button (click)="ask.set(null); askAi(a.question)">Tentar de novo</button>
+              @if (a.job && aiStatus()?.available) {
+                <button mat-stroked-button type="button" (click)="askWithProvider(a.question)">Responder pela IA do servidor</button>
+              }</div>
           } @else if (a.response; as r) {
             @if (r.attachmentSeen) {
               <div class="ask__seen"><mat-icon>visibility</mat-icon><span><strong>O que a IA entendeu do anexo:</strong> {{ r.attachmentSeen }}</span></div>
@@ -292,7 +327,12 @@
             @if (r.aiUsed && (r.coverage === 'partial' || r.coverage === 'not-found')) {
               <div class="ask__note"><mat-icon>bookmark_added</mat-icon>Registramos a pergunta — ela entrou na fila para a base aprender a responder.</div>
             }
-            @if (r.aiUsed && (r.coverage === 'partial' || r.coverage === 'not-found' || !r.results.length)) {
+            @if (r.aiUsed && a.job && !a.deep) {
+              <!-- 0102: pelo executor, "a fundo" refaz a pergunta com mais esforço (pode confirmar no código da máquina) -->
+              <button mat-stroked-button type="button" class="ask__deep-exec" (click)="askDeepByExecutor(a.question)">
+                <mat-icon>travel_explore</mat-icon>Analisar a fundo no seu Claude Code
+              </button>
+            } @else if (r.aiUsed && !a.job && (r.coverage === 'partial' || r.coverage === 'not-found' || !r.results.length)) {
               <app-kb-ask-deep [question]="a.question" [coverage]="r.coverage ?? 'not-found'" [suggested]="r.suggestedSection ?? null" [projects]="projects()"
                                [isAdmin]="isAdmin()" (created)="onDeepCreated($event)" (suggestionSent)="loadSuggestions()"></app-kb-ask-deep>
             }

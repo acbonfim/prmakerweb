@@ -233,7 +233,36 @@ export interface ArchitectureAskStatus {
   reason?: string | null;
   supportsAttachments: boolean;
   limits?: { maxFiles: number; maxImageBytes: number; maxPdfBytes: number; maxPdfPages: number; maxTextBytes: number; maxTotalBytes: number } | null;
+  /** 0102: quem responde o Pergunte desta pessoa (Minhas integrações) e se a máquina dela está pronta. */
+  runner?: 'provider' | 'executor' | string;
+  executorOnline?: boolean;
+  executorName?: string | null;
+  executorReason?: string | null;
 }
+
+/** 0102: pergunta respondida pelo executor (Claude Code na máquina de quem perguntou). */
+export interface BaseQuestion {
+  id: string;
+  /** Grupo do tempo real: `execplan:{key}`. */
+  key: string;
+  question: string;
+  deep: boolean;
+  status: 'queued' | 'claimed' | 'running' | 'done' | 'failed' | 'cancelled' | 'expired' | string;
+  requestId: string;
+  waitReason?: string | null;
+  waitCode?: string | null;
+  workerName?: string | null;
+  activity?: { label: string; tool?: string | null; at: string } | null;
+  answer?: ArchitectureAskResponse | null;
+  error?: string | null;
+  model?: string | null;
+  costUsd?: number | null;
+  createdAt: string;
+  startedAt?: string | null;
+  answeredAt?: string | null;
+}
+
+export const BASE_QUESTION_ACTIVE = ['queued', 'claimed', 'running'];
 
 /** Anexo enviado na pergunta (base64) — a API valida, lê e descarta. */
 export interface ArchitectureAskAttachment { name: string; mediaType: string; data: string; }
@@ -486,6 +515,19 @@ export class ArchitectureService {
   /** Pergunta à base com IA: entende o contexto e leva aos trechos que respondem (0037). */
   ask(question: string, attachments: ArchitectureAskAttachment[] = []): Observable<ArchitectureAskResponse> {
     return this.http.post<ArchitectureAskResponse>(`${this.api}/ask`, attachments.length ? { question, attachments } : { question });
+  }
+
+  /** 0102: pergunta pelo executor (409 NO_EXECUTOR = sem máquina pronta — a tela oferece a IA do servidor). */
+  askExecutor(question: string, deep: boolean, attachments: ArchitectureAskAttachment[] = []): Observable<BaseQuestion> {
+    return this.http.post<BaseQuestion>(`${this.api}/ask/executor`, attachments.length ? { question, deep, attachments } : { question, deep });
+  }
+
+  baseQuestion(id: string): Observable<BaseQuestion> {
+    return this.http.get<BaseQuestion>(`${this.api}/ask/executor/${id}`);
+  }
+
+  cancelBaseQuestion(id: string): Observable<BaseQuestion> {
+    return this.http.post<BaseQuestion>(`${this.api}/ask/executor/${id}/cancel`, {});
   }
 
   /** 0072: a IA configurada aceita anexos? (e os limites). */

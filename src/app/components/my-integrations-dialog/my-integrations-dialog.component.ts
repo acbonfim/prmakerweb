@@ -7,9 +7,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { UserIntegration, UserIntegrationService } from '../../services/user-integration.service';
+import { UserIntegration, UserIntegrationFieldOption, UserIntegrationService } from '../../services/user-integration.service';
 import { TEAMS_PLUGIN_NAME, TeamsService } from '../../services/teams.service';
 import { IntegrationGuide, guideFor } from '../setup-guide/integration-guides';
 
@@ -53,6 +54,8 @@ interface FieldDraft {
   suggestions: string[];
   /** Ajuda definida pelo administrador (0032). */
   help: string | null;
+  /** 0102: valores fechados do catálogo — lista de escolha com rótulos (vazio = texto livre). */
+  options: UserIntegrationFieldOption[];
 }
 
 interface PluginDraft {
@@ -82,7 +85,7 @@ type IntegrationState = 'ok' | 'pending' | 'optional';
 @Component({
   selector: 'app-my-integrations-dialog',
   standalone: true,
-  imports: [FormsModule, MatAutocompleteModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatIconModule,
+  imports: [FormsModule, MatAutocompleteModule, MatSelectModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatIconModule,
     MatInputModule, MatProgressSpinnerModule, MatTooltipModule],
   templateUrl: './my-integrations-dialog.component.html',
   styleUrls: ['./my-integrations-dialog.component.css'],
@@ -242,6 +245,16 @@ export class MyIntegrationsDialogComponent implements OnInit {
 
   readonly placeholder = fieldPlaceholder;
 
+  /** 0102: rótulo do valor numa lista de escolha (o valor salvo fora da lista aparece como está). */
+  optionLabel(field: FieldDraft, value: string | null): string {
+    return field.options.find(o => o.value.toLowerCase() === (value ?? '').toLowerCase())?.label ?? (value ?? '');
+  }
+
+  /** 0102: o valor salvo não está entre as opções (ex.: configurado antes da lista) — continua escolhível. */
+  outsideOptions(field: FieldDraft): boolean {
+    return !!field.value && !field.options.some(o => o.value.toLowerCase() === field.value.toLowerCase());
+  }
+
   close(): void {
     this.dialogRef.close();
   }
@@ -270,6 +283,7 @@ export class MyIntegrationsDialogComponent implements OnInit {
         editable: f.editable !== false,
         suggestions: f.sensitive ? [] : (f.suggestions ?? []),
         help: f.help?.trim() || null,
+        options: f.sensitive ? [] : (f.options ?? []),
       } satisfies FieldDraft;
     });
     return {

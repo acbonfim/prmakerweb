@@ -121,6 +121,28 @@
                     </button>
                   }
                 </div>
+              } @else if (field.options.length) {
+                <!-- 0102: valores fechados (catálogo) — escolha pelo rótulo -->
+                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field">
+                  <mat-label>{{ field.label }}</mat-label>
+                  <mat-select [disabled]="draft.saving" [(ngModel)]="field.value" (ngModelChange)="touch()"
+                              [placeholder]="field.defaultValue ? 'Padrão: ' + optionLabel(field, field.defaultValue) : 'Escolha'">
+                    @if (field.optional) {
+                      <mat-option value="">{{ field.defaultValue ? 'Padrão da configuração geral (' + optionLabel(field, field.defaultValue) + ')' : '—' }}</mat-option>
+                    }
+                    @for (o of field.options; track o.value) {
+                      <mat-option [value]="o.value">{{ o.label }}</mat-option>
+                    }
+                    @if (outsideOptions(field)) {
+                      <mat-option [value]="field.value">{{ field.value }}</mat-option>
+                    }
+                  </mat-select>
+                  @if (field.help) {
+                    <mat-hint>{{ field.help }}</mat-hint>
+                  } @else if (field.optional) {
+                    <mat-hint>Opcional</mat-hint>
+                  }
+                </mat-form-field>
               } @else {
                 <mat-form-field appearance="outline" subscriptSizing="dynamic" class="field">
                   <mat-label>{{ field.label }}</mat-label>
