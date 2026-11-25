@@ -124,7 +124,7 @@ export function sameValue(f: Pick<DevOpsFieldDef, 'type' | 'referenceName' | 'al
   const kind = f ? inputKind(f) : 'text';
   if (kind === 'identity') return identityKey(a).toLowerCase() === identityKey(b).toLowerCase();
   if (kind === 'number') return Number(a) === Number(b);
-  if (kind === 'boolean') return !!a === !!b;
+  if (kind === 'boolean') return booleanValue(a) === booleanValue(b);
   if (kind === 'date') return `${a}`.slice(0, 10) === `${b}`.slice(0, 10);
   return `${a}` === `${b}`;
 }
@@ -138,12 +138,25 @@ export function outgoingValue(f: Pick<DevOpsFieldDef, 'type' | 'referenceName' |
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
   }
-  if (kind === 'boolean') return !!v;
+  if (kind === 'boolean') return booleanValue(v);
   if (kind === 'picklist' && ['picklistInteger', 'integer', 'double'].includes(`${f?.type}`)) {
     const n = Number(v);
     return Number.isFinite(n) ? n : v;
   }
   return v;
+}
+
+/** Booleano do DevOps: o padrão vem como texto ("0"/"1", "false"/"true") — `!!"0"` daria verdadeiro. */
+export function booleanValue(v: unknown): boolean {
+  if (typeof v === 'string') return !['', '0', 'false', 'no', 'não'].includes(v.trim().toLowerCase());
+  return !!v;
+}
+
+/** Valor inicial do campo pelo padrão do tipo (booleano convertido; vazio = sem valor). */
+export function defaultFieldValue(f: Pick<DevOpsFieldDef, 'type' | 'referenceName' | 'allowedValues' | 'defaultValue'>): unknown {
+  const d = f.defaultValue;
+  if (d == null || d === '') return undefined;
+  return inputKind(f) === 'boolean' ? booleanValue(d) : d;
 }
 
 /**

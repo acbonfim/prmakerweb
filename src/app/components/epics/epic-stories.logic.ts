@@ -53,6 +53,14 @@ export interface ConvertEpicStoryRequest {
   board?: string | null;
   column?: string | null;
   lane?: string | null;
+  /** Campos do DevOps preenchidos na conversão (por cima dos da história) — os obrigatórios que faltavam. */
+  fields?: Record<string, unknown> | null;
+}
+
+/** `GET EpicStories/required-fields?type=`: o tipo do DevOps e os obrigatórios que ele não preenche sozinho (ex.: Module). */
+export interface StoryRequiredFields {
+  type: string;
+  fields: DevOpsFieldDef[];
 }
 
 // ── Tipo ─────────────────────────────────────────────────────────────────────────────────────
@@ -267,9 +275,17 @@ export interface StoryValidation {
  * Regras do editor: título obrigatório (até 300); História sem critérios de aceite → recomendação; Bug sem passos de
  * reprodução → recomendação no rascunho e erro ao marcar como pronta (o bug pronto precisa dizer como reproduzir).
  */
-export function validateStory(d: Pick<StoryDraft, 'type' | 'title' | 'acceptanceCriteria' | 'reproSteps' | 'status'>): StoryValidation {
+export function validateStory(d: Pick<StoryDraft, 'type' | 'title' | 'acceptanceCriteria' | 'reproSteps' | 'status'> & { fields?: Record<string, unknown> },
+  required: readonly DevOpsFieldDef[] = []): StoryValidation {
   const errors: string[] = [];
   const warnings: string[] = [];
+  // Card 1109 (E1093): o DevOps recusa o card sem os obrigatórios do tipo (ex.: Module da User Story).
+  const missing = missingStoryFields(required, d.fields ?? {}).map((f) => f.name);
+  if (missing.length) {
+    const what = `${missing.join(', ')} (o DevOps exige para virar card)`;
+    if (d.status === 'ready') errors.push(`Preencha ${what}.`);
+    else warnings.push(`Falta ${what}.`);
+  }
   const title = `${d.title ?? ''}`.trim();
   if (!title) errors.push('Dê um título.');
   else if (title.length > STORY_TITLE_MAX) errors.push(`O título passa de ${STORY_TITLE_MAX} caracteres.`);
@@ -282,6 +298,14 @@ export function validateStory(d: Pick<StoryDraft, 'type' | 'title' | 'acceptance
     warnings.push('Recomendado: critérios de aceite (como saber que a história está pronta).');
   }
   return { errors, warnings, ok: !errors.length };
+}
+
+/** Obrigatórios do DevOps ainda vazios nos campos da história. */
+export function missingStoryFields(required: readonly DevOpsFieldDef[], fields: Record<string, unknown>): DevOpsFieldDef[] {
+  return required.filter((f) => {
+    const v = fields[f.referenceName];
+    return v == null || (typeof v === 'string' && v.trim() === '');
+  });
 }
 
 /** Corpo do salvar: só o texto do tipo (critérios na História, passos no Bug; severidade só no Bug). */
@@ -340,6 +364,8 @@ export interface StoryApiError {
   message: string;
   /** `alreadyConverted`: o card que já existe. */
   cardId: string | null;
+  /** `required_fields` (422): os campos obrigatórios do DevOps que faltaram. */
+  fields?: DevOpsFieldDef[];
 }
 
 /** Erro da API das histórias (`{code, message, cardId}`, `{error}` ou texto) com mensagens dos 409 conhecidos. */
@@ -354,7 +380,9 @@ export function storyApiError(err: unknown, fallback: string): StoryApiError {
   }
   if (code === 'notEditable') return { code, cardId, message: 'História convertida não se edita mais — mude o card no DevOps.' };
   const msg = body && typeof body === 'object' ? body.message || body.error || body.title : null;
-  if (msg) return { code, cardId, message: msg };
+  const fields = body && typeof body === 'object' && Array.isArray((body as { fields?: unknown }).fields)
+    ? (body as { fields: DevOpsFieldDef[] }).fields : undefined;
+  if (msg) return fields ? { code, cardId, message: msg, fields } : { code, cardId, message: msg };
   if (e?.status === 0) return { code: null, cardId: null, message: 'Sem conexão com o PRMake.' };
   return { code, cardId, message: fallback };
 }

@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { ConvertEpicStoryRequest, EpicStory, SaveEpicStoryRequest } from '../components/epics/epic-stories.logic';
+import { ConvertEpicStoryRequest, EpicStory, SaveEpicStoryRequest, StoryRequiredFields } from '../components/epics/epic-stories.logic';
 import { EpicsService, EpicsUpdatedPayload } from './epics.service';
 
 export type { ConvertEpicStoryRequest, EpicStory, EpicStoryStatus, EpicStoryType, SaveEpicStoryRequest } from '../components/epics/epic-stories.logic';
@@ -40,6 +40,11 @@ export class EpicStoriesService {
   /** Descartar (o DELETE não apaga: a história fica como `discarded`). */
   discard(number: number): Observable<unknown> {
     return this.http.delete(`${this.apiUrl}/${number}`);
+  }
+
+  /** Obrigatórios do DevOps para o tipo da história que ele não preenche sozinho (ex.: Module da User Story). */
+  requiredFields(type: string): Observable<StoryRequiredFields> {
+    return this.http.get<StoryRequiredFields>(`${this.apiUrl}/required-fields`, { params: { type } });
   }
 
   /** Cria o card no DevOps (entra no épico). Já convertida → 409 `{code:"alreadyConverted", cardId}`. */

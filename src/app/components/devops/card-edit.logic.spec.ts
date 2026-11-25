@@ -1,5 +1,5 @@
 import {
-  buildCreate, buildPatch, changedFields, createFields, displayValue, groupFields, inputKind, missingRequired,
+  booleanValue, buildCreate, buildPatch, changedFields, createFields, defaultFieldValue, displayValue, groupFields, inputKind, missingRequired,
   outgoingValue, sameValue, describeChanges, changesLabel
 } from './card-edit.logic';
 import { DevOpsFieldDef } from './devops.model';
@@ -154,5 +154,40 @@ describe('describeChanges (0099 ajustes 3)', () => {
   it('sem mudança → lista vazia', () => {
     expect(describeChanges(original, defs, { ...original.fields }, 'Velho', ['A'])).toEqual([]);
     expect(changesLabel([])).toBe('');
+  });
+});
+
+describe('criar card: User Story do projeto Solvace (E1093)', () => {
+  // Obrigatórios reais da User Story: Module sem padrão; booleanos com padrão "0".
+  const defs: DevOpsFieldDef[] = [
+    def('System.Title', 'string', { required: true }),
+    def('System.AreaId', 'integer', { required: true }),
+    def('Custom.Module', 'picklistString', { name: 'Module', required: true, allowedValues: ['Checklist', 'Login'] }),
+    def('Custom.APPROVED', 'boolean', { name: 'APPROVED', required: true, defaultValue: '0' }),
+    def('Custom.Specified', 'boolean', { name: 'Specified', required: true, defaultValue: '0' }),
+    def('Microsoft.VSTS.CMMI.RequirementType', 'string', { name: 'Requirement Type', required: true, allowedValues: ['Business', 'RCA'], defaultValue: 'Business' }),
+  ];
+
+  it('mostra Module e bloqueia o Criar até escolher; o sistema (AreaId) fica de fora', () => {
+    const shown = createFields(defs);
+    expect(shown.map((d) => d.referenceName)).toContain('Custom.Module');
+    expect(shown.map((d) => d.referenceName)).not.toContain('System.AreaId');
+    const values: Record<string, unknown> = {};
+    for (const f of shown) if (defaultFieldValue(f) !== undefined) values[f.referenceName] = defaultFieldValue(f);
+    expect(missingRequired(shown, values)).toEqual(['Module']);
+    expect(missingRequired(shown, { ...values, 'Custom.Module': 'Login' })).toEqual([]);
+  });
+
+  it('booleano com padrão "0" sai como false (antes !!"0" mandava true)', () => {
+    const shown = createFields(defs);
+    const values: Record<string, unknown> = { 'Custom.Module': 'Login' };
+    for (const f of shown) if (defaultFieldValue(f) !== undefined) values[f.referenceName] = defaultFieldValue(f);
+    const body = buildCreate('User Story', 'x', shown, values, []);
+    expect(body.fields?.['Custom.APPROVED']).toBeFalse();
+    expect(body.fields?.['Custom.Specified']).toBeFalse();
+    expect(body.fields?.['Microsoft.VSTS.CMMI.RequirementType']).toBe('Business');
+    expect(booleanValue('1')).toBeTrue();
+    expect(booleanValue('false')).toBeFalse();
+    expect(sameValue(defs[3], '0', false)).toBeTrue();
   });
 });

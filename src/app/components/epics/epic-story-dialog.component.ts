@@ -8,6 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { DevOpsService } from '../../services/devops.service';
 import { EpicStoriesService } from '../../services/epic-stories.service';
+import { DevOpsFieldDef } from '../devops/devops.model';
 import { DevOpsFieldInputComponent } from '../devops/devops-field-input.component';
 import { DevOpsTagsInputComponent } from '../devops/devops-tags-input.component';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
@@ -163,9 +164,9 @@ type MdKey = 'description' | 'acceptanceCriteria' | 'reproSteps';
           </div>
 
           <div class="es__grid">
-            @for (f of fieldDefs; track f.referenceName) {
+            @for (f of fieldDefs(); track f.referenceName) {
               <div class="wi-field">
-                <span>{{ f.name }}</span>
+                <span>{{ f.name }}@if (f.required) { <b class="es__req" title="O DevOps exige para virar card">*</b> }</span>
                 <app-devops-field-input [field]="f" [value]="draft().fields[f.referenceName] ?? null" (valueChange)="setField(f.referenceName, $event)" />
               </div>
             }
@@ -262,14 +263,19 @@ export class EpicStoryDialogComponent {
 
   readonly types = STORY_TYPES;
   readonly titleMax = STORY_TITLE_MAX;
-  readonly fieldDefs = STORY_FIELD_DEFS;
+  /** Card 1109 (E1093): obrigatórios do DevOps para o tipo (ex.: Module da User Story) — sem eles o card não nasce. */
+  readonly requiredDefs = signal<DevOpsFieldDef[]>([]);
+  readonly fieldDefs = computed<DevOpsFieldDef[]>(() => [
+    ...STORY_FIELD_DEFS,
+    ...this.requiredDefs().filter((r) => !STORY_FIELD_DEFS.some((d) => d.referenceName === r.referenceName))
+  ]);
   readonly priorityOptions: PmComboOption[] = STORY_PRIORITIES.map((p) => ({ value: `${p.value}`, label: p.label, hint: p.hint, icon: 'flag' }));
 
   readonly readOnly = computed(() => !!this.data.story && !isStoryEditable(this.data.story));
   readonly cardId = computed(() => storyCardId(this.data.story));
   readonly draft = signal<StoryDraft>(this.data.story ? storyToDraft(this.data.story) : emptyStoryDraft(this.data.type ?? 'user-story'));
   readonly typeLook = computed(() => storyTypeLook(this.readOnly() ? this.data.story!.type : this.draft().type));
-  readonly validation = computed(() => validateStory(this.draft()));
+  readonly validation = computed(() => validateStory(this.draft(), this.requiredDefs()));
   readonly heading = computed(() => {
     const s = this.data.story;
     const t = this.typeLook();
@@ -278,7 +284,9 @@ export class EpicStoryDialogComponent {
   /** Campos do DevOps preenchidos (só leitura). */
   readonly roFields = computed(() => {
     const f = this.data.story?.fields ?? {};
-    return STORY_FIELD_DEFS.map((d) => ({ label: d.name, value: storyFieldText(d.referenceName, f[d.referenceName]) })).filter((x) => !!x.value);
+    const defs = [...STORY_FIELD_DEFS, ...Object.keys(f).filter((ref) => !STORY_FIELD_DEFS.some((d) => d.referenceName === ref))
+      .map((ref) => ({ referenceName: ref, name: this.requiredDefs().find((r) => r.referenceName === ref)?.name ?? ref.replace(/^Custom\./, '') }))];
+    return defs.map((d) => ({ label: d.name, value: storyFieldText(d.referenceName, f[d.referenceName]) })).filter((x) => !!x.value);
   });
 
   /** Severidade: os valores do campo do DevOps (Bug) quando vêm; senão "1 - Critical…4 - Low". */
@@ -299,6 +307,15 @@ export class EpicStoryDialogComponent {
 
   constructor() {
     if (this.draft().type === 'bug' && !this.readOnly()) this.loadSeverities();
+    this.loadRequired(this.readOnly() ? this.data.story!.type : this.draft().type);
+  }
+
+  /** Obrigatórios do DevOps para o tipo; sem DevOps a lista fica vazia (a conversão confere de novo). */
+  private loadRequired(type: EpicStoryType): void {
+    this.api.requiredFields(type).subscribe({
+      next: (r) => { if (this.draft().type === type || this.readOnly()) this.requiredDefs.set(r?.fields ?? []); },
+      error: () => this.requiredDefs.set([])
+    });
   }
 
   statusLook(status: string) {
@@ -313,6 +330,8 @@ export class EpicStoryDialogComponent {
   setType(type: EpicStoryType): void {
     this.patch({ type });
     if (type === 'bug') this.loadSeverities();
+    this.requiredDefs.set([]);
+    this.loadRequired(type);
   }
 
   setField(ref: string, value: unknown): void {

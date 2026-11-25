@@ -5,7 +5,7 @@ import { Subscription } from 'rxjs';
 import { DevOpsService } from '../../services/devops.service';
 import { htmlToMd, mdToHtml } from '../../helpers/markdown';
 import { PmComboComponent, PmComboOption } from '../pm-combo/pm-combo.component';
-import { displayValue, inputKind } from './card-edit.logic';
+import { booleanValue, displayValue, inputKind } from './card-edit.logic';
 import {
   DevOpsClassificationNode, DevOpsFieldDef, DevOpsPerson, identityImage, identityKey, identityName
 } from './devops.model';
@@ -64,8 +64,8 @@ const EMAIL_ONLY = (t: string): string | null => (/@/.test(t) ? t : null);
         }
         @case ('boolean') {
           <label class="dv-check">
-            <input type="checkbox" [ngModel]="!!value()" (ngModelChange)="setValue(!!$event)" [disabled]="disabled()">
-            {{ value() ? 'Sim' : 'Não' }}
+            <input type="checkbox" [ngModel]="isOn()" (ngModelChange)="setValue(!!$event)" [disabled]="disabled()">
+            {{ isOn() ? 'Sim' : 'Não' }}
           </label>
         }
         @case ('html') {
@@ -116,6 +116,8 @@ export class DevOpsFieldInputComponent {
 
   readonly field = input.required<DevOpsFieldDef>();
   readonly value = model<unknown>(null);
+  /** Booleano do DevOps (o padrão chega como "0"/"1"). */
+  readonly isOn = computed(() => booleanValue(this.value()));
   readonly disabled = input(false);
   readonly placeholder = input<string>('');
 

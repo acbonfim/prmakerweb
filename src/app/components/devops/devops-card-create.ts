@@ -8,7 +8,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Observable } from 'rxjs';
 import { DevOpsService } from '../../services/devops.service';
 import { canAccept } from './board.logic';
-import { buildCreate, createFields, inputKind, missingRequired } from './card-edit.logic';
+import { buildCreate, createFields, defaultFieldValue, inputKind, missingRequired } from './card-edit.logic';
 import { DevOpsFieldInputComponent } from './devops-field-input.component';
 import { DevOpsTagsInputComponent } from './devops-tags-input.component';
 import { BoardConfig, CardDetail, DevOpsFieldDef, DevOpsWorkItemType, devOpsErrorMessage, typeColorCss, typeIcon } from './devops.model';
@@ -246,7 +246,7 @@ export class DevOpsCardCreateComponent {
         const next: Record<string, unknown> = {};
         for (const f of shown) {
           if (prev[f.referenceName] != null && prev[f.referenceName] !== '') next[f.referenceName] = prev[f.referenceName];
-          else if (f.defaultValue != null && f.defaultValue !== '') next[f.referenceName] = f.defaultValue;
+          else if (defaultFieldValue(f) !== undefined) next[f.referenceName] = defaultFieldValue(f);
         }
         this.allDefs.set(shown);
         this.fields.set(shown);
