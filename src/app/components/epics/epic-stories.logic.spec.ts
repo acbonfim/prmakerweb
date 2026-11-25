@@ -2,7 +2,7 @@ import {
   DEFAULT_SEVERITIES, EpicStory, buildSaveStory, canConvertStory, convertWarnings, countByStoryFilter, emptyStoryDraft, filterStories,
   identityText, isStoryEditable, normalizePriority, normalizeStoryFields, openStoryCount, parseStoryFilter, severityValues,
   sortStories, storyApiError, storyBoardColumns, storyCardId, storyFieldText, storyStatusLook, storyToDraft, storyTypeLook,
-  validateStory
+  validateStory, missingStoryFields
 } from './epic-stories.logic';
 
 function story(p: Partial<EpicStory>): EpicStory {
@@ -159,5 +159,25 @@ describe('epic-stories.logic (0099 ajustes 2)', () => {
     expect(storyApiError({ status: 500, error: 'falhou' }, 'x').message).toBe('falhou');
     expect(storyApiError({ status: 0 }, 'x').message).toContain('Sem conexão');
     expect(storyApiError(null, 'padrão').message).toBe('padrão');
+  });
+});
+
+describe('campos obrigatórios do DevOps na história (E1093)', () => {
+  const module = { referenceName: 'Custom.Module', name: 'Module', type: 'picklistString', required: true, readOnly: false, allowedValues: ['Login'] };
+  const base = { type: 'user-story' as const, title: 'RCA', acceptanceCriteria: '- ok', reproSteps: '' };
+
+  it('pronta sem Module não salva; rascunho só avisa', () => {
+    expect(validateStory({ ...base, status: 'ready', fields: {} }, [module]).ok).toBeFalse();
+    expect(validateStory({ ...base, status: 'ready', fields: {} }, [module]).errors[0]).toContain('Module');
+    expect(validateStory({ ...base, status: 'draft', fields: {} }, [module]).ok).toBeTrue();
+    expect(validateStory({ ...base, status: 'draft', fields: {} }, [module]).warnings.join(' ')).toContain('Module');
+    expect(validateStory({ ...base, status: 'ready', fields: { 'Custom.Module': 'Login' } }, [module]).ok).toBeTrue();
+  });
+
+  it('faltantes e o 422 required_fields da conversão', () => {
+    expect(missingStoryFields([module], { 'Custom.Module': ' ' }).length).toBe(1);
+    const err = storyApiError({ status: 422, error: { code: 'required_fields', message: 'O DevOps exige no User Story: Module.', fields: [module] } }, 'x');
+    expect(err.code).toBe('required_fields');
+    expect(err.fields?.[0].referenceName).toBe('Custom.Module');
   });
 });

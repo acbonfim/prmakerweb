@@ -6,11 +6,12 @@ import { MatIconModule } from '@angular/material/icon';
 import { DevOpsService } from '../../services/devops.service';
 import { EpicStoriesService } from '../../services/epic-stories.service';
 import { boardLanes, laneFilterName } from '../devops/board.logic';
-import { BoardLane, devOpsErrorMessage } from '../devops/devops.model';
+import { BoardLane, DevOpsFieldDef, devOpsErrorMessage } from '../devops/devops.model';
+import { DevOpsFieldInputComponent } from '../devops/devops-field-input.component';
 import { PmComboComponent, PmComboOption } from '../pm-combo/pm-combo.component';
 import { WORK_DIALOG_STYLES } from '../work-items/work-dialog.styles';
 import { workDialogConfig } from '../work-items/work-dialog-config';
-import { EpicStory, convertWarnings, storyApiError, storyBoardColumns, storyTypeLook } from './epic-stories.logic';
+import { EpicStory, convertWarnings, missingStoryFields, storyApiError, storyBoardColumns, storyTypeLook } from './epic-stories.logic';
 
 export interface EpicStoryConvertData {
   story: EpicStory;
@@ -31,7 +32,7 @@ export type EpicStoryConvertResult = { story?: EpicStory; alreadyCard?: string }
 @Component({
   selector: 'app-epic-story-convert-dialog',
   standalone: true,
-  imports: [MatDialogModule, MatButtonModule, MatIconModule, PmComboComponent],
+  imports: [MatDialogModule, MatButtonModule, MatIconModule, PmComboComponent, DevOpsFieldInputComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     @let t = type;
@@ -77,6 +78,20 @@ export type EpicStoryConvertResult = { story?: EpicStory; alreadyCard?: string }
             em "Editar épico" para dizer a coluna).</small>
         }
 
+        @if (missing().length) {
+          <div class="wi-sec">
+            <h3 class="wi-sec__title">Obrigatórios no DevOps <small class="wi-muted">(faltam na história)</small></h3>
+            <div class="ec__row">
+              @for (f of missing(); track f.referenceName) {
+                <div class="wi-field ec__grow">
+                  <span>{{ f.name }} <b class="ec__req">*</b></span>
+                  <app-devops-field-input [field]="f" [value]="values()[f.referenceName] ?? null" (valueChange)="setValue(f.referenceName, $event)" />
+                </div>
+              }
+            </div>
+          </div>
+        }
+
         @if (warnings.length) {
           <div class="wi-note wi-note--warn"><mat-icon>tips_and_updates</mat-icon>
             <span>@for (w of warnings; track w) { {{ w }} } Dá para converter assim mesmo.</span></div>
@@ -87,7 +102,8 @@ export type EpicStoryConvertResult = { story?: EpicStory; alreadyCard?: string }
       <footer class="wi-dlg__foot">
         <span class="wi-dlg__spacer"></span>
         <button mat-button mat-dialog-close>Cancelar</button>
-        <button mat-flat-button color="primary" type="button" (click)="convert()" [disabled]="saving()">
+        <button mat-flat-button color="primary" type="button" (click)="convert()" [disabled]="saving() || !!pending().length"
+                [title]="pending().length ? 'Preencha ' + pending().join(', ') : ''">
           <mat-icon>move_up</mat-icon>{{ saving() ? 'Criando o card…' : 'Converter em card' }}
         </button>
       </footer>
@@ -96,6 +112,7 @@ export type EpicStoryConvertResult = { story?: EpicStory; alreadyCard?: string }
   styles: [WORK_DIALOG_STYLES, `
     .ec__row { display: flex; gap: 10px; flex-wrap: wrap; }
     .ec__grow { flex: 1 1 200px; }
+    .ec__req { color: #f85149; font-weight: 600; }
   `]
 })
 export class EpicStoryConvertDialogComponent {
@@ -116,6 +133,12 @@ export class EpicStoryConvertDialogComponent {
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
 
+  /** Card 1109 (E1093): obrigatórios do DevOps que a história não preencheu (ex.: Module) — pedidos aqui. */
+  private readonly required = signal<DevOpsFieldDef[]>([]);
+  readonly missing = computed(() => missingStoryFields(this.required(), this.data.story.fields ?? {}));
+  readonly values = signal<Record<string, unknown>>({});
+  readonly pending = computed(() => missingStoryFields(this.missing(), this.values()).map((f) => f.name));
+
   readonly columnOptions = computed<PmComboOption[]>(() => this.columns().map((c) => ({ value: c, label: c, icon: 'view_week' })));
   /** Lanes com nome (a padrão é o "vazio" do combo). */
   readonly laneOptions = computed<PmComboOption[]>(() =>
@@ -123,6 +146,15 @@ export class EpicStoryConvertDialogComponent {
 
   constructor() {
     if (this.data.team && this.data.board) void this.loadBoard(this.data.team, this.data.board);
+    this.api.requiredFields(this.data.story.type).subscribe({
+      next: (r) => this.required.set(r?.fields ?? []),
+      // Sem os metadados, a conversão confere no servidor e devolve o que faltou.
+      error: () => {}
+    });
+  }
+
+  setValue(ref: string, v: unknown): void {
+    this.values.update((m) => ({ ...m, [ref]: v }));
   }
 
   private async loadBoard(team: string, board: string): Promise<void> {
@@ -148,12 +180,18 @@ export class EpicStoryConvertDialogComponent {
         team: withBoard ? this.data.team : null,
         board: withBoard ? this.data.board : null,
         column: withBoard ? this.column() : null,
-        lane: withBoard ? this.lane() : null
+        lane: withBoard ? this.lane() : null,
+        fields: Object.keys(this.values()).length ? this.values() : null
       }));
       this.ref.close({ story });
     } catch (e) {
       const err = storyApiError(e, 'O DevOps não criou o card.');
       if (err.code === 'alreadyConverted') { this.ref.close({ alreadyCard: err.cardId ?? undefined }); return; }
+      // O DevOps exige campos que não vieram: passam a ser pedidos aqui.
+      if (err.code === 'required_fields' && err.fields?.length) {
+        const known = new Set(this.required().map((f) => f.referenceName));
+        this.required.update((list) => [...list, ...err.fields!.filter((f) => !known.has(f.referenceName))]);
+      }
       this.error.set(err.message);
     } finally {
       this.saving.set(false);
