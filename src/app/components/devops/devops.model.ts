@@ -77,6 +77,14 @@ export interface BoardConfig {
   fields: { column: string; lane: string; done: string };
   types: { name: string; color: string | null }[];
   orderField: string;
+  /** Cores das tags ("Tag colors" das configurações do board no DevOps). */
+  tagStyles?: BoardTagStyle[];
+}
+
+export interface BoardTagStyle {
+  name: string;
+  background: string | null;
+  color: string | null;
 }
 
 export type BoardScope = 'epic' | 'board';
@@ -118,6 +126,9 @@ export interface BoardItem {
   priority?: number | null;
   parentId?: number | null;
   changedDate?: string | null;
+  /** Fundo/título da primeira regra de estilo do board ("Styles" no DevOps) que o card atende — ex.: tag BLOCK, severidade. */
+  cardColor?: string | null;
+  titleColor?: string | null;
 }
 
 export interface BoardItemsResponse {
