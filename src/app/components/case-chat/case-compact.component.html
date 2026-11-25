@@ -138,11 +138,11 @@
                     <div class="km__files">
                       @for (f of m.files; track f.id) {
                         @if (f.kind === 'image') {
-                          <button type="button" class="km__img" (click)="openImage(f)" [matTooltip]="f.name">
+                          <button type="button" class="km__img" (click)="openFile(f)" [matTooltip]="f.name">
                             @if (blob(f); as url) { <img [src]="url" [alt]="f.name"> } @else { <span class="ck__spin"></span> }
                           </button>
                         } @else {
-                          <button type="button" class="km__file" (click)="expand()" [matTooltip]="f.name"><mat-icon>{{ fileIcon(f) }}</mat-icon><span>{{ f.name }}</span></button>
+                          <button type="button" class="km__file" (click)="openFile(f)" [matTooltip]="f.name"><mat-icon>{{ fileIcon(f) }}</mat-icon><span>{{ f.name }}</span></button>
                         }
                       }
                     </div>

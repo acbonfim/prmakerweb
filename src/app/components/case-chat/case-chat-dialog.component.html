@@ -150,13 +150,13 @@
                       <div class="msg__files">
                         @for (f of m.files; track f.id) {
                           @if (f.kind === 'image') {
-                            <button type="button" class="msg__img" (click)="openImage(f)" [matTooltip]="f.name + ' · arquivo #' + f.number">
+                            <button type="button" class="msg__img" (click)="openFile(f)" [matTooltip]="f.name + ' · arquivo #' + f.number">
                               @if (blob(f); as url) { <img [src]="url" [alt]="f.name"> } @else { <span class="cc__spin"></span> }
                             </button>
                           } @else if (f.kind === 'audio') {
                             @if (blob(f); as url) { <audio class="msg__audio" controls [src]="url" preload="metadata"></audio> }
                           } @else {
-                            <button type="button" class="msg__file" (click)="download(f)"><mat-icon>{{ fileIcon(f) }}</mat-icon>{{ f.name }}<small>#{{ f.number }}</small></button>
+                            <button type="button" class="msg__file" (click)="openFile(f)"><mat-icon>{{ fileIcon(f) }}</mat-icon>{{ f.name }}<small>#{{ f.number }}</small></button>
                           }
                         }
                       </div>
@@ -401,7 +401,7 @@
           <div class="aside__sec">
             <h6><mat-icon>folder</mat-icon>Arquivos desta conversa</h6>
             @for (f of convFiles().slice(0, 12); track f.id) {
-              <button type="button" class="fl" (click)="f.kind === 'image' ? openImage(f) : download(f)">
+              <button type="button" class="fl" (click)="openFile(f)">
                 <mat-icon>{{ fileIcon(f) }}</mat-icon><span>{{ f.name }}</span><small>{{ f.fromSpecialist ? 'especialista' : f.createdBy.split(' ')[0] }}</small>
               </button>
             } @empty {

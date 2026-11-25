@@ -24,7 +24,7 @@ import { StorageService } from '../../services/storage.service';
 import { CaseChatService } from '../../services/case-chat.service';
 import { UserPhotoService } from '../../services/user-photo.service';
 import { CaseChatStore, CaseRoom, PendingFile } from '../../services/case-chat-store.service';
-import { planApiError, saveBlob } from '../../services/execution-plan.service';
+import { planApiError } from '../../services/execution-plan.service';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
@@ -47,6 +47,7 @@ import { CaseComposer, CaseComposerService } from './case-composer.service';
 import { ComposerAction, ComposerSuggestion } from './composer-suggest';
 import { ComposerSuggestComponent } from './composer-suggest.component';
 import { StickyScroll, flyToChat } from './chat-motion';
+import { openCaseFile } from './open-case-file';
 import { TokenUsageComponent } from '../token-usage/token-usage.component';
 import { TokenUsage } from '../../services/token-pricing.service';
 import { formatTokens, formatUsd } from '../../services/ai-usage.service';
@@ -541,16 +542,9 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
     return this.store.blob(this.data.card, file);
   }
 
-  download(file: CaseFile): void {
-    this.api.content(this.data.card, file).subscribe({
-      next: (b) => saveBlob(b, file.name),
-      error: () => this.snack.open(`Não foi possível baixar ${file.name}.`, 'Fechar', { duration: 6000 })
-    });
-  }
-
-  openImage(file: CaseFile): void {
-    const url = this.blob(file);
-    if (url) window.open(url, '_blank', 'noopener');
+  /** Imagem ou arquivo da conversa no visualizador (← → entre os arquivos; baixar fica lá). */
+  openFile(file: CaseFile): void {
+    openCaseFile(this.dialog, this.api, this.data.card, this.chat()?.files ?? [], file);
   }
 
   // ── Voz ────────────────────────────────────────────────────────────────────────────────────────

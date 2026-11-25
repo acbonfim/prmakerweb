@@ -17,6 +17,7 @@ import { CaseAction, CaseDelivery, CaseFile, CaseMessage, CaseProposal, CaseView
 import { StickyScroll, flyToChat } from './chat-motion';
 import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-proposal-dialog.component';
 import { openCaseChat } from './open-case-chat';
+import { openCaseFile } from './open-case-file';
 import { CaseComposer, CaseComposerService } from './case-composer.service';
 import { ComposerAction, ComposerSuggestion } from './composer-suggest';
 import { ComposerSuggestComponent } from './composer-suggest.component';
@@ -524,9 +525,10 @@ export class CaseCompactComponent implements OnDestroy {
     return c ? this.store.blob(c, f) : null;
   }
 
-  openImage(f: CaseFile): void {
-    const url = this.blob(f);
-    if (url) window.open(url, '_blank', 'noopener');
+  /** Imagem ou arquivo da conversa no visualizador (← → entre os arquivos). */
+  openFile(f: CaseFile): void {
+    const c = this.card();
+    if (c) openCaseFile(this.dialog, this.api, c, this.chat()?.files ?? [], f);
   }
 
   toggleSteps(m: CaseMessage): void {
