@@ -260,7 +260,7 @@ export class WorkItemActionsService {
 
   private openSchedule(data: WorkScheduleDialogData): Promise<WorkScheduleDialogResult> {
     return firstValueFrom(this.dialog.open<WorkScheduleDialogComponent, WorkScheduleDialogData, WorkScheduleDialogResult>(
-      WorkScheduleDialogComponent, workDialogConfig(data, '520px')).afterClosed());
+      WorkScheduleDialogComponent, workDialogConfig(data, '600px')).afterClosed());
   }
 
   /** Card 78680: cancela só a sub-tarefa (pergunta o motivo e, se outras dependem dela, se cancelam junto). */

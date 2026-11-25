@@ -460,13 +460,23 @@ export function awaitsSchedule(item: Partial<Pick<WorkItem, 'scheduledAt' | 'par
   return !!item?.scheduledAt || !!item?.parked;
 }
 
-/** Item parado esperando um horário: o dele ou o da próxima sub-tarefa agendada (só sobrou ela). */
-export function itemScheduleLook(item: Partial<Pick<WorkItem, 'status' | 'scheduledAt' | 'parked' | 'nextScheduledAt'>> | null | undefined): StatusLook | null {
+/**
+ * Item parado esperando um horário: o dele, ou o da próxima sub-tarefa agendada quando tudo o que falta espera por ela
+ * (agendada/pausada ou presa a uma) — com sub-tarefa independente por fazer, o item não está "agendado".
+ */
+export function itemScheduleLook(item: Partial<Pick<WorkItem, 'status' | 'scheduledAt' | 'parked' | 'nextScheduledAt' | 'tasks'>> | null | undefined): StatusLook | null {
   if (!item || !(item.status === 'pending' || item.status === 'failed')) return null;
   if (item.scheduledAt) return scheduledLook('Agendado', item.scheduledAt);
   if (item.parked) return PARKED;
-  if (item.status === 'pending' && item.nextScheduledAt) return scheduledLook('Agendado', item.nextScheduledAt);
+  if (item.status === 'pending' && item.nextScheduledAt && onlyWaitingLeft(item.tasks)) return scheduledLook('Agendado', item.nextScheduledAt);
   return null;
+}
+
+/** Tudo o que falta está pausado/agendado ou preso a uma pausada (sem a lista, considera que sim). */
+function onlyWaitingLeft(tasks: WorkTask[] | null | undefined): boolean {
+  if (!tasks) return true;
+  const open = tasks.filter((t) => ['pending', 'running', 'waiting', 'failed'].includes(t.status));
+  return open.length > 0 && open.every((t) => !!t.held || !!t.controls?.waitsForHeld);
 }
 
 /** Sub-tarefa agendada (pausada até um horário). */

@@ -38,7 +38,7 @@ const MOVES: MoveOption[] = [
   template: `
     @if (scheduled()) {
       <span class="wtc__badge wtc__badge--sched" [matTooltip]="'Agendada por ' + (task().heldBy || 'uma pessoa') + ' — continua sozinha ' + when() + (task().controls?.dependents?.length ? '; as que dependem dela esperam junto' : '')">
-        <mat-icon>{{ clock }}</mat-icon>{{ when() }}
+        <mat-icon>{{ clock }}</mat-icon>
       </span>
     } @else if (task().held) {
       <span class="wtc__badge wtc__badge--held" [matTooltip]="'Pausada por ' + (task().heldBy || 'uma pessoa') + ' — o Claude não a faz (nem as que dependem dela) até alguém continuar'">

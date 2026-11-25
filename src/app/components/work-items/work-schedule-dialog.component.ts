@@ -90,15 +90,15 @@ function tomorrowAt(hour: number, minute = 0, now = new Date()): Date {
       </div>
       <footer class="wi-dlg__foot">
         @if (data.current || data.parked) {
-          <button mat-button (click)="close({ action: 'clear' })"><mat-icon>alarm_off</mat-icon>Remover agendamento</button>
+          <button mat-button (click)="close({ action: 'clear' })" title="Tira o agendamento"><mat-icon>alarm_off</mat-icon>Remover</button>
         }
-        <button mat-button (click)="close({ action: 'run-now' })"><mat-icon>play_arrow</mat-icon>Executar agora</button>
-        <span class="wi-dlg__spacer"></span>
         @if (data.subject === 'item' && !data.parked) {
           <button mat-button (click)="close({ action: 'park' })" title="Item opcional: só roda quando alguém decidir">
             <mat-icon>pending_actions</mat-icon>Sem data
           </button>
         }
+        <span class="wi-dlg__spacer"></span>
+        <button mat-button (click)="close({ action: 'run-now' })"><mat-icon>play_arrow</mat-icon>Executar agora</button>
         <button mat-flat-button color="primary" (click)="save()" [disabled]="!value()"><mat-icon>{{ icon }}</mat-icon>Agendar</button>
       </footer>
     </div>

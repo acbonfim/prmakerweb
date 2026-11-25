@@ -48,7 +48,10 @@ describe('0103 — agendamento de itens e sub-tarefas', () => {
     const at = new Date(Date.now() + 3 * 3600_000).toISOString();
     expect(itemLook(item({ scheduledAt: at })).label).toContain('Agendado');
     expect(itemLook(item({ parked: true })).label).toBe('Em espera · sem data');
-    expect(itemLook(item({ nextScheduledAt: at })).color).toBe(SCHEDULE_COLOR);
+    const held = task({ number: 2, held: true, scheduledAt: at });
+    expect(itemLook(item({ nextScheduledAt: at, tasks: [held] })).color).toBe(SCHEDULE_COLOR);
+    // Ainda há sub-tarefa independente por fazer: o item não está "agendado".
+    expect(itemLook(item({ nextScheduledAt: at, tasks: [held, task({ number: 3 })] })).color).not.toBe(SCHEDULE_COLOR);
     expect(itemLook(item({ status: 'running', nextScheduledAt: at })).color).not.toBe(SCHEDULE_COLOR);
     expect(awaitsSchedule(item({ parked: true }))).toBeTrue();
     expect(awaitsSchedule(item({}))).toBeFalse();
