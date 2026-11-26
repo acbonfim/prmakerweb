@@ -13,7 +13,8 @@ import { planApiError } from '../../services/execution-plan.service';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
-import { CaseAction, CaseDelivery, CaseFile, CaseMessage, CaseProposal, CaseViewMessage, SPECIALIST_NAME, isRunActive } from './case-chat.model';
+import { CASE_QUICK, CASE_STARTERS, CaseAction, CaseDelivery, CaseFile, CaseMessage, CaseProposal, CaseViewMessage, EPIC_QUICK, EPIC_STARTERS, SPECIALIST_NAME,
+  isRunActive } from './case-chat.model';
 import { StickyScroll, flyToChat } from './chat-motion';
 import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-proposal-dialog.component';
 import { openCaseChat } from './open-case-chat';
@@ -50,6 +51,9 @@ export class CaseCompactComponent implements OnDestroy {
   readonly cardType = input<CaseCardType>('bug');
   /** 0099: conversa de um épico da Mesa de gestão (chave `E{n}`) — rótulos e sugestões de gestão. */
   readonly epic = computed(() => this.cardType() === 'epic');
+  /** Sugestões da conversa vazia e atalhos sobre o campo — as mesmas da conversa grande. */
+  readonly starters = computed(() => this.epic() ? EPIC_STARTERS : CASE_STARTERS);
+  readonly quick = computed(() => this.epic() ? EPIC_QUICK : CASE_QUICK);
   /** Item de trabalho criado/aberto por uma ferramenta da conversa grande (o hospedeiro mostra o item). */
   readonly itemOpened = output<number>();
   /** Bancada: mostra a seta que recolhe o painel para a direita (o hospedeiro esconde e mostra a seta de volta). */
@@ -189,6 +193,16 @@ export class CaseCompactComponent implements OnDestroy {
     if (!c) return;
     openCaseChat(this.dialog, c, this.host.nativeElement.querySelector('.ck'), this.cardType(), tool)
       .afterClosed().subscribe((r) => { if (r?.openItem) this.itemOpened.emit(r.openItem); });
+  }
+
+  /** Atalho: com texto no campo, junta ao que a pessoa escreveu (ela ainda ajusta); campo vazio, manda direto. */
+  quickSend(text: string): void {
+    if (this.draft.trim()) {
+      this.draft = `${this.draft.trim()}\n${text}`;
+      this.boxRef?.nativeElement.focus();
+      return;
+    }
+    this.send(text);
   }
 
   send(text?: string): void {

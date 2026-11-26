@@ -75,9 +75,9 @@
               <span>Ele conhece o épico, os cards dele e o board do time. Peça relatórios, duplicados, entendimento de um card, RCA em PDF,
                 criar ou mover cards. Pergunte, mande um print ou um áudio.</span>
               <div class="cc__suggest">
-                <button type="button" (click)="send('Resuma a situação dos cards deste épico: o que está parado, o que avançou e o que precisa de atenção.')">Resumo do épico</button>
-                <button type="button" (click)="send('Procure cards duplicados entre os bugs abertos do board deste épico.')">Achar duplicados</button>
-                <button type="button" (click)="send('Monte um relatório dos bugs abertos (por estado, área e responsável) e gere o PDF.')">Relatório de bugs</button>
+                @for (q of starters; track q.label) {
+                  <button type="button" (click)="send(q.text)"><mat-icon>{{ q.icon }}</mat-icon>{{ q.label }}</button>
+                }
               </div>
             </div>
           } @else if (!messages().length) {
@@ -87,9 +87,9 @@
               <span>Ele já conhece o card, a análise, as decisões e o que aconteceu na correção. Pergunte, mande um print ou um áudio.
                 Nada muda no plano até você decidir.</span>
               <div class="cc__suggest">
-                <button type="button" (click)="send('Em que pé está este card? O que falta para fechar?')">Em que pé está este card?</button>
-                <button type="button" (click)="send('O que deu errado na última versão do plano e o que você mudaria?')">O que deu errado na última versão?</button>
-                <button type="button" (click)="send('Me explique a causa raiz como se eu não fosse desenvolvedor.')">Explique a causa raiz</button>
+                @for (q of starters; track q.label) {
+                  <button type="button" (click)="send(q.text)"><mat-icon>{{ q.icon }}</mat-icon>{{ q.label }}</button>
+                }
               </div>
             </div>
           }

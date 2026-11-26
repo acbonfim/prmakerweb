@@ -79,10 +79,10 @@
           <span class="sp-av sp-av--xl"><mat-icon>psychology</mat-icon></span>
           <b>O que vamos organizar neste épico?</b>
           <span>O especialista de gestão conhece o épico, os cards dele e o board do time. Ele consulta o DevOps, cria e move cards, gera relatórios, acha duplicados e escreve RCAs.</span>
-          <div class="ck__suggest">
-            <button type="button" (click)="send('Resuma a situação dos cards deste épico: o que está parado, o que avançou e o que precisa de atenção.')">Resumo do épico</button>
-            <button type="button" (click)="send('Procure cards duplicados entre os bugs abertos do board deste épico.')">Achar duplicados</button>
-            <button type="button" (click)="send('Monte um relatório dos bugs abertos (por estado, área e responsável) e gere o PDF.')">Relatório de bugs</button>
+          <div class="ck__starters">
+            @for (q of starters(); track q.label) {
+              <button type="button" (click)="send(q.text)" [matTooltip]="q.short ? q.label : ''"><mat-icon>{{ q.icon }}</mat-icon>{{ q.short ?? q.label }}</button>
+            }
           </div>
         </div>
       } @else if (!messages().length) {
@@ -90,10 +90,10 @@
           <span class="sp-av sp-av--xl"><mat-icon>psychology</mat-icon></span>
           <b>Tem alguma dúvida sobre este card?</b>
           <span>Pergunte aqui em vez de comentar no plano. O especialista já conhece o card, a análise e as decisões, e responde sem mexer no plano.</span>
-          <div class="ck__suggest">
-            <button type="button" (click)="send('Em que pé está este card? O que falta para fechar?')">Em que pé está?</button>
-            <button type="button" (click)="send('Me explique a causa raiz como se eu não fosse desenvolvedor.')">Explique a causa raiz</button>
-            <button type="button" (click)="send('O que deu errado na última versão do plano e o que você mudaria?')">O que deu errado?</button>
+          <div class="ck__starters">
+            @for (q of starters(); track q.label) {
+              <button type="button" (click)="send(q.text)" [matTooltip]="q.short ? q.label : ''"><mat-icon>{{ q.icon }}</mat-icon>{{ q.short ?? q.label }}</button>
+            }
           </div>
         </div>
       } @else {
@@ -240,6 +240,13 @@
           <button mat-icon-button class="ck__send" (click)="sendVoice()" [disabled]="sendingVoice()" matTooltip="Enviar o áudio" aria-label="Enviar o áudio"><mat-icon>send</mat-icon></button>
         </div>
       } @else {
+      @if (messages().length) {
+        <div class="ck__quick" role="toolbar" aria-label="Atalhos para o especialista">
+          @for (q of quick(); track q.label) {
+            <button type="button" (click)="quickSend(q.text)" [matTooltip]="q.label"><mat-icon>{{ q.icon }}</mat-icon>{{ q.short ?? q.label }}</button>
+          }
+        </div>
+      }
       <div class="ck__row">
         <button mat-icon-button (click)="pick()" matTooltip="Anexar arquivo ou imagem (também dá para colar ou arrastar)" aria-label="Anexar"><mat-icon>attach_file</mat-icon></button>
         <input #picker type="file" multiple hidden (change)="onPick($event)">

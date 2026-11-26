@@ -139,7 +139,7 @@
 .comp { position: relative; flex: none; padding: 8px 16px 10px; border-top: 1px solid var(--cc-line); background: var(--surface-2, #323232); display: flex; flex-direction: column; gap: 7px; }
 .comp__quick { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .comp__quick button { white-space: nowrap; color: var(--mat-sys-on-surface); border-color: var(--cc-line); background: color-mix(in srgb, var(--mat-sys-on-surface) 4%, transparent); }
-.comp__quick mat-icon { font-size: 15px; width: 15px; height: 15px; color: var(--spec); }
+.comp__quick mat-icon, .cc__suggest mat-icon { font-size: 15px; width: 15px; height: 15px; color: var(--spec); }
 .comp__reply { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--cc-muted); border-left: 3px solid var(--spec); padding-left: 8px; }
 .comp__reply span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .comp__files { display: flex; gap: 6px; flex-wrap: wrap; }
