@@ -88,6 +88,19 @@ describe('aws-deploy.model (0100/F2)', () => {
     expect(awsCollectCommand('77971')).toBe('bash ~/.claude/skills/aws-deploy/scripts/aws.sh collect 77971');
   });
 
+  it('acompanhamento com hora marcada não aparece como "aguardando o executor" (card 79019)', () => {
+    const now = Date.parse('2026-11-26T19:47:00Z');
+    const follow = { id: '1', status: 'queued', source: 'follow', notBefore: '2026-11-26T19:48:41Z' };
+    const info = refreshStatusText(follow, now);
+    expect(info?.scheduled).toBeTrue();
+    expect(info?.busy).toBeFalse();
+    expect(info?.text).toContain('Acompanhando o deploy — próxima conferência às');
+    expect(info?.text).not.toContain('aguardando o seu executor');
+    // passou da hora: aí sim está na fila esperando o executor
+    expect(refreshStatusText(follow, Date.parse('2026-11-26T19:49:00Z'))?.text).toContain('aguardando o seu executor');
+    expect(refreshStatusText({ id: '2', status: 'queued', notBefore: '2026-11-26T19:50:00Z' }, now)?.text).toContain('Coleta agendada');
+  });
+
   it('esteira quebrada antes do nosso código não pesa contra o card (card 78560)', () => {
     expect(normalizeVerdict('broken')).toBe('broken');
     expect(codeLook({ name: 'edv-solvace-centerline-dev', verdict: 'broken', brokenSince: '2026-11-12T14:41:00Z' }).label).toBe('Esteira quebrada');

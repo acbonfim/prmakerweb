@@ -164,6 +164,11 @@ export interface AwsRefresh {
   requestedBy?: string | null;
   requestedAt?: string | null;
   error?: string | null;
+  /** button | follow | task — `follow` é o acompanhamento automático do deploy em andamento. */
+  source?: string | null;
+  /** Acompanhamento: só sai da fila a partir desta hora ("Atualizar" antecipa). */
+  notBefore?: string | null;
+  finishedAt?: string | null;
 }
 
 /** `GET AwsDeploy/card/{card}`. */
@@ -326,11 +331,24 @@ export function relativeAgo(at: string | null | undefined, now: number = Date.no
   return `há ${days} ${days === 1 ? 'dia' : 'dias'}`;
 }
 
-/** Texto do pedido de coleta em andamento (ou null quando não há nada a mostrar). */
-export function refreshStatusText(refresh: AwsRefresh | null | undefined): { text: string; busy: boolean; tone: AwsTone } | null {
+/**
+ * Texto do pedido de coleta em andamento (ou null quando não há nada a mostrar). Pedido na fila com hora marcada
+ * (acompanhamento do deploy, `notBefore` no futuro) não está esperando o executor: é a próxima conferência agendada
+ * (`scheduled`, sem `busy` — "Atualizar" antecipa).
+ */
+export function refreshStatusText(refresh: AwsRefresh | null | undefined, now: number = Date.now()):
+  { text: string; busy: boolean; tone: AwsTone; scheduled?: boolean } | null {
   if (!refresh) return null;
   switch (`${refresh.status ?? ''}`.toLowerCase()) {
-    case 'queued': return { text: 'Pedido na fila — aguardando o seu executor', busy: true, tone: 'info' };
+    case 'queued': {
+      const at = toDate(refresh.notBefore);
+      if (at && at.getTime() > now) {
+        const when = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+        const text = `${refresh.source === 'follow' ? 'Acompanhando o deploy' : 'Coleta agendada'} — próxima conferência às ${when}`;
+        return { text, busy: false, tone: 'info', scheduled: true };
+      }
+      return { text: 'Pedido na fila — aguardando o seu executor', busy: true, tone: 'info' };
+    }
     case 'claimed':
     case 'running': return { text: 'Coletando na sua máquina…', busy: true, tone: 'info' };
     case 'failed': return { text: `A coleta falhou${refresh.error ? ': ' + refresh.error : ''}`, busy: false, tone: 'bad' };
