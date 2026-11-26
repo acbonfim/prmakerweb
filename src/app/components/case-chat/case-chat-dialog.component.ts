@@ -37,6 +37,10 @@ import {
   CasePoint,
   CaseProposal,
   CaseViewMessage,
+  CASE_QUICK,
+  CASE_STARTERS,
+  EPIC_QUICK,
+  EPIC_STARTERS,
   SPECIALIST_NAME,
   isRunActive
 } from './case-chat.model';
@@ -74,16 +78,6 @@ const TYPING_TTL_MS = 6000;
 /** Sinal de digitando no máximo a cada... */
 const TYPING_EVERY_MS = 4000;
 
-/** Atalhos do compositor: preenchem o texto (a pessoa ainda pode ajustar) ou mandam direto. */
-const QUICK = [
-  { icon: 'summarize', label: 'Resumir a conversa', text: 'Resuma a conversa até aqui: o que já combinamos e o que falta decidir.' },
-  { icon: 'auto_awesome', label: 'Gerar nova versão do plano', text: 'Pode gerar a nova versão do plano com o que combinamos?' },
-  { icon: 'code', label: 'Mostrar o código', text: 'Mostre o trecho de código envolvido (com caminho:linha e a branch).' },
-  { icon: 'storage', label: 'Consultar o banco (só leitura)', text: 'Consulte no banco (só leitura) e me mostre os valores que importam aqui.' },
-  { icon: 'image', label: 'Gerar imagem / mock', text: 'Gere um Antes × Depois (mock) do que muda para a pessoa usuária.' },
-  { icon: 'note_add', label: 'Gerar arquivo', text: 'Gere o arquivo (script ou texto do chamado) para eu revisar.' }
-];
-
 /**
  * 0080: Especialista do caso — a conversa do card com um agente próprio (pista do especialista no executor), que conhece
  * o caso inteiro, mostra o que está fazendo ao vivo e só mexe no plano a pedido (0096: ajuste direto no plano atual;
@@ -114,7 +108,8 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
   private readonly me = inject(StorageService).getAccess()?.user ?? null;
 
   readonly specialistName = SPECIALIST_NAME;
-  readonly quick = QUICK;
+  readonly quick = this.data.cardType === 'epic' ? EPIC_QUICK : CASE_QUICK;
+  readonly starters = this.data.cardType === 'epic' ? EPIC_STARTERS : CASE_STARTERS;
   readonly myId = (this.me?.externalId ?? '').toLowerCase();
 
   readonly chat = this.room.chat;

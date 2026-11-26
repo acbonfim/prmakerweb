@@ -41,10 +41,13 @@
 .ck__state { margin: auto; display: flex; align-items: center; gap: 8px; font-size: 12.5px; opacity: .75; }
 .ck__empty { margin: auto 6px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; font-size: 12.5px; }
 .ck__empty > span:not(.sp-av) { opacity: .7; line-height: 1.45; }
-.ck__suggest { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 4px; }
-.ck__suggest button, .ck__more { border: 1px solid rgba(196,167,255,.35); background: transparent; color: #d9c6ff; border-radius: 14px; padding: 5px 11px;
+/* Sugestões da conversa vazia (a classe não pode ser .ck__suggest: é a lista do / e do #, posicionada sobre o campo) */
+.ck__starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 4px; }
+.ck__starters button { display: inline-flex; align-items: center; gap: 4px; }
+.ck__starters mat-icon, .ck__quick mat-icon { font-size: 14px; width: 14px; height: 14px; color: #c4a7ff; }
+.ck__starters button, .ck__more { border: 1px solid rgba(196,167,255,.35); background: transparent; color: #d9c6ff; border-radius: 14px; padding: 5px 11px;
   font: inherit; font-size: 12px; cursor: pointer; }
-.ck__suggest button:hover { background: rgba(142,108,240,.15); }
+.ck__starters button:hover { background: rgba(142,108,240,.15); }
 .ck__more { align-self: center; border-style: dashed; }
 .ck__day { align-self: center; font-size: 11px; opacity: .55; padding: 2px 8px; border-radius: 8px; background: rgba(255,255,255,.04); }
 .ck__sys { display: flex; gap: 6px; align-items: flex-start; font-size: 11.5px; opacity: .7; padding: 0 4px; }
@@ -109,6 +112,12 @@
 .ck__pfile span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ck__pfile button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0; display: inline-flex; }
 .ck__pfile mat-icon { font-size: 15px; width: 15px; height: 15px; }
+/* Atalhos sobre o campo (os mesmos da conversa grande), numa linha que rola de lado */
+.ck__quick { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; padding: 0 2px 6px; }
+.ck__quick::-webkit-scrollbar { display: none; }
+.ck__quick button { flex: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font: inherit; font-size: 11.5px; padding: 3px 9px;
+  border-radius: 12px; cursor: pointer; color: inherit; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); }
+.ck__quick button:hover { background: rgba(142,108,240,.15); border-color: rgba(196,167,255,.35); }
 .ck__row { display: flex; align-items: flex-end; gap: 2px; }
 .ck__box { flex: 1; min-width: 0; resize: none; field-sizing: content; min-height: 36px; max-height: 120px; padding: 8px 10px; border-radius: 18px;
   border: 1px solid rgba(255,255,255,.14); background: var(--surface-input, #1f1f1f); color: inherit; font: inherit; font-size: 13px; line-height: 1.35; }

@@ -191,3 +191,52 @@ export const SPECIALIST_NAME = 'Especialista do caso';
 
 /** O especialista está trabalhando (na fila, pego ou rodando). */
 export const isRunActive = (r?: ExecutionRequest | null) => !!r && (r.status === 'queued' || r.status === 'claimed' || r.status === 'running');
+
+/** Sugestão em botão: `short` é o rótulo no modo compacto (painel estreito); `text` vai como mensagem. */
+export interface CaseSuggestion {
+  icon: string;
+  label: string;
+  short?: string;
+  text: string;
+}
+
+/** Conversa vazia de um card: perguntas para começar (conversa grande e compacta). */
+export const CASE_STARTERS: CaseSuggestion[] = [
+  { icon: 'flag', label: 'Em que pé está este card?', short: 'Em que pé está?', text: 'Em que pé está este card? O que falta para fechar?' },
+  { icon: 'history', label: 'O que deu errado na última versão?', short: 'O que deu errado?', text: 'O que deu errado na última versão do plano e o que você mudaria?' },
+  { icon: 'lightbulb', label: 'Explique a causa raiz', text: 'Me explique a causa raiz como se eu não fosse desenvolvedor.' },
+  { icon: 'arrow_forward', label: 'Qual o próximo passo?', short: 'Próximo passo', text: 'Qual é o próximo passo deste card e quem precisa agir agora?' },
+  { icon: 'fact_check', label: 'Como eu valido a correção?', short: 'Como validar?', text: 'Como eu valido esta correção? Monte o passo a passo do teste: onde, com que dados e o que esperar.' },
+  { icon: 'warning_amber', label: 'Quais os riscos da correção?', short: 'Riscos', text: 'Quais os riscos desta correção e o que mais pode ser afetado (telas, regras, clientes)?' },
+  { icon: 'person', label: 'Resuma o pedido do cliente', short: 'Pedido do cliente', text: 'Resuma o pedido do cliente em poucas linhas: o que pediu, por quê e o que muda para ele.' }
+];
+
+/** Conversa vazia de um épico (Mesa de gestão). */
+export const EPIC_STARTERS: CaseSuggestion[] = [
+  { icon: 'summarize', label: 'Resumo do épico', text: 'Resuma a situação dos cards deste épico: o que está parado, o que avançou e o que precisa de atenção.' },
+  { icon: 'content_copy', label: 'Achar duplicados', text: 'Procure cards duplicados entre os bugs abertos do board deste épico.' },
+  { icon: 'picture_as_pdf', label: 'Relatório de bugs', text: 'Monte um relatório dos bugs abertos (por estado, área e responsável) e gere o PDF.' },
+  { icon: 'hourglass_bottom', label: 'Cards parados', text: 'Quais cards deste épico estão parados há mais tempo, por quê e quem precisa agir?' },
+  { icon: 'low_priority', label: 'Prioridades da semana', short: 'Prioridades', text: 'O que devo priorizar neste épico esta semana? Ordene os cards com o motivo de cada um.' }
+];
+
+/** Atalhos sobre o compositor (com a conversa em andamento): preenchem junto do texto digitado ou mandam direto. */
+export const CASE_QUICK: CaseSuggestion[] = [
+  { icon: 'summarize', label: 'Resumir a conversa', short: 'Resumir', text: 'Resuma a conversa até aqui: o que já combinamos e o que falta decidir.' },
+  { icon: 'arrow_forward', label: 'Próximo passo', text: 'Qual é o próximo passo deste card e quem precisa agir agora?' },
+  { icon: 'auto_awesome', label: 'Gerar nova versão do plano', short: 'Nova versão do plano', text: 'Pode gerar a nova versão do plano com o que combinamos?' },
+  { icon: 'code', label: 'Mostrar o código', short: 'Código', text: 'Mostre o trecho de código envolvido (com caminho:linha e a branch).' },
+  { icon: 'storage', label: 'Consultar o banco (só leitura)', short: 'Banco', text: 'Consulte no banco (só leitura) e me mostre os valores que importam aqui.' },
+  { icon: 'fact_check', label: 'Roteiro de teste', short: 'Teste', text: 'Monte o roteiro de teste desta correção: onde, com que dados e o resultado esperado.' },
+  { icon: 'image', label: 'Gerar imagem / mock', short: 'Mock', text: 'Gere um Antes × Depois (mock) do que muda para a pessoa usuária.' },
+  { icon: 'note_add', label: 'Gerar arquivo', short: 'Arquivo', text: 'Gere o arquivo (script ou texto do chamado) para eu revisar.' }
+];
+
+/** Atalhos da conversa de um épico (sem plano: gestão dos cards). */
+export const EPIC_QUICK: CaseSuggestion[] = [
+  { icon: 'summarize', label: 'Resumir a conversa', short: 'Resumir', text: 'Resuma a conversa até aqui: o que já combinamos e o que falta decidir.' },
+  { icon: 'dashboard', label: 'Resumo do épico', short: 'Resumo do épico', text: 'Resuma a situação dos cards deste épico: o que está parado, o que avançou e o que precisa de atenção.' },
+  { icon: 'hourglass_bottom', label: 'Cards parados', short: 'Parados', text: 'Quais cards deste épico estão parados há mais tempo, por quê e quem precisa agir?' },
+  { icon: 'content_copy', label: 'Achar duplicados', short: 'Duplicados', text: 'Procure cards duplicados entre os bugs abertos do board deste épico.' },
+  { icon: 'picture_as_pdf', label: 'Relatório em PDF', short: 'Relatório', text: 'Monte um relatório dos bugs abertos (por estado, área e responsável) e gere o PDF.' }
+];
