@@ -34,7 +34,7 @@
       </span>
     }
     <button mat-stroked-button type="button" class="aws__refresh" [disabled]="busy()" (click)="refresh()"
-            matTooltip="Pede a coleta ao seu executor do PRMake: a sua máquina lê a AWS (CLI, somente leitura) e grava o retrato aqui"
+            [matTooltip]="req?.scheduled ? 'Confere agora, sem esperar a próxima conferência do acompanhamento' : 'Pede a coleta ao seu executor do PRMake: a sua máquina lê a AWS (CLI, somente leitura) e grava o retrato aqui'"
             matTooltipShowDelay="500">
       @if (asking()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon>refresh</mat-icon> }
       Atualizar

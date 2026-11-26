@@ -73,11 +73,14 @@ export class AwsDeployPanelComponent {
   /** Ambientes com as esteiras abertas na tabela (nenhum de início: a linha já responde). */
   readonly openEnvs = signal<ReadonlySet<string>>(new Set());
 
-  /** Pedido de coleta a mostrar: na fila/rodando sempre; falhou/expirou só se for mais novo que o retrato. */
+  /**
+   * Pedido de coleta a mostrar: na fila/rodando/agendado sempre; falhou/expirou só se for mais novo que o retrato.
+   * O relógio vira o agendado (acompanhamento do deploy) em "na fila" quando chega a hora.
+   */
   readonly refreshInfo = computed(() => {
     const r = this.state()?.refresh ?? null;
-    const info = refreshStatusText(r);
-    if (!info || info.busy) return info;
+    const info = refreshStatusText(r, this.now());
+    if (!info || info.busy || info.scheduled) return info;
     const at = Date.parse(r?.requestedAt ?? '');
     const collected = Date.parse(this.collectedAt() ?? '');
     return Number.isFinite(collected) && Number.isFinite(at) && at < collected ? null : info;
