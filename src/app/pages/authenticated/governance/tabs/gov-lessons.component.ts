@@ -75,7 +75,7 @@ interface Draft {
                     (click)="setStatus(o.key)">{{ o.label }}</button>
           }
         </div>
-        <select class="f-search" [ngModel]="skill()" (ngModelChange)="skill.set($event || null)" aria-label="Skill">
+        <select class="f-search" [ngModel]="skill() ?? ''" (ngModelChange)="skill.set($event || null)" aria-label="Skill">
           <option value="">Todas as skills</option>
           @for (k of skills(); track k) { <option [value]="k">{{ k }}</option> }
         </select>
