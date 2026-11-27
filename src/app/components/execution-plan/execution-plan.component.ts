@@ -1,4 +1,5 @@
 import { CommonModule } from '@angular/common';
+import { changesRequestedLook } from '../work-items/work-item.model';
 import {
   Component,
   ElementRef,
@@ -1560,6 +1561,11 @@ export class ExecutionPlanComponent implements OnDestroy {
 
   linkIcon(link: ExecutionLink): string {
     return { ticket: 'confirmation_number', pr: 'merge', doc: 'description', other: 'link' }[link.kind] ?? 'link';
+  }
+
+  /** 0106: selo "Mudanças pedidas" no PR aberto da etapa. */
+  changesLook(link: ExecutionLink) {
+    return changesRequestedLook(link);
   }
 
   /** 0069: CI do PR na etapa. */

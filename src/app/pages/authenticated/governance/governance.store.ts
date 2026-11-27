@@ -8,7 +8,7 @@ import { standardLookup } from '../../../services/governance/standards.logic';
 import { GovEventDialogComponent, GovEventDialogResult } from './tabs/gov-event-dialog.component';
 import { GovPeriod, dayKey, periodRange } from '../../../services/governance/governance.logic';
 
-export type GovTab = 'visao-geral' | 'usuarios' | 'cards' | 'tarefas' | 'auditoria' | 'regras' | 'padroes' | 'hooks' | 'configuracoes';
+export type GovTab = 'visao-geral' | 'usuarios' | 'cards' | 'tarefas' | 'auditoria' | 'regras' | 'padroes' | 'licoes' | 'hooks' | 'configuracoes';
 
 /** 0101: vistas da aba Padrões (na query `?vista=`). */
 export type StandardsView = 'catalogo' | 'importar' | 'aderencia';
@@ -26,6 +26,8 @@ export const GOV_TABS: { key: GovTab; label: string; icon: string; usesPeriod: b
   { key: 'auditoria', label: 'Auditoria', icon: 'manage_search', usesPeriod: true },
   { key: 'regras', label: 'Regras e guardrails', icon: 'gavel', usesPeriod: false },
   { key: 'padroes', label: 'Padrões', icon: 'rule', usesPeriod: false },
+  // 0106: lições aprendidas com os erros dos agentes (e os sinais de erro em aberto).
+  { key: 'licoes', label: 'Lições', icon: 'school', usesPeriod: false },
   { key: 'hooks', label: 'Hooks', icon: 'webhook', usesPeriod: false },
   { key: 'configuracoes', label: 'Configurações', icon: 'settings', usesPeriod: false },
 ];
