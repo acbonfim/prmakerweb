@@ -84,6 +84,9 @@ const SNACK = { duration: 4000, horizontalPosition: 'right' as const, verticalPo
                 @if (s.type === 'bug' && s.severity) { <span matTooltip="Severidade"><mat-icon>report</mat-icon>{{ s.severity }}</span> }
                 @for (tag of s.tags.slice(0, 3); track tag) { <span class="est__tag">{{ tag }}</span> }
                 @if (s.tags.length > 3) { <span class="est__faint">+{{ s.tags.length - 3 }}</span> }
+                @if (s.sourceCard) {
+                  <span class="est__tag" matTooltip="Rascunho escrito pelo Especialista do caso deste card"><mat-icon>chat</mat-icon>pelo card {{ s.sourceCard }}</span>
+                }
                 @if (s.status === 'converted' && (s.convertedByName || s.convertedAt)) {
                   <span>convertida@if (s.convertedByName) { por {{ s.convertedByName }} }@if (s.convertedAt) { · {{ s.convertedAt | date: 'dd/MM HH:mm' }} }</span>
                 } @else {

@@ -28,6 +28,8 @@ export interface EpicSummary {
   devOpsTeam?: string | null;
   devOpsBoard?: string | null;
   devOpsCardId?: string | null;
+  /** 0104: o Especialista do caso dos cards do épico pode escrever rascunhos de histórias (ausente = ligado). */
+  allowCardStoryDrafts?: boolean;
   createdByName: string | null;
   createdAt: string;
   updatedAt: string;
@@ -79,6 +81,8 @@ export interface SaveEpicRequest {
   devOpsCardId?: string | null;
   /** Ajustes 1: filtros do board (null/ausente = não mexe). */
   boardFilters?: EpicBoardFilters | null;
+  /** 0104: rascunhos de histórias pelos cards (criar: ausente = ligado; editar: ausente = não mexe). */
+  allowCardStoryDrafts?: boolean | null;
 }
 
 /** Evento de tempo real do grupo `epics`. */

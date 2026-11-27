@@ -62,6 +62,7 @@ type MdKey = 'description' | 'acceptanceCriteria' | 'reproSteps';
               @let st = statusLook(s.status);
               <span class="wi-status" [style.color]="st.color" [matTooltip]="st.hint"><mat-icon>{{ st.icon }}</mat-icon>{{ st.label }}</span>
               <span>{{ s.createdByName || 'PRMake' }} · {{ s.createdAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+              @if (s.sourceCard) { <span matTooltip="Rascunho escrito pelo Especialista do caso deste card">pelo card {{ s.sourceCard }}</span> }
               @if (s.updatedAt && s.updatedAt !== s.createdAt) { <span>atualizada {{ s.updatedAt | date: 'dd/MM HH:mm' }}</span> }
             } @else {
               <span>Escreva aqui antes de virar card no DevOps — o card sai com estes campos quando você converter</span>
