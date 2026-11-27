@@ -5,7 +5,7 @@
  */
 
 /** Veredito por ambiente (o pior das pipelines do card naquele ambiente). */
-export type AwsVerdict = 'deployed' | 'deploying' | 'waiting' | 'failed' | 'absent' | 'broken' | 'not-applicable' | 'unknown';
+export type AwsVerdict = 'deployed' | 'partial' | 'deploying' | 'waiting' | 'failed' | 'absent' | 'broken' | 'not-applicable' | 'unknown';
 
 export interface AwsEnvironmentConfig {
   key: string;
@@ -197,7 +197,7 @@ export interface AwsLook {
   label: string;
 }
 
-const KNOWN_VERDICTS: ReadonlySet<string> = new Set(['deployed', 'deploying', 'waiting', 'failed', 'absent', 'broken', 'not-applicable', 'unknown']);
+const KNOWN_VERDICTS: ReadonlySet<string> = new Set(['deployed', 'partial', 'deploying', 'waiting', 'failed', 'absent', 'broken', 'not-applicable', 'unknown']);
 
 export function normalizeVerdict(v: string | null | undefined): AwsVerdict {
   const k = `${v ?? ''}`.trim().toLowerCase();
@@ -208,6 +208,8 @@ export function normalizeVerdict(v: string | null | undefined): AwsVerdict {
 export function verdictLook(v: string | null | undefined): AwsLook {
   switch (normalizeVerdict(v)) {
     case 'deployed': return { icon: 'check_circle', tone: 'ok', label: 'Implantado' };
+    // Card 79047: versão anterior implantada; o ajuste mais recente ainda não chegou.
+    case 'partial': return { icon: 'timelapse', tone: 'warn', label: 'Parte implantada' };
     case 'deploying': return { icon: 'sync', tone: 'info', spin: true, label: 'Deploy em andamento' };
     case 'waiting': return { icon: 'hourglass_top', tone: 'warn', label: 'Aguardando deploy' };
     case 'failed': return { icon: 'error', tone: 'bad', label: 'Deploy falhou' };
@@ -223,6 +225,7 @@ export function verdictMessage(v: string | null | undefined, label: string): str
   const env = label?.trim() || 'este ambiente';
   switch (normalizeVerdict(v)) {
     case 'deployed': return `Nosso código está em ${env}`;
+    case 'partial': return `Parte do nosso código está em ${env} (o ajuste mais recente ainda não)`;
     case 'deploying': return `Deploy em andamento em ${env}`;
     case 'waiting': return `Na branch de ${env}, aguardando o deploy`;
     case 'failed': return `Deploy falhou em ${env}`;
