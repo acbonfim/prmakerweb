@@ -58,7 +58,7 @@ export class SideMenuComponent {
       label: 'Promoção de PRs',
       icon: 'rocket_launch',
       link: 'auth/promotions',
-      allowedRoles: ['admin']
+      allowedRoles: ['admin', 'support']
     },
     {
       label: 'Base Solvace',

@@ -95,8 +95,9 @@ export const AUTHENTICATED_ROUTES: Routes = [
       },
       {
         path: 'promotions',
-        data: { tab: { title: 'Promoção de PRs', icon: 'rocket_launch' } },
-        canActivate: [AuthGuard, AdminGuard],
+        // Admin e support promovem (a API exige o mesmo).
+        data: { tab: { title: 'Promoção de PRs', icon: 'rocket_launch' }, roles: ['admin', 'support'], message: 'A promoção de PRs é só para admin ou support.' },
+        canActivate: [AuthGuard, roleGuard],
         loadComponent: () => import('./promotion/promotion.component').then(m => m.PromotionComponent)
       },
       {
