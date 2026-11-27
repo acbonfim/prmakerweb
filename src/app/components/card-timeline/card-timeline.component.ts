@@ -154,8 +154,26 @@ export class CardTimelineComponent implements OnDestroy {
     return this._cardNumber;
   }
 
-  /** Quando true, alterar [cardNumber] dispara a busca automaticamente. */
-  @Input() autoLoad = false;
+  /**
+   * Quando true, alterar [cardNumber] dispara a busca automaticamente.
+   * Não depende da ordem dos inputs: se o card chegou antes do autoLoad (o Angular aplica os
+   * inputs na ordem do template), a busca sai aqui — uma vez só para o mesmo card.
+   */
+  @Input()
+  set autoLoad(value: boolean) {
+    this._autoLoad = value;
+    if (value && this._cardNumber && this.requestedCard !== this._cardNumber) {
+      this.load();
+    }
+  }
+
+  get autoLoad(): boolean {
+    return this._autoLoad;
+  }
+
+  private _autoLoad = false;
+  /** Último card buscado por load() — evita buscar duas vezes o mesmo card (cardNumber + autoLoad). */
+  private requestedCard: string | null = null;
 
   /** Permite (ou não) registrar novas entradas pelo rodapé. */
   @Input() canPost = true;
@@ -277,6 +295,7 @@ export class CardTimelineComponent implements OnDestroy {
 
     if (card !== this._cardNumber) this.renderLimit.set(TIMELINE_RENDERED);
     this._cardNumber = card;
+    this.requestedCard = card;
     this.switchTimelineGroup(card);
 
     // Só é discreto quando já há algo na tela para preservar; senão, carga normal (skeletons cheios).
