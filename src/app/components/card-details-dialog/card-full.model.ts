@@ -1,3 +1,4 @@
+import { CardSla } from '../sla-badge/sla-badge.component';
 export interface CardAlerts {
   missingRootCause: boolean;
   missingResolutionType: boolean;
@@ -37,5 +38,7 @@ export interface CardFull {
   comments: CardComment[];
   history: CardHistory[];
   alerts: CardAlerts;
+  /** 0105: SLA do card (null = tipo sem SLA, sem severidade ou sem regra). */
+  sla?: CardSla | null;
   error?: string;
 }

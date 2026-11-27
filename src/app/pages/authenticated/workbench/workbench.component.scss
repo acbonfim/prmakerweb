@@ -58,6 +58,7 @@
   min-width: 0;
   flex: 0 1 auto;
 }
+.wb-card__sla { flex: none; }
 .wb-card--loading { color: var(--wb-muted); font-size: 13px; }
 // 0099: chips dos épicos do card (encolhem antes do título)
 .wb-epics { flex: 0 3 auto; min-width: 0; }

@@ -1,3 +1,4 @@
+import { CardSla } from '../sla-badge/sla-badge.component';
 /**
  * 0099 (Mesa de gestão): modelos da API `api/v1/DevOps` — board do time (colunas, lanes, mapeamento coluna→estado),
  * itens do board, metadados do projeto (tipos, campos, tags, áreas/iterações, pessoas) e o card com os campos.
@@ -129,6 +130,8 @@ export interface BoardItem {
   /** Fundo/título da primeira regra de estilo do board ("Styles" no DevOps) que o card atende — ex.: tag BLOCK, severidade. */
   cardColor?: string | null;
   titleColor?: string | null;
+  /** 0105: SLA do card (null = tipo sem SLA, sem severidade ou sem regra). */
+  sla?: CardSla | null;
 }
 
 export interface BoardItemsResponse {
@@ -173,6 +176,8 @@ export interface CardDetail {
   tags: string[];
   url: string;
   relations: CardRelation[];
+  /** 0105: SLA do card. */
+  sla?: CardSla | null;
 }
 
 /** `POST DevOps/workitems`. */
