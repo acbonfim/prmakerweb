@@ -5,6 +5,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angu
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { DevOpsService } from '../../services/devops.service';
 import { DevOpsOption, EpicsService, epicApiError } from '../../services/epics.service';
 import { boardLanes, laneFilterName, normalizeBoardFilter } from '../devops/board.logic';
@@ -36,8 +37,8 @@ export type EpicDialogResult = Epic | undefined;
 @Component({
   selector: 'app-epic-dialog',
   standalone: true,
-  imports: [FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, PmComboComponent,
-    DevOpsTagsInputComponent],
+  imports: [FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatTooltipModule, MatSlideToggleModule, PlanMarkdownPipe,
+    PmComboComponent, DevOpsTagsInputComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
     <div class="wi-dlg ed">
@@ -131,6 +132,15 @@ export type EpicDialogResult = Epic | undefined;
           <input class="wi-input ed__card" [(ngModel)]="devOpsCardId" inputmode="numeric" maxlength="100" placeholder="Ex.: 78100">
         </label>
 
+        <!-- 0104: rascunhos de histórias pelos cards do épico (ligado por padrão; muda a qualquer momento) -->
+        <div class="wi-field ed__drafts">
+          <mat-slide-toggle [(ngModel)]="allowCardStoryDrafts" aria-describedby="ed-drafts-hint">
+            Permitir rascunhos de histórias pelos cards
+          </mat-slide-toggle>
+          <small id="ed-drafts-hint" class="wi-muted">O Especialista do caso dos cards deste épico pode escrever histórias e bugs como
+            <b>rascunho</b> na aba Histórias. Converter em card continua só aqui na Mesa (papel admin ou management).</small>
+        </div>
+
         @if (error()) { <div class="wi-note wi-note--warn"><mat-icon>error_outline</mat-icon><span>{{ error() }}</span></div> }
       </div>
 
@@ -148,6 +158,7 @@ export type EpicDialogResult = Epic | undefined;
     .ed__label-row { display: flex; align-items: center; gap: 6px; }
     .ed__link { margin-left: auto; background: none; border: 0; padding: 0; font: inherit; font-size: 11.5px; color: var(--mat-sys-primary); cursor: pointer; }
     .ed__desc { min-height: 120px; }
+    .ed__drafts { gap: 6px; }
     .ed__preview { min-height: 120px; max-height: 320px; overflow: auto; padding: 8px 10px; border-radius: 8px; background: var(--surface-input, #1a1f28);
       border: 1px solid var(--cc-surface-border-strong, rgba(255,255,255,.18)); }
     .ed__colors { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -177,6 +188,8 @@ export class EpicDialogComponent {
   title = this.data.epic?.title ?? '';
   description = this.data.epic?.description ?? '';
   devOpsCardId = this.data.epic?.devOpsCardId ?? '';
+  /** 0104: rascunhos de histórias pelos cards (épico antigo sem o campo = ligado). */
+  allowCardStoryDrafts = this.data.epic?.allowCardStoryDrafts ?? true;
   readonly color = signal(this.data.epic ? epicColor(this.data.epic.color) : DEFAULT_EPIC_COLOR);
   readonly tags = signal<string[]>(normalizeTags(this.data.epic?.tags));
   readonly team = signal<string | null>(this.data.epic?.devOpsTeam || null);
@@ -327,7 +340,8 @@ export class EpicDialogComponent {
       devOpsTeam: this.team(),
       devOpsBoard: this.team() ? this.board() : null,
       devOpsCardId: `${this.devOpsCardId ?? ''}`.trim().replace(/^#/, '') || null,
-      boardFilters: this.boardFiltersToSave()
+      boardFilters: this.boardFiltersToSave(),
+      allowCardStoryDrafts: this.allowCardStoryDrafts
     };
     this.saving.set(true);
     this.error.set(null);

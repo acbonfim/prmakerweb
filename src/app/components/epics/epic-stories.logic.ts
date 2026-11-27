@@ -29,6 +29,8 @@ export interface EpicStory {
   convertedAt?: string | null;
   convertedByName?: string | null;
   createdByName?: string | null;
+  /** 0104: card de onde veio (Especialista do caso de um card do épico); null = escrita na Mesa. */
+  sourceCard?: string | null;
   createdAt: string;
   updatedAt: string;
 }

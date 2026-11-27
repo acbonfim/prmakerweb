@@ -84,4 +84,13 @@ describe('EpicStoriesComponent (0099 ajustes 2)', () => {
     fixture.detectChanges();
     expect(el.querySelectorAll('.est__row').length).toBe(1);
   });
+
+  it('rascunho escrito por um card mostra "pelo card N" (0104)', async () => {
+    stories.list$ = [story({ number: 7, title: 'Trocar de site não reabre a sala', sourceCard: '79047' }), story({ number: 8, title: 'Pela Mesa' })];
+    const fixture = await render();
+    const rows = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.est__row'));
+    const row = (n: number) => rows.find((r) => r.textContent?.includes(`#${n}`))!;
+    expect(row(7).textContent).toContain('pelo card 79047');
+    expect(row(8).textContent).not.toContain('pelo card');
+  });
 });
