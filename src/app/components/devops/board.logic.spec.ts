@@ -1,7 +1,7 @@
 import {
   DEFAULT_LANE_NAME, EMPTY_FILTER, UNASSIGNED, applyMove, canAccept, columnCounts, columnOf, filterCount, filterItems, filterOptions,
   groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, limitBoard, neighborsAt, normalizeBoardFilter, orderBetween,
-  sameFilter, shownByColumn, shownTotal, stateFor, toggleValue, typeOnBoard, visibleColumns
+  sameFilter, shownByColumn, slaFilterKey, shownTotal, stateFor, toggleValue, typeOnBoard, visibleColumns
 } from './board.logic';
 import { BoardConfig, BoardItem } from './devops.model';
 
@@ -194,6 +194,26 @@ describe('board.logic (0099)', () => {
     expect(sameFilter({ ...EMPTY_FILTER, types: ['Bug', 'Task'] }, { ...EMPTY_FILTER, types: ['task', 'bug'] })).toBeTrue();
     expect(sameFilter({ ...EMPTY_FILTER, text: ' a ' }, { ...EMPTY_FILTER, text: 'a' })).toBeTrue();
     expect(sameFilter({ ...EMPTY_FILTER, lanes: ['A'] }, EMPTY_FILTER)).toBeFalse();
+  });
+
+  it('0105: filtra pelo SLA (faixas em OU; prazo parado e sem SLA à parte) e salva no épico', () => {
+    const sla = (level: string, stopped = false) => ({ level, stopped, text: '', origin: 'client', severity: '', limitDays: 1, start: '',
+      deadline: '', elapsedDays: 0, remainingDays: 0 });
+    const base = { rev: 1, type: 'Bug', title: 't', state: 'New', tags: [], column: 'New', done: false, lane: null, order: null };
+    const items: BoardItem[] = [
+      { ...base, id: 1, sla: sla('grave') }, { ...base, id: 2, sla: sla('attention') }, { ...base, id: 3, sla: sla('ok') },
+      { ...base, id: 4, sla: sla('grave', true) }, { ...base, id: 5 },
+    ];
+    const ids = (v: string[]) => filterItems(items, { ...EMPTY_FILTER, sla: v }).map((i) => i.id);
+    expect(ids(['grave'])).toEqual([1]);
+    expect(ids(['grave', 'attention'])).toEqual([1, 2]);
+    expect(ids(['stopped'])).toEqual([4]);
+    expect(ids(['none'])).toEqual([5]);
+    expect(slaFilterKey(items[3])).toBe('stopped');
+    expect(filterCount({ ...EMPTY_FILTER, sla: ['grave', 'ok'] })).toBe(2);
+    expect(normalizeBoardFilter({ sla: ['Grave'] }).sla).toEqual(['grave']);
+    expect(normalizeBoardFilter({ types: ['Bug'] }).sla).toEqual([]); // filtro salvo antes da 0105
+    expect(sameFilter({ ...EMPTY_FILTER, sla: ['grave'] }, EMPTY_FILTER)).toBeFalse();
   });
 
   it('colunas ocultas: some do board, ocultar todas mostra todas, coluna nova aparece sozinha', () => {
