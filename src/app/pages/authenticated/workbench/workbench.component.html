@@ -116,8 +116,8 @@
                   }
                 </ol>
               }
-              @if (executingItems().length) {
-                <p class="run-pop__text">Executando {{ executingItems().length === 1 ? 'o item #' + executingItems()[0] : executingItems().length + ' itens' }}.</p>
+              @if (claudeItems().running.length) {
+                <p class="run-pop__text">Executando {{ claudeItems().running.length === 1 ? 'o item #' + claudeItems().running[0] : claudeItems().running.length + ' itens' }}.</p>
               }
               <div class="run-pop__actions">
                 @if (r.waitCode === 'budget') { <button mat-button (click)="pc!.forceRequest(r)" [disabled]="!!pc!.busy()">Rodar mesmo assim</button> }
@@ -125,7 +125,7 @@
                 @if (r.waitCode === 'no-worker' || r.waitCode === 'offline' || r.waitCode === 'paused') {
                   <button mat-button (click)="robotExecutors()">Meus executores</button>
                 }
-                @if (executingItems().length) { <button mat-button (click)="robotToItems()">Ver itens</button> }
+                @if (claudeItems().running.length) { <button mat-button (click)="robotToItems()">Ver itens</button> }
                 <span class="run-pop__spacer"></span>
                 <button mat-stroked-button class="run-pop__stop" (click)="pc!.cancelRequest(r)" [disabled]="!!pc!.busy()">
                   <mat-icon>{{ r.status === 'queued' ? 'close' : 'stop' }}</mat-icon>{{ r.status === 'queued' ? 'Cancelar' : 'Parar' }}
@@ -367,7 +367,7 @@
         }
 
         <app-work-item-list [card]="card()" [cardType]="cardType()" [openItem]="openItem()" [openSessionOf]="sessionOf()"
-                            (countChange)="onCountChange($event)" (executingChange)="onExecuting($event)"></app-work-item-list>
+                            (countChange)="onCountChange($event)" (executingChange)="onExecuting($event)" (claudeChange)="onClaudeItems($event)"></app-work-item-list>
       </div>
 
       <!-- 0094: Relatado — itens de outros cards relacionados a este (menção/manual), somente leitura -->

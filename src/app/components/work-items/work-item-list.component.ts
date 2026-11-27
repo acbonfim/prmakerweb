@@ -33,6 +33,8 @@ import {
   executorLabel,
   formatWorkNumber,
   isExecutingItem,
+  claudeItems,
+  type ClaudeItems,
   isItemBusy,
   isOpenItem,
   itemProgress,
@@ -47,7 +49,9 @@ import {
   relatedSourceIcon,
   relatedSourceLabel,
   sortByCreation,
-  workTaskLook,
+  workTaskLookIn,
+  isYourTurn,
+  mergeWaitTask,
   userTaskActions
 } from './work-item.model';
 import { WorkItemActionsService } from './work-item-actions.service';
@@ -273,7 +277,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
                         <button class="wil__running" (click)="showSession(it.number)" [matTooltip]="(it.activity || look(it).label) + ' — ver a sessão de execução'"
                                 [attr.aria-label]="'Ver a sessão de execução do ' + num(it.number)">
                           <mat-icon [class.wil__bot]="busy(it)">{{ it.status === 'waiting' ? 'front_hand' : 'smart_toy' }}</mat-icon>
-                          <span class="wil__running-text">{{ it.activity || (it.status === 'queued' ? 'Na fila' : it.status === 'reverting' ? 'Desfazendo' : it.status === 'waiting' ? (waitsForYou(it) ? 'Aguardando você' : 'Aguardando') : 'Executando') }}</span>
+                          <span class="wil__running-text">{{ it.activity || (it.status === 'queued' ? 'Na fila' : it.status === 'reverting' ? 'Desfazendo' : it.status === 'waiting' ? (waitsForYou(it) ? 'Aguardando você' : waitsForMerge(it) ? 'Aguardando o merge' : 'Aguardando') : 'Executando') }}</span>
                         </button>
                       } @else {
                         <button mat-icon-button class="wil__play" data-tour="wi-run" (click)="execute(it)" [disabled]="!canRun(it) || pending().has(it.number)"
@@ -309,14 +313,14 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
               @if (isExpanded(it.number) && it.tasks.length) {
                 <ol class="wil__tasks">
                   @for (t of it.tasks; track t.id) {
-                    <li class="wil__task" [class.wil__task--cited]="source() === 'related' && relMeta(it.number)?.matchedTaskNumber === t.number">
-                      <mat-icon class="wil__task-st" [style.color]="taskLook(t).color" [class.wil__spin]="taskLook(t).spin" [matTooltip]="taskLook(t).label">{{ taskLook(t).icon }}</mat-icon>
+                    <li class="wil__task" [class.wil__task--you]="isYourTurn(it, t)" [class.wil__task--cited]="source() === 'related' && relMeta(it.number)?.matchedTaskNumber === t.number">
+                      <mat-icon class="wil__task-st" [style.color]="taskLook(t, it).color" [class.wil__spin]="taskLook(t, it).spin" [matTooltip]="taskLook(t, it).label">{{ taskLook(t, it).icon }}</mat-icon>
                       <button class="wil__task-main" (click)="openTask(it, t)" [title]="t.title">
                         <span class="wil__num">{{ num(t.number) }}</span>
                         <mat-icon class="wil__task-kind" [matTooltip]="kind(t).label">{{ kind(t).icon }}</mat-icon>
                         <span class="wil__task-title">{{ t.title }}</span>
                       </button>
-                      <span class="wil__task-st-label" [style.color]="taskLook(t).color">{{ taskLook(t).label }}</span>
+                      <span class="wil__task-st-label" [style.color]="taskLook(t, it).color">{{ taskLook(t, it).label }}</span>
                       <span class="wil__chip wil__chip--exec">{{ executor(t.executor) }}</span>
                       @if (!readOnly()) {
                         @if (canResolve(t)) {
@@ -502,6 +506,7 @@ const EXPANDED_KEY = (card: string) => `wi-expanded:${card}`;
     .wil__relx.mat-mdc-icon-button { width: 30px; height: 30px; padding: 4px; }
     .wil__relx mat-icon { font-size: 18px; width: 18px; height: 18px; color: var(--cc-text-3); }
     .wil__relx:hover mat-icon { color: #f85149; }
+    .wil__task--you { background: rgba(210,153,34,.08); border-left-color: #d29922; }
     .wil__task--cited { background: color-mix(in srgb, var(--mat-sys-primary) 10%, transparent); border-left-color: color-mix(in srgb, var(--mat-sys-primary) 55%, transparent); }
 
     @container (max-width: 560px) {
@@ -527,6 +532,8 @@ export class WorkItemListComponent {
   readonly countChange = output<number>();
   /** Números dos itens em execução (na fila, rodando, esperando ou desfazendo) — a cada mudança. */
   readonly executingChange = output<number[]>();
+  /** Card 79047: itens em que o Claude está mexendo (rodando/desfazendo) e os na fila dele — o robô da Bancada. */
+  readonly claudeChange = output<ClaudeItems>();
 
   private api = inject(WorkItemsService);
   private plans = inject(ExecutionPlanService);
@@ -617,7 +624,9 @@ export class WorkItemListComponent {
   }
   readonly canCancelIt = (it: WorkItem) => canCancel(it);
   readonly canUndoIt = (it: WorkItem) => canUndo(it);
-  readonly taskLook = (t: WorkTask) => workTaskLook(t);
+  readonly isYourTurn = isYourTurn;
+  readonly waitsForMerge = (it: WorkItem) => !!mergeWaitTask(it);
+  readonly taskLook = (t: WorkTask, it?: WorkItem) => workTaskLookIn(it, t);
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
   /** "Já resolvi": sub-tarefa do Claude parada esperando a pessoa. */
   readonly canResolve = (t: WorkTask) => canResolveWait(t);
@@ -632,6 +641,7 @@ export class WorkItemListComponent {
   /** A pessoa fechou a sessão: item novo em execução não reabre sozinho (só entra nas abas). */
   private sessionClosedByUser = false;
   private lastExecuting = '';
+  private lastClaude = '';
   private deliveryRequestedFor: string | null = null;
 
   constructor() {
@@ -661,6 +671,13 @@ export class WorkItemListComponent {
     effect(() => {
       const nums = this.executing();
       untracked(() => this.onExecutingChanged(nums));
+    });
+    effect(() => {
+      const busy = claudeItems(this.items());
+      const key = `${busy.running.join(',')}|${busy.queued.join(',')}`;
+      if (key === this.lastClaude) return;
+      this.lastClaude = key;
+      untracked(() => this.claudeChange.emit(busy));
     });
 
     const destroyRef = inject(DestroyRef);

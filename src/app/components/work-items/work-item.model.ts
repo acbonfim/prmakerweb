@@ -752,6 +752,20 @@ export function executingNumbers(items: readonly Pick<WorkItem, 'status' | 'numb
 }
 
 /**
+ * Card 79047: itens em que o Claude está mexendo agora (rodando ou desfazendo) e os que estão na fila dele. Item em espera
+ * (a vez da pessoa, o merge de um PR, um chamado) fica de fora — o robô da Bancada não pode girar por ele.
+ */
+export interface ClaudeItems { running: number[]; queued: number[] }
+
+export function claudeItems(items: readonly Pick<WorkItem, 'status' | 'number'>[]): ClaudeItems {
+  const nums = (st: ReadonlySet<string>) => items.filter((x) => st.has(x.status)).map((x) => x.number).sort((a, b) => a - b);
+  return { running: nums(CLAUDE_RUNNING), queued: nums(CLAUDE_QUEUED) };
+}
+
+const CLAUDE_RUNNING: ReadonlySet<string> = new Set(['running', 'reverting']);
+const CLAUDE_QUEUED: ReadonlySet<string> = new Set(['queued']);
+
+/**
  * Ordem da lista: criação, do mais antigo ao mais novo (novos por último), com ou sem a sessão de execução aberta —
  * item em execução não sobe. Sem data válida, vale o número (sequência global, também na ordem de criação).
  */
@@ -1027,12 +1041,40 @@ export function personTurnTask(item: Pick<WorkItem, 'tasks'> | null | undefined)
   }) ?? null;
 }
 
+/**
+ * Card 79047: a sub-tarefa é da pessoa e chegou a vez dela (em espera/andamento, ou pendente com as dependências feitas)
+ * — fica amarela ("Aguardando você") mesmo antes do plano marcá-la como em andamento.
+ */
+export function isYourTurn(item: Pick<WorkItem, 'tasks'> | null | undefined, task: Pick<WorkTask, 'number' | 'executor' | 'status'>): boolean {
+  if (task.executor !== 'user') return false;
+  if (task.status === 'waiting' || task.status === 'running') return true;
+  return task.status === 'pending' && personTurnTask(item)?.number === task.number;
+}
+
+/** Aparência da sub-tarefa dentro do item: a da pessoa na vez dela vira "Aguardando você" (amarelo). */
+export function workTaskLookIn(item: Pick<WorkItem, 'tasks'> | null | undefined, task: WorkTask): StatusLook {
+  if (task.held && task.scheduledAt && task.status === 'pending') return workTaskLook(task);
+  return isYourTurn(item, task) ? WAITS_FOR_YOU : workTaskLook(task);
+}
+
 /** O item aguarda a pessoa: em espera por uma sub-tarefa dela ou por uma que ela precisa destravar. */
 export function waitsForPerson(item: Pick<WorkItem, 'status' | 'tasks'> | null | undefined): boolean {
   return item?.status === 'waiting' && (!!waitingForResolve(item) || !!personTurnTask(item));
 }
 
 const WAITS_FOR_YOU: StatusLook = { label: 'Aguardando você', icon: 'front_hand', color: '#d29922' };
+const WAITS_FOR_MERGE: StatusLook = { label: 'Aguardando o merge', icon: 'merge', color: '#a371f7' };
+
+/** Card 79047: sub-tarefa em espera pelo merge de PR aberto (a primeira, pela ordem) — não é a vez da pessoa. */
+export function mergeWaitTask(item: Pick<WorkItem, 'tasks'> | null | undefined): WorkTask | null {
+  return (item?.tasks ?? []).slice().sort((a, b) => a.order - b.order)
+    .find((t) => t.status === 'waiting' && taskLinks(t).some((l) => l.kind === 'pr' && (l.status || 'open') === 'open')) ?? null;
+}
+
+/** PRs abertos que a sub-tarefa espera mesclar ("#31443 edv-solvace -> qa"). */
+export function openPrTitles(task: Pick<WorkTask, 'links'> | null | undefined): string[] {
+  return taskLinks(task).filter((l) => l.kind === 'pr' && (l.status || 'open') === 'open').map((l) => (l.title ?? '').trim() || 'PR');
+}
 
 /**
  * Aparência do status do item — "Aguardando" vira "Aguardando você" quando a vez é da pessoa; 0103: parado esperando um
@@ -1040,6 +1082,7 @@ const WAITS_FOR_YOU: StatusLook = { label: 'Aguardando você', icon: 'front_hand
  */
 export function itemLook(item: (Pick<WorkItem, 'status' | 'tasks'> & Partial<Pick<WorkItem, 'scheduledAt' | 'parked' | 'nextScheduledAt'>>) | null | undefined): StatusLook {
   if (waitsForPerson(item)) return WAITS_FOR_YOU;
+  if (item?.status === 'waiting' && mergeWaitTask(item)) return WAITS_FOR_MERGE;
   return itemScheduleLook(item) ?? itemStatusLook(item?.status);
 }
 /** Item fechado/cancelado/desfeito (ou desfazendo): a Bancada só mostra. */

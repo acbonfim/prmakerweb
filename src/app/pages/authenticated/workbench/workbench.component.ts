@@ -41,7 +41,7 @@ import {
 } from '../../../components/work-items/cancel-work-dialog.component';
 import { workDialogConfig } from '../../../components/work-items/work-dialog-config';
 import { WorkItemActionsService } from '../../../components/work-items/work-item-actions.service';
-import { WorkItem, WorkItemStatus, formatWorkNumber, itemLook, waitingForResolve, waitsForPerson } from '../../../components/work-items/work-item.model';
+import { ClaudeItems, WorkItem, WorkItemStatus, formatWorkNumber, itemLook, waitingForResolve, waitsForPerson } from '../../../components/work-items/work-item.model';
 import { listenAws, listenWorkItems } from '../../../components/work-items/work-items-live';
 import { isInitialAnalysisItem } from '../../../components/work-items/analysis-overview';
 import { AwsDeployPanelComponent } from '../../../components/aws-deploy/aws-deploy-panel.component';
@@ -426,8 +426,10 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   });
 
   // ── Robô do Claude + conexão (cabeçalho, qualquer aba) ──────────────────────────────────────
-  /** Itens em execução agora (da lista de itens, `executingChange`). */
+  /** Itens em execução agora (da lista de itens, `executingChange`) — inclui os em espera. */
   readonly executingItems = signal<number[]>([]);
+  /** Card 79047: itens em que o Claude está mexendo / na fila dele (`claudeChange`) — só esses mexem o robô. */
+  readonly claudeItems = signal<ClaudeItems>({ running: [], queued: [] });
   /** Pedido do Claude na pista principal do card (lido do próprio `app-execution-plan`, sem buscar de novo). */
   readonly claudeRequest = computed(() => this.planCmp()?.activeRequest() ?? null);
   /** "Sem sinal do Claude há N min" (plano ativo sem atividade e sem pedido rodando) — o mesmo do cabeçalho do plano. */
@@ -440,14 +442,16 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   readonly robot = computed<WorkbenchRobot>(() => {
     const cmp = this.planCmp();
     const r = this.claudeRequest();
-    const items = this.executingItems();
-    const itemsText = items.length === 1 ? `o item #${items[0]}` : `${items.length} itens`;
+    const { running: items, queued } = this.claudeItems();
+    const itemsText = (nums: number[]) => nums.length === 1 ? `o item #${nums[0]}` : `${nums.length} itens`;
     if (r && r.status !== 'queued') {
       return { mode: 'running', icon: 'smart_toy', target: 'plan',
-        tooltip: (cmp?.runTooltip() ?? 'Claude rodando') + (items.length ? ` · executando ${itemsText}` : '') };
+        tooltip: (cmp?.runTooltip() ?? 'Claude rodando') + (items.length ? ` · executando ${itemsText(items)}` : '') };
     }
-    if (items.length) return { mode: 'running', icon: 'smart_toy', target: 'items', tooltip: `Claude executando ${itemsText} (clique para ver)` };
+    // Card 79047: só item que o Claude está tocando de verdade; em espera (a vez da pessoa, merge de PR) não gira.
+    if (items.length) return { mode: 'running', icon: 'smart_toy', target: 'items', tooltip: `Claude executando ${itemsText(items)} (clique para ver)` };
     if (r) return { mode: 'queued', icon: 'hourglass_top', target: 'plan', tooltip: cmp?.runTooltip() ?? 'Na fila do Claude' };
+    if (queued.length) return { mode: 'queued', icon: 'hourglass_top', target: 'items', tooltip: `Na fila do Claude: ${itemsText(queued)} (clique para ver)` };
     const c = this.card();
     if (c && this.caseStore.status(c)().working) {
       return { mode: 'running', icon: 'smart_toy', target: 'plan', tooltip: 'O Especialista do caso está trabalhando numa resposta' };
@@ -883,6 +887,10 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     this.executingItems.set(numbers ?? []);
   }
 
+  onClaudeItems(busy: ClaudeItems): void {
+    this.claudeItems.set(busy ?? { running: [], queued: [] });
+  }
+
   // ── Robô / conexão ──────────────────────────────────────────────────────────────────────────
 
   /**
@@ -892,8 +900,12 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   openRobot(): void {
     const robot = this.robot();
     if (robot.target === 'items') {
+      // Card 79047: abre a sessão de execução do item (trocar de aba só não mostrava nada quando já se estava nela).
       this.robotOpen.set(false);
-      this.selectMobile('items');
+      const { running, queued } = this.claudeItems();
+      const n = running[0] ?? queued[0];
+      if (n) this.openItemSession(n);
+      else this.selectMobile('items');
       return;
     }
     this.robotOpen.update((open) => !open);

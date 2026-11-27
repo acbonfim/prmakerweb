@@ -70,6 +70,10 @@ import {
   taskPrHint,
   taskStatusLook,
   workTaskLook,
+  workTaskLookIn,
+  isYourTurn,
+  mergeWaitTask,
+  openPrTitles,
   isTaskScheduled,
   ticketTaskActions,
   userTaskActions,
@@ -228,7 +232,7 @@ const FLASH_MS = 1_600;
             } @else if (item()?.status === 'queued') {
               <mat-icon class="wie__now-ico">schedule</mat-icon><span class="wie__now-text">Na fila do executor — começa em instantes.</span>
             } @else if (item()?.status === 'waiting') {
-              <mat-icon class="wie__now-ico">front_hand</mat-icon><span class="wie__now-text">{{ resolvable() ? 'Aguardando você — veja acima o que destravar.' : personTurn() ? 'Aguardando você — ' + num(personTurn()!.number) + ' ' + personTurn()!.title + '.' : 'Aguardando uma ação para continuar.' }}</span>
+              <mat-icon class="wie__now-ico">front_hand</mat-icon><span class="wie__now-text">{{ resolvable() ? 'Aguardando você — veja acima o que destravar.' : personTurn() ? 'Aguardando você — ' + num(personTurn()!.number) + ' ' + personTurn()!.title + '.' : mergeWait() ? 'Aguardando o merge — ' + mergeWait() + '.' : 'Aguardando uma ação para continuar.' }}</span>
             } @else {
               <mat-icon class="wie__now-ico wie__pulse">psychology</mat-icon><span class="wie__now-text">{{ item()?.activity || 'Pensando…' }}</span>
             }
@@ -258,7 +262,7 @@ const FLASH_MS = 1_600;
             @if (!it.tasks.length) { <p class="wie__muted">Sem sub-tarefas.</p> }
             <ol class="wie__tasks">
               @for (t of it.tasks; track t.id) {
-                <li class="wie__task wie__task--{{ t.status }}" [class.wie__task--current]="t.number === currentTask()" [class.wie__task--flash]="flashed().has(t.number)">
+                <li class="wie__task wie__task--{{ t.status }}" [class.wie__task--you]="yourTurn(t)" [class.wie__task--current]="t.number === currentTask()" [class.wie__task--flash]="flashed().has(t.number)">
                   <span class="wie__task-st" [style.color]="taskLook(t).color" [matTooltip]="taskLabel(t)">
                     <mat-icon [class.wie__spin]="taskLook(t).spin">{{ taskIcon(t) }}</mat-icon>
                   </span>
@@ -475,7 +479,7 @@ const FLASH_MS = 1_600;
     .wie__task { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 8px; border: 1px solid transparent; transition: background-color .4s ease, border-color .4s ease; }
     .wie__task:hover { background: rgba(255,255,255,.03); }
     .wie__task--current { background: color-mix(in srgb, #58a6ff 8%, transparent); border-color: color-mix(in srgb, #58a6ff 25%, transparent); }
-    .wie__task--waiting.wie__task--current { background: rgba(210,153,34,.08); border-color: rgba(210,153,34,.3); }
+    .wie__task--waiting.wie__task--current, .wie__task--you { background: rgba(210,153,34,.08); border-color: rgba(210,153,34,.3); }
     .wie__task--cancelled .wie__task-title, .wie__task--reverted .wie__task-title, .wie__task--skipped .wie__task-title { color: var(--cc-text-3); }
     .wie__task--completed .wie__task-title { color: var(--cc-text-2); }
     .wie__task-st { display: inline-flex; flex: none; }
@@ -608,7 +612,9 @@ export class WorkItemExecutionComponent {
   readonly executor = executorLabel;
   readonly requestLabel = requestStatusLabel;
   readonly actIcon = activityIcon;
-  readonly taskLook = (t: WorkTask) => workTaskLook(t);
+  readonly taskLook = (t: WorkTask) => workTaskLookIn(this.item(), t);
+  /** Card 79047: sub-tarefa da pessoa na vez dela (pelas dependências) — amarela, com as ações, mesmo ainda pendente. */
+  readonly yourTurn = (t: WorkTask) => isYourTurn(this.item(), t);
   readonly kind = (t: WorkTask) => kindInfo(t.kind, this.catalog());
   /** Chamado na Bancada + 0091: PR/branch das entregas da sub-tarefa (senão os links do `output`), sem repetir um link dela. */
   readonly outLinks = (t: WorkTask) => taskExtraOutputLinks(this.item(), t);
@@ -654,6 +660,11 @@ export class WorkItemExecutionComponent {
   readonly look = computed(() => (this.item() ? itemLook(this.item()) : itemStatusLook(this.status())));
   /** Card 78720: sub-tarefa da pessoa em que é a vez dela (validar em QA, aprovar...). */
   readonly personTurn = computed(() => (this.item()?.status === 'waiting' ? personTurnTask(this.item()) : null));
+  /** Card 79047: o item espera o merge de PR aberto (os PRs, para o aviso). */
+  readonly mergeWait = computed(() => {
+    const t = this.item()?.status === 'waiting' ? mergeWaitTask(this.item()) : null;
+    return t ? openPrTitles(t).join(', ') : '';
+  });
   readonly status = computed(() => this.item()?.status ?? (this.liveData()?.status as WorkItem['status'] | undefined) ?? null);
   readonly live = computed(() => isExecutingItem(this.status() ? { status: this.status()! } : null));
   readonly running = computed(() => this.status() === 'running' || this.status() === 'reverting');
@@ -1000,7 +1011,8 @@ export class WorkItemExecutionComponent {
   taskLabel(t: WorkTask): string {
     if (isTaskScheduled(t)) return workTaskLook(t).label;
     if (t.status === 'waiting' && this.openTicket(t)) return 'Aguardando o chamado';
-    if (t.executor === 'user' && (t.status === 'waiting' || t.status === 'running' || (t.status === 'pending' && t.number === this.currentTask()))) return 'Aguardando você';
+    if (t.status === 'waiting' && openPrTitles(t).length) return 'Aguardando o merge';
+    if (this.yourTurn(t)) return 'Aguardando você';
     if (canResolveWait(t)) return 'Aguardando você';
     return taskPrHint(t) ?? taskStatusLook(t.status).label;
   }
@@ -1012,14 +1024,14 @@ export class WorkItemExecutionComponent {
 
   taskIcon(t: WorkTask): string {
     if (isTaskScheduled(t)) return workTaskLook(t).icon;
-    if ((t.executor === 'user' && (t.status === 'waiting' || t.status === 'running')) || canResolveWait(t)) return 'front_hand';
+    if (this.yourTurn(t) || canResolveWait(t)) return 'front_hand';
     return taskStatusLook(t.status).icon;
   }
 
   /** Ações da sub-tarefa do usuário: em espera/andamento/falha sempre; pendente só quando é a vez dela. */
   userActions(t: WorkTask): WorkTaskAction[] {
     if (t.executor !== 'user') return [];
-    if (t.status === 'pending' && t.number !== this.currentTask()) return [];
+    if (t.status === 'pending' && t.number !== this.currentTask() && !this.yourTurn(t)) return [];
     return userTaskActions(t);
   }
 
