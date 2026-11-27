@@ -21,6 +21,7 @@
         <mat-icon class="wb-card__type" [svgIcon]="typeIcon()" [matTooltip]="typeLabel()" [attr.aria-label]="typeLabel()"></mat-icon>
         <span class="wb-card__num">#{{ card() }}</span>
         <span class="wb-card__title" [matTooltip]="title()" matTooltipShowDelay="600">{{ title() || 'Sem título' }}</span>
+        @if (cf.sla; as sla) { <app-sla-badge class="wb-card__sla" [sla]="sla" /> }
       </div>
       <!-- 0099: épicos da Mesa de gestão em que o card está (link para a Mesa já no épico e no card) -->
       <app-epic-chips class="wb-epics" [card]="card()"></app-epic-chips>

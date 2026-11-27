@@ -1,3 +1,4 @@
+import { SlaBadgeComponent } from '../sla-badge/sla-badge.component';
 import { Component, ViewEncapsulation, computed, effect, inject, input, linkedSignal, output, signal, untracked, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { CdkOverlayOrigin, OverlayModule } from '@angular/cdk/overlay';
@@ -64,6 +65,7 @@ export type CardPanelContext = 'desk' | 'workbench';
   selector: 'app-devops-card-panel',
   standalone: true,
   imports: [
+    SlaBadgeComponent,
     NgTemplateOutlet, OverlayModule, FormsModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule, PmComboComponent,
     CcPopoverComponent, DevOpsFieldInputComponent, DevOpsTagsInputComponent, DevOpsCardDiscussionComponent, DevOpsCardAttachmentsComponent,
     DevOpsCardRelatedComponent, DevOpsCardHistoryComponent, DevOpsAttachmentImagesDirective
@@ -92,6 +94,7 @@ export type CardPanelContext = 'desk' | 'workbench';
               }
             </span>
           }
+          @if (d?.sla; as sla) { <app-sla-badge class="dvp__sla" [sla]="sla" /> }
           <span class="dvp__spacer"></span>
           @if (d) {
             @if (showWorkbenchLink()) {

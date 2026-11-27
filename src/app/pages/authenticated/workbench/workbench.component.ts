@@ -1,3 +1,4 @@
+import { SlaBadgeComponent } from '../../../components/sla-badge/sla-badge.component';
 import {
   Component, DestroyRef, ElementRef, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild
 } from '@angular/core';
@@ -190,7 +191,7 @@ function writeFlag(key: string, on: boolean): void {
   imports: [
     FormsModule, OverlayModule, MatButtonModule, MatFormFieldModule, MatIconModule,
     MatInputModule, MatMenuModule, MatProgressSpinnerModule, MatTooltipModule,
-    CardAlertBarComponent, CardTimelineComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
+    CardAlertBarComponent, CardTimelineComponent, SlaBadgeComponent, CaseCompactComponent, ExecutionPlanComponent, PrInfoCardComponent,
     CardSituationLauncherComponent, CardAssistantLauncherComponent, CardHoursComponent, WorkItemListComponent, WorkbenchPrsComponent,
     WorkbenchCardComponent, CardFilesComponent, EpicChipsComponent, AwsDeployPanelComponent
   ],

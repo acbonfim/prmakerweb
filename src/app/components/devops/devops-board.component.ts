@@ -1,3 +1,4 @@
+import { SlaBadgeComponent } from '../sla-badge/sla-badge.component';
 import { CdkDrag, CdkDragDrop, CdkDropList, DragDropModule } from '@angular/cdk/drag-drop';
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import {
@@ -63,7 +64,7 @@ function storageSet(key: string, value: string): void {
 @Component({
   selector: 'app-devops-board',
   standalone: true,
-  imports: [NgTemplateOutlet, FormsModule, DragDropModule, CdkScrollable, MatButtonModule, MatIconModule, MatMenuModule, MatProgressBarModule,
+  imports: [SlaBadgeComponent, NgTemplateOutlet, FormsModule, DragDropModule, CdkScrollable, MatButtonModule, MatIconModule, MatMenuModule, MatProgressBarModule,
     MatTooltipModule, PmComboComponent, UserAvatarComponent],
   encapsulation: ViewEncapsulation.None,
   template: `
@@ -249,7 +250,9 @@ function storageSet(key: string, value: string): void {
                 <span class="dvb-card__nobody">Sem responsável</span>
               }
             </div>
-            <div class="dvb-card__state"><span class="dvb-card__label">Estado</span><span class="dvb-dot"></span>{{ item.state }}</div>
+            <div class="dvb-card__state"><span class="dvb-card__label">Estado</span><span class="dvb-dot"></span>{{ item.state }}
+              @if (item.sla; as sla) { <app-sla-badge class="dvb-card__sla" [sla]="sla" [compact]="true" /> }
+            </div>
             @if (item.tags.length) {
               <div class="dvb-card__tags">
                 @for (t of item.tags; track t) {
@@ -413,6 +416,7 @@ function storageSet(key: string, value: string): void {
     .dvb-card__nobody { color: var(--cc-text-3); font-style: italic; }
     .dvb-card__state { display: flex; align-items: center; gap: 5px; color: var(--cc-text-2); }
     .dvb-card__label { color: var(--cc-text-3); }
+    .dvb-card__sla { margin-left: auto; }
     .dvb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dvb-type, #8a8f98); flex: none; }
     .dvb-card__tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 1px; }
     .dvb-tag { font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 3px; background: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent);
