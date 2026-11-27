@@ -107,7 +107,7 @@ export const WORKBENCH_TOUR: TourDefinition = {
       id: 'first-analysis', anchor: 'wb-first-analysis', group: 'Itens de trabalho', since: 2, phase: 'card', side: 'bottom', align: 'start',
       optional: true, prepare: 'tab:items',
       title: 'Comece pela análise inicial',
-      body: 'Card sem plano e sem itens? <b>Começar a análise inicial</b> manda o Claude analisar o bug (ou a US).',
+      body: 'Card ainda sem análise inicial? <b>Começar a análise inicial</b> manda o Claude analisar o bug (ou a US).',
       detail: 'A análise cria sozinha o item "Análise inicial…" com uma sub-tarefa por etapa e, ao final, os itens de trabalho da ' +
         'entrega com as sub-tarefas. Tudo aparece na lista, ao vivo.'
     },

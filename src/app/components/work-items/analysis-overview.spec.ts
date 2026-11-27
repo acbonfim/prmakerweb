@@ -1,4 +1,4 @@
-import { analysisDeliverables, isAnalysisItem, pickAnalysisFile } from './analysis-overview';
+import { analysisDeliverables, isAnalysisItem, isInitialAnalysisItem, pickAnalysisFile } from './analysis-overview';
 import { WorkItemFile } from './work-item-files';
 
 const file = (name: string, kind = 'analysis', at = '2026-11-11T14:00:00Z', source: WorkItemFile['source'] = 'plan'): WorkItemFile =>
@@ -32,5 +32,14 @@ describe('analysis-overview (card 78262)', () => {
     expect(open.map((d) => d.done)).toEqual([true, false, false]);
     const done = analysisDeliverables({ tasks, status: 'completed' }, false, true);
     expect(done.every((d) => d.done)).toBeTrue();
+  });
+
+  it('investigação do Especialista não é a análise inicial — o botão continua (card 79047)', () => {
+    expect(isInitialAnalysisItem({ origin: 'analysis', planPhase: 'analysis' })).toBeTrue();
+    expect(isInitialAnalysisItem({ origin: 'analysis', planPhase: null })).toBeTrue();
+    expect(isInitialAnalysisItem({ origin: 'specialist', planPhase: null })).toBeFalse();
+    expect(isInitialAnalysisItem({ origin: 'user', planPhase: null })).toBeFalse();
+    expect(isInitialAnalysisItem({ origin: 'correction', planPhase: 'correction' })).toBeFalse();
+    expect(isInitialAnalysisItem(null)).toBeFalse();
   });
 });

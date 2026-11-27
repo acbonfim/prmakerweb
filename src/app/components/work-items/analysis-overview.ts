@@ -13,6 +13,15 @@ export function isAnalysisItem(item: Pick<WorkItem, 'type' | 'origin' | 'planPha
   return item.planPhase === 'analysis' || item.type === 'analysis' || (item.origin === 'analysis' && !item.planPhase);
 }
 
+/**
+ * A **análise inicial** do card: o item que espelha o plano de análise (nasce da análise pedida ao Claude). Item do tipo
+ * análise criado à mão ou pelo Especialista (uma investigação avulsa) não é a análise inicial (card 79047).
+ */
+export function isInitialAnalysisItem(item: Pick<WorkItem, 'origin' | 'planPhase'> | null | undefined): boolean {
+  if (!item) return false;
+  return item.planPhase === 'analysis' || item.origin === 'analysis';
+}
+
 /** O que a análise faz, em uma frase (bug × User Story). A descrição do item, quando houver, vale por cima. */
 export function analysisBrief(us: boolean): string {
   return us
