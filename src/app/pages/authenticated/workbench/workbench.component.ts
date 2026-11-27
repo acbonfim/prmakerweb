@@ -42,6 +42,7 @@ import { workDialogConfig } from '../../../components/work-items/work-dialog-con
 import { WorkItemActionsService } from '../../../components/work-items/work-item-actions.service';
 import { WorkItem, WorkItemStatus, formatWorkNumber, itemLook, waitingForResolve, waitsForPerson } from '../../../components/work-items/work-item.model';
 import { listenAws, listenWorkItems } from '../../../components/work-items/work-items-live';
+import { isInitialAnalysisItem } from '../../../components/work-items/analysis-overview';
 import { AwsDeployPanelComponent } from '../../../components/aws-deploy/aws-deploy-panel.component';
 import { snapshotAlert } from '../../../components/aws-deploy/aws-deploy.model';
 import { AwsDeployService } from '../../../services/aws-deploy.service';
@@ -346,12 +347,13 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     return !!h && isPlanActive(h.status as any);
   });
   /**
-   * "Analisar bug" / "Analisar US" só aparece enquanto o card não tem análise: some quando já há um item de análise
-   * válido (em andamento ou concluído) e também enquanto os itens do card não foram lidos (sem piscar o botão).
+   * "Analisar bug" / "Analisar US" só aparece enquanto o card não tem análise inicial: some quando já há o item que
+   * espelha o plano de análise (em andamento ou concluído) e também enquanto os itens do card não foram lidos (sem
+   * piscar o botão). Item do tipo análise criado à mão ou pelo Especialista (investigação avulsa) não conta (card 79047).
    */
   readonly canRequestAnalysis = computed(() =>
     this.planItemsCard() === this.card()
-    && !this.planItems().some((i) => i.type === 'analysis' && !DISCARDED_ANALYSIS.has(i.status)));
+    && !this.planItems().some((i) => isInitialAnalysisItem(i) && !DISCARDED_ANALYSIS.has(i.status)));
 
   /** PRs do card (contados pelo `app-workbench-prs`). */
   readonly prCount = signal<number | null>(null);
@@ -470,7 +472,7 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
   readonly realtimeDown = signal(false);
   private wsTimer?: ReturnType<typeof setTimeout>;
 
-  // ── Sugestão de análise inicial (card sem plano e sem itens) ────────────────────────────────
+  // ── Sugestão de análise inicial (card sem plano e sem análise inicial, mesmo com outros itens) ─
   /** Card em que a análise já foi pedida por esta tela (esconde a sugestão até o plano/item aparecer). */
   readonly analysisAskedFor = signal<string | null>(null);
   /** Plano já lido e vazio (sem plano, sem pedido na fila, sem erro). */
@@ -481,11 +483,11 @@ export class WorkbenchComponent implements OnInit, OnDestroy {
     return !cmp.plan() && !cmp.activeRequest();
   });
   readonly suggestAnalysis = computed(() =>
-    this.cardState() === 'found' && this.itemCount() === 0 && this.planKnownEmpty() && !this.analyzing()
+    this.cardState() === 'found' && this.canRequestAnalysis() && this.planKnownEmpty() && !this.analyzing()
     && this.analysisAskedFor() !== this.card());
-  /** Análise pedida aqui e ainda sem plano/itens: "o item aparece quando o Claude começar". */
+  /** Análise pedida aqui e ainda sem plano/item da análise: "o item aparece quando o Claude começar". */
   readonly analysisWaiting = computed(() =>
-    this.analysisAskedFor() === this.card() && this.itemCount() === 0 && !this.planCmp()?.plan());
+    this.analysisAskedFor() === this.card() && this.canRequestAnalysis() && !this.planCmp()?.plan());
 
   private cardSub?: Subscription;
   private querySub?: Subscription;

@@ -340,7 +340,7 @@
 
       <div class="wb-pane" [class.wb-hidden]="main !== 'items'" data-tour="wb-items">
         @if (suggestAnalysis()) {
-          <!-- Card sem plano e sem itens: a Bancada sugere a análise inicial (ela cria os itens e as sub-tarefas) -->
+          <!-- Card sem plano e sem análise inicial (outros itens não contam): a Bancada sugere a análise inicial (ela cria os itens e as sub-tarefas) -->
           @let us = cardType() === 'user-story';
           <section class="wb-first" data-tour="wb-first-analysis" role="region" aria-label="Sugestão de análise inicial">
             <span class="wb-first__icon" aria-hidden="true"><mat-icon [svgIcon]="typeIcon()"></mat-icon></span>
