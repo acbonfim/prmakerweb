@@ -16,6 +16,7 @@ import { GovRulesComponent } from './tabs/gov-rules.component';
 import { GovHooksComponent } from './tabs/gov-hooks.component';
 import { GovSettingsComponent } from './tabs/gov-settings.component';
 import { GovStandardsComponent } from './tabs/gov-standards.component';
+import { GovLessonsComponent } from './tabs/gov-lessons.component';
 
 /**
  * Governança do PRMake (0098, admin): casca com as abas internas (aba na query `?aba=`), o filtro de período
@@ -25,7 +26,7 @@ import { GovStandardsComponent } from './tabs/gov-standards.component';
   selector: 'app-governance-page',
   standalone: true,
   imports: [FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, GovOverviewComponent, GovUsersComponent, GovCardsComponent, GovTasksComponent,
-    GovAuditComponent, GovRulesComponent, GovStandardsComponent, GovHooksComponent, GovSettingsComponent],
+    GovAuditComponent, GovRulesComponent, GovStandardsComponent, GovLessonsComponent, GovHooksComponent, GovSettingsComponent],
   providers: [GovernanceStore],
   templateUrl: './governance-page.component.html',
   styleUrls: ['./governance-shared.css', './governance-page.component.css'],

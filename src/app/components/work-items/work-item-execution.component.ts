@@ -63,6 +63,7 @@ import {
   requestStatusLabel,
   taskExtraOutputLinks,
   taskLinkCiLook,
+  changesRequestedLook,
   taskLinkIcon,
   taskLinkStatusLook,
   taskLinks,
@@ -275,6 +276,7 @@ const FLASH_MS = 1_600;
                             <mat-icon>{{ linkIco(l.kind) }}</mat-icon><span class="wie__out-text">{{ linkText(l) }}</span>
                             @if (linkLook(l); as st) { <span class="wie__out-st" [style.color]="st.color">{{ st.label }}</span> }
                             @if (ciLook(l); as ci) { <span class="wie__out-st" [style.color]="ci.color">{{ ci.label }}</span> }
+                            @if (changesLook(l); as cr) { <span class="wie__out-st" [style.color]="cr.color">{{ cr.label }}</span> }
                           </a>
                         }
                         @for (o of outLinks(t); track o.url) {
@@ -616,6 +618,7 @@ export class WorkItemExecutionComponent {
   readonly linkIco = taskLinkIcon;
   readonly linkLook = taskLinkStatusLook;
   readonly ciLook = taskLinkCiLook;
+  readonly changesLook = changesRequestedLook;
   readonly ticketLook = (a: TicketAction) => TICKET_ACTION_LABELS[a];
   readonly ticketActs = ticketTaskActions;
   readonly openTicket = (t: WorkTask) => { const c = currentTicket(t); return !!c && (c.status || 'open') === 'open'; };

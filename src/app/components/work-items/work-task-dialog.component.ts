@@ -35,6 +35,7 @@ import {
   kindParams,
   outputEntries,
   taskLinkCiLook,
+  changesRequestedLook,
   taskLinkIcon,
   taskLinkStatusLook,
   taskLinks,
@@ -157,6 +158,7 @@ export interface WorkTaskDialogData {
                     <mat-icon class="wtd__link-ico">{{ linkIco(l.kind) }}</mat-icon>
                     <a class="wi-link wtd__link-title" [href]="l.url" target="_blank" rel="noopener" [matTooltip]="l.url">{{ l.title || l.url }}</a>
                     @if (ciLook(l); as ci) { <span class="wi-chip" [style.color]="ci.color" [style.border-color]="ci.color"><mat-icon>{{ ci.icon }}</mat-icon>{{ ci.label }}</span> }
+                    @if (changesLook(l); as cr) { <span class="wi-chip" [style.color]="cr.color" [style.border-color]="cr.color"><mat-icon>{{ cr.icon }}</mat-icon>{{ cr.label }}</span> }
                     @if (linkLook(l); as st) { <span class="wi-chip" [style.color]="st.color" [style.border-color]="st.color"><mat-icon>{{ st.icon }}</mat-icon>{{ st.label }}</span> }
                   </div>
                 }
@@ -390,6 +392,7 @@ export class WorkTaskDialogComponent {
   readonly linkIco = taskLinkIcon;
   readonly linkLook = taskLinkStatusLook;
   readonly ciLook = taskLinkCiLook;
+  readonly changesLook = changesRequestedLook;
 
   constructor() {
     this.pickers.ensureGithubUrl(this.data.catalog);

@@ -192,6 +192,8 @@ export interface ExecutionLink {
   /** 0069: checks que falharam; `preexisting` = a base já falha nele (não é do card). */
   checksFailed?: ExecutionCheckItem[];
   checksChangedAt?: string | null;
+  /** 0106: quantas pessoas pedem mudanças no PR aberto (0 = nenhuma). */
+  changesRequested?: number | null;
 }
 
 /** 0069: check do CI que falhou. */

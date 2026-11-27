@@ -813,6 +813,10 @@
         @if (l.kind === 'pr' && l.status === 'open' && l.checksStatus; as ci) {
           <span class="plan-link__status plan-link__ci plan-link__ci--{{ ci }}" [matTooltip]="ciTooltip(l)">{{ ciLabel(ci) }}</span>
         }
+        @if (changesLook(l); as cr) {
+          <span class="plan-link__status plan-link__changes" [style.color]="cr.color" [style.border-color]="cr.color"
+                matTooltip="O revisor pediu mudanças — o PRMake abre o item &quot;Atender o review&quot; na Bancada">{{ cr.label }}</span>
+        }
         @if (linkStatusLabel(l); as st) {
           <span class="plan-link__status">{{ st }}</span>
         }

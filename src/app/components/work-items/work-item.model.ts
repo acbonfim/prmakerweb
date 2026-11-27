@@ -67,6 +67,8 @@ export interface WorkTaskLink {
   status?: WorkTaskLinkStatus | null;
   /** CI do PR (só PR aberto). */
   checksStatus?: CiStatus | null;
+  /** 0106: quantas pessoas pedem mudanças no PR aberto. */
+  changesRequested?: number | null;
 }
 
 /** Corpo do `POST WorkItems/tasks/{n}/ticket` (anexa o chamado; a sub-tarefa passa a aguardar). */
@@ -964,6 +966,19 @@ const CI_LABELS: Record<CiStatus, StatusLook> = {
 export function taskLinkCiLook(link: Pick<WorkTaskLink, 'kind' | 'status' | 'checksStatus'>): StatusLook | null {
   if (link.kind !== 'pr' || (link.status && link.status !== 'open') || !link.checksStatus) return null;
   return CI_LABELS[link.checksStatus] ?? null;
+}
+
+/** 0106: cor do pedido de mudanças (laranja — vez de quem trata o card). */
+export const CHANGES_REQUESTED_COLOR = '#f0883e';
+
+/** 0106: selo "Mudanças pedidas" — PR aberto com pedido de mudanças valendo. */
+export function changesRequestedLook(link: { kind?: string | null; status?: string | null; changesRequested?: number | null } | null | undefined): StatusLook | null {
+  if (!link || link.kind !== 'pr' || (link.status && link.status !== 'open') || !link.changesRequested) return null;
+  return {
+    label: link.changesRequested > 1 ? `Mudanças pedidas (${link.changesRequested})` : 'Mudanças pedidas',
+    icon: 'rate_review',
+    color: CHANGES_REQUESTED_COLOR,
+  };
 }
 
 /** Sub-tarefa de chamado da pessoa (`kind: ticket`, executor `user`). */
