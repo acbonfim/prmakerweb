@@ -20,7 +20,7 @@ import { WsService } from '../../services/ws.service';
 import { PmComboComponent, PmComboOption } from '../pm-combo/pm-combo.component';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import {
-  BoardCell, BoardFilter, ColumnCount, EMPTY_FILTER, applyMove, canAccept, columnCounts, filterCount, filterItems, filterOptions,
+  BoardCell, BoardFilter, ColumnCount, EMPTY_FILTER, SLA_FILTERS, slaFilterKey, applyMove, canAccept, columnCounts, filterCount, filterItems, filterOptions,
   groupBoard, isFilterActive, isRealMove, laneFilterName, laneMatches, laneOf, limitBoard, boardLanes, neighborsAt, normalizeBoardFilter,
   sameFilter, shownByColumn, shownTotal, toggleValue, typeOnBoard, visibleColumns
 } from './board.logic';
@@ -107,6 +107,12 @@ function storageSet(key: string, value: string): void {
         <button type="button" class="dvb-filter" [class.dvb-filter--on]="f.states.length" [matMenuTriggerFor]="statesMenu">
           Estado @if (f.states.length) { <b>{{ f.states.length }}</b> }<mat-icon>arrow_drop_down</mat-icon>
         </button>
+        @if (hasSla() || f.sla.length) {
+          <button type="button" class="dvb-filter" [class.dvb-filter--on]="f.sla.length" [matMenuTriggerFor]="slaMenu"
+                  matTooltip="Filtrar pelo SLA (prazo em dias úteis)" matTooltipShowDelay="600">
+            SLA @if (f.sla.length) { <b>{{ f.sla.length }}</b> }<mat-icon>arrow_drop_down</mat-icon>
+          </button>
+        }
         @if (laneChoices().length > 1 || f.lanes.length) {
           <button type="button" class="dvb-filter" [class.dvb-filter--on]="f.lanes.length" [matMenuTriggerFor]="lanesMenu">
             Lane @if (f.lanes.length) { <b>{{ f.lanes.length }}</b> }<mat-icon>arrow_drop_down</mat-icon>
@@ -311,6 +317,15 @@ function storageSet(key: string, value: string): void {
         </button>
       } @empty { <div class="dvb-menu__empty">O board não tem lanes</div> }
     </mat-menu>
+    <mat-menu #slaMenu="matMenu" class="dvb-menu">
+      @for (o of slaFilters; track o.value) {
+        <button mat-menu-item type="button" (click)="toggle('sla', o.value, $event)">
+          <mat-icon>{{ has(f.sla, o.value) ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>
+          <span class="dvb-sla-dot" [style.background]="o.color" [class.dvb-sla-dot--hollow]="!o.color"></span>
+          <span>{{ o.label }}</span><span class="dvb-menu__count">{{ slaCounts().get(o.value) ?? 0 }}</span>
+        </button>
+      }
+    </mat-menu>
     <mat-menu #statesMenu="matMenu" class="dvb-menu">
       @for (s of opts.states; track s) {
         <button mat-menu-item type="button" (click)="toggle('states', s, $event)">
@@ -414,9 +429,12 @@ function storageSet(key: string, value: string): void {
     .dvb-card__who { display: flex; align-items: center; gap: 5px; color: var(--cc-text-2); min-width: 0; }
     .dvb-card__who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dvb-card__nobody { color: var(--cc-text-3); font-style: italic; }
-    .dvb-card__state { display: flex; align-items: center; gap: 5px; color: var(--cc-text-2); }
+    .dvb-card__state { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 5px; color: var(--cc-text-2); }
     .dvb-card__label { color: var(--cc-text-3); }
     .dvb-card__sla { margin-left: auto; }
+    .dvb-sla-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; flex: none; }
+    .dvb-sla-dot--hollow { box-shadow: inset 0 0 0 1.5px var(--cc-text-3, #8a8f98); }
+    .dvb-menu__count { margin-left: 10px; color: var(--cc-text-3); font-size: 12px; }
     .dvb-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dvb-type, #8a8f98); flex: none; }
     .dvb-card__tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 1px; }
     .dvb-tag { font-size: 10.5px; line-height: 16px; padding: 0 6px; border-radius: 3px; background: color-mix(in srgb, var(--mat-sys-on-surface) 12%, transparent);
@@ -516,6 +534,14 @@ export class DevOpsBoardComponent {
   readonly options = computed(() => filterOptions(this.items()));
   readonly filterActive = computed(() => isFilterActive(this.filter()));
   readonly filterCount = computed(() => filterCount(this.filter()));
+  /** 0105: opções do filtro de SLA e quantos cards do board caem em cada uma (antes dos outros filtros). */
+  readonly slaFilters = SLA_FILTERS;
+  readonly hasSla = computed(() => this.items().some((i) => !!i.sla));
+  readonly slaCounts = computed(() => {
+    const counts = new Map<string, number>();
+    for (const i of this.items()) counts.set(slaFilterKey(i), (counts.get(slaFilterKey(i)) ?? 0) + 1);
+    return counts;
+  });
   /** Cards na tela por coluna (com lanes escolhidas e filtros) — o cabeçalho mostra este e o total da coluna. */
   readonly shownCounts = computed(() => shownByColumn(this.lanes()));
   readonly totalLabel = computed(() => {
@@ -795,7 +821,7 @@ export class DevOpsBoardComponent {
     return list.some((x) => x.toLowerCase() === v.toLowerCase());
   }
 
-  toggle(key: 'types' | 'assignedTo' | 'tags' | 'states', value: string, e: Event): void {
+  toggle(key: 'types' | 'assignedTo' | 'tags' | 'states' | 'sla', value: string, e: Event): void {
     e.stopPropagation(); // o menu fica aberto para marcar vários
     this.filter.update((f) => ({ ...f, [key]: toggleValue(f[key], value) }));
     this.filterChanged();

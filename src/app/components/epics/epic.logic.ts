@@ -52,6 +52,8 @@ export interface EpicBoardFilters {
   text: string;
   /** Colunas ocultas do board (nomes; vazio = todas — coluna nova do DevOps aparece sozinha). */
   hiddenColumns: string[];
+  /** 0105: faixas do SLA (grave, attention, ok, stopped, none). */
+  sla?: string[];
 }
 
 /** `EpicCardResponse`. */

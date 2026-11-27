@@ -226,9 +226,26 @@ export interface BoardFilter {
    * filtros: "Limpar filtros" não mexe nelas e coluna nova do DevOps aparece sozinha.
    */
   hiddenColumns: string[];
+  /** 0105: faixas do SLA (`SLA_FILTERS`), em OU. */
+  sla: string[];
 }
 
-export const EMPTY_FILTER: BoardFilter = { text: '', types: [], assignedTo: [], tags: [], states: [], lanes: [], hiddenColumns: [] };
+/** 0105: opções do filtro de SLA — faixa do prazo correndo, prazo parado (cumprido/estourado) e card sem SLA. */
+export const SLA_FILTERS: readonly { value: string; label: string; color: string | null }[] = [
+  { value: 'grave', label: 'Grave', color: '#f85149' },
+  { value: 'attention', label: 'Atenção', color: '#d29922' },
+  { value: 'ok', label: 'Ok', color: '#3fb950' },
+  { value: 'stopped', label: 'Prazo encerrado (cumprido ou estourado)', color: null },
+  { value: 'none', label: 'Sem SLA', color: null },
+];
+
+/** Valor do filtro de SLA em que o card cai (mesma regra do servidor: `CardSlaFilter.KeyOf`). */
+export function slaFilterKey(item: Pick<BoardItem, 'sla'>): string {
+  const s = item.sla;
+  return !s ? 'none' : s.stopped ? 'stopped' : s.level;
+}
+
+export const EMPTY_FILTER: BoardFilter = { text: '', types: [], assignedTo: [], tags: [], states: [], lanes: [], hiddenColumns: [], sla: [] };
 
 /** Nome da lane padrão sem nome no filtro (o servidor entende "padrão"/"default"/vazio como a lane padrão). */
 export const DEFAULT_LANE_NAME = 'Padrão';
@@ -261,6 +278,7 @@ export function normalizeBoardFilter(raw: unknown): BoardFilter {
     states: strList(r['states']),
     lanes: strList(r['lanes']),
     hiddenColumns: strList(r['hiddenColumns']),
+    sla: strList(r['sla']).map(lower),
   };
 }
 
@@ -271,7 +289,7 @@ export function sameFilter(a: BoardFilter | null | undefined, b: BoardFilter | n
   const list = (l: string[]) => l.map(lower).sort().join('\u0001');
   return x.text.trim() === y.text.trim() && list(x.types) === list(y.types) && list(x.assignedTo) === list(y.assignedTo)
     && list(x.tags) === list(y.tags) && list(x.states) === list(y.states) && list(x.lanes) === list(y.lanes)
-    && list(x.hiddenColumns) === list(y.hiddenColumns);
+    && list(x.hiddenColumns) === list(y.hiddenColumns) && list(x.sla) === list(y.sla);
 }
 
 /** Colunas que aparecem: as que não estão ocultas (ocultar todas = mostrar todas, para o board não sumir). */
@@ -317,11 +335,11 @@ export function shownByColumn(views: readonly BoardLaneView[]): Map<string, numb
 }
 
 export function isFilterActive(f: BoardFilter): boolean {
-  return !!f.text.trim() || !!f.types.length || !!f.assignedTo.length || !!f.tags.length || !!f.states.length || !!f.lanes?.length;
+  return !!f.text.trim() || !!f.types.length || !!f.assignedTo.length || !!f.tags.length || !!f.states.length || !!f.lanes?.length || !!f.sla?.length;
 }
 
 export function filterCount(f: BoardFilter): number {
-  return (f.text.trim() ? 1 : 0) + f.types.length + f.assignedTo.length + f.tags.length + f.states.length + (f.lanes?.length ?? 0);
+  return (f.text.trim() ? 1 : 0) + f.types.length + f.assignedTo.length + f.tags.length + f.states.length + (f.lanes?.length ?? 0) + (f.sla?.length ?? 0);
 }
 
 /** Chave do responsável no filtro (uniqueName; sem responsável → `UNASSIGNED`). */
@@ -341,6 +359,7 @@ export function filterItems(items: BoardItem[], f: BoardFilter, lanes?: BoardLan
   const people = new Set(f.assignedTo.map(lower));
   const tags = f.tags.map(lower);
   const states = new Set(f.states.map(lower));
+  const sla = new Set((f.sla ?? []).map(lower));
   const laneList = lanes?.length ? lanes : null;
   const wantedLanes = laneList && f.lanes?.length
     ? new Set(laneList.filter((l) => f.lanes.some((v) => laneMatches(v, l))).map(laneKey))
@@ -349,6 +368,7 @@ export function filterItems(items: BoardItem[], f: BoardFilter, lanes?: BoardLan
     if (types.size && !types.has(lower(i.type))) return false;
     if (states.size && !states.has(lower(i.state))) return false;
     if (people.size && !people.has(assigneeKey(i))) return false;
+    if (sla.size && !sla.has(slaFilterKey(i))) return false;
     if (wantedLanes && !wantedLanes.has(laneOf(laneList!, i))) return false;
     if (tags.length) {
       const own = new Set((i.tags ?? []).map(lower));
