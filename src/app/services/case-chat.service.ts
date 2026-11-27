@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { CaseAction, CaseChat, CaseFile, CaseMessage, CasePoint, CaseProposal } from '../components/case-chat/case-chat.model';
+import { CaseAction, CaseChat, CaseChoicePick, CaseFile, CaseMessage, CasePoint, CaseProposal } from '../components/case-chat/case-chat.model';
 import { ExecutionRequest } from '../components/execution-plan/execution-queue.model';
 import { WorkItem } from '../components/work-items/work-item.model';
 
@@ -99,5 +99,10 @@ export class CaseChatService {
 
   decideAction(card: string, id: string, confirm: boolean): Observable<CaseAction> {
     return this.http.post<CaseAction>(this.url(card, `/actions/${id}/decision`), { confirm });
+  }
+
+  /** 0107: responde a escolha do especialista clicando (vira mensagem da pessoa e chama o especialista). */
+  answerChoice(card: string, messageId: string, pick: CaseChoicePick): Observable<CaseMessage> {
+    return this.http.post<CaseMessage>(this.url(card, `/messages/${messageId}/choice`), { selected: pick.selected, other: pick.other || null });
   }
 }

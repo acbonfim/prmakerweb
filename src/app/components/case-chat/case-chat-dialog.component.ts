@@ -31,6 +31,7 @@ import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
 import { SpecialistToolsComponent } from '../specialist-tools/specialist-tools.component';
 import {
   CaseAction,
+  CaseChoicePick,
   CaseDelivery,
   CaseFile,
   CaseMessage,
@@ -45,6 +46,7 @@ import {
   isRunActive
 } from './case-chat.model';
 import { VoiceRecorder, VoiceResult } from './voice-recorder';
+import { CaseChoiceComponent } from './case-choice.component';
 import { composerHint, silentTail } from './specialist-call';
 import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-proposal-dialog.component';
 import { CaseComposer, CaseComposerService } from './case-composer.service';
@@ -88,7 +90,7 @@ const TYPING_EVERY_MS = 4000;
   selector: 'app-case-chat-dialog',
   standalone: true,
   imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, MatBadgeModule,
-    PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent, SpecialistToolsComponent, ComposerSuggestComponent, TokenUsageComponent],
+    PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent, SpecialistToolsComponent, ComposerSuggestComponent, TokenUsageComponent, CaseChoiceComponent],
   templateUrl: './case-chat-dialog.component.html',
   styleUrls: ['./case-chat-dialog.component.css']
 })
@@ -613,6 +615,23 @@ export class CaseChatDialogComponent implements AfterViewInit, OnDestroy {
       error: (err) => {
         this.sending.set(false);
         this.snack.open(planApiError(err, 'Não foi possível decidir a proposta.'), 'Fechar', { duration: 8000 });
+      }
+    });
+  }
+
+  /** 0107: mensagem do especialista cuja escolha está sendo enviada (trava os botões dela). */
+  readonly choosing = signal<string | null>(null);
+
+  /** 0107: a pessoa clicou na escolha do especialista — vira mensagem dela e chama o especialista. */
+  answerChoice(m: CaseMessage, pick: CaseChoicePick): void {
+    if (this.choosing()) return;
+    this.choosing.set(m.id);
+    this.api.answerChoice(this.data.card, m.id, pick).subscribe({
+      next: () => { this.choosing.set(null); this.load(); },
+      error: (err) => {
+        this.choosing.set(null);
+        this.load();
+        this.snack.open(planApiError(err, 'Não foi possível enviar a escolha.'), 'Fechar', { duration: 8000 });
       }
     });
   }

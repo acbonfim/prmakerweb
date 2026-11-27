@@ -13,7 +13,7 @@ import { planApiError } from '../../services/execution-plan.service';
 import { PlanMarkdownPipe } from '../execution-plan/plan-markdown.pipe';
 import { CodeRefHostDirective } from '../code-ref/code-ref-host.directive';
 import { UserAvatarComponent } from '../user-avatar/user-avatar.component';
-import { CASE_QUICK, CASE_STARTERS, CaseAction, CaseDelivery, CaseFile, CaseMessage, CaseProposal, CaseViewMessage, EPIC_QUICK, EPIC_STARTERS, SPECIALIST_NAME,
+import { CASE_QUICK, CASE_STARTERS, CaseAction, CaseChoicePick, CaseDelivery, CaseFile, CaseMessage, CaseProposal, CaseViewMessage, EPIC_QUICK, EPIC_STARTERS, SPECIALIST_NAME,
   isRunActive } from './case-chat.model';
 import { StickyScroll, flyToChat } from './chat-motion';
 import { CaseProposalDialogComponent, CaseProposalDialogData } from './case-proposal-dialog.component';
@@ -24,6 +24,7 @@ import { ComposerAction, ComposerSuggestion } from './composer-suggest';
 import { ComposerSuggestComponent } from './composer-suggest.component';
 import { CaseCardType } from '../../helpers/work-item-type-icons';
 import { VoiceRecorder, VoiceResult } from './voice-recorder';
+import { CaseChoiceComponent } from './case-choice.component';
 import { composerHint, silentTail } from './specialist-call';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -40,7 +41,7 @@ const TYPING_EVERY_MS = 4000;
 @Component({
   selector: 'app-case-compact',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent,
+  imports: [DatePipe, FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, PlanMarkdownPipe, CodeRefHostDirective, UserAvatarComponent, CaseChoiceComponent,
     ComposerSuggestComponent],
   templateUrl: './case-compact.component.html',
   styleUrls: ['./case-compact.component.css']
@@ -523,6 +524,24 @@ export class CaseCompactComponent implements OnDestroy {
     const data: CaseProposalDialogData = { card: c, proposal: p, canDecide: chat.canDecide, hasPlan: chat.hasPlan };
     this.dialog.open(CaseProposalDialogComponent, { data, width: '1100px', maxWidth: '96vw', maxHeight: '92vh', autoFocus: false })
       .afterClosed().subscribe((changed) => { if (changed) this.store.reload(c, 0); });
+  }
+
+  /** 0107: mensagem do especialista cuja escolha está sendo enviada (trava os botões dela). */
+  readonly choosing = signal<string | null>(null);
+
+  /** 0107: a pessoa clicou na escolha do especialista — vira mensagem dela e chama o especialista. */
+  answerChoice(m: CaseMessage, pick: CaseChoicePick): void {
+    const c = this.card();
+    if (!c || this.choosing()) return;
+    this.choosing.set(m.id);
+    this.api.answerChoice(c, m.id, pick).subscribe({
+      next: () => { this.choosing.set(null); this.store.reload(c, 0); },
+      error: (err) => {
+        this.choosing.set(null);
+        this.store.reload(c, 0);
+        this.snack.open(planApiError(err, 'Não foi possível enviar a escolha.'), 'Fechar', { duration: 8000 });
+      }
+    });
   }
 
   decideAction(a: CaseAction, confirm: boolean): void {

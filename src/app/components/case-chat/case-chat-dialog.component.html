@@ -137,6 +137,9 @@
                       <div class="msg__transcript">{{ m.transcript ? '“' + m.transcript + '”' : 'Sem transcrição — o navegador não transcreveu este áudio.' }}</div>
                     }
                     @if (m.text) { <div class="plan-md msg__text" [innerHTML]="m.text | planMarkdown:'case'"></div> }
+                    @if (m.authorKind === 'specialist' && m.choice; as ch) {
+                      <app-case-choice [choice]="ch" [busy]="choosing() === m.id" (answer)="answerChoice(m, $event)"></app-case-choice>
+                    }
                     @if (m.localFiles?.length) {
                       <div class="msg__files">
                         @for (f of m.localFiles; track $index) {

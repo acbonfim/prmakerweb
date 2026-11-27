@@ -126,6 +126,9 @@
                   }
                   @if (m.kind === 'voice') { <div class="km__transcript">“{{ m.transcript || 'áudio sem transcrição' }}”</div> }
                   @if (m.text) { <div class="plan-md km__text" [innerHTML]="m.text | planMarkdown:'case'"></div> }
+                  @if (m.authorKind === 'specialist' && m.choice; as ch) {
+                    <app-case-choice [choice]="ch" [compact]="true" [busy]="choosing() === m.id" (answer)="answerChoice(m, $event)"></app-case-choice>
+                  }
                   @if (m.localFiles?.length) {
                     <div class="km__files">
                       @for (f of m.localFiles; track $index) {

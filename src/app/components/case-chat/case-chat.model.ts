@@ -40,6 +40,43 @@ export interface CaseMessage {
   createdAt: string;
   editedAt?: string | null;
   files: CaseFile[];
+  /** 0107: escolha clicável do especialista (com a resposta, quando já houve). */
+  choice?: CaseChoice | null;
+}
+
+/** 0107: botões (cada um responde na hora), escolha única, checklist ou lista suspensa. */
+export type CaseChoiceMode = 'buttons' | 'single' | 'multi' | 'select';
+
+export interface CaseChoiceOption {
+  id: string;
+  label: string;
+  detail?: string | null;
+  style: 'primary' | 'danger' | 'neutral';
+  recommended: boolean;
+}
+
+export interface CaseChoiceAnswer {
+  userId?: string | null;
+  by: string;
+  at: string;
+  selected: string[];
+  other?: string | null;
+  messageNumber?: number | null;
+}
+
+export interface CaseChoice {
+  mode: CaseChoiceMode;
+  question?: string | null;
+  options: CaseChoiceOption[];
+  allowOther: boolean;
+  otherLabel?: string | null;
+  answer?: CaseChoiceAnswer | null;
+  closedAt?: string | null;
+}
+
+export interface CaseChoicePick {
+  selected: string[];
+  other?: string | null;
 }
 
 export interface CasePoint {
